@@ -7,6 +7,7 @@
 池如实呈现 code/name（公开榜单客观事实）。用户私有数据未进 git；复用现有
 em_zt_topic_pool，不新增东财端点。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -19,6 +20,7 @@ from fastapi import APIRouter, Query
 
 import astock
 from vr_paths import is_trading_day
+
 # cache_response 定义在 app.py（cache_response 段之后才 include 本路由）。
 # 用守卫 import：app 先加载（生产/uvicorn）时拿到真装饰器；topology 被单独
 # import（单测）时触发循环 import，回退到透传装饰器，纯逻辑仍可独立测试。
@@ -28,9 +30,12 @@ except (ImportError, AttributeError):  # noqa: BLE001 — 循环 import 回退
 
     def cache_response(ttl: int = 300):  # type: ignore[no-redef]
         """循环 import 回退：透传装饰器（端点不缓存，仅 standalone 导入场景）。"""
+
         def deco(func):
             return func
+
         return deco
+
 
 from candidate_funnel import funnel as funnel_mod
 
@@ -84,7 +89,9 @@ class SectorEdgeProvider:
     def build_edges(self, candidates: list[dict], *, date: str | None = None) -> list[dict]:
         return _collect_shared_sets(
             candidates,
-            fetch_fn=lambda code, _d: astock.concept_blocks(code, raise_on_failure=True),  # S131 R4.2: 源断 raise→_collect_shared_sets try/except 兜底+log（非静默空 dict 当合法空）
+            fetch_fn=lambda code, _d: astock.concept_blocks(
+                code, raise_on_failure=True
+            ),  # S131 R4.2: 源断 raise→_collect_shared_sets try/except 兜底+log（非静默空 dict 当合法空）
             extract_fn=lambda blocks: set((blocks or {}).get("concept_tags", []) or []),
             edge_type="sector",
             date=date,
@@ -105,9 +112,7 @@ class FundFlowEdgeProvider:
             candidates,
             fetch_fn=lambda code, d: astock.stock_fund_flow_120d(code, date=d),  # S085 A6 残留：传 d 修 replay 误取今日
             extract_fn=lambda flow: {
-                r.get("date", "")
-                for r in (flow or [])[-_FUND_RECENT_DAYS:]
-                if (r.get("main_net") or 0) > 0
+                r.get("date", "") for r in (flow or [])[-_FUND_RECENT_DAYS:] if (r.get("main_net") or 0) > 0
             },
             edge_type="fund_flow",
             date=date,
@@ -137,16 +142,16 @@ class LadderEdgeProvider:
             return []
         try:
             pool = astock.em_zt_topic_pool(
-                "getTopicZTPool", pool_date, "fbt:asc", raise_on_failure=True,
+                "getTopicZTPool",
+                pool_date,
+                "fbt:asc",
+                raise_on_failure=True,
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("ladder provider: em_zt_topic_pool 失败: %s", exc)
             return []
         # code -> (连板高度, 行业)
-        info = {
-            str(it.get("c", "")): (it.get("lbc"), it.get("hybk"))
-            for it in (pool or [])
-        }
+        info = {str(it.get("c", "")): (it.get("lbc"), it.get("hybk")) for it in (pool or [])}
         edges: list[dict] = []
         # review fix #11：去重候选 code，否则重复 code 在 i/i+1 配对时产自环边
         # {source:a,target:a}（dict.fromkeys 保序去重，同 build_relation_graph 节点去重范式）。
@@ -154,17 +159,21 @@ class LadderEdgeProvider:
         for i, a in enumerate(cand_codes):
             if a not in info:
                 continue
-            for b in cand_codes[i + 1:]:
+            for b in cand_codes[i + 1 :]:
                 if b not in info:
                     continue
                 a_boards, a_ind = info[a]
                 b_boards, b_ind = info[b]
                 if a_boards and a_boards == b_boards:
                     same_ind = bool(a_ind and a_ind == b_ind)
-                    edges.append({
-                        "source": a, "target": b, "type": "ladder",
-                        "weight": 2 if same_ind else 1,
-                    })
+                    edges.append(
+                        {
+                            "source": a,
+                            "target": b,
+                            "type": "ladder",
+                            "weight": 2 if same_ind else 1,
+                        }
+                    )
         return edges
 
 
@@ -204,13 +213,17 @@ def _pairwise_shared(code_sets: dict[str, set[str]], edge_type: str, min_shared:
     edges: list[dict] = []
     codes = list(code_sets)
     for i, a in enumerate(codes):
-        for b in codes[i + 1:]:
+        for b in codes[i + 1 :]:
             shared = code_sets[a] & code_sets[b]
             if len(shared) >= min_shared:
-                edges.append({
-                    "source": a, "target": b, "type": edge_type,
-                    "weight": min(len(shared), _WEIGHT_CAP),
-                })
+                edges.append(
+                    {
+                        "source": a,
+                        "target": b,
+                        "type": edge_type,
+                        "weight": min(len(shared), _WEIGHT_CAP),
+                    }
+                )
     return edges
 
 
@@ -226,7 +239,7 @@ def _evict_fetch_cache() -> None:
     for k in [k for k, (ts, _) in _FETCH_CACHE.items() if now - ts >= _FETCH_TTL]:
         _FETCH_CACHE.pop(k, None)
     if len(_FETCH_CACHE) > _FETCH_CACHE_MAX:
-        for k, _ in sorted(_FETCH_CACHE.items(), key=lambda kv: kv[1][0])[:len(_FETCH_CACHE) - _FETCH_CACHE_MAX]:
+        for k, _ in sorted(_FETCH_CACHE.items(), key=lambda kv: kv[1][0])[: len(_FETCH_CACHE) - _FETCH_CACHE_MAX]:
             _FETCH_CACHE.pop(k, None)
 
 
@@ -326,15 +339,17 @@ def build_relation_graph(
         if not code or code in seen:
             continue
         seen.add(code)
-        nodes.append({
-            "id": code,
-            "name": c.get("name") or code,
-            "code": code,
-            "category": "candidate",
-        })
+        nodes.append(
+            {
+                "id": code,
+                "name": c.get("name") or code,
+                "code": code,
+                "category": "candidate",
+            }
+        )
 
     edges: list[dict] = []
-    for p in (providers if providers is not None else get_all_edge_providers()):
+    for p in providers if providers is not None else get_all_edge_providers():
         try:
             edges.extend(p.build_edges(candidates, date=date))
         except Exception as exc:  # noqa: BLE001 — 单 provider 故障隔离
@@ -365,7 +380,10 @@ def build_board_ladder_tree(date: str | None = None) -> dict:
         return {"name": "当日涨停", "children": []}
     try:
         pool = astock.em_zt_topic_pool(
-            "getTopicZTPool", pool_date, "fbt:asc", raise_on_failure=True,
+            "getTopicZTPool",
+            pool_date,
+            "fbt:asc",
+            raise_on_failure=True,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("board-ladder: em_zt_topic_pool 失败: %s", exc)
@@ -378,18 +396,17 @@ def build_board_ladder_tree(date: str | None = None) -> dict:
             continue
         lbc = int(it.get("lbc") or 1)
         ind = it.get("hybk") or "未分类"
-        by_height.setdefault(lbc, {}).setdefault(ind, []).append({
-            "name": f"{code} {it.get('n', '')}".strip(),
-            "code": code,
-            "value": lbc,
-        })
+        by_height.setdefault(lbc, {}).setdefault(ind, []).append(
+            {
+                "name": f"{code} {it.get('n', '')}".strip(),
+                "code": code,
+                "value": lbc,
+            }
+        )
     # 高连板层在前
     height_children = []
     for lbc in sorted(by_height, reverse=True):
-        ind_children = [
-            {"name": ind, "children": stocks}
-            for ind, stocks in sorted(by_height[lbc].items())
-        ]
+        ind_children = [{"name": ind, "children": stocks} for ind, stocks in sorted(by_height[lbc].items())]
         height_children.append({"name": f"{lbc}板", "children": ind_children})
     return {"name": "当日涨停", "children": height_children}
 
@@ -407,6 +424,7 @@ def _load_candidates(date: str | None) -> list[dict]:
     导入时若硬 import 会触发 app 部分加载循环）。
     """
     from routers.candidates import _store  # noqa: PLC0415 — 防 import 环，运行时取 live config
+
     result = funnel_mod.run_funnel("all", date or _today_iso(), _store["config"])
     return [{"code": c.code, "name": c.name} for c in result.final_candidates]
 

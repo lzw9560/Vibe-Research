@@ -10,6 +10,7 @@ v6.00：暴露 tail_dip_engine 的核心能力给前端/外部调用：
 
 合规：响应仅客观数据+因子值，无方向结论词、无参考价位。
 """
+
 from __future__ import annotations
 
 import os
@@ -67,8 +68,10 @@ router = APIRouter(tags=["strategy-tail-dip"], dependencies=[Depends(_falsified_
 # 1. 全市场尾盘错杀扫描
 # ─────────────────────────────────────────────────────────────────────────
 
+
 class TailDipScanResponse(BaseModel):
     """扫描结果响应体。"""
+
     candidates: list[dict[str, Any]]
     sector_change_pct: float
     sector_source: str
@@ -101,26 +104,38 @@ def scan_tail_dip(
             all_stocks = cache[0]
         else:
             subprocess.run(
-                ["/Users/lizhiwei/.nvm/versions/node/v24.21.0/bin/hithink-finance",
-                 "market", "snapshot", "--limit", "5000",
-                 "--output", "/tmp/tail_dip_scan.json"],
-                capture_output=True, text=True, timeout=30,
+                [
+                    "/Users/lizhiwei/.nvm/versions/node/v24.21.0/bin/hithink-finance",
+                    "market",
+                    "snapshot",
+                    "--limit",
+                    "5000",
+                    "--output",
+                    "/tmp/tail_dip_scan.json",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
             try:
                 with open("/tmp/tail_dip_scan.json") as f:
                     data = json.load(f)
             except (FileNotFoundError, json.JSONDecodeError):
                 return TailDipScanResponse(
-                    candidates=[], sector_change_pct=0.0,
-                    sector_source="数据拉取失败", thresholds={},
+                    candidates=[],
+                    sector_change_pct=0.0,
+                    sector_source="数据拉取失败",
+                    thresholds={},
                     total_scanned=0,
                 )
             all_stocks = data.get("data", {}).get("item", [])
             setattr(scan_tail_dip, _CACHE_KEY, (all_stocks, _time.time()))
         if not all_stocks:
             return TailDipScanResponse(
-                candidates=[], sector_change_pct=0.0,
-                sector_source="空数据", thresholds={},
+                candidates=[],
+                sector_change_pct=0.0,
+                sector_source="空数据",
+                thresholds={},
                 total_scanned=0,
             )
 
@@ -161,18 +176,20 @@ def scan_tail_dip(
             if not deviation.is_anomalous:
                 continue
 
-            candidates.append({
-                "code": s.get("thscode", ""),
-                "name": s.get("name", ""),
-                "price": price,
-                "change_pct": chg,
-                "turnover_yi": round(turnover / 1e8, 2),
-                "deviation": deviation.anomalous_deviation,
-                "confidence": deviation.confidence,
-                "detail": deviation.detail,
-                "stop_loss": HARD_THRESHOLDS["max_stop_loss"],
-                "take_profit": HARD_THRESHOLDS["take_profit"],
-            })
+            candidates.append(
+                {
+                    "code": s.get("thscode", ""),
+                    "name": s.get("name", ""),
+                    "price": price,
+                    "change_pct": chg,
+                    "turnover_yi": round(turnover / 1e8, 2),
+                    "deviation": deviation.anomalous_deviation,
+                    "confidence": deviation.confidence,
+                    "detail": deviation.detail,
+                    "stop_loss": HARD_THRESHOLDS["max_stop_loss"],
+                    "take_profit": HARD_THRESHOLDS["take_profit"],
+                }
+            )
 
         candidates.sort(key=lambda x: x["deviation"], reverse=True)
 
@@ -207,11 +224,16 @@ def scan_tail_dip(
                     reduction = factors.get("has_reduction_recent", False)
 
                     blocked_reasons = []
-                    if gw_blk and gw is not None: blocked_reasons.append(f"商誉{gw*100:.0f}%>=15%")
-                    if ar and ar >= 40: blocked_reasons.append(f"应收{ar:.0f}%>=40%")
-                    if cf_neg: blocked_reasons.append("现金流为负")
-                    if reduction: blocked_reasons.append("有减持")
-                    if not factors: blocked_reasons.append("财务数据缺失")
+                    if gw_blk and gw is not None:
+                        blocked_reasons.append(f"商誉{gw * 100:.0f}%>=15%")
+                    if ar and ar >= 40:
+                        blocked_reasons.append(f"应收{ar:.0f}%>=40%")
+                    if cf_neg:
+                        blocked_reasons.append("现金流为负")
+                    if reduction:
+                        blocked_reasons.append("有减持")
+                    if not factors:
+                        blocked_reasons.append("财务数据缺失")
 
                     if blocked_reasons:
                         blocked_fast += 1
@@ -240,11 +262,16 @@ def scan_tail_dip(
                             reduction = factors.get("has_reduction_recent", False)
 
                             blocked_reasons = []
-                            if gw_blk and gw is not None: blocked_reasons.append(f"商誉{gw*100:.0f}%>=15%")
-                            if ar and ar >= 40: blocked_reasons.append(f"应收{ar:.0f}%>=40%")
-                            if cf_neg: blocked_reasons.append("现金流为负")
-                            if reduction: blocked_reasons.append("有减持")
-                            if not factors: blocked_reasons.append("财务数据缺失")
+                            if gw_blk and gw is not None:
+                                blocked_reasons.append(f"商誉{gw * 100:.0f}%>=15%")
+                            if ar and ar >= 40:
+                                blocked_reasons.append(f"应收{ar:.0f}%>=40%")
+                            if cf_neg:
+                                blocked_reasons.append("现金流为负")
+                            if reduction:
+                                blocked_reasons.append("有减持")
+                            if not factors:
+                                blocked_reasons.append("财务数据缺失")
 
                             if blocked_reasons:
                                 bg_blocked += 1
@@ -262,8 +289,11 @@ def scan_tail_dip(
                             "blocked": bg_blocked,
                             "passed": len(bg_filtered),
                         }
-                        setattr(scan_tail_dip, _FIN_CACHE_KEY,
-                                ({"filtered": bg_filtered, "summary": bg_summary}, _time.time()))
+                        setattr(
+                            scan_tail_dip,
+                            _FIN_CACHE_KEY,
+                            ({"filtered": bg_filtered, "summary": bg_summary}, _time.time()),
+                        )
                     except Exception:
                         pass  # 后台失败不影响前台
 
@@ -282,9 +312,13 @@ def scan_tail_dip(
         return TailDipScanResponse(
             candidates=candidates[:limit],
             sector_change_pct=round(sector_pct, 2),
-            sector_source=sector_src + (f" | 财务过滤: {financial_summary['passed']}/{financial_summary['total_candidates']}通过" if financial_summary else ""),
-            thresholds={k: v for k, v in HARD_THRESHOLDS.items()
-                        if isinstance(v, (int, float))},
+            sector_source=sector_src
+            + (
+                f" | 财务过滤: {financial_summary['passed']}/{financial_summary['total_candidates']}通过"
+                if financial_summary
+                else ""
+            ),
+            thresholds={k: v for k, v in HARD_THRESHOLDS.items() if isinstance(v, (int, float))},
             total_scanned=len(all_stocks),
         )
     except Exception as e:
@@ -294,6 +328,7 @@ def scan_tail_dip(
 # ─────────────────────────────────────────────────────────────────────────
 # 2. 个股实时偏离度时间序列
 # ─────────────────────────────────────────────────────────────────────────
+
 
 @router.get("/api/strategy/tail-dip/deviation")
 def get_deviation(
@@ -331,6 +366,7 @@ def get_deviation(
 # ─────────────────────────────────────────────────────────────────────────
 # 3. 铁血止损决策
 # ─────────────────────────────────────────────────────────────────────────
+
 
 class StopLossReq(BaseModel):
     code: str
@@ -374,6 +410,7 @@ def stop_loss_decision(req: StopLossReq) -> dict:
 # 4. 回撤断路器诊断+peak衰减方案
 # ─────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/api/strategy/tail-dip/drawdown")
 def drawdown_diagnosis(
     equity: float = Query(..., description="当前权益"),
@@ -408,13 +445,16 @@ def drawdown_diagnosis(
             "new_recovery_pct": proposal.new_recovery_pct if proposal else None,
             "size_mult_cap": proposal.size_mult_cap if proposal else None,
             "recommendation": proposal.recommendation if proposal else "无需衰减",
-        } if proposal else None,
+        }
+        if proposal
+        else None,
     }
 
 
 # ─────────────────────────────────────────────────────────────────────────
 # 5. 财务因子查询
 # ─────────────────────────────────────────────────────────────────────────
+
 
 @router.get("/api/strategy/tail-dip/financial")
 def financial_factors(code: str = Query(..., description="股票代码")) -> dict:
@@ -428,6 +468,7 @@ def financial_factors(code: str = Query(..., description="股票代码")) -> dic
 # ─────────────────────────────────────────────────────────────────────────
 # 6. 尾盘波动率检查（轻量版——用14:50→15:00快照）
 # ─────────────────────────────────────────────────────────────────────────
+
 
 @router.get("/api/strategy/tail-dip/tail-volatility")
 def tail_volatility_check(code: str = Query(..., description="股票代码")) -> dict:
@@ -455,6 +496,7 @@ def tail_volatility_check(code: str = Query(..., description="股票代码")) ->
 # 7. 小成交额错杀扫描（2026年唯一统计显著alpha p=0.026）
 # ─────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/api/strategy/lvd/scan")
 def lvd_scan(
     limit: int = Query(5, description="返回数量上限"),
@@ -479,10 +521,18 @@ def lvd_scan(
         all_stocks = cache[0]
     else:
         result = subprocess.run(
-            ["/Users/lizhiwei/.nvm/versions/node/v24.21.0/bin/hithink-finance",
-             "market", "snapshot", "--limit", "5000",
-             "--output", "/tmp/lvd_scan.json"],
-            capture_output=True, text=True, timeout=30,
+            [
+                "/Users/lizhiwei/.nvm/versions/node/v24.21.0/bin/hithink-finance",
+                "market",
+                "snapshot",
+                "--limit",
+                "5000",
+                "--output",
+                "/tmp/lvd_scan.json",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         try:
             with open("/tmp/lvd_scan.json") as f:
@@ -524,6 +574,7 @@ def lvd_scan(
 # 8. RSI择时信号（最强统计显著alpha p=0.0001）
 # ─────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/api/strategy/rsi-timing/signal")
 def rsi_timing_signal() -> dict:
     """RSI择时信号——检查4个指数RSI是否触发买入。
@@ -541,10 +592,20 @@ def rsi_timing_signal() -> dict:
     signals = []
     for code, params in RSI_PARAMS["indices"].items():
         r = subprocess.run(
-            ["/Users/lizhiwei/.nvm/versions/node/v24.21.0/bin/hithink-finance",
-             "index", "history", "--thscode", code,
-             "--start-ms", str(start_ms), "--end-ms", str(end_ms)],
-            capture_output=True, text=True, timeout=15,
+            [
+                "/Users/lizhiwei/.nvm/versions/node/v24.21.0/bin/hithink-finance",
+                "index",
+                "history",
+                "--thscode",
+                code,
+                "--start-ms",
+                str(start_ms),
+                "--end-ms",
+                str(end_ms),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         try:
             d = _json.loads(r.stdout)
@@ -553,20 +614,22 @@ def rsi_timing_signal() -> dict:
             if len(closes) < 20:
                 continue
             sig = check_rsi_signal(code, closes)
-            signals.append({
-                "index_code": sig.index_code,
-                "index_name": sig.index_name,
-                "current_rsi": sig.current_rsi,
-                "threshold": sig.threshold,
-                "is_triggered": sig.is_triggered,
-                "hold_days": sig.hold_days,
-                "stop_loss_pct": sig.stop_loss_pct,
-                "expected_return": sig.expected_return,
-                "win_rate": sig.win_rate,
-                "p_value": sig.p_value,
-                "sample_size": sig.sample_size,
-                "detail": sig.detail,
-            })
+            signals.append(
+                {
+                    "index_code": sig.index_code,
+                    "index_name": sig.index_name,
+                    "current_rsi": sig.current_rsi,
+                    "threshold": sig.threshold,
+                    "is_triggered": sig.is_triggered,
+                    "hold_days": sig.hold_days,
+                    "stop_loss_pct": sig.stop_loss_pct,
+                    "expected_return": sig.expected_return,
+                    "win_rate": sig.win_rate,
+                    "p_value": sig.p_value,
+                    "sample_size": sig.sample_size,
+                    "detail": sig.detail,
+                }
+            )
         except Exception:
             continue
 
@@ -574,15 +637,14 @@ def rsi_timing_signal() -> dict:
     return {
         "signals": signals,
         "any_triggered": any_triggered,
-        "recommendation": (
-            "买入指数ETF，持有20天，-8%止损" if any_triggered else "等待RSI<30"
-        ),
+        "recommendation": ("买入指数ETF，持有20天，-8%止损" if any_triggered else "等待RSI<30"),
     }
 
 
 # ─────────────────────────────────────────────────────────────────────────
 # 9. RSI+MACD组合信号（最强：mean+9.53% WR100%）
 # ─────────────────────────────────────────────────────────────────────────
+
 
 @router.get("/api/strategy/rsi-macd/signal")
 def rsi_macd_signal() -> dict:
@@ -602,10 +664,20 @@ def rsi_macd_signal() -> dict:
         if not params.get("p") or params["p"] > 0.01:
             continue
         r = subprocess.run(
-            ["/Users/lizhiwei/.nvm/versions/node/v24.21.0/bin/hithink-finance",
-             "index", "history", "--thscode", code,
-             "--start-ms", str(start_ms), "--end-ms", str(end_ms)],
-            capture_output=True, text=True, timeout=15,
+            [
+                "/Users/lizhiwei/.nvm/versions/node/v24.21.0/bin/hithink-finance",
+                "index",
+                "history",
+                "--thscode",
+                code,
+                "--start-ms",
+                str(start_ms),
+                "--end-ms",
+                str(end_ms),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         try:
             d = _json.loads(r.stdout)
@@ -614,20 +686,22 @@ def rsi_macd_signal() -> dict:
             if len(closes) < 30:
                 continue
             sig = check_rsi_macd_combo(params["name"], closes)
-            signals.append({
-                "index_name": sig.index_name,
-                "rsi": sig.rsi,
-                "rsi_triggered": sig.rsi_triggered,
-                "macd_dif": sig.macd_dif,
-                "macd_dea": sig.macd_dea,
-                "macd_hist": sig.macd_hist,
-                "is_golden_cross": sig.is_golden_cross,
-                "has_recent_cross": sig.has_recent_cross,
-                "combo_signal": sig.combo_signal,
-                "expected_60d": sig.expected_60d,
-                "win_rate_60d": sig.win_rate_60d,
-                "detail": sig.detail,
-            })
+            signals.append(
+                {
+                    "index_name": sig.index_name,
+                    "rsi": sig.rsi,
+                    "rsi_triggered": sig.rsi_triggered,
+                    "macd_dif": sig.macd_dif,
+                    "macd_dea": sig.macd_dea,
+                    "macd_hist": sig.macd_hist,
+                    "is_golden_cross": sig.is_golden_cross,
+                    "has_recent_cross": sig.has_recent_cross,
+                    "combo_signal": sig.combo_signal,
+                    "expected_60d": sig.expected_60d,
+                    "win_rate_60d": sig.win_rate_60d,
+                    "detail": sig.detail,
+                }
+            )
         except Exception:
             continue
 
@@ -639,8 +713,6 @@ def rsi_macd_signal() -> dict:
         "buy_count": len(buy_signals),
         "wait_count": len(wait_signals),
         "recommendation": (
-            "买入（RSI+MACD金叉确认）" if buy_signals
-            else "等待MACD金叉确认" if wait_signals
-            else "无信号"
+            "买入（RSI+MACD金叉确认）" if buy_signals else "等待MACD金叉确认" if wait_signals else "无信号"
         ),
     }

@@ -162,9 +162,7 @@ def build_indicator_set(
     ind.concepts = ca.get("concepts") or []
     ind.sector_flow = ca.get("sector_flow")
     anns = ca.get("announcements") or []
-    ind.announcements = [
-        Announcement(**x) if isinstance(x, dict) else x for x in anns
-    ]
+    ind.announcements = [Announcement(**x) if isinstance(x, dict) else x for x in anns]
 
     for s in (board or {}).get("lianban_stocks", []):
         if isinstance(s, dict) and s.get("code") == code:
@@ -181,6 +179,7 @@ def build_indicator_set(
     # 重复 read_bytes + json.loads 52 次 = 7.6GB IO，每只 13-15s × 52 = 780s 卡死 _collect）
     try:
         from engine.kline_cache_store import get_bars
+
         _bars = get_bars(code)
         if _bars:
             _closes = [b.get("close", 0) for b in _bars if b.get("close")]
@@ -191,7 +190,7 @@ def build_indicator_set(
                 _last20 = _closes[-20:]
                 _mean = sum(_last20) / 20
                 _var = sum((x - _mean) ** 2 for x in _last20) / 20
-                _std = _var ** 0.5
+                _std = _var**0.5
                 ind.boll_upper = round(_mean + 2 * _std, 3)
                 ind.boll_lower = round(_mean - 2 * _std, 3)
             elif len(_closes) >= 5:
@@ -205,6 +204,7 @@ def build_indicator_set(
     # 仿 MA/BOLL inline 模式：惰性导入，取不到标 None + missing 原因（AC6 红线）
     try:
         from data.sources.akshare_src import chip_distribution  # noqa: PLC0415 — 惰性导入
+
         _result = chip_distribution(code)
         if _result:
             ind.chip_profit_ratio = _result.get("chip_profit_ratio")
@@ -222,9 +222,9 @@ def build_diagnosis_card(
     eff: BaseThreshold,
     market_ctx: dict | None = None,
     as_of: datetime | None = None,
-    gene_obj: Any = None,           # S084 R1：GeneScore 完整对象（model_dump 塞 card.gene_score）
+    gene_obj: Any = None,  # S084 R1：GeneScore 完整对象（model_dump 塞 card.gene_score）
     pool_item: dict | None = None,  # S084 R2：涨停池原始 dict
-    derived: dict | None = None,    # S084 R3：S070 R7 分时派生
+    derived: dict | None = None,  # S084 R3：S070 R7 分时派生
     trade_date: str | None = None,  # S085 B2：T-1 交易日（龙虎榜盘后数据，供席位聚合取数）
     with_seat_detail: bool = False,  # S085 B2：席位聚合 opt-in（bulk 漏斗默认关，单股 diagnose 开）
     st_play: str | None = None,  # S148：ST carve-out 标（摘帽/重组/扭亏），radar 白名单 re-include 的 ST 股带
@@ -261,6 +261,7 @@ def build_diagnosis_card(
     eight_ctx = dict(market_ctx or {})
     if pool_item:
         from strategies.first_board_filter import _fbt_to_hhmm, _to_float  # noqa: PLC0415 — 复用，zt_pool_source 已有跨包先例
+
         fbt = pool_item.get("fbt")
         if fbt is not None:
             hhmm = _fbt_to_hhmm(fbt)  # _time_within 无法解析 5 位 fbt(92500→h=925 恒 fail)，须转 HH:MM
@@ -273,16 +274,9 @@ def build_diagnosis_card(
                 eight_ctx["open_count"] = int(zbc)
     eight = check_eight_standards(ind, eight_ctx)
     capped = eight.fail_count >= 3
-    cap_reason = (
-        f"八项标准未过{eight.fail_count}项，得分封顶{_CAP_THRESHOLD}"
-        if capped else None
-    )
+    cap_reason = f"八项标准未过{eight.fail_count}项，得分封顶{_CAP_THRESHOLD}" if capped else None
     # S084 R1：gene_obj → model_dump(mode='json')；非 pydantic 对象（如 mock）防御性跳过
-    gene_score = (
-        gene_obj.model_dump(mode="json")
-        if gene_obj is not None and hasattr(gene_obj, "model_dump")
-        else None
-    )
+    gene_score = gene_obj.model_dump(mode="json") if gene_obj is not None and hasattr(gene_obj, "model_dump") else None
     # S085 B2：席位聚合 opt-in——bulk 漏斗跳过（perf），单股 diagnose 开
     seat_detail = _build_seat_detail(code, trade_date) if with_seat_detail else None
     # S139（s066 task 039）：板块周期阶段纯 LABEL 接线——不改策略分/排序/capped
@@ -294,12 +288,16 @@ def build_diagnosis_card(
         if _hybk:
             try:
                 from strategies.sector_cycle import analyze_sector_phase  # noqa: PLC0415
+
                 _sp = analyze_sector_phase(trade_date, _hybk)
                 if _sp is not None:
                     sector_phase = {
-                        "industry": _sp.industry, "phase": _sp.phase,
-                        "stay_days": _sp.stay_days, "phase_note": _sp.phase_note,
-                        "count_today": _sp.count_today, "count_avg_3d": _sp.count_avg_3d,
+                        "industry": _sp.industry,
+                        "phase": _sp.phase,
+                        "stay_days": _sp.stay_days,
+                        "phase_note": _sp.phase_note,
+                        "count_today": _sp.count_today,
+                        "count_avg_3d": _sp.count_avg_3d,
                         "momentum": _sp.momentum,
                     }
             except Exception:
@@ -335,6 +333,7 @@ def _build_seat_detail(code: str, trade_date: str | None) -> dict | None:
         return None
     try:
         from seat_engine.service import get_engine
+
         engine = get_engine()
         consensus = engine.compute_consensus_signal(trade_date, code)
     except Exception:
@@ -347,12 +346,14 @@ def _build_seat_detail(code: str, trade_date: str | None) -> dict | None:
     risk_label = None
     try:
         from strategies.hot_money_seats import compute_seat_risk_factor
+
         seat_risk = compute_seat_risk_factor(code, trade_date)
         if seat_risk is not None:
             score_modifier = seat_risk.score_modifier
             risk_label = seat_risk.risk_label
     except Exception as e:  # noqa: BLE001
         import logging
+
         logging.getLogger(__name__).warning("compute_seat_risk_factor 失败（降级，不阻塞）: %s", e)
     return {
         "buy_one_ratio": details.get("buy_one_ratio"),

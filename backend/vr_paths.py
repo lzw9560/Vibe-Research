@@ -33,8 +33,10 @@ def resolve_data_dir() -> Path:
         # 项目 .vibe-research 虽在 home 下但是项目子目录（合法），不误判；测试临时目录非 home 不受影响
         if p.parent == Path.home() or p == Path.home() / ".vibe-research":
             import logging
+
             logging.getLogger("vibe-research").warning(
-                "[vr_paths] VR_DATA_DIR=%s 在 home 根下，fallback 项目根 .vibe-research（防分裂）", env)
+                "[vr_paths] VR_DATA_DIR=%s 在 home 根下，fallback 项目根 .vibe-research（防分裂）", env
+            )
             return DEFAULT_DATA_DIR
         return p
     return DEFAULT_DATA_DIR
@@ -71,17 +73,28 @@ _A_SHARE_HOLIDAYS_FALLBACK: set[str] = {
     # 2026 元旦
     "2026-01-01",
     # 2026 春节
-    "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20",
+    "2026-02-16",
+    "2026-02-17",
+    "2026-02-18",
+    "2026-02-19",
+    "2026-02-20",
     # 2026 清明
     "2026-04-06",
     # 2026 劳动节
-    "2026-05-04", "2026-05-05", "2026-05-06",
+    "2026-05-04",
+    "2026-05-05",
+    "2026-05-06",
     # 2026 端午
     "2026-06-19",
     # 2026 中秋
     "2026-09-25",
     # 2026 国庆
-    "2026-10-01", "2026-10-02", "2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08",
+    "2026-10-01",
+    "2026-10-02",
+    "2026-10-05",
+    "2026-10-06",
+    "2026-10-07",
+    "2026-10-08",
     # 2027 元旦（固定节假日，akshare 当前无 2027 数据，预先标以防次年误判）
     "2027-01-01",
 }
@@ -158,6 +171,7 @@ def _refresh_holidays_via_akshare() -> bool:
     target_years = years_with_data[-2:]
     non_trading: list[str] = []
     from datetime import timedelta as _td_inner
+
     for y in target_years:
         cur = date(int(y), 1, 1)
         end = date(int(y), 12, 31)
@@ -183,12 +197,8 @@ def _refresh_holidays_via_akshare() -> bool:
     data["non_trading_days"] = non_trading
     try:
         _HOLIDAYS_JSON_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _HOLIDAYS_JSON_PATH.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
-        _logger.info(
-            "[vr_paths] 已用 akshare 刷新 holidays.json（%d 个工作日休市日）", len(non_trading)
-        )
+        _HOLIDAYS_JSON_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        _logger.info("[vr_paths] 已用 akshare 刷新 holidays.json（%d 个工作日休市日）", len(non_trading))
         return True
     except OSError as e:
         _logger.warning("[vr_paths] holidays.json 写入失败: %s，将 fallback 硬编码", e)
@@ -381,15 +391,15 @@ def resolve_date_triplet(date_override: date | None = None) -> dict:
     if not is_today_trading:
         stage = "post_market"  # 非交易日 = 上一交易日盘后就绪态
     elif now_time < _time(9, 0):
-        stage = "pre_market"       # 17:15→09:00 跨夜就绪（今日盘后=次日盘前）
+        stage = "pre_market"  # 17:15→09:00 跨夜就绪（今日盘后=次日盘前）
     elif now_time < _time(9, 30):
-        stage = "pre_open"         # 09:00-09:30 集合竞价/开盘准备（S093 新增）
+        stage = "pre_open"  # 09:00-09:30 集合竞价/开盘准备（S093 新增）
     elif now_time < _time(15, 30):
-        stage = "intraday"         # 09:30-15:30 盘中交易（最新交易规则延迟到 15:30）
+        stage = "intraday"  # 09:30-15:30 盘中交易（最新交易规则延迟到 15:30）
     elif now_time < _time(17, 15):
         stage = "post_transition"  # 15:30-17:15 数据采集渐进
     else:
-        stage = "post_market"      # 17:15→ 跨夜就绪（= 次日 pre_market）
+        stage = "post_market"  # 17:15→ 跨夜就绪（= 次日 pre_market）
 
     # R8a：过渡窗内手动选"今天"(== today_bj 且交易日) → 复用自动态
     # （选今天等于没选；防前瞻拿到 T+1 用陈旧 kline 算错）

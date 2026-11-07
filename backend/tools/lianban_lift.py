@@ -6,6 +6,7 @@
 """S158: 连板（high_days）§44 维度——ths_limit_up_pool(date) 42 天覆盖。
 文献 Hua'an 2026: 连板 tail 2.4% 赚 14.5% 利润 +14.6% 92.3% win（强但稀）。
 复用 day_paired per-T top-vs-all + net-profit-verify（S155/S156 教训）。"""
+
 import datetime
 import json
 import re
@@ -13,6 +14,7 @@ import sqlite3
 import sys
 import time
 from pathlib import Path
+
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vr_paths import resolve_data_dir
@@ -31,36 +33,49 @@ DB = resolve_data_dir() / "gene_scores.db"
 LB_CACHE = resolve_data_dir() / "ths_lb_cache.json"
 PARAMS = (-3.0, 8.0, 3)
 
+
 def parse_boards(high_days: str) -> int:
     """'3天3板'→3, '2天2板'→2, 首板/空→1。"""
     m = re.search(r"(\d+)\s*板", str(high_days or ""))
     return int(m.group(1)) if m else 1
 
+
 def fetch_lb(date_compact):
     cache = json.loads(LB_CACHE.read_text()) if LB_CACHE.exists() else {}
-    if date_compact in cache: return cache[date_compact]  # 派生 artifact（已 transform 为 {code,boards}，非源 schema）
+    if date_compact in cache:
+        return cache[date_compact]  # 派生 artifact（已 transform 为 {code,boards}，非源 schema）
     try:
         rows = ths_limit_up_pool(date_compact)
         time.sleep(0.5)
         # S163 R1: 坏 ths 行（缺 code/错型/缺失率）拒绝进 §44 verdict
         validate_or_reject("ths_limit_up_pool", rows)
-        out = [{"code": str(r.get("code") or "").zfill(6), "boards": parse_boards(r.get("high_days"))} for r in rows if r.get("code")]
+        out = [
+            {"code": str(r.get("code") or "").zfill(6), "boards": parse_boards(r.get("high_days"))}
+            for r in rows
+            if r.get("code")
+        ]
         cache[date_compact] = out
         LB_CACHE.write_text(json.dumps(cache, ensure_ascii=False))
         return out
     except Exception as e:
-        print(f"  lb {date_compact} ERR {repr(e)[:80]}", flush=True); return []
+        print(f"  lb {date_compact} ERR {repr(e)[:80]}", flush=True)
+        return []
+
 
 def main():
     cache = _load_kline_cache()  # S204 T1: enriched（一字板 pctChg=0.0 修复）
     # S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
-    validate_or_reject("baostock_kline",
-                       [b for bars in cache.values() for b in bars],
-                       as_of=datetime.date.today().isoformat())
+    validate_or_reject(
+        "baostock_kline", [b for bars in cache.values() for b in bars], as_of=datetime.date.today().isoformat()
+    )
     conn = sqlite3.connect(str(DB), timeout=10)
     try:
-        em_dates = [r[0] for r in conn.execute(
-            "SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date").fetchall()]
+        em_dates = [
+            r[0]
+            for r in conn.execute(
+                "SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
+            ).fetchall()
+        ]
     finally:
         conn.close()
     print(f"dates={len(em_dates)}", flush=True)
@@ -68,45 +83,61 @@ def main():
     obs = []
     for di, D in enumerate(em_dates):
         pool = fetch_lb(D.replace("-", ""))
-        if not pool: continue
-        print(f"  [{di+1}/{len(em_dates)}] {D}: {len(pool)} 涨停股", flush=True)
+        if not pool:
+            continue
+        print(f"  [{di + 1}/{len(em_dates)}] {D}: {len(pool)} 涨停股", flush=True)
         for s in pool:
-            code = s["code"]; bars = cache.get(code)
-            if not bars: continue
+            code = s["code"]
+            bars = cache.get(code)
+            if not bars:
+                continue
             d_idx = next((i for i, b in enumerate(bars) if str(b["date"])[:10] == D), None)
-            if d_idx is None or d_idx + 1 >= len(bars): continue
-            if _is_unbuyable_next_bar(bars[d_idx + 1]): continue
+            if d_idx is None or d_idx + 1 >= len(bars):
+                continue
+            if _is_unbuyable_next_bar(bars[d_idx + 1]):
+                continue
             sim = simulate_holding(bars, D, *PARAMS)
-            if sim is None: continue
+            if sim is None:
+                continue
             # S201b: 逐笔 _cost_pct（保留 5元门 size-dependent，非 flat 0.70%）
             entry_price = float(bars[d_idx + 1].get("open", 0) or 0)
             cost = _cost_pct(entry_price, 100.0, D) if entry_price > 0 else 0.0
             net = sim["return_pct"] - cost
-            obs.append({"D": D, "code": code, "boards": s["boards"],
-                        "net": net, "win": 1 if net > 0 else 0, "cost": cost})
+            obs.append(
+                {"D": D, "code": code, "boards": s["boards"], "net": net, "win": 1 if net > 0 else 0, "cost": cost}
+            )
 
     if len(obs) < 30:
-        print(f"n={len(obs)} <30 探索性"); return
-    all_wins = sum(o["win"] for o in obs); wr_all = all_wins / len(obs)
-    print(f"\nobs={len(obs)} days={len(set(o['D'] for o in obs))} | all net-WR(涨停股 D+1): {wr_all*100:.2f}%")
+        print(f"n={len(obs)} <30 探索性")
+        return
+    all_wins = sum(o["win"] for o in obs)
+    wr_all = all_wins / len(obs)
+    print(f"\nobs={len(obs)} days={len(set(o['D'] for o in obs))} | all net-WR(涨停股 D+1): {wr_all * 100:.2f}%")
     # 连板分布
     from collections import Counter
+
     dist = Counter(o["boards"] for o in obs)
     print(f"连板分布: {dict(sorted(dist.items()))}\n")
 
-    for name, pred in [("首板(boards==1)", lambda o: o["boards"] == 1),
-                       ("2连板", lambda o: o["boards"] == 2),
-                       ("3+连板", lambda o: o["boards"] >= 3),
-                       ("连板(2+)", lambda o: o["boards"] >= 2)]:
+    for name, pred in [
+        ("首板(boards==1)", lambda o: o["boards"] == 1),
+        ("2连板", lambda o: o["boards"] == 2),
+        ("3+连板", lambda o: o["boards"] >= 3),
+        ("连板(2+)", lambda o: o["boards"] >= 2),
+    ]:
         tw, tn = 0, 0
         for D in set(o["D"] for o in obs):
             day = [o for o in obs if o["D"] == D]
             top = [o for o in day if pred(o)]
-            tw += sum(o["win"] for o in top); tn += len(top)
-        if not tn: print(f"  {name}: n=0"); continue
-        wr = tw / tn; lift = wr / wr_all if wr_all else 0
+            tw += sum(o["win"] for o in top)
+            tn += len(top)
+        if not tn:
+            print(f"  {name}: n=0")
+            continue
+        wr = tw / tn
+        lift = wr / wr_all if wr_all else 0
         st = "VALIDATED" if lift >= 2 else ("未validated" if lift >= 1 else "劣于随机")
-        print(f"  {name}: net-WR {wr*100:.2f}% (n={tn}) vs all {wr_all*100:.2f}% | net lift={lift:.3f}x {st}")
+        print(f"  {name}: net-WR {wr * 100:.2f}% (n={tn}) vs all {wr_all * 100:.2f}% | net lift={lift:.3f}x {st}")
 
     # ── S168 接线：4 verdict（4 arm）落 Recorder + lineage ──
     _FROZEN_S168 = "44bc42d"  # S158 冻结 commit（引入 harness 参数，后续 commit 仅加防御性 schema gate）
@@ -144,9 +175,13 @@ def main():
             params={"arm": _arm_name, "path": list(PARAMS), "cost": "per_trade"},
         )
         _s168_verdicts[_arm_name] = {
-            "status": _v.status, "selection_lift": _v.selection_lift,
-            "n": _v.n, "days_robust": _v.days_robust, "note": _v.note,
+            "status": _v.status,
+            "selection_lift": _v.selection_lift,
+            "n": _v.n,
+            "days_robust": _v.days_robust,
+            "note": _v.note,
         }
+
 
 if __name__ == "__main__":
     main()

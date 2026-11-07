@@ -156,15 +156,17 @@ def record_settlement(state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     trade_date = state.get("trade_date") or settle_date
 
     engine = SettlementEngine()  # 每次新建，无跨请求状态残留
-    result = engine.settle(SettlementInput(
-        code=state.get("code", ""),
-        name=state.get("name", ""),
-        strategy=state.get("strategy") or "",
-        entry_price=float(entry_price),
-        exit_price=float(exit_price),
-        signal_date=trade_date,
-        settle_date=settle_date,
-    ))
+    result = engine.settle(
+        SettlementInput(
+            code=state.get("code", ""),
+            name=state.get("name", ""),
+            strategy=state.get("strategy") or "",
+            entry_price=float(entry_price),
+            exit_price=float(exit_price),
+            signal_date=trade_date,
+            settle_date=settle_date,
+        )
+    )
 
     from win_rate_tracker import WinRateRecord
 
@@ -179,14 +181,14 @@ def record_settlement(state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         stock_code=code,
         stock_name=state.get("name", ""),
         strategy_used=strategy,
-        entry_date=trade_date,          # D3：候选日≈信号日（诚实近似）
+        entry_date=trade_date,  # D3：候选日≈信号日（诚实近似）
         entry_price=float(entry_price),
         exit_date=settle_date,
         exit_price=float(exit_price),
         return_pct=round(result.return_pct, 2),
         is_win=result.won,
         gene_score=_lookup_gene_score(code, trade_date),
-        sti_label="",                    # 无数据源，留空（列可空）
+        sti_label="",  # 无数据源，留空（列可空）
         sector="",
         signal_source=attribution["signal_source"],
         signal_ref=attribution["signal_ref"],
@@ -202,7 +204,8 @@ def record_settlement(state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
     buy_at, settle_at = get_holding_settle_times(state.get("code", ""), trade_date)
     return settlement_summary(
-        float(entry_price), float(exit_price),
+        float(entry_price),
+        float(exit_price),
         buy_at or trade_date,
         settle_at or settle_date,
     )

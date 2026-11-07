@@ -12,6 +12,7 @@
 是 astock 的子类，消息格式从旧 `str(e)` 统一为 `f"{name} 执行失败：{e}"`——
 无测试断言旧格式，且对用户更清晰）。
 """
+
 from __future__ import annotations
 
 import inspect
@@ -25,6 +26,7 @@ _EMPTY = inspect.Parameter.empty
 @dataclass
 class ToolDef:
     """单个工具的声明式描述。"""
+
     name: str
     description: str
     func: Callable[..., Any]
@@ -37,6 +39,7 @@ _REGISTRY: "dict[str, ToolDef]" = {}
 
 
 # ── 类型 → JSON schema 映射 ──────────────────────────────────────────
+
 
 def _type_to_schema(ann: Any) -> dict:
     """把 Python 类型标注映射成 JSON schema 片段（不含 description）。
@@ -115,6 +118,7 @@ def _build_schema_from_signature(func: Callable[..., Any]) -> dict:
 
 # ── 注册 / 导出 / 派发 ───────────────────────────────────────────────
 
+
 def register_tool(
     name: str,
     description: str,
@@ -138,8 +142,11 @@ def register_tool(
             else:
                 schema["properties"][pname] = dict(extra)
         _REGISTRY[name] = ToolDef(
-            name=name, description=description, func=func,
-            schema=schema, param_meta=meta,
+            name=name,
+            description=description,
+            func=func,
+            schema=schema,
+            param_meta=meta,
         )
         return func
 

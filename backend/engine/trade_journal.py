@@ -20,6 +20,7 @@ signal 生成器 → executor → accounting → 写 SQLite）。口径不同不
 
 聚合走 SQLite query 不读结果 cache（memory s088 重算范式）。
 """
+
 from __future__ import annotations
 
 import math
@@ -54,11 +55,11 @@ DEFAULT_INITIAL_CAPITAL: float = 100000.0
 #: S175 T9 — 各臂 §44 verdict 静态标签（诚实呈现，grill C7：falsified ≠ weak ≠ 待复验）
 #: externally_validated=外部文献验证（非本系统 §44）；§44_falsified=S168 证否；dead_arm=§44 成本假象 falsified
 ARM_VERDICT: dict[str, str] = {
-    "floor": "externally_validated",   # 红利低波 9-12% 三重定论（学术+卖方+指数），非本系统 §44
-    "breakout": "§44_falsified",        # S168 12 harness 全 falsified，selection 无 edge
-    "gap": "dead_arm",                   # §44 falsified 成本假象 net -0.48% t=-3.79
-    "limitup": "mock_not_ready",         # signal 生成器未建，mock_entry=10.0
-    "trend": "exploratory",             # S181 已升级实臂（trend_swing_arm 真 generator），§44 未验
+    "floor": "externally_validated",  # 红利低波 9-12% 三重定论（学术+卖方+指数），非本系统 §44
+    "breakout": "§44_falsified",  # S168 12 harness 全 falsified，selection 无 edge
+    "gap": "dead_arm",  # §44 falsified 成本假象 net -0.48% t=-3.79
+    "limitup": "mock_not_ready",  # signal 生成器未建，mock_entry=10.0
+    "trend": "exploratory",  # S181 已升级实臂（trend_swing_arm 真 generator），§44 未验
 }
 #: dormant 臂（不跑生产/mock 未就绪，无记录）——aggregate 显式加 stub 让 UI 显诚实标签。
 #: gap 不在此（gap 有 is_dead_arm=1 记录，走 RecordRow dead badge，不进 aggregate 防污染存活臂统计）
@@ -100,8 +101,12 @@ class JournalRecord:
 
     @classmethod
     def create(
-        cls, arm: str, stock_code: str, entry_price: float | None,
-        entry_date: str, **kwargs: Any,
+        cls,
+        arm: str,
+        stock_code: str,
+        entry_price: float | None,
+        entry_date: str,
+        **kwargs: Any,
     ) -> "JournalRecord":
         """构造新记录，signal_id 确定性（arm_entry_date_stock_code）+ created_at。
 
@@ -204,13 +209,25 @@ class TradeJournal:
                     cost_pct, gross_return, is_realized, unrealized_pnl,
                     is_dead_arm, fills_json, created_at)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (record.signal_id, record.arm, record.stock_code,
-                 record.entry_price, record.entry_date,
-                 record.exit_price, record.exit_date, record.exit_reason,
-                 record.net_pnl, record.pnl_unit, record.cost_pct,
-                 record.gross_return, record.is_realized,
-                 record.unrealized_pnl, record.is_dead_arm,
-                 record.fills_json, record.created_at),
+                (
+                    record.signal_id,
+                    record.arm,
+                    record.stock_code,
+                    record.entry_price,
+                    record.entry_date,
+                    record.exit_price,
+                    record.exit_date,
+                    record.exit_reason,
+                    record.net_pnl,
+                    record.pnl_unit,
+                    record.cost_pct,
+                    record.gross_return,
+                    record.is_realized,
+                    record.unrealized_pnl,
+                    record.is_dead_arm,
+                    record.fills_json,
+                    record.created_at,
+                ),
             )
             conn.commit()
         finally:
@@ -218,7 +235,10 @@ class TradeJournal:
         return record.signal_id
 
     def update_unrealized(
-        self, signal_id: str, unrealized_pnl: float, current_price: float,
+        self,
+        signal_id: str,
+        unrealized_pnl: float,
+        current_price: float,
     ) -> bool:
         """更新 floor 臂持仓的 unrealized_pnl（C6 每日盘后 MTM）。"""
         conn = self._conn()
@@ -234,8 +254,14 @@ class TradeJournal:
             conn.close()
 
     def update_settlement_v2(
-        self, signal_id: str, gross_return_v2: float, exit_price: float,
-        exit_date: str, exit_reason: str, net_pnl: float, cost_pct: float,
+        self,
+        signal_id: str,
+        gross_return_v2: float,
+        exit_price: float,
+        exit_date: str,
+        exit_reason: str,
+        net_pnl: float,
+        cost_pct: float,
         exit_model_version: str = "v2_gap_through_aware",
     ) -> bool:
         """S201b stage 2 — UPDATE 结算字段 + v2 列，冻结 gross_return 不动。
@@ -251,8 +277,7 @@ class TradeJournal:
                    SET gross_return_v2=?, exit_price=?, exit_date=?, exit_reason=?,
                        net_pnl=?, cost_pct=?, is_realized=1, exit_model_version=?
                    WHERE signal_id=? AND is_realized=0""",
-                (gross_return_v2, exit_price, exit_date, exit_reason,
-                 net_pnl, cost_pct, exit_model_version, signal_id),
+                (gross_return_v2, exit_price, exit_date, exit_reason, net_pnl, cost_pct, exit_model_version, signal_id),
             )
             conn.commit()
             return cur.rowcount > 0
@@ -260,8 +285,11 @@ class TradeJournal:
             conn.close()
 
     def query_records(
-        self, arm: str | None = None, is_realized: int | None = None,
-        is_dead_arm: int | None = 0, limit: int = 5000,
+        self,
+        arm: str | None = None,
+        is_realized: int | None = None,
+        is_dead_arm: int | None = 0,
+        limit: int = 5000,
     ) -> list[JournalRecord]:
         """查询记录。is_dead_arm 默认 0（只查存活臂），传 None 查全部。"""
         clauses: list[str] = []
@@ -293,12 +321,18 @@ class TradeJournal:
         gr_v2 = row["gross_return_v2"] if "gross_return_v2" in row.keys() else None
         emv = row["exit_model_version"] if "exit_model_version" in row.keys() else ""
         return JournalRecord(
-            signal_id=row["signal_id"], arm=row["arm"],
-            stock_code=row["stock_code"], entry_price=row["entry_price"],
-            entry_date=row["entry_date"], exit_price=row["exit_price"],
-            exit_date=row["exit_date"], exit_reason=row["exit_reason"],
-            net_pnl=row["net_pnl"], pnl_unit=row["pnl_unit"],
-            cost_pct=row["cost_pct"], gross_return=row["gross_return"],
+            signal_id=row["signal_id"],
+            arm=row["arm"],
+            stock_code=row["stock_code"],
+            entry_price=row["entry_price"],
+            entry_date=row["entry_date"],
+            exit_price=row["exit_price"],
+            exit_date=row["exit_date"],
+            exit_reason=row["exit_reason"],
+            net_pnl=row["net_pnl"],
+            pnl_unit=row["pnl_unit"],
+            cost_pct=row["cost_pct"],
+            gross_return=row["gross_return"],
             is_realized=row["is_realized"],
             unrealized_pnl=row["unrealized_pnl"],
             is_dead_arm=row["is_dead_arm"],
@@ -311,7 +345,8 @@ class TradeJournal:
     # ── equity 曲线（C4/C6）────────────────────────────────────────────
 
     def equity_curve(
-        self, arm: str | None = None,
+        self,
+        arm: str | None = None,
         initial_capital: float = DEFAULT_INITIAL_CAPITAL,
     ) -> list[dict]:
         """equity 曲线 = initial_capital + cumulative(realized + unrealized MTM)。
@@ -321,8 +356,7 @@ class TradeJournal:
         """
         records = self.query_records(arm=arm, is_dead_arm=None)
         if not records:
-            return [{"date": "", "equity": initial_capital,
-                     "cum_pnl": 0.0, "drawdown_cny": 0.0}]
+            return [{"date": "", "equity": initial_capital, "cum_pnl": 0.0, "drawdown_cny": 0.0}]
 
         # 按平仓日/持仓日排序
         dated: list[tuple[str, float]] = []
@@ -344,11 +378,14 @@ class TradeJournal:
             equity = initial_capital + cum
             peak = max(peak, cum)
             dd_cny = peak - cum
-            points.append({
-                "date": date, "equity": round(equity, 2),
-                "cum_pnl": round(cum, 2),
-                "drawdown_cny": round(dd_cny, 2),
-            })
+            points.append(
+                {
+                    "date": date,
+                    "equity": round(equity, 2),
+                    "cum_pnl": round(cum, 2),
+                    "drawdown_cny": round(dd_cny, 2),
+                }
+            )
         return points
 
     # ── 跨臂聚合 + 统计方法论（H1/H2/H8）──────────────────────────────
@@ -386,7 +423,8 @@ class TradeJournal:
         # 4 臂多重检验（H1：bonferroni_bh，K cap 8）
         if len(p_values) > 1:
             adjusted = bonferroni_bh(
-                p_values, n=min(len(p_values), MAX_BONFERRONI_K),
+                p_values,
+                n=min(len(p_values), MAX_BONFERRONI_K),
                 method="BH",
             )
             arms_with_p = [a for a in arms if result[a].get("p_one_sided") is not None]
@@ -402,11 +440,11 @@ class TradeJournal:
         weight_override 设值时优先于冻结 registry（enforce kill / provisional 降权）。
         """
         import sqlite3
+
         conn = sqlite3.connect(str(self._db_path))
         try:
             row = conn.execute(
-                "SELECT arm, is_active, weight_override, kill_reason, killed_at "
-                "FROM arm_status WHERE arm=?",
+                "SELECT arm, is_active, weight_override, kill_reason, killed_at FROM arm_status WHERE arm=?",
                 (arm,),
             ).fetchone()
         finally:
@@ -414,13 +452,16 @@ class TradeJournal:
         if not row:
             return None
         return {
-            "arm": row[0], "is_active": bool(row[1]),
-            "weight_override": row[2], "kill_reason": row[3], "killed_at": row[4],
+            "arm": row[0],
+            "is_active": bool(row[1]),
+            "weight_override": row[2],
+            "kill_reason": row[3],
+            "killed_at": row[4],
         }
 
-    def set_arm_status(self, arm: str, *, is_active: bool = True,
-                      weight_override: float | None = None,
-                      kill_reason: str | None = None) -> None:
+    def set_arm_status(
+        self, arm: str, *, is_active: bool = True, weight_override: float | None = None, kill_reason: str | None = None
+    ) -> None:
         """S213 设置 arm kill switch 状态（upsert）。
 
         is_active=False + kill_reason → lift_for_arm 返 0.0 停交易。
@@ -428,6 +469,7 @@ class TradeJournal:
         """
         import datetime
         import sqlite3
+
         killed_at = datetime.datetime.now().isoformat() if not is_active else None
         conn = sqlite3.connect(str(self._db_path))
         try:
@@ -504,21 +546,24 @@ class TradeJournal:
                 label = "underpowered"
             else:
                 label = "robust"
-            result.append({
-                "week_start": ws,
-                "win_rate": round(d["n_win"] / n_dec, 4) if n_dec else 0.0,
-                "ci_low": ci_low, "ci_high": ci_high,
-                "n_decided": n_dec, "n_total": n_dec, "n_days": n_days,
-                "label": label,
-            })
+            result.append(
+                {
+                    "week_start": ws,
+                    "win_rate": round(d["n_win"] / n_dec, 4) if n_dec else 0.0,
+                    "ci_low": ci_low,
+                    "ci_high": ci_high,
+                    "n_decided": n_dec,
+                    "n_total": n_dec,
+                    "n_days": n_days,
+                    "label": label,
+                }
+            )
         return result
 
     def _distinct_arms(self) -> list[str]:
         conn = self._conn()
         try:
-            rows = conn.execute(
-                "SELECT DISTINCT arm FROM trade_journal WHERE is_dead_arm=0"
-            ).fetchall()
+            rows = conn.execute("SELECT DISTINCT arm FROM trade_journal WHERE is_dead_arm=0").fetchall()
         finally:
             conn.close()
         return [r["arm"] for r in rows]
@@ -526,14 +571,8 @@ class TradeJournal:
     def get_drawdown_status(self, arm: str | None = None) -> dict:
         """供 drawdown_breaker 调用的 equity + drawdown 快照。"""
         records = self.query_records(arm=arm, is_dead_arm=None)
-        total_realized = sum(
-            float(r.net_pnl) for r in records
-            if r.is_realized and r.net_pnl is not None
-        )
-        total_unrealized = sum(
-            float(r.unrealized_pnl) for r in records
-            if r.unrealized_pnl is not None
-        )
+        total_realized = sum(float(r.net_pnl) for r in records if r.is_realized and r.net_pnl is not None)
+        total_unrealized = sum(float(r.unrealized_pnl) for r in records if r.unrealized_pnl is not None)
         cum = total_realized + total_unrealized
         # peak = max cumulative at any point (approximate from current + history)
         points = self.equity_curve(arm=arm)
@@ -546,7 +585,8 @@ class TradeJournal:
             "peak_pnl": round(peak_pnl, 2),
             "drawdown_cny": round(drawdown_cny, 2),
             "drawdown_pct": round(drawdown_cny / DEFAULT_INITIAL_CAPITAL * 100, 2)
-            if DEFAULT_INITIAL_CAPITAL > 0 else 0.0,
+            if DEFAULT_INITIAL_CAPITAL > 0
+            else 0.0,
             "days_tracked": len(dates),
             "n_records": len(records),
         }
@@ -572,7 +612,8 @@ def _wilson_ci(wins: int, total: int, z: float = 1.96) -> tuple[float, float]:
 
 
 def _daily_aggregate_sharpe(
-    net_pnls: list[float], exit_dates: list[str],
+    net_pnls: list[float],
+    exit_dates: list[str],
 ) -> dict:
     """H2 Sharpe 年化修正：先按 exit_date 日聚合 net_pnl → daily PnL 序列 →
     Sharpe = mean/std × sqrt(252)（日频年化有效）。
@@ -586,14 +627,12 @@ def _daily_aggregate_sharpe(
         by_day[date] = by_day.get(date, 0.0) + pnl
     daily_pnls = list(by_day.values())
     if len(daily_pnls) < 2:
-        return {"sharpe": None, "n_days": len(daily_pnls),
-                "daily_mean": None, "daily_std": None}
+        return {"sharpe": None, "n_days": len(daily_pnls), "daily_mean": None, "daily_std": None}
     arr = np.array(daily_pnls, dtype=float)
     mean = float(arr.mean())
     std = float(arr.std(ddof=1))
     if std == 0:
-        return {"sharpe": None, "n_days": len(daily_pnls),
-                "daily_mean": round(mean, 4), "daily_std": 0.0}
+        return {"sharpe": None, "n_days": len(daily_pnls), "daily_mean": round(mean, 4), "daily_std": 0.0}
     sharpe = mean / std * math.sqrt(252)
     return {
         "sharpe": round(sharpe, 4),
@@ -663,7 +702,10 @@ def _compute_arm_stats(records: list[JournalRecord]) -> dict:
     if net_pnls and len(net_pnls) >= 2:
         r_arr = np.array(net_pnls, dtype=float)
         haircut = compute_haircut(
-            r_arr, n_obs=len(net_pnls), n_tests=1, method="bonferroni",
+            r_arr,
+            n_obs=len(net_pnls),
+            n_tests=1,
+            method="bonferroni",
         )
 
     # underpowered gate（H1/H4）
@@ -699,8 +741,7 @@ def _compute_arm_stats(records: list[JournalRecord]) -> dict:
         "min_trl": min_trl,
         "haircut": haircut,
         # 净超额 CI（day-clustered t-test 的 t_stat → 近似 CI）
-        "net_excess_mean_cny": round(
-            sum(net_pnls) / n_days if n_days > 0 and net_pnls else 0.0, 2),
+        "net_excess_mean_cny": round(sum(net_pnls) / n_days if n_days > 0 and net_pnls else 0.0, 2),
     }
 
 

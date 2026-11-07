@@ -12,6 +12,7 @@ def fetch_genes(date: str) -> dict[str, dict]:
     """返回 {code: {name, gene_score, high_gene, qualify}}。取不到返回 {}。"""
     try:
         import limitup_screener as ls
+
         if hasattr(ls, "get_screener_result"):
             # get_screener_result 是 async def，必须 await（否则返回 coroutine，下游 gene_scores=None → 静默空）。
             result = run_coro_sync(ls.get_screener_result(date))

@@ -18,6 +18,7 @@
 
 不臆造：所有数字实算。
 """
+
 import json
 import math
 import sqlite3
@@ -29,6 +30,7 @@ from collections import Counter, defaultdict
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vr_paths import resolve_data_dir
+
 _DATA = resolve_data_dir()
 KLINE_DB = str(_DATA / "baostock_kline_cache.db")
 ZT_DB = str(_DATA / "zt_history.db")
@@ -131,27 +133,43 @@ for d in fb_dates:
         gap_pct = (d1_open - d_close) / d_close * 100  # D+1 open vs D close(涨停价). negative=low open
         # 一字涨停 D+1: open=close=high=low near limit-up → can't buy at low (locked up)
         # 一字涨停 D+2: can't sell
-        d1_locked_up = (d1_open >= d_close * 0.995 and d1_low >= d_close * 0.995)  # D+1 一字涨停(开盘即封)
-        d2_locked_up = (d2_open >= d1_close * 1.095 and d2_low >= d1_close * 1.095)  # D+2 一字涨停
-        d2_locked_dn = (d2_open <= d1_close * 0.905 and d2_high <= d1_close * 0.905)  # D+2 一字跌停
+        d1_locked_up = d1_open >= d_close * 0.995 and d1_low >= d_close * 0.995  # D+1 一字涨停(开盘即封)
+        d2_locked_up = d2_open >= d1_close * 1.095 and d2_low >= d1_close * 1.095  # D+2 一字涨停
+        d2_locked_dn = d2_open <= d1_close * 0.905 and d2_high <= d1_close * 0.905  # D+2 一字跌停
         # is ST? (5% limit) — use isST field
         is_st = bar_d.get("isST") == "1"
         # board type by code prefix
         is_kcb = code.startswith("688")  # 科创板 20%
-        is_cyb = code.startswith("30")   # 创业板 20%
-        records.append({
-            "code": code, "d": d, "d1": d1, "d2": d2,
-            "d_close": d_close, "d1_open": d1_open, "d1_close": d1_close,
-            "d1_high": d1_high, "d1_low": d1_low,
-            "d2_open": d2_open, "d2_close": d2_close,
-            "d2_high": d2_high, "d2_low": d2_low,
-            "gap_pct": gap_pct,
-            "d1_locked_up": d1_locked_up, "d2_locked_up": d2_locked_up,
-            "d2_locked_dn": d2_locked_dn,
-            "is_st": is_st, "is_kcb": is_kcb, "is_cyb": is_cyb,
-        })
+        is_cyb = code.startswith("30")  # 创业板 20%
+        records.append(
+            {
+                "code": code,
+                "d": d,
+                "d1": d1,
+                "d2": d2,
+                "d_close": d_close,
+                "d1_open": d1_open,
+                "d1_close": d1_close,
+                "d1_high": d1_high,
+                "d1_low": d1_low,
+                "d2_open": d2_open,
+                "d2_close": d2_close,
+                "d2_high": d2_high,
+                "d2_low": d2_low,
+                "gap_pct": gap_pct,
+                "d1_locked_up": d1_locked_up,
+                "d2_locked_up": d2_locked_up,
+                "d2_locked_dn": d2_locked_dn,
+                "is_st": is_st,
+                "is_kcb": is_kcb,
+                "is_cyb": is_cyb,
+            }
+        )
 
-print(f"first-board records: {len(records)} (total fb {n_fb_total}, no_kline {n_no_kline}, no_d1 {n_no_d1}, no_d2 {n_no_d2})", file=sys.stderr)
+print(
+    f"first-board records: {len(records)} (total fb {n_fb_total}, no_kline {n_no_kline}, no_d1 {n_no_d1}, no_d2 {n_no_d2})",
+    file=sys.stderr,
+)
 
 
 def stats(name, recs, retfn, cost=0.003):
@@ -171,11 +189,14 @@ def stats(name, recs, retfn, cost=0.003):
     t = mean / se if se else 0
     # one-sided p (H1: mean>0)
     from math import erfc, sqrt
+
     z = t
     p_one = 0.5 * erfc(z / sqrt(2)) if z > 0 else 1 - 0.5 * erfc(-z / sqrt(2))
     # day-clustered: count unique days
     days = len(set(r["d"] for r in recs))
-    print(f"{name:52s} | n={n:5d} days={days:3d} gross={mean*100:6.2f}% net~{net*100:6.2f}% med={med*100:6.2f}% WR={wr*100:5.1f}% t={t:5.2f} p1={p_one:.4f}")
+    print(
+        f"{name:52s} | n={n:5d} days={days:3d} gross={mean * 100:6.2f}% net~{net * 100:6.2f}% med={med * 100:6.2f}% WR={wr * 100:5.1f}% t={t:5.2f} p1={p_one:.4f}"
+    )
 
 
 # ---- return functions ----
@@ -197,6 +218,7 @@ def ret_tp(tp_pct):
         if r["d2_high"] >= tp_px:
             return tp_pct
         return (r["d2_close"] - r["d1_open"]) / r["d1_open"]
+
     return fn
 
 
@@ -211,6 +233,7 @@ def ret_stop(sl_pct, tp_pct=None):
             if r["d2_high"] >= tp_px:
                 return tp_pct
         return (r["d2_close"] - r["d1_open"]) / r["d1_open"]
+
     return fn
 
 
@@ -252,13 +275,25 @@ print("\n--- 按 D+1 开盘缺口分组（entry=D+1 open, exit=D+2 open）---")
 cats = defaultdict(list)
 for r in records:
     cats[categorize(r["gap_pct"])].append(r)
-for cat in ["deep_low(<-5%)", "low_open(-5~-2%)", "slight_low(-2~0%)",
-            "slight_high(0~+2%)", "high_open(+2~+5%)", "deep_high(>+5%)"]:
+for cat in [
+    "deep_low(<-5%)",
+    "low_open(-5~-2%)",
+    "slight_low(-2~0%)",
+    "slight_high(0~+2%)",
+    "high_open(+2~+5%)",
+    "deep_high(>+5%)",
+]:
     stats(f"{cat} → D+2 open", cats.get(cat, []), ret_d2_open)
 
 print("\n--- 按 D+1 开盘缺口分组（exit=D+2 close）---")
-for cat in ["deep_low(<-5%)", "low_open(-5~-2%)", "slight_low(-2~0%)",
-            "slight_high(0~+2%)", "high_open(+2~+5%)", "deep_high(>+5%)"]:
+for cat in [
+    "deep_low(<-5%)",
+    "low_open(-5~-2%)",
+    "slight_low(-2~0%)",
+    "slight_high(0~+2%)",
+    "high_open(+2~+5%)",
+    "deep_high(>+5%)",
+]:
     stats(f"{cat} → D+2 close", cats.get(cat, []), ret_d2_close)
 
 # ---- REALIZABILITY-AWARE (exclude 一字) ----
@@ -274,14 +309,26 @@ print("\n--- 可实现 + 按 D+1 缺口分组（exit=D+2 open）---")
 real_cats = defaultdict(list)
 for r in real_all:
     real_cats[categorize(r["gap_pct"])].append(r)
-for cat in ["deep_low(<-5%)", "low_open(-5~-2%)", "slight_low(-2~0%)",
-            "slight_high(0~+2%)", "high_open(+2~+5%)", "deep_high(>+5%)"]:
+for cat in [
+    "deep_low(<-5%)",
+    "low_open(-5~-2%)",
+    "slight_low(-2~0%)",
+    "slight_high(0~+2%)",
+    "high_open(+2~+5%)",
+    "deep_high(>+5%)",
+]:
     sub = real_cats.get(cat, [])
     stats(f"REAL {cat} → D+2 open", sub, ret_d2_open)
 
 print("\n--- 可实现 + 按 D+1 缺口分组（exit=D+2 close）---")
-for cat in ["deep_low(<-5%)", "low_open(-5~-2%)", "slight_low(-2~0%)",
-            "slight_high(0~+2%)", "high_open(+2~+5%)", "deep_high(>+5%)"]:
+for cat in [
+    "deep_low(<-5%)",
+    "low_open(-5~-2%)",
+    "slight_low(-2~0%)",
+    "slight_high(0~+2%)",
+    "high_open(+2~+5%)",
+    "deep_high(>+5%)",
+]:
     sub = real_cats.get(cat, [])
     stats(f"REAL {cat} → D+2 close", sub, ret_d2_close)
 
@@ -292,22 +339,22 @@ print("=" * 100)
 target = real_cats.get("low_open(-5~-2%)", [])
 stats("target → D+2 close (no TP/SL)", target, ret_d2_close)
 for tp in [0.03, 0.05, 0.08, 0.10]:
-    stats(f"target → TP {tp*100:.0f}% (else D+2 close)", target, ret_tp(tp))
+    stats(f"target → TP {tp * 100:.0f}% (else D+2 close)", target, ret_tp(tp))
 print()
 for sl in [0.03, 0.05, 0.08]:
-    stats(f"target → SL {sl*100:.0f}% (else D+2 close)", target, ret_stop(sl))
+    stats(f"target → SL {sl * 100:.0f}% (else D+2 close)", target, ret_stop(sl))
 print()
 print("--- TP+SL 组合 ---")
 for tp in [0.05, 0.08]:
     for sl in [0.03, 0.05]:
-        stats(f"target → TP {tp*100:.0f}% / SL {sl*100:.0f}%", target, ret_stop(sl, tp))
+        stats(f"target → TP {tp * 100:.0f}% / SL {sl * 100:.0f}%", target, ret_stop(sl, tp))
 
 # ---- "不破昨日涨停价" filter interpretation ----
 # Interp: D+1 low stays above D close (涨停价). But if low-open -2~-5%, open is BELOW
 # 涨停价, so low < open < 涨停价 → this filter would eliminate almost all low-open.
 # Test the OPPOSITE interp: D+1 close recovers above some level (反包/企稳)
 print("\n" + "=" * 100)
-print('过滤：D+1 收盘企稳（close >= open，即当日不破开盘/反包迹象）')
+print("过滤：D+1 收盘企稳（close >= open，即当日不破开盘/反包迹象）")
 print("=" * 100)
 for cat in ["low_open(-5~-2%)", "slight_low(-2~0%)", "high_open(+2~+5%)"]:
     sub = [r for r in real_cats.get(cat, []) if r["d1_close"] >= r["d1_open"]]
@@ -322,7 +369,7 @@ print("=" * 100)
 for cat in ["low_open(-5~-2%)", "high_open(+2~+5%)"]:
     sub = real_cats.get(cat, [])
     n_break = sum(1 for r in sub if r["d1_low"] < r["d1_open"] * 0.97)
-    print(f"{cat}: n={len(sub)} D+1破开盘3%数={n_break} ({n_break/max(len(sub),1)*100:.1f}%)")
+    print(f"{cat}: n={len(sub)} D+1破开盘3%数={n_break} ({n_break / max(len(sub), 1) * 100:.1f}%)")
 
 # ---- survivorship / base comparison: non-first-board stocks next-day behavior ----
 print("\n" + "=" * 100)
@@ -359,24 +406,43 @@ for code, ds in code_dates.items():
         if d_close <= 0 or d1_open <= 0:
             continue
         gap = (d1_open - d_close) / d_close * 100
-        d1_locked = (d1_open >= d_close * 0.995 and d1_low >= d_close * 0.995)
-        d2_locked_up = (d2_open >= bar_d1.get("close", d1_open) * 1.095 and d2_low >= bar_d1.get("close", d1_open) * 1.095)
+        d1_locked = d1_open >= d_close * 0.995 and d1_low >= d_close * 0.995
+        d2_locked_up = (
+            d2_open >= bar_d1.get("close", d1_open) * 1.095 and d2_low >= bar_d1.get("close", d1_open) * 1.095
+        )
         if d1_locked or d2_locked_up:
             continue
-        nzt_records.append({"code": code, "d": d, "d_close": d_close, "d1_open": d1_open,
-                            "d2_open": d2_open, "d2_close": d2_close, "d2_low": d2_low,
-                            "d2_high": d2_high, "gap_pct": gap})
+        nzt_records.append(
+            {
+                "code": code,
+                "d": d,
+                "d_close": d_close,
+                "d1_open": d1_open,
+                "d2_open": d2_open,
+                "d2_close": d2_close,
+                "d2_low": d2_low,
+                "d2_high": d2_high,
+                "gap_pct": gap,
+            }
+        )
 # sample down: too many non-ZT records, take random 20000 for speed
 import random
+
 random.seed(42)
 if len(nzt_records) > 20000:
     nzt_records = random.sample(nzt_records, 20000)
 nzt_low = [r for r in nzt_records if -5.0 < r["gap_pct"] <= -2.0]
 nzt_high = [r for r in nzt_records if 2.0 < r["gap_pct"] <= 5.0]
+
+
 def nr_open(r):
     return (r["d2_open"] - r["d1_open"]) / r["d1_open"]
+
+
 def nr_close(r):
     return (r["d2_close"] - r["d1_open"]) / r["d1_open"]
+
+
 stats("非涨停 低开(-5~-2%) → D+2 open (对照)", nzt_low, nr_open)
 stats("非涨停 低开(-5~-2%) → D+2 close (对照)", nzt_low, nr_close)
 stats("非涨停 高开(+2~+5%) → D+2 open (对照)", nzt_high, nr_open)
@@ -400,7 +466,7 @@ for cat in ["low_open(-5~-2%)", "high_open(+2~+5%)"]:
     if not sub:
         continue
     d2_zt = sum(1 for r in sub if r["d2_open"] >= r["d1_close"] * 1.095)
-    print(f"{cat}: n={len(sub)} D+2涨停率={d2_zt/len(sub)*100:.1f}%")
+    print(f"{cat}: n={len(sub)} D+2涨停率={d2_zt / len(sub) * 100:.1f}%")
 
 print("\n" + "=" * 100)
 print("诚实结论：低开低吸 vs 高开追 的 net return 对比 + 显著性")
@@ -409,4 +475,6 @@ lo = real_cats.get("low_open(-5~-2%)", [])
 ho = real_cats.get("high_open(+2~+5%)", [])
 stats("LOW-OPEN 低吸 → D+2 close", lo, ret_d2_close)
 stats("HIGH-OPEN 追 → D+2 close", ho, ret_d2_close)
-print(f"\n低吸-追高 net 差 = {(statistics.mean([ret_d2_close(r) for r in lo]) - statistics.mean([ret_d2_close(r) for r in ho]))*100:.2f}% (gross, before cost)")
+print(
+    f"\n低吸-追高 net 差 = {(statistics.mean([ret_d2_close(r) for r in lo]) - statistics.mean([ret_d2_close(r) for r in ho])) * 100:.2f}% (gross, before cost)"
+)

@@ -4,6 +4,7 @@
 轮2 singles OOS 全 FAIL（test t 1.3-1.6，方向正但不显著）。组合 3 候选
 (gap + today_ret + 小盘) 成 composite score，看 top-decile 是否 OOS 显著。
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -37,7 +38,7 @@ def main() -> None:
         if len(bars) < 26:
             continue
         for i in range(5, len(bars) - 1):
-            prev_c = float(bars[i-1].get("close", 0) or 0)
+            prev_c = float(bars[i - 1].get("close", 0) or 0)
             o = float(bars[i].get("open", 0) or 0)
             c = float(bars[i].get("close", 0) or 0)
             amt = float(bars[i].get("amount", 0) or 0)
@@ -45,7 +46,7 @@ def main() -> None:
                 continue
             today_ret = (c - prev_c) / prev_c
             gap = (o - prev_c) / prev_c
-            nxt_c = float(bars[i+1].get("close", 0) or 0)
+            nxt_c = float(bars[i + 1].get("close", 0) or 0)
             if not nxt_c:
                 continue
             nxt_ret = (nxt_c - c) / c
@@ -86,8 +87,12 @@ def main() -> None:
     tr = composite_top_decile(train_dates)
     te = composite_top_decile(test_dates)
     if tr and te:
-        print(f"train: top-decile mean {tr['mean']*100:+.4f}% (base {tr['base']*100:+.4f}%, diff {tr['diff']*100:+.4f}%, t={tr['t']:.2f})")
-        print(f"test:  top-decile mean {te['mean']*100:+.4f}% (base {te['base']*100:+.4f}%, diff {te['diff']*100:+.4f}%, t={te['t']:.2f})")
+        print(
+            f"train: top-decile mean {tr['mean'] * 100:+.4f}% (base {tr['base'] * 100:+.4f}%, diff {tr['diff'] * 100:+.4f}%, t={tr['t']:.2f})"
+        )
+        print(
+            f"test:  top-decile mean {te['mean'] * 100:+.4f}% (base {te['base'] * 100:+.4f}%, diff {te['diff'] * 100:+.4f}%, t={te['t']:.2f})"
+        )
         oos = te["t"] > 2.4 and te["diff"] > 0  # Bonferroni×3 粗
         print(f"\nOOS (Bonferroni×3, t>2.4): {'✅ SURVIVOR' if oos else '❌ FAIL'}")
         if oos:

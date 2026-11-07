@@ -18,16 +18,10 @@ class ShortSectorHead(Head):
     feature_subset = HEAD_FEATURE_SUBSETS["short_sector"]
 
     def train(self, X, y) -> None:  # noqa: ANN001
-        raise NotImplementedError(
-            "S017 T3: 待 ensemble/regime/calibration 模型落地"
-        )
+        raise NotImplementedError("S017 T3: 待 ensemble/regime/calibration 模型落地")
 
     def predict(self, stage: str, t: str) -> dict:
-        raise NotImplementedError(
-            "S017 T3: 待 ensemble/regime/calibration 模型落地"
-        )
+        raise NotImplementedError("S017 T3: 待 ensemble/regime/calibration 模型落地")
 
     def evaluate(self) -> dict:
-        raise NotImplementedError(
-            "S017 T3: 待 ensemble/regime/calibration 模型落地"
-        )
+        raise NotImplementedError("S017 T3: 待 ensemble/regime/calibration 模型落地")

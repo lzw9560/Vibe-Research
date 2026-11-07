@@ -11,6 +11,7 @@ stoke（~/stoke，symlink ~/.claude/skills/stoke）聚合 mootdx+akshare+腾讯�
 
 设计：薄适配层，返 DataFrame → dict/list，消费者零改动。限流遵守 stoke SKILL.md（akshare 5s/腾讯 3s/mootdx 不限）。
 """
+
 from __future__ import annotations
 
 import json
@@ -47,7 +48,9 @@ def _run_stoke(body: str, timeout: int = 60, retries: int = 0) -> Any:
         try:
             r = subprocess.run(
                 [str(STOKE_PYTHON), "-c", script],
-                capture_output=True, text=True, timeout=timeout,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
             )
             if r.returncode != 0:
                 last_err = RuntimeError(f"stoke 子进程失败: {r.stderr[:300]}")
@@ -85,12 +88,16 @@ def cls_telegraph() -> list[dict]:
     akshare-direct（非 em_get 限流通道），但 daily_full_pull 单日单次调用低频，IP 封风险极低
     （同原 cls_telegraph 的 akshare-direct 风险）。要严格 em_get 通道后续按需加 astock.em_telegraph。
     """
-    r = _run_stoke("""
+    r = _run_stoke(
+        """
 import akshare as ak
 df = ak.stock_info_global_em()
 df = df[["标题", "摘要", "发布时间"]].rename(columns={"摘要": "内容", "发布时间": "时间"})
 print(df.to_json(orient="records", force_ascii=False))
-""", timeout=60, retries=1)
+""",
+        timeout=60,
+        retries=1,
+    )
     if isinstance(r, list):
         return r
     # r 是 {error} dict —— 失败容错返空 list（daily_full_pull 会 logger.warning 暴露原因）
@@ -141,6 +148,12 @@ print(df.to_json(orient="records", force_ascii=False))
 
 
 __all__ = [
-    "research_report", "news", "cls_telegraph", "strong_stocks",
-    "index_pe", "market_pb", "concept_list", "industry_list",
+    "research_report",
+    "news",
+    "cls_telegraph",
+    "strong_stocks",
+    "index_pe",
+    "market_pb",
+    "concept_list",
+    "industry_list",
 ]

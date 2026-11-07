@@ -16,6 +16,7 @@ from fastapi import HTTPException
 
 # ============ Database ===========
 from vr_paths import resolve_data_dir  # S184 统一 DB 到 .vibe-research/
+
 _DB_PATH: str = str(resolve_data_dir() / "market_data.db")
 _DB_LOCK: threading.Lock = threading.Lock()
 
@@ -36,6 +37,7 @@ _FIN_CACHE: Dict[str, Tuple[Any, float]] = {}
 
 def _cached(cache: Dict[str, Tuple[Any, float]], key: str, ttl: int = 300) -> Callable:
     """Simple cache decorator with TTL."""
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -47,12 +49,15 @@ def _cached(cache: Dict[str, Tuple[Any, float]], key: str, ttl: int = 300) -> Ca
             result = func(*args, **kwargs)
             cache[key] = (result, now)
             return result
+
         return wrapper
+
     return decorator
 
 
 def _cached_async(cache: Dict[str, Tuple[Any, float]], key: str, ttl: int = 300) -> Callable:
     """Simple async cache decorator with TTL."""
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -64,7 +69,9 @@ def _cached_async(cache: Dict[str, Tuple[Any, float]], key: str, ttl: int = 300)
             result = await func(*args, **kwargs)
             cache[key] = (result, now)
             return result
+
         return wrapper
+
     return decorator
 
 

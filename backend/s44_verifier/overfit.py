@@ -14,6 +14,7 @@ All Sharpe ratios in this module are expressed in *per-observation* units
 (i.e. NOT annualised). If you pass annualised Sharpe ratios the probability
 formulas will be wrong. Use `annualised_to_per_period` if needed.
 """
+
 from __future__ import annotations
 
 import math
@@ -83,7 +84,7 @@ def probabilistic_sharpe_ratio(
     """
     if n_obs < 2 or math.isnan(observed_sr):
         return float("nan")
-    denom = 1.0 - skew * observed_sr + ((kurtosis - 1.0) / 4.0) * observed_sr ** 2
+    denom = 1.0 - skew * observed_sr + ((kurtosis - 1.0) / 4.0) * observed_sr**2
     denom = max(denom, 1e-12)  # guard against numerical / pathological inputs
     se = math.sqrt(denom / (n_obs - 1))
     z = (observed_sr - benchmark_sr) / se
@@ -164,7 +165,7 @@ def deflated_sharpe_ratio(
             # Fall back to the asymptotic Var(SR) of a single estimate. This is
             # a *lower bound* on the cross-trial variance and makes DSR lenient;
             # supplying real trial Sharpes is strongly recommended.
-            denom = 1.0 - skew * sr + ((kurt - 1.0) / 4.0) * sr ** 2
+            denom = 1.0 - skew * sr + ((kurt - 1.0) / 4.0) * sr**2
             sr_variance_across_trials = max(denom, 1e-12) / max(n - 1, 1)
 
     sr0 = expected_max_sharpe(sr_variance_across_trials, n_trials)
@@ -202,7 +203,7 @@ def minimum_track_record_length(
     if observed_sr <= benchmark_sr:
         return float("inf")
     z = norm.ppf(confidence)
-    num = 1.0 - skew * observed_sr + ((kurtosis - 1.0) / 4.0) * observed_sr ** 2
+    num = 1.0 - skew * observed_sr + ((kurtosis - 1.0) / 4.0) * observed_sr**2
     return float(1.0 + max(num, 1e-12) * (z / (observed_sr - benchmark_sr)) ** 2)
 
 
@@ -211,7 +212,7 @@ if __name__ == "__main__":
     # A modest strategy selected as the best out of 100 trials.
     ret = rng.normal(0.0006, 0.012, size=750)  # ~3y daily, SR_annual ~ 0.8
     res = deflated_sharpe_ratio(ret, n_trials=100)
-    print("Observed (annualised) Sharpe :", round(res.observed_sharpe * 252 ** 0.5, 3))
+    print("Observed (annualised) Sharpe :", round(res.observed_sharpe * 252**0.5, 3))
     print("Deflation benchmark SR0      :", round(res.deflated_benchmark_sr0, 4))
     print("PSR vs 0                     :", round(res.psr_vs_zero, 4))
     print("Deflated Sharpe Ratio        :", round(res.deflated_sharpe_ratio, 4))

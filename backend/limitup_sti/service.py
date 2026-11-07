@@ -1,4 +1,5 @@
 import sqlite3
+
 # -*- coding: utf-8 -*-
 """limitup_sti 服务层 —— STI 引擎核心逻辑。"""
 
@@ -76,9 +77,7 @@ class STIEngine:
         """加载历史 STI 分数（用于 3 日平滑 + 动态分位数）。"""
         return load_history_scores()
 
-    def _normalize_dimension(
-        self, value: float, history: list[float], direction: int
-    ) -> float:
+    def _normalize_dimension(self, value: float, history: list[float], direction: int) -> float:
         """将原始值归一化到 0-100。"""
         score = percentile_rank(value, history)
         if direction == -1:
@@ -203,9 +202,7 @@ class STIEngine:
                     rows = db.execute(
                         f"SELECT {col} FROM sti_timeline WHERE {col} IS NOT NULL ORDER BY date DESC LIMIT 252"
                     ).fetchall()
-                    dim_histories[dim_name] = [
-                        float(r[col]) for r in rows if r[col] is not None
-                    ][::-1]
+                    dim_histories[dim_name] = [float(r[col]) for r in rows if r[col] is not None][::-1]
             finally:
                 db.close()
         except Exception as e:
@@ -352,9 +349,7 @@ class STIEngine:
 
         return self.compute(emotion_data, sentiment_data)
 
-    def backfill(
-        self, start_date: str, end_date: str | None = None
-    ) -> list[STIResult]:
+    def backfill(self, start_date: str, end_date: str | None = None) -> list[STIResult]:
         """回填历史 STI 数据。"""
         if end_date is None:
             end_date = datetime.now(_BEIJING_TZ).strftime("%Y-%m-%d")

@@ -21,6 +21,7 @@ as_of ≠ content hash（spec R2 显式）：
 - **私有数据隔离**：lineage 写 ``resolve_data_dir()/"lineage"``（VR_DATA_DIR，gitignored，不进 git）。
 - **不臆造**：commit hash 实算（git rev-parse），hash 实算（sha256），不伪造。
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -72,6 +73,7 @@ class LineageRecord:
 # 哈希指纹（sha256 规范 JSON —— 指纹非复算状态，spec R2）
 # ---------------------------------------------------------------------------
 
+
 def compute_hash(data: Any) -> str:
     """sha256(规范 JSON) —— 数据内容指纹（sort_keys 确保顺序无关）。
 
@@ -90,7 +92,9 @@ def current_commit() -> str:
     try:
         out = subprocess.run(
             ["git", "rev-parse", "HEAD"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
             cwd=str(Path(__file__).resolve().parents[1]),  # repo root
         )
         if out.returncode == 0 and out.stdout.strip():
@@ -103,6 +107,7 @@ def current_commit() -> str:
 # ---------------------------------------------------------------------------
 # 存储路径 + 读写
 # ---------------------------------------------------------------------------
+
 
 def _store_path() -> Path:
     """血缘存储路径：resolve_data_dir()/"lineage"/lineage.jsonl。
@@ -154,6 +159,7 @@ def _read_all() -> list[LineageRecord]:
 # 公开 API
 # ---------------------------------------------------------------------------
 
+
 def record(
     *,
     artifact_id: str,
@@ -186,8 +192,12 @@ def record(
     # write-once 守卫：完全相同的记录已存在 → 拒绝静默重复
     existing = _read_all()
     for ex in existing:
-        if (ex.artifact_id == rec.artifact_id and ex.as_of == rec.as_of
-                and ex.commit == rec.commit and ex.output_hash == rec.output_hash):
+        if (
+            ex.artifact_id == rec.artifact_id
+            and ex.as_of == rec.as_of
+            and ex.commit == rec.commit
+            and ex.output_hash == rec.output_hash
+        ):
             raise LineageError(
                 f"write-once 违反：记录已存在 artifact={artifact_id} as_of={as_of} "
                 f"commit={commit_hash} output_hash={rec.output_hash[:8]}…"

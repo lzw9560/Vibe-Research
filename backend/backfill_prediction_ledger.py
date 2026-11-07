@@ -38,10 +38,10 @@ QUALIFY_THRESHOLD = 50.0  # = GENE_QUALIFY_THRESHOLD；qualify 标志历史欠�
 def _gene_dates(days: int) -> list[str]:
     """gene_scores 最近 days 个有合格候选（total_score≥阈值）的日期，升序。"""
     from limitup_screener.data import get_db
+
     conn = get_db()
     rows = conn.execute(
-        "SELECT DISTINCT date FROM gene_scores WHERE total_score >= ? "
-        "ORDER BY date DESC LIMIT ?",
+        "SELECT DISTINCT date FROM gene_scores WHERE total_score >= ? ORDER BY date DESC LIMIT ?",
         (QUALIFY_THRESHOLD, days),
     ).fetchall()
     conn.close()
@@ -54,6 +54,7 @@ def _candidates_for_dates(dates: list[str]) -> list[dict]:
         return []
     ph = ",".join("?" * len(dates))
     from limitup_screener.data import get_db
+
     conn = get_db()
     rows = conn.execute(
         f"SELECT date, code, name, total_score FROM gene_scores "
@@ -61,8 +62,10 @@ def _candidates_for_dates(dates: list[str]) -> list[dict]:
         [QUALIFY_THRESHOLD, *dates],
     ).fetchall()
     conn.close()
-    return [{"date": r["date"], "code": r["code"], "name": r["name"] or r["code"],
-             "score": r["total_score"] or 0.0} for r in rows]
+    return [
+        {"date": r["date"], "code": r["code"], "name": r["name"] or r["code"], "score": r["total_score"] or 0.0}
+        for r in rows
+    ]
 
 
 def _fetch_bars(code: str) -> list:
@@ -101,9 +104,16 @@ def backfill(days: int = 30, dry_run: bool = False) -> dict:
             d = c["date"]
             i = idx_by_date.get(d)
             if i is None:
-                rows_out.append({**c, "status": "voided",
-                                 "attribution": "K线窗口未覆盖该日", "baseline": None,
-                                 "actual": None, "due": None})
+                rows_out.append(
+                    {
+                        **c,
+                        "status": "voided",
+                        "attribution": "K线窗口未覆盖该日",
+                        "baseline": None,
+                        "actual": None,
+                        "due": None,
+                    }
+                )
                 continue
             target_close = bars[i].close
             if i + 1 < len(bars):
@@ -112,35 +122,63 @@ def backfill(days: int = 30, dry_run: bool = False) -> dict:
                 due = (next_bar.date or "")[:10]
                 actual = round((next_close - target_close) / target_close, 6) if target_close else None
                 status = "hit" if (actual is not None and actual > 0) else "miss"
-                rows_out.append({**c, "status": status, "attribution": None,
-                                 "baseline": target_close, "actual": actual, "due": due})
+                rows_out.append(
+                    {**c, "status": status, "attribution": None, "baseline": target_close, "actual": actual, "due": due}
+                )
             else:
-                rows_out.append({**c, "status": "pending", "attribution": "次日未收盘",
-                                 "baseline": target_close, "actual": None, "due": None})
+                rows_out.append(
+                    {
+                        **c,
+                        "status": "pending",
+                        "attribution": "次日未收盘",
+                        "baseline": target_close,
+                        "actual": None,
+                        "due": None,
+                    }
+                )
         if idx % 50 == 0:
             print(f"[backfill_prediction_ledger] {idx}/{len(codes)} 股处理完", flush=True)
 
     if dry_run:
-        return {"dry_run": True, "candidates": len(cands), "codes": len(codes),
-                "rows": len(rows_out),
-                "hit": sum(1 for r in rows_out if r["status"] == "hit"),
-                "miss": sum(1 for r in rows_out if r["status"] == "miss"),
-                "voided": sum(1 for r in rows_out if r["status"] == "voided"),
-                "pending": sum(1 for r in rows_out if r["status"] == "pending")}
+        return {
+            "dry_run": True,
+            "candidates": len(cands),
+            "codes": len(codes),
+            "rows": len(rows_out),
+            "hit": sum(1 for r in rows_out if r["status"] == "hit"),
+            "miss": sum(1 for r in rows_out if r["status"] == "miss"),
+            "voided": sum(1 for r in rows_out if r["status"] == "voided"),
+            "pending": sum(1 for r in rows_out if r["status"] == "pending"),
+        }
 
     now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     conn = sqlite3.connect(WINRATE_DB_PATH)
     try:
         conn.execute("DELETE FROM prediction_ledger WHERE signal_ref = ?", (_SYNTH_REF,))
-        batch = [(
-            r["date"], "manual", _SYNTH_REF, r["code"], r["name"],
-            "next_day_premium", r["baseline"], ">0", 1,
-            r["due"] or r["date"], r["actual"], r["status"], r["attribution"],
-            now if r["status"] in ("hit", "miss") else None,
-        ) for r in rows_out]
-        cols = ("stated_at,source,signal_ref,code,name,prediction_type,"
-                "baseline_price,expected,horizon,due_date,actual_return,"
-                "status,attribution,verified_at")
+        batch = [
+            (
+                r["date"],
+                "manual",
+                _SYNTH_REF,
+                r["code"],
+                r["name"],
+                "next_day_premium",
+                r["baseline"],
+                ">0",
+                1,
+                r["due"] or r["date"],
+                r["actual"],
+                r["status"],
+                r["attribution"],
+                now if r["status"] in ("hit", "miss") else None,
+            )
+            for r in rows_out
+        ]
+        cols = (
+            "stated_at,source,signal_ref,code,name,prediction_type,"
+            "baseline_price,expected,horizon,due_date,actual_return,"
+            "status,attribution,verified_at"
+        )
         ph = ",".join(["?"] * len(cols.split(",")))
         conn.executemany(
             f"INSERT INTO prediction_ledger ({cols}) VALUES ({ph})",
@@ -150,11 +188,15 @@ def backfill(days: int = 30, dry_run: bool = False) -> dict:
     finally:
         conn.close()
 
-    return {"written": len(rows_out), "candidates": len(cands), "codes": len(codes),
-            "hit": sum(1 for r in rows_out if r["status"] == "hit"),
-            "miss": sum(1 for r in rows_out if r["status"] == "miss"),
-            "voided": sum(1 for r in rows_out if r["status"] == "voided"),
-            "pending": sum(1 for r in rows_out if r["status"] == "pending")}
+    return {
+        "written": len(rows_out),
+        "candidates": len(cands),
+        "codes": len(codes),
+        "hit": sum(1 for r in rows_out if r["status"] == "hit"),
+        "miss": sum(1 for r in rows_out if r["status"] == "miss"),
+        "voided": sum(1 for r in rows_out if r["status"] == "voided"),
+        "pending": sum(1 for r in rows_out if r["status"] == "pending"),
+    }
 
 
 if __name__ == "__main__":

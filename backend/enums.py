@@ -6,6 +6,7 @@ from enum import Enum
 
 class ReportType(str, Enum):
     """报告类型"""
+
     DAILY = "daily"
     WEEKLY = "weekly"
     MONTHLY = "monthly"

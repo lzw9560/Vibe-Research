@@ -21,6 +21,7 @@ def _f(v) -> float | None:
 def _is_historical_date(date: str) -> bool:
     """date < 今日（YYYY-MM-DD 字符串比较）→ 历史日（走 kline 复算路径）。"""
     from datetime import datetime
+
     try:
         return (date or "")[:10] < datetime.now().strftime("%Y-%m-%d")
     except Exception:
@@ -57,7 +58,7 @@ def _compute_kline_derived(bars: list[dict], idx: int, float_shares: float | Non
         out["shadow_length_pct"] = round((high / close - 1) * 100, 2)
     # ma_5_status：5日均线趋势（最近5日 close 均值 vs 前移一日均值）
     if idx >= 5:
-        closes_5d = [_f(b.get("close")) for b in bars[idx-5:idx+1]]
+        closes_5d = [_f(b.get("close")) for b in bars[idx - 5 : idx + 1]]
         closes_5d = [c for c in closes_5d if c is not None]
         if len(closes_5d) >= 6:
             ma5_today = sum(closes_5d[-5:]) / 5
@@ -89,16 +90,30 @@ def _fetch_single_historical(c: str, today_quote: dict, target: str) -> tuple[st
     任一字段取不到 → missing，不臆造。
     """
     entry: dict = {
-        "name": None, "price": None, "change_pct": None, "turnover_pct": None,
-        "vol_ratio": None, "amount_yi": None, "amplitude_pct": None,
-        "limit_up": None, "limit_down": None, "missing": {},
+        "name": None,
+        "price": None,
+        "change_pct": None,
+        "turnover_pct": None,
+        "vol_ratio": None,
+        "amount_yi": None,
+        "amplitude_pct": None,
+        "limit_up": None,
+        "limit_down": None,
+        "missing": {},
         "float_market_cap": None,  # S057：八项标准①流通市值
         # S081：PRD 2 战法因子（历史日路径在下方从 K线扩展算）
-        "max_high_pct": None, "shadow_length_pct": None,
-        "ma_5_status": None, "prev_turnover_pct": None,
+        "max_high_pct": None,
+        "shadow_length_pct": None,
+        "ma_5_status": None,
+        "prev_turnover_pct": None,
         # S084：tencent_quote 扩展 + 前日成交额（历史日路径：kline 复算 + 估值 None）
-        "last_close": None, "open": None, "change_amt": None,
-        "pe_ttm": None, "mcap_yi": None, "pb": None, "prev_amount_yi": None,
+        "last_close": None,
+        "open": None,
+        "change_amt": None,
+        "pe_ttm": None,
+        "mcap_yi": None,
+        "pb": None,
+        "prev_amount_yi": None,
     }
     model = quote_from_tencent(c, today_quote.get(c, {}))
     entry["name"] = model.name
@@ -141,7 +156,7 @@ def _fetch_single_historical(c: str, today_quote: dict, target: str) -> tuple[st
     if prev_close:
         entry["change_pct"] = round((close - prev_close) / prev_close * 100, 2)
         entry["amplitude_pct"] = round((high - low) / prev_close * 100, 2)
-    prev_vols = [_f(b.get("vol")) or 0.0 for b in bars[max(0, idx - 5):idx]]
+    prev_vols = [_f(b.get("vol")) or 0.0 for b in bars[max(0, idx - 5) : idx]]
     if prev_vols and sum(prev_vols) > 0:
         entry["vol_ratio"] = round(vol / (sum(prev_vols) / len(prev_vols)), 2)
     entry["amount_yi"] = round(amount / 1e8, 4)
@@ -193,6 +208,7 @@ def _fetch_activity_from_kline(codes: list[str], date: str) -> dict[str, dict]:
                 out[c] = entry
             except Exception as e:  # noqa: BLE001
                 import logging
+
                 logging.getLogger(__name__).warning("per-code 历史行情取数失败（降级兜底 missing）: %s", e)
     for c in codes:
         if c not in out:
@@ -222,24 +238,24 @@ def _fetch_single_realtime(c: str, raw: dict, as_of: str) -> tuple[str, dict]:
         "limit_down": model.limit_down_price,
         # S049 C2：当日行情数据源日期=as_of（tencent_quote 仅当日）
         "_as_of": as_of,
-         # S057：流通市值（元）—— 供八项标准①判定
-         "float_market_cap": model.float_market_cap,
-         # S081/S085 A3：战法派生字段——盘前 tencent 无当日 K线，
-         # 改从 K线 T-1 bar 复算（下方注入），取不到保持 None
-         "max_high_pct": None,
-         "shadow_length_pct": None,
-         "ma_5_status": None,
-         "prev_turnover_pct": None,
-         # S084 R4.1：tencent_quote 扩展（当日路径直接读 Quote 模型字段）
-         "last_close": model.last_close,
-         "open": model.open,
-         "change_amt": model.change_amount,  # Quote 字段 change_amount → entry key change_amt
-         "pe_ttm": model.pe_ttm,
-         "mcap_yi": model.market_cap_yi,  # Quote property（亿）
-         "pb": model.pb,
-         # S085 A3：前日成交额——从 K线 T-2 bar 取（下方注入），取不到保持 None
-         "prev_amount_yi": None,
-     }
+        # S057：流通市值（元）—— 供八项标准①判定
+        "float_market_cap": model.float_market_cap,
+        # S081/S085 A3：战法派生字段——盘前 tencent 无当日 K线，
+        # 改从 K线 T-1 bar 复算（下方注入），取不到保持 None
+        "max_high_pct": None,
+        "shadow_length_pct": None,
+        "ma_5_status": None,
+        "prev_turnover_pct": None,
+        # S084 R4.1：tencent_quote 扩展（当日路径直接读 Quote 模型字段）
+        "last_close": model.last_close,
+        "open": model.open,
+        "change_amt": model.change_amount,  # Quote 字段 change_amount → entry key change_amt
+        "pe_ttm": model.pe_ttm,
+        "mcap_yi": model.market_cap_yi,  # Quote property（亿）
+        "pb": model.pb,
+        # S085 A3：前日成交额——从 K线 T-2 bar 取（下方注入），取不到保持 None
+        "prev_amount_yi": None,
+    }
     # S085 A3：盘前 tencent 路径补 K线派生字段（max_high_pct/shadow/ma5/
     # prev_turnover_pct/prev_amount_yi）。tencent 盘前取不到这5项，从
     # K线 T-1 bar 复算（口径与 _fetch_activity_from_kline 完全一致，经
@@ -251,9 +267,11 @@ def _fetch_single_realtime(c: str, raw: dict, as_of: str) -> tuple[str, dict]:
         bars = []
     if bars:
         # T-1 bar：今日无 K线 → bars[-1]；今日已有一根 → bars[-2]
-        idx_t1 = len(bars) - 2 if len(bars) >= 2 and \
-            (bars[-1].get("datetime") or bars[-1].get("date") or "")[:10] >= \
-            as_of[:10] else len(bars) - 1
+        idx_t1 = (
+            len(bars) - 2
+            if len(bars) >= 2 and (bars[-1].get("datetime") or bars[-1].get("date") or "")[:10] >= as_of[:10]
+            else len(bars) - 1
+        )
         if idx_t1 >= 0:
             # float_shares：从 tencent 流通市值/价格近似（与历史日路径一致）
             float_shares = None
@@ -308,6 +326,7 @@ def fetch_activity(codes: list[str], as_of: str) -> dict[str, dict]:
                     out[c] = entry
                 except Exception as e:  # noqa: BLE001
                     import logging
+
                     logging.getLogger(__name__).warning("per-code 实时行情取数失败（降级兜底 missing）: %s", e)
         for c in batch:
             if c not in out:

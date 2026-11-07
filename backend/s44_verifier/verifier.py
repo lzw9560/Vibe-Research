@@ -4,6 +4,7 @@ Given a return series + n_trials + optional trials_matrix -> Verdict. Pure and
 immutable. Edge-type is explicit so a selection-falsified result is never
 misread as "no edge" (spec-grill S161 honesty hole #24).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -88,7 +89,7 @@ class Verdict:
     data_snapshot_id: Optional[str] = None
     # R38/R39/R40 (2026-10-17 幽灵政策落地, memory engineering-baseline-audit)
     false_negative_risk: Optional[str] = None  # R38: falsified → requires_audit/method_fixable/true_falsified
-    regime_stratified: Optional[dict] = None   # R39: regime 分层可复现 (post_hoc, 调用方传)
+    regime_stratified: Optional[dict] = None  # R39: regime 分层可复现 (post_hoc, 调用方传)
     independent_source_replicated: Optional[bool] = None  # R40: 独立数据源复现 gate
     note: str = ""
 
@@ -161,9 +162,7 @@ def _purged_kfold_oos_lifts(
     lifts: list[float] = []
     n_dates = len(sorted_dates)
     for _tr, te_idx in splits:
-        test_dates_set = {
-            sorted_dates[i] for i in te_idx.tolist() if 0 <= i < n_dates
-        }
+        test_dates_set = {sorted_dates[i] for i in te_idx.tolist() if 0 <= i < n_dates}
         test_surv = {d: r for d, r in survivors_by_day.items() if d in test_dates_set}
         test_raw = {d: r for d, r in universe_by_day.items() if d in test_dates_set}
         if not test_surv or not test_raw:
@@ -303,7 +302,11 @@ def verify(
 
         # permutation p-value (within-day survivor resampling)
         p_perm = stats_mod.permutation_p_value(
-            survivors_by_day, universe_by_day, selection_lift, n_perm, perm_seed,
+            survivors_by_day,
+            universe_by_day,
+            selection_lift,
+            n_perm,
+            perm_seed,
         )
 
         # P4 slim: selection uses Bonferroni only (status reads p_bonf at
@@ -316,7 +319,10 @@ def verify(
         # wf_status/wf_mean_lift are walk-forward ONLY — NOT overwritten by
         # PurgedKFold (spec R2: 互补 non-redundant, not substitute).
         wf_res = stats_mod.walk_forward_oos(
-            survivors_by_day, universe_by_day, walk_train, walk_test,
+            survivors_by_day,
+            universe_by_day,
+            walk_train,
+            walk_test,
             step if step is not None else stats_mod._WALK_STEP_DEFAULT,
         )
         wf_status = wf_res.status
@@ -335,15 +341,15 @@ def verify(
         # + walk_forward. Kept as complementary OOS signal; no change needed.
         if dates is not None:
             pk_lifts = _purged_kfold_oos_lifts(
-                survivors_by_day, universe_by_day, dates,
+                survivors_by_day,
+                universe_by_day,
+                dates,
             )
             pk_n_folds = len(pk_lifts)
             if pk_lifts:
                 pk_mean_lift = round(float(np.mean(pk_lifts)), 4)
                 pk_status = (
-                    "purged_kfold_oos_stable"
-                    if all(l >= 1.0 for l in pk_lifts)
-                    else "purged_kfold_oos_unstable"
+                    "purged_kfold_oos_stable" if all(l >= 1.0 for l in pk_lifts) else "purged_kfold_oos_unstable"
                 )
 
     # ── event metrics + event_status (day-clustered one-sample t-test) ────
@@ -375,11 +381,11 @@ def verify(
         if t_res is not None:
             t_stat_val: Optional[float] = t_res.t_stat
             base_rate_val: Optional[float] = (
-                drift.universe_mean if drift is not None and drift.universe_mean is not None
-                else 0.0
+                drift.universe_mean if drift is not None and drift.universe_mean is not None else 0.0
             )  # R11: base_rate = universe baseline (not 0) when drift-adjusted
             net_mean_val: Optional[float] = (
-                drift.drift_adjusted_mean if drift is not None and drift.drift_adjusted_mean is not None
+                drift.drift_adjusted_mean
+                if drift is not None and drift.drift_adjusted_mean is not None
                 else t_res.day_mean
             )  # R11: net = drift-adjusted (event - universe) when universe provided
 
@@ -390,7 +396,9 @@ def verify(
             # event_status gate below). Bonferroni (p_bonf) not computed
             # for event — set None.
             evt_bh = stats_mod.bonferroni_bh(
-                [t_res.p_one_sided], n_comparisons, "BH",
+                [t_res.p_one_sided],
+                n_comparisons,
+                "BH",
             )
             # R8 双算: don't overwrite selection's p_bonf. selection uses Bonferroni
             # (p_bonf set by selection branch above), event uses BH (p_bh). Both
@@ -590,8 +598,10 @@ def compare_filtered_vs_unfiltered_edge(
     is_underpowered = n_f < 60 or days_f < 60
 
     return {
-        "n_unfiltered": n_all, "mean_unfiltered_pct": round(mean_all * 100, 4),
-        "n_filtered": n_f, "mean_filtered_pct": round(mean_f * 100, 4),
+        "n_unfiltered": n_all,
+        "mean_unfiltered_pct": round(mean_all * 100, 4),
+        "n_filtered": n_f,
+        "mean_filtered_pct": round(mean_f * 100, 4),
         "filter_pct": round(filter_pct, 2),
         "contrib_pct": round(contrib_pct, 2),
         "is_fake_edge": is_fake_edge,  # filter 掉 >70% picks 或贡献 >70% edge

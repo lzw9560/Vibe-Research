@@ -9,6 +9,7 @@ target：D open→exit net（扣 逐笔 _cost_pct round-trip cost），day_paire
   - block_trade_raw.json（eastmoney RPT_DATA_BLOCKTRADE 市场全量, 20000 records, 136 dates）
   - baostock_kline_cache.json（5226 stocks, daily K-line）
 """
+
 import datetime
 import json
 import sys
@@ -32,11 +33,12 @@ sys.path.insert(0, str(ROOT / "backend"))
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
 from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
+
 BLOCK = resolve_data_dir() / "block_trade_raw.json"
 KLINE = resolve_data_dir() / "baostock_kline_cache.json"
 EXIT_WINDOWS = [1, 3, 5]
 N_PERM = 2000
-BONF_K = 9           # 3 strata × 3 windows
+BONF_K = 9  # 3 strata × 3 windows
 ALPHA = 0.05 / BONF_K
 SEED = 42
 
@@ -52,15 +54,15 @@ print("Loading block trades...", end=" ", flush=True)
 bt_raw = json.loads(BLOCK.read_bytes())
 # S163 R1: bad data gate — eastmoney block_trade
 validate_or_reject("eastmoney_block_trade", bt_raw, as_of=datetime.date.today().isoformat())
-print(f"{len(bt_raw)} records ({time.time()-t0:.1f}s)")
+print(f"{len(bt_raw)} records ({time.time() - t0:.1f}s)")
 
 print("Loading kline cache...", end=" ", flush=True)
 cache = json.loads(KLINE.read_bytes())
-print(f"{len(cache)} stocks ({time.time()-t0:.1f}s)")
+print(f"{len(cache)} stocks ({time.time() - t0:.1f}s)")
 # S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
-validate_or_reject("baostock_kline",
-                   [b for bars in cache.values() for b in bars],
-                   as_of=datetime.date.today().isoformat())
+validate_or_reject(
+    "baostock_kline", [b for bars in cache.values() for b in bars], as_of=datetime.date.today().isoformat()
+)
 
 # ── 2. Aggregate by (date, code) — most discounted ─────────────────────────
 print("\nAggregating block trades by (date, code)...")
@@ -74,9 +76,9 @@ for r in bt_raw:
         best[key] = {**r, "code": str(r["code"]).zfill(6)}
 
 STRATA = {
-    "deep_discount": lambda p: p < -0.05,         # 折价>5%
-    "mild_discount": lambda p: -0.05 <= p < 0,     # 折价0-5%
-    "premium":       lambda p: p >= 0,              # 溢价
+    "deep_discount": lambda p: p < -0.05,  # 折价>5%
+    "mild_discount": lambda p: -0.05 <= p < 0,  # 折价0-5%
+    "premium": lambda p: p >= 0,  # 溢价
 }
 strata_pairs = {s: {} for s in STRATA}
 for key, rec in best.items():
@@ -99,10 +101,11 @@ for code, bars in cache.items():
         if ds not in di:
             di[ds] = i
     code_date_idx[code] = di
-print(f"done ({time.time()-t0:.1f}s)")
+print(f"done ({time.time() - t0:.1f}s)")
 
 # ── 4. Forward returns: block-trade stocks ────────────────────────────────
 # Block trade on D_bt → entry D_bt+1 open → exit D_bt+1/3/5 close (1d/3d/5d)
+
 
 def compute_returns(code, bt_date):
     di = code_date_idx.get(code)
@@ -137,6 +140,7 @@ def compute_returns(code, bt_date):
     results["_cost"] = cost
     return results
 
+
 print("\nComputing block-trade forward returns...", end=" ", flush=True)
 block_returns = {s: {w: [] for w in EXIT_WINDOWS} for s in STRATA}
 _all_trade_costs: list[float] = []  # S201b: track per-trade costs for mean
@@ -154,13 +158,13 @@ for sname, pairs in strata_pairs.items():
             if r is not None:
                 block_returns[sname][w].append((bt_date, code, r))
 _mean_cost_pct = sum(_all_trade_costs) / len(_all_trade_costs) if _all_trade_costs else 0.0
-print(f"done ({time.time()-t0:.1f}s, skipped {n_skip} no-kline, mean_cost={_mean_cost_pct:.3f}%)")
+print(f"done ({time.time() - t0:.1f}s, skipped {n_skip} no-kline, mean_cost={_mean_cost_pct:.3f}%)")
 
 # ── 5. Universe returns per day ────────────────────────────────────────────
 print("Computing universe returns per day...", end=" ", flush=True)
 bt_dates = sorted(set(r["date"] for r in bt_raw))
 bt_codes_per_date = defaultdict(set)
-for (bt_date, code) in best.keys():
+for bt_date, code in best.keys():
     bt_codes_per_date[bt_date].add(code)
 
 universe_returns = defaultdict(lambda: {w: [] for w in EXIT_WINDOWS})
@@ -196,7 +200,7 @@ for bt_date in bt_dates:
             _u_cost = _cost_pct(float(entry_open), 100.0, str(bars[entry_idx].get("date", bt_date)))
             universe_returns[bt_date][w].append(gross - _u_cost)
             n_univ_total += 1
-print(f"done ({time.time()-t0:.1f}s, {n_univ_total} obs across {len(universe_returns)} days)")
+print(f"done ({time.time() - t0:.1f}s, {n_univ_total} obs across {len(universe_returns)} days)")
 
 # ── 6. §44 v2 metrics ─────────────────────────────────────────────────────
 print("\n" + "=" * 72)
@@ -218,8 +222,7 @@ for sname in STRATA:
         for bt_date, code, ret in obs_list:
             block_by_day[bt_date].append(ret)
 
-        valid_days = [d for d in block_by_day
-                      if d in universe_returns and universe_returns[d][w]]
+        valid_days = [d for d in block_by_day if d in universe_returns and universe_returns[d][w]]
         if not valid_days:
             continue
 
@@ -290,23 +293,32 @@ for sname in STRATA:
             verdict_str = "未validated (wr_lift>=1x but p>=alpha)"
 
         print(f"--- {sname} | exit={w}d ---")
-        print(f"  n_picks={n_picks}  n_days={n_days}  (univ/day ~{len(all_univ)//n_days})")
-        print(f"  block  mean={mean_block:+.3f}%  WR={pooled_block_wr*100:.1f}%")
-        print(f"  univ   mean={mean_univ:+.3f}%  WR={pooled_univ_wr*100:.1f}%")
+        print(f"  n_picks={n_picks}  n_days={n_days}  (univ/day ~{len(all_univ) // n_days})")
+        print(f"  block  mean={mean_block:+.3f}%  WR={pooled_block_wr * 100:.1f}%")
+        print(f"  univ   mean={mean_univ:+.3f}%  WR={pooled_univ_wr * 100:.1f}%")
         print(f"  day_paired mean lift (block-univ)={mean_lift:+.3f}%")
         print(f"  day_paired WR lift (block/univ)={mean_wr_lift:.3f}x")
-        print(f"  sign consistency: {n_positive}/{n_days} days block>univ ({sign_frac*100:.0f}%)")
+        print(f"  sign consistency: {n_positive}/{n_days} days block>univ ({sign_frac * 100:.0f}%)")
         print(f"  within-day null: median two-sided p={median_p:.4f}  (alpha={ALPHA:.5f})")
         print(f"  verdict: {verdict_str}\n")
 
-        all_results.append({
-            "stratum": sname, "window": w, "n_picks": n_picks, "n_days": n_days,
-            "block_mean": mean_block, "univ_mean": mean_univ,
-            "mean_lift": mean_lift, "wr_lift": mean_wr_lift,
-            "sign_frac": sign_frac, "median_p": median_p,
-            "verdict": verdict_str,
-            "pooled_block_wr": pooled_block_wr, "pooled_univ_wr": pooled_univ_wr,
-        })
+        all_results.append(
+            {
+                "stratum": sname,
+                "window": w,
+                "n_picks": n_picks,
+                "n_days": n_days,
+                "block_mean": mean_block,
+                "univ_mean": mean_univ,
+                "mean_lift": mean_lift,
+                "wr_lift": mean_wr_lift,
+                "sign_frac": sign_frac,
+                "median_p": median_p,
+                "verdict": verdict_str,
+                "pooled_block_wr": pooled_block_wr,
+                "pooled_univ_wr": pooled_univ_wr,
+            }
+        )
 
 # ── 7. Summary ────────────────────────────────────────────────────────────
 print("=" * 72)
@@ -316,7 +328,9 @@ hdr = f"{'stratum':<16} {'win':>3} {'n':>6} {'days':>5} {'block':>8} {'univ':>8}
 print(hdr)
 print("-" * 110)
 for r in all_results:
-    print(f"{r['stratum']:<16} {r['window']:>3}d {r['n_picks']:>6} {r['n_days']:>5} {r['block_mean']:>+7.3f}% {r['univ_mean']:>+7.3f}% {r['mean_lift']:>+6.3f}% {r['wr_lift']:>6.3f}x {r['median_p']:>6.4f}  {r['verdict']}")
+    print(
+        f"{r['stratum']:<16} {r['window']:>3}d {r['n_picks']:>6} {r['n_days']:>5} {r['block_mean']:>+7.3f}% {r['univ_mean']:>+7.3f}% {r['mean_lift']:>+6.3f}% {r['wr_lift']:>6.3f}x {r['median_p']:>6.4f}  {r['verdict']}"
+    )
 
 any_edge = any(r["verdict"].startswith(("EDGE", "WEAK EDGE", "THIN EDGE")) for r in all_results)
 all_underpowered = all(r["verdict"] == "UNDERPOWERED" for r in all_results)
@@ -329,7 +343,7 @@ else:
 print(f"\nOverall: {overall}")
 print(f"\n⚠️ 不外推：此 verdict 仅限「大宗交易折价×选股(D-1大宗→D open入场)」对窗口；")
 print(f"   「无 selection edge」≠「无 edge」（盘中、资金流、动态卖出未测）。")
-print(f"\nElapsed: {time.time()-t0:.1f}s")
+print(f"\nElapsed: {time.time() - t0:.1f}s")
 
 # ── S168 接线：9 verdict（3 strata × 3 windows）落 Recorder + lineage ──
 # 不破现有逻辑：从 block_returns[sname][w] 重建 block_by_day，universe 取对应 window
@@ -343,8 +357,7 @@ for _sname in STRATA:
         _block_by_day = defaultdict(list)
         for _bt_date, _code, _ret in _obs:
             _block_by_day[_bt_date].append(_ret)
-        _univ_by_day = {d: universe_returns[d][_w]
-                        for d in _block_by_day if d in universe_returns}
+        _univ_by_day = {d: universe_returns[d][_w] for d in _block_by_day if d in universe_returns}
         _rets = [r for rs in _block_by_day.values() for r in rs]
         _dts = [d for d, rs in _block_by_day.items() for _ in rs]
         if len(_rets) < 2:
@@ -361,13 +374,23 @@ for _sname in STRATA:
             n_comparisons=BONF_K,  # Bonferroni K=9 pre-registered (3 strata × 3 windows)
             round_trip_cost=_mean_cost_pct,
             script="tools/block_trade_lift.py",
-            params={"stratum": _sname, "exit_window": _w,
-                    "bonf_k": BONF_K, "cost": "per_trade",
-                    "strata": list(STRATA.keys()), "exit_windows": EXIT_WINDOWS},
+            params={
+                "stratum": _sname,
+                "exit_window": _w,
+                "bonf_k": BONF_K,
+                "cost": "per_trade",
+                "strata": list(STRATA.keys()),
+                "exit_windows": EXIT_WINDOWS,
+            },
         )
         _s168_verdicts[f"{_sname}:{_w}d"] = {
-            "status": _v.status, "selection_lift": _v.selection_lift,
-            "n": _v.n, "days_robust": _v.days_robust, "note": _v.note,
+            "status": _v.status,
+            "selection_lift": _v.selection_lift,
+            "n": _v.n,
+            "days_robust": _v.days_robust,
+            "note": _v.note,
         }
-print(f"\n[S168] wired {len(_s168_verdicts)} verdicts: " +
-      ", ".join(f"{k}={v['status']}" for k, v in _s168_verdicts.items()))
+print(
+    f"\n[S168] wired {len(_s168_verdicts)} verdicts: "
+    + ", ".join(f"{k}={v['status']}" for k, v in _s168_verdicts.items())
+)

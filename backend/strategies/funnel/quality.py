@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """质量标准检查——check_quality_standards / passes_hard_standards。"""
+
 from __future__ import annotations
 
 
@@ -167,14 +168,16 @@ def check_quality_standards(
             missing = True
             detail = "未实现检查逻辑"
 
-        results.append({
-            "name": std.name,
-            "passed": passed,
-            "required": std.required,
-            "missing": missing,
-            "description": std.description,
-            "detail": detail,
-        })
+        results.append(
+            {
+                "name": std.name,
+                "passed": passed,
+                "required": std.required,
+                "missing": missing,
+                "description": std.description,
+                "detail": detail,
+            }
+        )
 
     return results
 

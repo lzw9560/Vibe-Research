@@ -8,42 +8,42 @@ spec §15 账户硬约束：max 5 只/max 10% 单股/max 20% 板块/min 30% 现�
 
 成本参数可配置（backend/config），默认值基于 A 股实际费率。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-
 
 
 # ===========================================================================
 # 常量（spec §16.2 A 股实际费率）
 # ===========================================================================
 
-COMMISSION_RATE = 0.00025     # 佣金 0.025% 单边
-STAMP_DUTY = 0.0005           # 印花税 0.05% 卖出单边
-SLIPPAGE_MIN = 0.001          # 滑点下限 0.1%
-SLIPPAGE_COEFF = 0.003        # 滑点系数 0.3%
+COMMISSION_RATE = 0.00025  # 佣金 0.025% 单边
+STAMP_DUTY = 0.0005  # 印花税 0.05% 卖出单边
+SLIPPAGE_MIN = 0.001  # 滑点下限 0.1%
+SLIPPAGE_COEFF = 0.003  # 滑点系数 0.3%
 
 # 账户硬约束（spec §15.x）
 MAX_CONCURRENT_POSITIONS = 5
-MAX_SINGLE_POSITION = 0.10    # 单股不超过 10%
-MAX_SECTOR_EXPOSURE = 0.20    # 单板块不超过 20%
-MIN_CASH_RESERVE = 0.30       # 永远保留至少 30% 现金
-MAX_TOTAL_POSITION = 0.30     # 涨停延续策略最多占组合 30%
+MAX_SINGLE_POSITION = 0.10  # 单股不超过 10%
+MAX_SECTOR_EXPOSURE = 0.20  # 单板块不超过 20%
+MIN_CASH_RESERVE = 0.30  # 永远保留至少 30% 现金
+MAX_TOTAL_POSITION = 0.30  # 涨停延续策略最多占组合 30%
 
 # 回撤熔断（spec §15.4）
-CONSECUTIVE_LOSS_THRESHOLD = 3   # 连续 3 笔亏损 → 降仓 50%
-DRAWDOWN_THRESHOLD = 0.08         # 组合回撤 > 8% → 停止开新仓
+CONSECUTIVE_LOSS_THRESHOLD = 3  # 连续 3 笔亏损 → 降仓 50%
+DRAWDOWN_THRESHOLD = 0.08  # 组合回撤 > 8% → 停止开新仓
 
 # kill criteria（spec §15.7）
-KILL_STRATEGY_CONSECUTIVE_LOSS = 5    # 策略级连亏 5 笔
-KILL_PORTFOLIO_CONSECUTIVE_LOSS = 8    # 组合级连亏 8 笔
-KILL_PORTFOLIO_WINDOW_DAYS = 5         # 组合级 5 日窗口
-KILL_DRAWDOWN = 0.15                   # 组合最大回撤 > 15%
-KILL_ROLLING_WIN_RATE = 0.45          # 30 日滚动胜率 < 45%
+KILL_STRATEGY_CONSECUTIVE_LOSS = 5  # 策略级连亏 5 笔
+KILL_PORTFOLIO_CONSECUTIVE_LOSS = 8  # 组合级连亏 8 笔
+KILL_PORTFOLIO_WINDOW_DAYS = 5  # 组合级 5 日窗口
+KILL_DRAWDOWN = 0.15  # 组合最大回撤 > 15%
+KILL_ROLLING_WIN_RATE = 0.45  # 30 日滚动胜率 < 45%
 
 # 市场熔断（spec §16.4）
-MARKET_KILL_SH_DROP = 3.0        # 上证跌幅 > 3% → 不开新仓
-MARKET_KILL_GEM_DROP = 4.0       # 创业板跌幅 > 4% → 不开新仓
+MARKET_KILL_SH_DROP = 3.0  # 上证跌幅 > 3% → 不开新仓
+MARKET_KILL_GEM_DROP = 4.0  # 创业板跌幅 > 4% → 不开新仓
 MARKET_KILL_CONSECUTIVE_DROP = 2.0  # 连续 2 日上证跌幅 > 2% → 次日降仓 50%
 
 
@@ -51,14 +51,16 @@ MARKET_KILL_CONSECUTIVE_DROP = 2.0  # 连续 2 日上证跌幅 > 2% → 次日�
 # 动态滑点模型（spec §16.2）
 # ===========================================================================
 
+
 @dataclass(frozen=True)
 class TransactionCost:
     """单笔交易成本拆解。"""
-    commission: float       # 佣金（双边）
-    stamp_duty: float       # 印花税（卖出单边）
-    slippage: float         # 滑点（双边）
+
+    commission: float  # 佣金（双边）
+    stamp_duty: float  # 印花税（卖出单边）
+    slippage: float  # 滑点（双边）
     round_trip_cost: float  # 总成本
-    slippage_pct: float     # 滑点百分比
+    slippage_pct: float  # 滑点百分比
 
 
 def compute_slippage(order_amount: float, daily_amount: float) -> float:
@@ -86,8 +88,8 @@ def compute_transaction_cost(
     """
     slippage = compute_slippage(order_amount, daily_amount)
     commission = order_amount * COMMISSION_RATE * 2  # 买卖双边
-    stamp = order_amount * STAMP_DUTY                  # 卖出单边
-    slip = order_amount * slippage * 2                # 买卖双边
+    stamp = order_amount * STAMP_DUTY  # 卖出单边
+    slip = order_amount * slippage * 2  # 买卖双边
     total = commission + stamp + slip
     return TransactionCost(
         commission=round(commission, 2),
@@ -102,9 +104,11 @@ def compute_transaction_cost(
 # 市场级熔断（spec §16.4）
 # ===========================================================================
 
+
 @dataclass(frozen=True)
 class MarketKillSwitch:
     """市场熔断状态。"""
+
     triggered: bool
     reason: str
     sh_change_pct: float | None = None
@@ -162,9 +166,11 @@ def check_market_kill_switch(indices: list[dict] | None = None) -> MarketKillSwi
 # 双层 kill criteria（spec §15.7）
 # ===========================================================================
 
+
 @dataclass(frozen=True)
 class KillCriteriaStatus:
     """策略终止条件状态。"""
+
     strategy_killed: bool
     portfolio_killed: bool
     strategy_reason: str
@@ -232,9 +238,11 @@ def check_kill_criteria(
 # 账户硬约束（spec §15.x）
 # ===========================================================================
 
+
 @dataclass(frozen=True)
 class PortfolioConstraint:
     """组合约束检查结果。"""
+
     within_limits: bool
     violations: list[str]
     total_position_pct: float

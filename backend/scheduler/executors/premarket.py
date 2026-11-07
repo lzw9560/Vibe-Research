@@ -4,6 +4,7 @@
 依赖 scheduler.notifications 模块的函数——通过模块对象引用（非直接 import 函数名），
 以便测试 monkeypatch ``scheduler.notifications._load_final_cards`` 等能生效。
 """
+
 from __future__ import annotations
 
 import logging
@@ -35,11 +36,20 @@ def premarket_auction_notify(payload: Dict[str, Any]) -> Dict[str, Any]:
         ks = _notif._check_premarket_kill_switch()  # S136：开盘后实时核
         if not ks["triggered"]:
             # P1 降噪：常态日竞价表现合并到 09:35 open_notify，不推
-            logger.info("[premarket_auction_notify] %s 候选%d 常态不推（合并到 open_notify 09:35）kill_switch=%s",
-                        f_date, len(final_cards), ks["triggered"])
-            return {"date": f_date, "status": "ok", "candidates": len(final_cards),
-                    "notified": False, "kill_switch": ks,
-                    "note": "P1降噪: 竞价表现合并到09:35 open_notify，仅 kill_switch 触发时推"}
+            logger.info(
+                "[premarket_auction_notify] %s 候选%d 常态不推（合并到 open_notify 09:35）kill_switch=%s",
+                f_date,
+                len(final_cards),
+                ks["triggered"],
+            )
+            return {
+                "date": f_date,
+                "status": "ok",
+                "candidates": len(final_cards),
+                "notified": False,
+                "kill_switch": ks,
+                "note": "P1降噪: 竞价表现合并到09:35 open_notify，仅 kill_switch 触发时推",
+            }
 
         # kill_switch triggered：推含竞价表现 + 警告（保护钱信号不降噪）
         codes = [c.get("code") for c in final_cards if c.get("code")]
@@ -47,10 +57,14 @@ def premarket_auction_notify(payload: Dict[str, Any]) -> Dict[str, Any]:
         content = _notif._build_auction_notify_content(f_date, final_cards, quotes)
         content = _notif._prepend_kill_switch_warning(content, ks)
         notified = _notif._send_notify(content)
-        logger.info("[premarket_auction_notify] %s 候选%d notified=%s kill_switch=%s (触发推警告)",
-                    f_date, len(final_cards), notified, ks["triggered"])
-        return {"date": f_date, "status": "ok", "candidates": len(final_cards),
-                "notified": notified, "kill_switch": ks}
+        logger.info(
+            "[premarket_auction_notify] %s 候选%d notified=%s kill_switch=%s (触发推警告)",
+            f_date,
+            len(final_cards),
+            notified,
+            ks["triggered"],
+        )
+        return {"date": f_date, "status": "ok", "candidates": len(final_cards), "notified": notified, "kill_switch": ks}
     except Exception as e:
         logger.warning("[premarket_auction_notify] 失败: %s", e)
         return {"status": f"error: {e}"}
@@ -78,10 +92,14 @@ def premarket_open_notify(payload: Dict[str, Any]) -> Dict[str, Any]:
         if ks["triggered"]:
             content = _notif._prepend_kill_switch_warning(content, ks)
         notified = _notif._send_notify(content)
-        logger.info("[premarket_open_notify] %s 候选%d notified=%s kill_switch=%s",
-                    f_date, len(final_cards), notified, ks["triggered"])
-        return {"date": f_date, "status": "ok", "candidates": len(final_cards),
-                "notified": notified, "kill_switch": ks}
+        logger.info(
+            "[premarket_open_notify] %s 候选%d notified=%s kill_switch=%s",
+            f_date,
+            len(final_cards),
+            notified,
+            ks["triggered"],
+        )
+        return {"date": f_date, "status": "ok", "candidates": len(final_cards), "notified": notified, "kill_switch": ks}
     except Exception as e:
         logger.warning("[premarket_open_notify] 失败: %s", e)
         return {"status": f"error: {e}"}
@@ -111,8 +129,11 @@ def premarket_t1_review(payload: Dict[str, Any]) -> Dict[str, Any]:
         n = len(returns)
         logger.info("[premarket_t1_review] %s→%s n=%d notified=%s", f_date, t_date, n, notified)
         return {
-            "f_date": f_date, "t_date": t_date, "status": "ok",
-            "candidates": n, "notified": notified,
+            "f_date": f_date,
+            "t_date": t_date,
+            "status": "ok",
+            "candidates": n,
+            "notified": notified,
         }
     except Exception as e:
         logger.warning("[premarket_t1_review] 失败: %s", e)

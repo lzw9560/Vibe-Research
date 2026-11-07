@@ -65,6 +65,7 @@ _KEY_TO_FEATURE = {
 
 # ── Registration ────────────────────────────────────────────────────
 
+
 def register_external(registry: Registry) -> None:
     """Register all external FeatureSpecs into the given Registry.
 
@@ -76,6 +77,7 @@ def register_external(registry: Registry) -> None:
 
 
 # ── Pure computation (no side effects, no network) ──────────────────
+
 
 def compute_overnight_returns(indices: list[dict]) -> dict[str, float | None]:
     """Map a list of index dicts (as returned by global_indices()) to
@@ -102,7 +104,4 @@ def compute_overnight_returns(indices: list[dict]) -> dict[str, float | None]:
             lookup[key] = idx.get("change_pct")
 
     # Return all four features, defaulting to None when missing
-    return {
-        feature_name: lookup.get(key)
-        for key, feature_name in _KEY_TO_FEATURE.items()
-    }
+    return {feature_name: lookup.get(key) for key, feature_name in _KEY_TO_FEATURE.items()}

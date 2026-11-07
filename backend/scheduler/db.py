@@ -4,6 +4,7 @@
 ``_get_connection`` 在调用时读模块级 ``_DB_PATH`` global，conftest 测试 monkeypatch
 ``scheduler.db._DB_PATH`` 直接生效（不通过 scheduled_tasks shim 间接 patch）。
 """
+
 from __future__ import annotations
 
 import json
@@ -254,12 +255,12 @@ class ScheduledTaskManager:
         即使 R1 timeout 兜底（双保险），reaper 每轮清 DB stale + 返 task_id 让调度器 discard。
         """
         from datetime import datetime as _dt, timedelta
+
         cutoff = (_dt.now() - timedelta(seconds=stale_seconds)).isoformat()
         conn = _get_connection()
         try:
             stale = conn.execute(
-                "SELECT id, task_id FROM scheduled_task_runs "
-                "WHERE status = 'running' AND started_at < ?",
+                "SELECT id, task_id FROM scheduled_task_runs WHERE status = 'running' AND started_at < ?",
                 (cutoff,),
             ).fetchall()
             if not stale:
@@ -267,10 +268,8 @@ class ScheduledTaskManager:
             reaped_task_ids: List[int] = []
             for row in stale:
                 conn.execute(
-                    "UPDATE scheduled_task_runs SET status = 'failed', "
-                    "finished_at = ?, error = ? WHERE id = ?",
-                    (_dt.now().isoformat(),
-                     f"reaped stale (>{stale_seconds}s, S150 R2)", row["id"]),
+                    "UPDATE scheduled_task_runs SET status = 'failed', finished_at = ?, error = ? WHERE id = ?",
+                    (_dt.now().isoformat(), f"reaped stale (>{stale_seconds}s, S150 R2)", row["id"]),
                 )
                 if row["task_id"] is not None:
                     reaped_task_ids.append(int(row["task_id"]))

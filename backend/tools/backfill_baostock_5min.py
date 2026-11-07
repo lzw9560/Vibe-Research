@@ -14,6 +14,7 @@
     .venv/bin/python -m tools.backfill_baostock_5min --days 3
     .venv/bin/python -m tools.backfill_baostock_5min --start 2026-08-18 --end 2026-08-31
 """
+
 from __future__ import annotations
 import argparse
 import logging
@@ -28,6 +29,7 @@ def _trading_days_between(start: str, end: str) -> list[str]:
     try:
         import sqlite3
         from vr_paths import resolve_data_dir
+
         db = resolve_data_dir() / "zt_history.db"
         conn = sqlite3.connect(str(db))
         # zt_history.date 格式是 'YYYY-MM-DD'（实测），直接用 start/end
@@ -69,6 +71,7 @@ def backfill_one_day(date: str) -> dict:
     # em_get 炸板池（dual_pressure 重建须用）
     try:
         import astock
+
         zb = astock.em_zt_topic_pool("getTopicZBPool", date.replace("-", ""), "fbt:asc")
         result["zb_events"] = [it.get("c") for it in (zb or []) if it.get("c")]
     except Exception as e:
@@ -97,12 +100,23 @@ def run_backfill(start: str, end: str, max_days: int | None = None) -> list[dict
     days = _trading_days_between(start, end)
     if max_days:
         days = days[:max_days]
-    logger.info("[backfill_baostock_5min] 回补 %d 个交易日: %s~%s", len(days), days[0] if days else "?", days[-1] if days else "?")
+    logger.info(
+        "[backfill_baostock_5min] 回补 %d 个交易日: %s~%s",
+        len(days),
+        days[0] if days else "?",
+        days[-1] if days else "?",
+    )
     results = []
     for d in days:
         r = backfill_one_day(d)
-        logger.info("[backfill] %s: zt=%d freeze_ok=%d zb=%d errs=%d",
-                    d, len(r["zt_codes"]), r["freeze_ok"], len(r["zb_events"]), len(r["errors"]))
+        logger.info(
+            "[backfill] %s: zt=%d freeze_ok=%d zb=%d errs=%d",
+            d,
+            len(r["zt_codes"]),
+            r["freeze_ok"],
+            len(r["zb_events"]),
+            len(r["errors"]),
+        )
         results.append(r)
     return results
 

@@ -37,7 +37,7 @@ class NotificationConfig:
     # notification_noise.py:258-262 getattr 读这些，缺定义=默认 0→去重/冷却全禁用（轰炸根因之一）
     # 只补安全的 dedup_ttl + cooldown；min_severity/quiet_hours 有过滤风险暂不补（留 P3）
     notification_dedup_ttl_seconds: int = 1800  # 同 dedup_key TTL 内只推一次（scan_price_alerts 30min 去重）
-    notification_cooldown_seconds: int = 600    # 同 route_type+cooldown_key 冷却内只推一次
+    notification_cooldown_seconds: int = 600  # 同 route_type+cooldown_key 冷却内只推一次
 
     # === 通知渠道 ===
     feishu_webhook_url: str = ""

@@ -11,6 +11,7 @@ S201b stage 2（2026-09-14）：出场乐观修复——recompute_gross_v2 重�
 fill（旧硬编码 gross=float(stop_pct)=-4.0% → open<=stop→fill=open 更差, low<=stop→fill=stop*(1-eps),
 一字跌停→carry）。take-side 不碰（limit sell 已 realistic）。1709/2888 stop exits 受影响。
 """
+
 import sys
 from pathlib import Path
 
@@ -38,7 +39,10 @@ def main() -> None:
         dates.append(entry_date)
 
     mean_cost_pct = sum(costs) / len(costs) if costs else 0.0
-    print(f"# F3 event edge: {len(returns)} 条融合 event（net 收益，逐笔 _cost_pct mean={mean_cost_pct:.3f}%）, {len(set(dates))} 唯一日", file=sys.stderr)
+    print(
+        f"# F3 event edge: {len(returns)} 条融合 event（net 收益，逐笔 _cost_pct mean={mean_cost_pct:.3f}%）, {len(set(dates))} 唯一日",
+        file=sys.stderr,
+    )
     if len(returns) < 30:
         print(f"# 样本不足（{len(returns)}<30），无法跑 §44", file=sys.stderr)
         return

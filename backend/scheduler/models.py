@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """定时任务数据结构。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -10,6 +11,7 @@ from typing import Any, Dict, Optional
 @dataclass
 class ScheduledTask:
     """定时任务定义。"""
+
     id: Optional[int] = None
     name: str = ""
     description: str = ""
@@ -19,7 +21,9 @@ class ScheduledTask:
     enabled: bool = True
     notify_on_success: bool = False
     notify_on_failure: bool = True
-    depends_on: Optional[str] = None  # S190 R5：逗号分隔 task_type，今日上游未 success/degraded 则 _tick 跳过（盘后链依赖门控）
+    depends_on: Optional[str] = (
+        None  # S190 R5：逗号分隔 task_type，今日上游未 success/degraded 则 _tick 跳过（盘后链依赖门控）
+    )
     last_run_at: Optional[str] = None
     last_run_status: Optional[str] = None
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -29,6 +33,7 @@ class ScheduledTask:
 @dataclass
 class TaskRun:
     """单次任务执行记录。"""
+
     id: Optional[int] = None
     task_id: int = 0
     status: str = "running"

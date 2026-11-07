@@ -30,6 +30,7 @@
   cd /Users/lizhiwei/project/code/stock/Vibe-Research/backend
   .venv/bin/python tools/explore_composite_decomposition.py
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -76,6 +77,7 @@ def _short(f: str) -> str:
 
 # ---------- weight builders (immutable: return new dict) ----------
 
+
 def _alone_weights(comp: str) -> dict[str, float]:
     """单因子权重: 1.0 for comp, 0 for others. → composite = pct[comp]."""
     return {f: (1.0 if f == comp else 0.0) for f in FACTORS}
@@ -90,6 +92,7 @@ def _loo_weights(comp: str) -> dict[str, float]:
 
 # ---------- main ----------
 
+
 def main() -> None:
     print("=" * 70)
     print("composite-score 正交分解 (5 component 单独 + leave-one-out)")
@@ -103,12 +106,12 @@ def main() -> None:
     zt_rows = load_zt()
     gene, n_gene = load_gene_scores()
     calendar = sorted(all_dates)
-    print(f"  kline codes={len(code_map)} calendar days={len(calendar)} "
-          f"zt_rows={len(zt_rows)}")
-    print(f"  zt date range: {min(d for d,_,_ in zt_rows)} ~ "
-          f"{max(d for d,_,_ in zt_rows)}")
-    print(f"  gene_scores: {n_gene} rows, {len(gene)} dates "
-          f"({min(gene) if gene else 'N/A'} ~ {max(gene) if gene else 'N/A'})")
+    print(f"  kline codes={len(code_map)} calendar days={len(calendar)} zt_rows={len(zt_rows)}")
+    print(f"  zt date range: {min(d for d, _, _ in zt_rows)} ~ {max(d for d, _, _ in zt_rows)}")
+    print(
+        f"  gene_scores: {n_gene} rows, {len(gene)} dates "
+        f"({min(gene) if gene else 'N/A'} ~ {max(gene) if gene else 'N/A'})"
+    )
 
     # ---- build blanket picks ----
     print("\n[2] 构建 blanket picks (entry=T+1 open, exit=T+2 close, 一字涨停跳过)…")
@@ -118,12 +121,13 @@ def main() -> None:
     # ---- attach 5 factors ----
     print("\n[3] 附 5 因子 (turn/vr5/gap/lbc/gene_score) ...")
     blanket, n_complete, counts = attach_factors(blanket, code_map, gene)
-    print(f"  5 因子全有 (composite universe): {n_complete} "
-          f"({n_complete/max(len(blanket),1)*100:.1f}% of blanket)")
+    print(
+        f"  5 因子全有 (composite universe): {n_complete} ({n_complete / max(len(blanket), 1) * 100:.1f}% of blanket)"
+    )
     print(f"  各因子覆盖:")
     for f in FACTORS:
         c = counts[f]
-        print(f"    {f:<12}: {c:>5} ({c/max(len(blanket),1)*100:.1f}%)")
+        print(f"    {f:<12}: {c:>5} ({c / max(len(blanket), 1) * 100:.1f}%)")
 
     if n_complete == 0:
         print("\n  → no-data: 无 pick 5 因子全有, 无法分解")
@@ -132,8 +136,7 @@ def main() -> None:
     # all-5-present universe (same for ALL analyses — fair comparison)
     universe = [p for p in blanket if all(p.get(f) is not None for f in FACTORS)]
     comp_dates = sorted({p["zt_date"] for p in universe})
-    print(f"  universe dates: {len(comp_dates)} "
-          f"({comp_dates[0]} ~ {comp_dates[-1]})")
+    print(f"  universe dates: {len(comp_dates)} ({comp_dates[0]} ~ {comp_dates[-1]})")
 
     # ---- [4] composite baseline (equal weight) ----
     print(f"\n{'=' * 70}")
@@ -142,10 +145,13 @@ def main() -> None:
     equal_w = {f: 1.0 / len(FACTORS) for f in FACTORS}
     compute_composite(blanket, weights=equal_w)
     comp_top5 = select_topk_by_composite(blanket, 5)
-    r_comp = analyze_subset("composite-top5 (equal-weight)", comp_top5,
-                            ret_fn_basic=close_ev_basic,
-                            ret_fn_stop=close_ev_stop,
-                            ret_fn_label="close_ev")
+    r_comp = analyze_subset(
+        "composite-top5 (equal-weight)",
+        comp_top5,
+        ret_fn_basic=close_ev_basic,
+        ret_fn_stop=close_ev_stop,
+        ret_fn_label="close_ev",
+    )
     comp_ev = r_comp.get("basic_ev", {}).get("ev", 0.0)
     comp_dt = r_comp.get("basic_day_t", {})
     comp_wf = r_comp.get("wf_basic", {})
@@ -164,10 +170,13 @@ def main() -> None:
         w = _alone_weights(comp)
         compute_composite(blanket, weights=w)
         top5 = select_topk_by_composite(blanket, 5)
-        r = analyze_subset(f"alone-{_short(comp)}", top5,
-                           ret_fn_basic=close_ev_basic,
-                           ret_fn_stop=close_ev_stop,
-                           ret_fn_label="close_ev")
+        r = analyze_subset(
+            f"alone-{_short(comp)}",
+            top5,
+            ret_fn_basic=close_ev_basic,
+            ret_fn_stop=close_ev_stop,
+            ret_fn_label="close_ev",
+        )
         ev = r.get("basic_ev", {}).get("ev", 0.0)
         dt = r.get("basic_day_t", {})
         wf = r.get("wf_basic", {})
@@ -179,19 +188,33 @@ def main() -> None:
         bonf = bonferroni_p(p_raw, N_COMPONENTS * 2)
         wf_train_ev = wf.get("train_ev", {}).get("ev", 0.0) if wfs == "ok" else 0.0
         wf_test_ev = wf.get("test_ev", {}).get("ev", 0.0) if wfs == "ok" else 0.0
-        wf_test_p = (wf.get("test_day_t", {}).get("p_one_sided", 1.0)
-                     if wfs == "ok" else 1.0)
+        wf_test_p = wf.get("test_day_t", {}).get("p_one_sided", 1.0) if wfs == "ok" else 1.0
         v = verdict_for(
-            ev, t_day, p_raw, wfs, wf_train_ev,
-            wf_test_ev, wf_test_p, n_days, net_ev,
-            f"alone-{_short(comp)}", n_cross_factor=N_COMPONENTS,
+            ev,
+            t_day,
+            p_raw,
+            wfs,
+            wf_train_ev,
+            wf_test_ev,
+            wf_test_p,
+            n_days,
+            net_ev,
+            f"alone-{_short(comp)}",
+            n_cross_factor=N_COMPONENTS,
         )
         alone_results[comp] = {
-            "ev": ev, "net_ev": net_ev, "t_day": t_day,
-            "p_raw": p_raw, "bonf": bonf, "n_days": n_days,
-            "wf_status": wfs, "wf_train_ev": wf_train_ev,
-            "wf_test_ev": wf_test_ev, "wf_test_p": wf_test_p,
-            "verdict": v, "n_picks": len(top5),
+            "ev": ev,
+            "net_ev": net_ev,
+            "t_day": t_day,
+            "p_raw": p_raw,
+            "bonf": bonf,
+            "n_days": n_days,
+            "wf_status": wfs,
+            "wf_train_ev": wf_train_ev,
+            "wf_test_ev": wf_test_ev,
+            "wf_test_p": wf_test_p,
+            "verdict": v,
+            "n_picks": len(top5),
         }
 
     # ---- [6] leave-one-out (composite minus each component) ----
@@ -205,19 +228,23 @@ def main() -> None:
         w = _loo_weights(comp)
         compute_composite(blanket, weights=w)
         top5 = select_topk_by_composite(blanket, 5)
-        r = analyze_subset(f"loo-without-{_short(comp)}", top5,
-                           ret_fn_basic=close_ev_basic,
-                           ret_fn_stop=close_ev_stop,
-                           ret_fn_label="close_ev")
+        r = analyze_subset(
+            f"loo-without-{_short(comp)}",
+            top5,
+            ret_fn_basic=close_ev_basic,
+            ret_fn_stop=close_ev_stop,
+            ret_fn_label="close_ev",
+        )
         ev = r.get("basic_ev", {}).get("ev", 0.0)
         delta = comp_ev - ev
         loo_results[comp] = {
-            "ev": ev, "delta": delta, "n_picks": len(top5),
+            "ev": ev,
+            "delta": delta,
+            "n_picks": len(top5),
         }
         sign = "+" if delta > 0 else ""
         tag = "(component helped)" if delta > 0 else "(component hurt)"
-        print(f"  without {_short(comp):<6}: EV={ev:+.3f}%  "
-              f"delta={sign}{delta:.3f}%  {tag}")
+        print(f"  without {_short(comp):<6}: EV={ev:+.3f}%  delta={sign}{delta:.3f}%  {tag}")
 
     # ---- [7] driver identification ----
     print(f"\n{'=' * 70}")
@@ -228,23 +255,22 @@ def main() -> None:
     print(f"\n  alone top-5 EV ranking (高→低):")
     for f in alone_ranked:
         r = alone_results[f]
-        print(f"    {_short(f):<6}: EV={r['ev']:+.3f}%  t={r['t_day']:.2f}  "
-              f"Bonf×10={r['bonf']:.6f}  verdict={r['verdict']}")
+        print(
+            f"    {_short(f):<6}: EV={r['ev']:+.3f}%  t={r['t_day']:.2f}  "
+            f"Bonf×10={r['bonf']:.6f}  verdict={r['verdict']}"
+        )
 
     loo_ranked = sorted(FACTORS, key=lambda f: loo_results[f]["delta"], reverse=True)
     print(f"\n  leave-one-out delta ranking (大正向贡献→负):")
     for f in loo_ranked:
         r = loo_results[f]
-        print(f"    {_short(f):<6}: loo_EV={r['ev']:+.3f}%  "
-              f"delta={r['delta']:+.3f}%")
+        print(f"    {_short(f):<6}: loo_EV={r['ev']:+.3f}%  delta={r['delta']:+.3f}%")
 
     best_alone = alone_ranked[0]
     best_loo = loo_ranked[0]
     agree = best_alone == best_loo
-    print(f"\n  best alone EV:  {_short(best_alone)} "
-          f"(EV={alone_results[best_alone]['ev']:+.3f}%)")
-    print(f"  best loo delta: {_short(best_loo)} "
-          f"(delta={loo_results[best_loo]['delta']:+.3f}%)")
+    print(f"\n  best alone EV:  {_short(best_alone)} (EV={alone_results[best_alone]['ev']:+.3f}%)")
+    print(f"  best loo delta: {_short(best_loo)} (delta={loo_results[best_loo]['delta']:+.3f}%)")
 
     # driver = highest alone EV (standalone power); loo as supporting evidence
     driver = best_alone
@@ -261,45 +287,53 @@ def main() -> None:
     if agree:
         print(f"    (alone best == loo best → 一致, driver 清晰)")
     else:
-        print(f"    (alone best={_short(best_alone)} ≠ loo best={_short(best_loo)} "
-              f"— 不一致, 以 alone standalone EV 为主 driver; "
-              f"loo delta 反映 composite 内冗余/独特性)")
+        print(
+            f"    (alone best={_short(best_alone)} ≠ loo best={_short(best_loo)} "
+            f"— 不一致, 以 alone standalone EV 为主 driver; "
+            f"loo delta 反映 composite 内冗余/独特性)"
+        )
 
     # ---- [8] summary table ----
     print(f"\n{'=' * 70}")
     print("[8] 汇总 (close_ev %, per-day-mean t, Bonf×10, walk-forward, verdict)")
     print(f"{'=' * 70}")
-    hdr = (f"  {'component':<10} {'mode':>6} {'n':>5} {'days':>5} "
-           f"{'gross%':>8} {'net%':>7} {'day_t':>6} {'p_raw':>8} "
-           f"{'Bonf×10':>9} {'wf_tr%':>7} {'wf_te%':>7} {'verdict':<16}")
+    hdr = (
+        f"  {'component':<10} {'mode':>6} {'n':>5} {'days':>5} "
+        f"{'gross%':>8} {'net%':>7} {'day_t':>6} {'p_raw':>8} "
+        f"{'Bonf×10':>9} {'wf_tr%':>7} {'wf_te%':>7} {'verdict':<16}"
+    )
     print(hdr)
-    print(f"  {'-'*100}")
+    print(f"  {'-' * 100}")
     # composite baseline
     wf_tr_c = comp_wf.get("train_ev", {}).get("ev", 0.0) if comp_wfs == "ok" else 0.0
     wf_te_c = comp_wf.get("test_ev", {}).get("ev", 0.0) if comp_wfs == "ok" else 0.0
-    print(f"  {'composite':<10} {'base':>6} {len(comp_top5):>5} "
-          f"{comp_dt.get('n_days',0):>5} {comp_ev:>+8.3f} {comp_net:>+7.3f} "
-          f"{comp_dt.get('t',0):>6.2f} {comp_dt.get('p_one_sided',1):>8.4f} "
-          f"{'(baseline)':>9} {wf_tr_c:>+7.3f} {wf_te_c:>+7.3f} "
-          f"{'(baseline)':<16}")
+    print(
+        f"  {'composite':<10} {'base':>6} {len(comp_top5):>5} "
+        f"{comp_dt.get('n_days', 0):>5} {comp_ev:>+8.3f} {comp_net:>+7.3f} "
+        f"{comp_dt.get('t', 0):>6.2f} {comp_dt.get('p_one_sided', 1):>8.4f} "
+        f"{'(baseline)':>9} {wf_tr_c:>+7.3f} {wf_te_c:>+7.3f} "
+        f"{'(baseline)':<16}"
+    )
     for comp in FACTORS:
         r = alone_results[comp]
-        print(f"  {_short(comp):<10} {'alone':>6} {r['n_picks']:>5} "
-              f"{r['n_days']:>5} {r['ev']:>+8.3f} {r['net_ev']:>+7.3f} "
-              f"{r['t_day']:>6.2f} {r['p_raw']:>8.4f} {r['bonf']:>9.6f} "
-              f"{r['wf_train_ev']:>+7.3f} {r['wf_test_ev']:>+7.3f} "
-              f"{r['verdict']:<16}")
-    print(f"  {'-'*100}")
+        print(
+            f"  {_short(comp):<10} {'alone':>6} {r['n_picks']:>5} "
+            f"{r['n_days']:>5} {r['ev']:>+8.3f} {r['net_ev']:>+7.3f} "
+            f"{r['t_day']:>6.2f} {r['p_raw']:>8.4f} {r['bonf']:>9.6f} "
+            f"{r['wf_train_ev']:>+7.3f} {r['wf_test_ev']:>+7.3f} "
+            f"{r['verdict']:<16}"
+        )
+    print(f"  {'-' * 100}")
     for comp in FACTORS:
         r = loo_results[comp]
-        print(f"  {_short(comp):<10} {'loo':>6} {r['n_picks']:>5} {'-':>5} "
-              f"{r['ev']:>+8.3f} {'-':>7} {'-':>6} {'-':>8} {'-':>9} "
-              f"{'-':>7} {'-':>7} Δ={r['delta']:+.3f}%")
+        print(
+            f"  {_short(comp):<10} {'loo':>6} {r['n_picks']:>5} {'-':>5} "
+            f"{r['ev']:>+8.3f} {'-':>7} {'-':>6} {'-':>8} {'-':>9} "
+            f"{'-':>7} {'-':>7} Δ={r['delta']:+.3f}%"
+        )
 
     # ---- [9] honest notes ----
-    _print_honest_notes(driver, implication, comp_ev, comp_net,
-                        alone_results, loo_results, best_alone, best_loo,
-                        agree)
+    _print_honest_notes(driver, implication, comp_ev, comp_net, alone_results, loo_results, best_alone, best_loo, agree)
 
     # ---- [EXTRACTION] machine-parseable key numbers ----
     print(f"\n{'=' * 70}")
@@ -310,19 +344,27 @@ def main() -> None:
     for comp in FACTORS:
         ar = alone_results[comp]
         lr = loo_results[comp]
-        print(f"component={_short(comp)} alone_ev={ar['ev']} "
-              f"alone_t={ar['t_day']} alone_bonf={ar['bonf']} "
-              f"alone_verdict={ar['verdict']} "
-              f"loo_ev={lr['ev']} loo_delta={round(lr['delta'], 3)}")
+        print(
+            f"component={_short(comp)} alone_ev={ar['ev']} "
+            f"alone_t={ar['t_day']} alone_bonf={ar['bonf']} "
+            f"alone_verdict={ar['verdict']} "
+            f"loo_ev={lr['ev']} loo_delta={round(lr['delta'], 3)}"
+        )
     print(f"driver={_short(driver)} implication={implication}")
-    print(f"best_alone={_short(best_alone)} best_loo={_short(best_loo)} "
-          f"agree={agree}")
+    print(f"best_alone={_short(best_alone)} best_loo={_short(best_loo)} agree={agree}")
 
 
-def _print_honest_notes(driver: str, implication: str,
-                        comp_ev: float, comp_net: float,
-                        alone_results: dict, loo_results: dict,
-                        best_alone: str, best_loo: str, agree: bool) -> None:
+def _print_honest_notes(
+    driver: str,
+    implication: str,
+    comp_ev: float,
+    comp_net: float,
+    alone_results: dict,
+    loo_results: dict,
+    best_alone: str,
+    best_loo: str,
+    agree: bool,
+) -> None:
     print(f"\n{'=' * 70}")
     print("诚实注解")
     print(f"{'=' * 70}")
@@ -352,8 +394,10 @@ def _print_honest_notes(driver: str, implication: str,
     print("   用 ×10 (n_cross_factor=5); loo 不出 verdict 只报 EV+delta")
     print("   (loo 是辅助诊断非独立假说)。")
     agree_str = "一致" if agree else "不一致 (以 alone standalone EV 为主)"
-    print(f"8. driver={_short(driver)} ({implication}); alone best={_short(best_alone)} "
-          f"loo best={_short(best_loo)} → {agree_str}")
+    print(
+        f"8. driver={_short(driver)} ({implication}); alone best={_short(best_alone)} "
+        f"loo best={_short(best_loo)} → {agree_str}"
+    )
     print(f"\nOVERALL driver: {_short(driver)} ({implication})")
 
 

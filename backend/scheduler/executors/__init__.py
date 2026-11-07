@@ -5,6 +5,7 @@
 类属性跨实例生效），body 委托到 8 域文件的模块级函数。dispatch dict 映射
 task_type → `self._execute_xxx`（bound method），patch 类属性后新实例的 dispatch 自动拿 patched 版。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -22,10 +23,16 @@ logger = logging.getLogger("vibe-research")
 
 # S177: executor 返回值 → run.status 映射（core-invariant「绝不静默吞掉错误」）
 # degraded 信号不再被埋进 run.result JSON，status 列如实反映（backlog M1）
-_DEGRADED_STATUSES = frozenset({
-    "degraded", "partial", "source_fail", "no_emotion_data",
-    "script_not_found", "baostock_unavailable",
-})
+_DEGRADED_STATUSES = frozenset(
+    {
+        "degraded",
+        "partial",
+        "source_fail",
+        "no_emotion_data",
+        "script_not_found",
+        "baostock_unavailable",
+    }
+)
 
 
 def _resolve_run_status(result: Any) -> str:
@@ -233,7 +240,7 @@ class TaskExecutor:
                 result = await asyncio.wait_for(handler(task.payload), timeout=_task_timeout(task))
             else:
                 # S150 R1 + 审查 HIGH1 根治：同步 handler 走调度器独占 _thread_pool
-                #（run_in_executor 替代 asyncio.to_thread），隔离泄漏——调度器线程全挂
+                # （run_in_executor 替代 asyncio.to_thread），隔离泄漏——调度器线程全挂
                 # 也不影响路由器默认池。wait_for 超时仍 cancel future（底层线程不可取消，
                 # 但独占池爆炸半径限在调度器，不冻 API；HIGH3 重复写库另由 subprocess/async 根治）。
                 result = await asyncio.wait_for(
@@ -277,6 +284,7 @@ class TaskExecutor:
         """发送任务执行通知。"""
         try:
             from notification.notification_service import get_notification_service
+
             service = get_notification_service()
 
             status_text = {"success": "成功", "degraded": "降级", "failed": "失败"}.get(status, "未知")
@@ -298,70 +306,87 @@ class TaskExecutor:
 
     def _execute_daily_data_refresh(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.data_ops import daily_data_refresh
+
         return daily_data_refresh(payload)
 
     def _execute_daily_review_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.ai_portfolio import daily_review_notify
+
         return daily_review_notify(payload)
 
     def _execute_limitup_precompute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.limitup import limitup_precompute
+
         return limitup_precompute(payload)
 
     def _execute_portfolio_refresh(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.ai_portfolio import portfolio_refresh
+
         return portfolio_refresh(payload)
 
     def _execute_market_data_sync(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.data_ops import market_data_sync
+
         return market_data_sync(payload)
 
     def _execute_cleanup_old_runs(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.data_ops import cleanup_old_runs
+
         return cleanup_old_runs(payload)
 
     def _execute_daily_backtest_run(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.backtest import daily_backtest_run
+
         return daily_backtest_run(payload)
 
     def _execute_sti_post_market(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.limitup import sti_post_market
+
         return sti_post_market(payload)
 
     def _execute_seal_intraday_collect(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.intraday import seal_intraday_collect
+
         return seal_intraday_collect(payload)
 
     def _execute_candidate_funnel_precompute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.ai_portfolio import candidate_funnel_precompute
+
         return candidate_funnel_precompute(payload)
 
     def _execute_first_board_filter(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.first_board import first_board_filter
+
         return first_board_filter(payload)
 
     def _execute_s066_validation_checkpoint(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.backtest import s066_validation_checkpoint
+
         return s066_validation_checkpoint(payload)
 
     def _execute_evaluation_backtest(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.backtest import evaluation_backtest
+
         return evaluation_backtest(payload)
 
     def _execute_scan_watchlist_gaps(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.gap_scan import scan_watchlist_gaps
+
         return scan_watchlist_gaps(payload)
 
     def _execute_scan_price_alerts(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.price_monitor import scan_price_alerts
+
         return scan_price_alerts(payload)
 
     def _execute_forward_test_daily(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.backtest import forward_test_daily
+
         return forward_test_daily(payload)
 
     def _execute_forward_test_t1_settle(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.backtest import forward_test_t1_settle
+
         return forward_test_t1_settle(payload)
 
     def _execute_forward_test_backfill(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -372,6 +397,7 @@ class TaskExecutor:
         use_weather=True 走 build_context 历史天气（完整架构）；早期日无 STI → weather=None 退化下界。
         """
         from tools.forward_test_backfill import main as backfill_main
+
         use_weather = bool(payload.get("use_weather", True))
         try:
             rc = backfill_main(use_weather=use_weather)
@@ -386,6 +412,7 @@ class TaskExecutor:
         非 arm 级 dimension（gene_score/turnover 等无 arm 映射）→ 保持 frozen 不重算。
         """
         from scheduler.executors.backtest import r3_enforce  # noqa: PLC0415
+
         return r3_enforce(payload)
 
     def _execute_early_admission_scan(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -400,6 +427,7 @@ class TaskExecutor:
         from early_admission import scan_early_admission
         import tracking_pool_repo as _repo
         from datetime import timedelta
+
         run_date = payload.get("run_date") or datetime.now().date().isoformat()
         # T-1（caller 传 or run_date - 1 day fallback）
         previous_trade_day = payload.get("previous_trade_day")
@@ -407,6 +435,7 @@ class TaskExecutor:
             # T-1 = 前一交易日（非日历日 -1，跨周末/节假日取非交易日→0 picks）
             try:
                 from vr_paths import prev_trading_date_str  # lazy import
+
                 previous_trade_day = prev_trading_date_str(datetime.strptime(run_date, "%Y-%m-%d").date())
             except Exception:
                 previous_trade_day = run_date
@@ -415,6 +444,7 @@ class TaskExecutor:
         candidates = payload.get("candidates")
         if not candidates:
             from pre_limitup_scanner import scan_pre_limitup
+
             candidates = scan_pre_limitup(run_date, previous_trade_day=previous_trade_day)
         admitted = scan_early_admission(run_date, candidates, previous_trade_day=previous_trade_day)
         inserted = 0
@@ -422,8 +452,14 @@ class TaskExecutor:
             if _repo.insert_tracking_record(a.code, a.admit_date, a.signal_type, a.indicators_t1):
                 inserted += 1
             _repo.upsert_indicator_snapshot(a.code, a.admit_date, a.indicators_t1, snapshot_source="early_admit")
-        return {"status": "ok", "candidates": len(candidates), "admitted": len(admitted),
-                "inserted": inserted, "run_date": run_date, "previous_trade_day": previous_trade_day}
+        return {
+            "status": "ok",
+            "candidates": len(candidates),
+            "admitted": len(admitted),
+            "inserted": inserted,
+            "run_date": run_date,
+            "previous_trade_day": previous_trade_day,
+        }
 
     def _execute_escalation_run(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S204 T11: escalation run（tracking→watching auto-promote + promoted→decayed）。
@@ -433,6 +469,7 @@ class TaskExecutor:
         T12 decay WATCHING→FILTERED reason='decayed'（非→CANDIDATE 防振荡）。manual trigger 验证阈值后改 enabled=True。
         """
         from escalation_engine import escalate
+
         run_date = payload.get("run_date") or datetime.now().date().isoformat()
         try:
             promoted = escalate(run_date)
@@ -442,98 +479,121 @@ class TaskExecutor:
 
     def _execute_first_board_t1_review(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.first_board import first_board_t1_review
+
         return first_board_t1_review(payload)
 
     def _execute_first_board_quote_probe(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.first_board import first_board_quote_probe
+
         return first_board_quote_probe(payload)
 
     def _execute_zt_history_snapshot(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.limitup import zt_history_snapshot
+
         return zt_history_snapshot(payload)
 
     def _execute_regime_cache_fetch(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.limitup import regime_cache_fetch
+
         return regime_cache_fetch(payload)
 
     def _execute_macro_fetch(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.macro import macro_fetch
+
         return macro_fetch(payload)
 
     def _execute_derived_precompute(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.limitup import derived_precompute
+
         return derived_precompute(payload)
 
     def _execute_monthly_vacuum(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.data_ops import monthly_vacuum
+
         return monthly_vacuum(payload)
 
     def _execute_kline_refresh(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.data_ops import kline_refresh
+
         return kline_refresh(payload)
 
     def _execute_daily_ai_summary(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.ai_portfolio import daily_ai_summary
+
         return daily_ai_summary(payload)
 
     def _execute_premarket_auction_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.premarket import premarket_auction_notify
+
         return premarket_auction_notify(payload)
 
     def _execute_premarket_open_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.premarket import premarket_open_notify
+
         return premarket_open_notify(payload)
 
     def _execute_premarket_t1_review(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.premarket import premarket_t1_review
+
         return premarket_t1_review(payload)
 
     def _execute_daily_kg_audit(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.kg import daily_kg_audit
+
         return daily_kg_audit(payload)
 
     def _execute_daily_kg_sync(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.kg import daily_kg_sync
+
         return daily_kg_sync(payload)
 
     def _execute_kg_inject(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.kg import kg_inject
+
         return kg_inject(payload)
 
     def _execute_st_play_radar(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.limitup import st_play_radar
+
         return st_play_radar(payload)
 
     def _execute_intraday_microstructure_snapshot(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.intraday import intraday_microstructure_snapshot
+
         return intraday_microstructure_snapshot(payload)
 
     def _execute_intraday_auction_dense(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.intraday import intraday_auction_dense
+
         return intraday_auction_dense(payload)
 
     def _execute_baostock_5min_freeze(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         from scheduler.executors.intraday import baostock_5min_freeze
+
         return baostock_5min_freeze(payload)
 
     def _execute_trade_journal_daily(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S175 R2 — 模拟盘闭环盘后跑（journal_recorder.run_daily 接 scheduler 点火）。"""
         from scheduler.executors.journal import trade_journal_daily
+
         return trade_journal_daily(payload)
 
     def _execute_loss_breaker_enforce(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S203 T6 — 吃大面 enforce gate 盘后跑（block_add/block_new+cooldown，不碰 final_size sizing）。"""
         from scheduler.executors.journal import loss_breaker_enforce
+
         return loss_breaker_enforce(payload)
 
     def _execute_fund_accumulation(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S219 #11 — fund 前向累积 cron（每日 em snapshot 存 fund/fundamt UPDATE-only，un-defer 数据准备）。"""
         from scheduler.executors.fund_accum import fund_accumulation
+
         return fund_accumulation(payload)
 
     def _execute_hot_money_seats_update(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S066 §9 通电——游资席位周更聚合（拉 60 日龙虎榜 → 画像 → seat_profiles.db B 字段，#13 follow-up 数据 prep）。"""
         from scheduler.executors.hot_money_seats import hot_money_seats_update
+
         return hot_money_seats_update(payload)
 
     def _execute_sector_heat_reverify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -544,89 +604,107 @@ class TaskExecutor:
         write_override：lift≥2→×1.0 / lift<1→×0.1 / else skip×0.5（§44v2 规约④ 一致）。
         """
         from scheduler.executors.sector_heat_reverify import sector_heat_reverify
+
         return sector_heat_reverify(payload)
 
     def _execute_ofi_collect(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S176 R5 — 盘中 OFI 五档收集（tencent fetch_raw → collect_ofi → save_ofi）。"""
         from scheduler.executors.intraday import ofi_collect
+
         return ofi_collect(payload)
 
     def _execute_turso_sync(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S185 路径 A — Turso 云同步（VR_TURSO_URL 未设→纯本地跳过，零侵入）。"""
         from data.turso_sync import sync_all
+
         return sync_all()
 
     def _execute_healthcheck_ping(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S188 RB-2 — 外部心跳（VR_HEALTHCHECKS_URL 未设→纯本地跳过）。"""
         from scheduler.executors.data_ops import healthcheck_ping
+
         return healthcheck_ping(payload)
 
     def _execute_weekly_brainstorm_remind(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S188 RB-9 — 每周头脑风暴提醒（飞书+待办标记）。"""
         from scheduler.executors.data_ops import weekly_brainstorm_remind
+
         return weekly_brainstorm_remind(payload)
 
     def _execute_daily_full_pull(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S191 RB-3 — 每日全量拉取沉淀 datalake（stoke + mootdx 分笔）。"""
         from scheduler.executors.data_ops import daily_full_pull
+
         return daily_full_pull(payload)
 
     def _execute_daily_report(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S218 — 每日信号报告（consecutive_relay 验证信号 → 结构化 dict + 人话报告 + 可选推送）。"""
         from scheduler.executors.signals import daily_report
+
         return daily_report(payload)
 
     def _execute_weekly_review(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S218 C5 — 阶段性汇总复盘（weekly review + cap 升降 gate + process-theater 自检）。"""
         from scheduler.executors.signals import weekly_review
+
         return weekly_review(payload)
 
     def _execute_keypoint_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S218 C3 — 关键点位决策通知（D 收盘入场 / D+1 开盘出场 / gap-down 诚实标）。"""
         from scheduler.executors.signals import keypoint_notify
+
         return keypoint_notify(payload)
 
     def _execute_discipline_gate_morning(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S231 — 打板纪律门禁（09:15 工作日盘前 7 条件门禁 + 飞书通知，风控工具非 edge）。"""
         from scheduler.executors.discipline_gate import discipline_gate_morning
+
         return discipline_gate_morning(payload)
 
     def _execute_t1_watchlist_generate(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S232 — T+1 涨停预测 watchlist（15:10 收盘后，观察池非买入信号，EV 负）。"""
         from scheduler.executors.t1_forecast import t1_watchlist_generate
+
         return t1_watchlist_generate(payload)
 
     def _execute_t1_hit_backfill(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S232 — T+1 hit 回填（18:00，zt_history final 后，累积二次确认数据）。"""
         from scheduler.executors.t1_forecast import t1_hit_backfill
+
         return t1_hit_backfill(payload)
 
     def _execute_sentiment_commander_morning(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S234 — 情绪指挥官 09:15 盘前（情绪诊断+仓位+飞书，沸点期触发排雷）。"""
         from scheduler.executors.sentiment_commander import sentiment_commander_morning
+
         return sentiment_commander_morning(payload)
 
     def _execute_sentiment_commander_close(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S234 — 情绪指挥官 14:50 尾盘（排雷+飞书，沸点期 score>70 才触发 filter）。"""
         from scheduler.executors.sentiment_commander import sentiment_commander_close
+
         return sentiment_commander_close(payload)
 
     def _execute_regime_flip_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S222 — regime→bull tripwire（3 天 hysteresis，consecutive_relay live 验证启动器）。"""
         from scheduler.executors.signals import regime_flip_notify
+
         return regime_flip_notify(payload)
 
     def _execute_regime_gate_combo_log(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """命题A对抗后——跑 ashare_regime_monitor --log 记 gate 预测（只读诊断，前瞻跟踪 30-60 天验预测力）。"""
         from scheduler.executors.signals import regime_gate_combo_log
+
         return regime_gate_combo_log(payload)
 
     def _execute_combo_daily_notify(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """2026-10-29 用户"每日提醒我 combo"——15:10 跑 combo_notify 推 top-20 + gate 到飞书（干净不混投毒）。"""
         from scheduler.executors.signals import combo_daily_notify
+
         return combo_daily_notify(payload)
 
     def _execute_cron_audit(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S218 #10 — cron-fire audit：扫 cron_fire.log receipt + last_run_at 数 missed delivery cron。"""
         from scheduler.executors.audit import cron_audit
+
         return cron_audit(payload)

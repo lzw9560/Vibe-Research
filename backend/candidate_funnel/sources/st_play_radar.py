@@ -24,6 +24,7 @@ def load_st_play_radar() -> dict[str, str]:
     """
     try:
         from vr_paths import resolve_data_dir  # noqa: PLC0415
+
         p: Path = resolve_data_dir() / "st_play_radar.json"
         if not p.exists():
             return {}
@@ -46,6 +47,7 @@ def _chongzu_keywords() -> tuple[str, ...]:
     """复用 catalyst._ANN_KEYWORDS 的"重组"型关键词（DRY）。"""
     try:
         from candidate_funnel.sources.catalyst import _ANN_KEYWORDS  # noqa: PLC0415
+
         return next((kws for t, kws in _ANN_KEYWORDS if t == "重组"), ())
     except Exception:
         return ()
@@ -59,9 +61,7 @@ def classify_st_play(announcements) -> str | None:
     """
     if not announcements:
         return None
-    joined = " ".join(
-        (a.get("title", "") if isinstance(a, dict) else "") for a in announcements
-    )
+    joined = " ".join((a.get("title", "") if isinstance(a, dict) else "") for a in announcements)
     if any(kw in joined for kw in _ZHAIMAO_KEYWORDS):
         return "摘帽"
     if any(kw in joined for kw in _chongzu_keywords()):
@@ -72,7 +72,8 @@ def classify_st_play(announcements) -> str | None:
 
 
 def build_st_play_radar(
-    st_codes, fetch_announcements,
+    st_codes,
+    fetch_announcements,
 ) -> dict[str, str]:
     """产 ST-play 白名单。st_codes: ST 股代码列表；fetch_announcements(code)->list[dict]。
 
@@ -95,6 +96,7 @@ def build_st_play_radar(
 def save_st_play_radar(radar: dict[str, str]) -> None:
     """落盘 ST-play 白名单到 VR_DATA_DIR/st_play_radar.json（覆盖写）。"""
     from vr_paths import resolve_data_dir  # noqa: PLC0415
+
     p = resolve_data_dir() / "st_play_radar.json"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(
@@ -112,6 +114,7 @@ def _collect_st_codes() -> list[str]:
     try:
         import sqlite3  # noqa: PLC0415
         from vr_paths import resolve_data_dir  # noqa: PLC0415
+
         db = resolve_data_dir() / "gene_scores.db"
         if not db.exists():
             return []
@@ -139,6 +142,7 @@ def run_st_play_radar(
         st_codes = _collect_st_codes()
     if fetch_announcements is None:
         import astock  # noqa: PLC0415
+
         fetch_announcements = astock.announcements
     radar = build_st_play_radar(st_codes, fetch_announcements)
     save_st_play_radar(radar)

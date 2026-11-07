@@ -32,6 +32,7 @@ SQLite，本模块不复刻（§44v2 复测时联读 seal_intraday_snapshots + �
 
 spec: `specs/S167-盘中微结构数据累积/spec.md`
 """
+
 from __future__ import annotations
 
 import json
@@ -63,9 +64,7 @@ _SCHEMA_RANKINGS = """CREATE TABLE IF NOT EXISTS intraday_ranking_snapshots (
     snapshot_at TEXT,               -- 落库时间戳
     PRIMARY KEY (date, ts, source, code)
 )"""
-_INDEX_RANKINGS = (
-    "CREATE INDEX IF NOT EXISTS idx_rank_date_ts ON intraday_ranking_snapshots(date, ts)"
-)
+_INDEX_RANKINGS = "CREATE INDEX IF NOT EXISTS idx_rank_date_ts ON intraday_ranking_snapshots(date, ts)"
 
 _SCHEMA_QUOTES = """CREATE TABLE IF NOT EXISTS intraday_quote_snapshots (
     date TEXT NOT NULL,
@@ -82,9 +81,7 @@ _SCHEMA_QUOTES = """CREATE TABLE IF NOT EXISTS intraday_quote_snapshots (
     snapshot_at TEXT,
     PRIMARY KEY (date, ts, code)
 )"""
-_INDEX_QUOTES = (
-    "CREATE INDEX IF NOT EXISTS idx_quote_date_ts ON intraday_quote_snapshots(date, ts)"
-)
+_INDEX_QUOTES = "CREATE INDEX IF NOT EXISTS idx_quote_date_ts ON intraday_quote_snapshots(date, ts)"
 
 _SCHEMA_BAOSTOCK = """CREATE TABLE IF NOT EXISTS baostock_5min_freeze (
     date TEXT NOT NULL,             -- 涨停日（prev_trading_date）
@@ -95,9 +92,7 @@ _SCHEMA_BAOSTOCK = """CREATE TABLE IF NOT EXISTS baostock_5min_freeze (
     captured_at TEXT,
     PRIMARY KEY (date, code)
 )"""
-_INDEX_BAOSTOCK = (
-    "CREATE INDEX IF NOT EXISTS idx_bs5_date ON baostock_5min_freeze(date)"
-)
+_INDEX_BAOSTOCK = "CREATE INDEX IF NOT EXISTS idx_bs5_date ON baostock_5min_freeze(date)"
 
 _SCHEMA_AUCTION = """CREATE TABLE IF NOT EXISTS intraday_auction_snapshots (
     date TEXT NOT NULL,             -- YYYY-MM-DD（交易日）
@@ -123,9 +118,7 @@ _SCHEMA_AUCTION = """CREATE TABLE IF NOT EXISTS intraday_auction_snapshots (
     snapshot_at TEXT,
     PRIMARY KEY (date, ts, stage, code)
 )"""
-_INDEX_AUCTION = (
-    "CREATE INDEX IF NOT EXISTS idx_auct_date_ts ON intraday_auction_snapshots(date, ts)"
-)
+_INDEX_AUCTION = "CREATE INDEX IF NOT EXISTS idx_auct_date_ts ON intraday_auction_snapshots(date, ts)"
 
 # S176 R4 — OFI 五档快照（独立 store，不喂 trade_journal；conditioning 数据收集器）
 _SCHEMA_OFI = """CREATE TABLE IF NOT EXISTS intraday_ofi_snapshots (
@@ -145,9 +138,7 @@ _SCHEMA_OFI = """CREATE TABLE IF NOT EXISTS intraday_ofi_snapshots (
     snapshot_at TEXT,
     PRIMARY KEY (date, ts, code)
 )"""
-_INDEX_OFI = (
-    "CREATE INDEX IF NOT EXISTS idx_ofi_date_ts ON intraday_ofi_snapshots(date, ts)"
-)
+_INDEX_OFI = "CREATE INDEX IF NOT EXISTS idx_ofi_date_ts ON intraday_ofi_snapshots(date, ts)"
 
 
 def _get_conn() -> sqlite3.Connection:
@@ -171,6 +162,7 @@ def _get_conn() -> sqlite3.Connection:
 # ─────────────────────────────────────────────────────────────────────────────
 # 归一辅助
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _to_float(v) -> float | None:
     if v is None or isinstance(v, bool):
@@ -198,9 +190,8 @@ def _to_int(v) -> int | None:
 # 写入
 # ─────────────────────────────────────────────────────────────────────────────
 
-def save_ranking_snapshots(
-    date: str, ts: str, source: str, items: list[dict[str, Any]]
-) -> int:
+
+def save_ranking_snapshots(date: str, ts: str, source: str, items: list[dict[str, Any]]) -> int:
     """批量写 hithink 排名快照（skyrocket/hot_stock/anomaly 归一后）。返回写入行数。
 
     幂等：PK(date, ts, source, code) INSERT OR REPLACE，同周期重跑覆盖不翻倍。
@@ -215,17 +206,22 @@ def save_ranking_snapshots(
         if not code:
             continue
         # extra_json：保留未归一字段（异动榜原样字段除 thscode/code/name 外）
-        extra = {k: v for k, v in it.items()
-                 if k not in ("code", "name", "rank", "heat", "rank_change", "rank_trend")}
-        rows.append({
-            "date": date, "ts": ts, "source": source, "code": code,
-            "name": it.get("name"), "rank": _to_int(it.get("rank")),
-            "heat": _to_float(it.get("heat")),
-            "rank_change": _to_float(it.get("rank_change")),
-            "rank_trend": it.get("rank_trend"),
-            "extra_json": json.dumps(extra, ensure_ascii=False) if extra else None,
-            "snapshot_at": snap_at,
-        })
+        extra = {k: v for k, v in it.items() if k not in ("code", "name", "rank", "heat", "rank_change", "rank_trend")}
+        rows.append(
+            {
+                "date": date,
+                "ts": ts,
+                "source": source,
+                "code": code,
+                "name": it.get("name"),
+                "rank": _to_int(it.get("rank")),
+                "heat": _to_float(it.get("heat")),
+                "rank_change": _to_float(it.get("rank_change")),
+                "rank_trend": it.get("rank_trend"),
+                "extra_json": json.dumps(extra, ensure_ascii=False) if extra else None,
+                "snapshot_at": snap_at,
+            }
+        )
     if not rows:
         return 0
     conn = _get_conn()
@@ -245,9 +241,7 @@ def save_ranking_snapshots(
         conn.close()
 
 
-def save_quote_snapshots(
-    date: str, ts: str, quotes: dict[str, dict[str, Any]]
-) -> int:
+def save_quote_snapshots(date: str, ts: str, quotes: dict[str, dict[str, Any]]) -> int:
     """批量写 tencent 量比快照。quotes: {裸code: {price, vol_ratio, ...}}。返回写入行数。
 
     幂等：PK(date, ts, code) INSERT OR REPLACE。缺字段 None。
@@ -260,17 +254,22 @@ def save_quote_snapshots(
         code = str(code).strip()
         if not code or not isinstance(q, dict):
             continue
-        rows.append({
-            "date": date, "ts": ts, "code": code,
-            "name": q.get("name"), "price": _to_float(q.get("price")),
-            "change_pct": _to_float(q.get("change_pct")),
-            "vol_ratio": _to_float(q.get("vol_ratio")),
-            "turnover_pct": _to_float(q.get("turnover_pct")),
-            "limit_up": _to_float(q.get("limit_up")),
-            "limit_down": _to_float(q.get("limit_down")),
-            "amount_wan": _to_float(q.get("amount_wan")),
-            "snapshot_at": snap_at,
-        })
+        rows.append(
+            {
+                "date": date,
+                "ts": ts,
+                "code": code,
+                "name": q.get("name"),
+                "price": _to_float(q.get("price")),
+                "change_pct": _to_float(q.get("change_pct")),
+                "vol_ratio": _to_float(q.get("vol_ratio")),
+                "turnover_pct": _to_float(q.get("turnover_pct")),
+                "limit_up": _to_float(q.get("limit_up")),
+                "limit_down": _to_float(q.get("limit_down")),
+                "amount_wan": _to_float(q.get("amount_wan")),
+                "snapshot_at": snap_at,
+            }
+        )
     if not rows:
         return 0
     conn = _get_conn()
@@ -290,9 +289,7 @@ def save_quote_snapshots(
         conn.close()
 
 
-def freeze_baostock_5min(
-    date: str, code: str, name: str | None, bars: list[dict[str, Any]]
-) -> int:
+def freeze_baostock_5min(date: str, code: str, name: str | None, bars: list[dict[str, Any]]) -> int:
     """写单股 baostock 5min 次日冻结。bars: [{date,time,open,high,low,close,volume}]。
 
     幂等：PK(date, code) INSERT OR REPLACE。空 bars 仍写（bar_count=0，诚实记录缺数据）。
@@ -314,9 +311,7 @@ def freeze_baostock_5min(
         conn.close()
 
 
-def save_auction_snapshots(
-    date: str, ts: str, stage: str, items: list[dict[str, Any]]
-) -> int:
+def save_auction_snapshots(date: str, ts: str, stage: str, items: list[dict[str, Any]]) -> int:
     """批量写 hithink 集合竞价快照。stage: ``live`` / ``final``。
 
     幂等：PK(date, ts, stage, code) INSERT OR REPLACE，同 ts/stage 重跑覆盖不翻倍。
@@ -332,26 +327,31 @@ def save_auction_snapshots(
         code = str(it.get("code", "") or "").strip()
         if not code:
             continue
-        rows.append({
-            "date": date, "ts": ts, "stage": stage, "code": code,
-            "name": it.get("name"),
-            "auction_price": _to_float(it.get("auction_price")),
-            "auction_pct": _to_float(it.get("auction_pct")),
-            "auction_volume": _to_float(it.get("auction_volume")),
-            "auction_amount": _to_float(it.get("auction_amount")),
-            "auction_unmatched": _to_float(it.get("auction_unmatched")),
-            "auction_turnover_pct": _to_float(it.get("auction_turnover_pct")),
-            "auction_yesterday_ratio_pct": _to_float(it.get("auction_yesterday_ratio_pct")),
-            "auction_volume_ratio": _to_float(it.get("auction_volume_ratio")),
-            "pre_close_price": _to_float(it.get("pre_close_price")),
-            "open_price": _to_float(it.get("open_price")),
-            "last_price": _to_float(it.get("last_price")),
-            "float_market_cap": _to_float(it.get("float_market_cap")),
-            "source_timestamp": _to_float(it.get("source_timestamp")),
-            "auction_phase": it.get("auction_phase"),
-            "data_status": it.get("data_status"),
-            "snapshot_at": snap_at,
-        })
+        rows.append(
+            {
+                "date": date,
+                "ts": ts,
+                "stage": stage,
+                "code": code,
+                "name": it.get("name"),
+                "auction_price": _to_float(it.get("auction_price")),
+                "auction_pct": _to_float(it.get("auction_pct")),
+                "auction_volume": _to_float(it.get("auction_volume")),
+                "auction_amount": _to_float(it.get("auction_amount")),
+                "auction_unmatched": _to_float(it.get("auction_unmatched")),
+                "auction_turnover_pct": _to_float(it.get("auction_turnover_pct")),
+                "auction_yesterday_ratio_pct": _to_float(it.get("auction_yesterday_ratio_pct")),
+                "auction_volume_ratio": _to_float(it.get("auction_volume_ratio")),
+                "pre_close_price": _to_float(it.get("pre_close_price")),
+                "open_price": _to_float(it.get("open_price")),
+                "last_price": _to_float(it.get("last_price")),
+                "float_market_cap": _to_float(it.get("float_market_cap")),
+                "source_timestamp": _to_float(it.get("source_timestamp")),
+                "auction_phase": it.get("auction_phase"),
+                "data_status": it.get("data_status"),
+                "snapshot_at": snap_at,
+            }
+        )
     if not rows:
         return 0
     conn = _get_conn()
@@ -396,6 +396,7 @@ def has_auction_snapshot(date: str, stage: str) -> bool:
 # ─────────────────────────────────────────────────────────────────────────────
 # 读取（供未来 §44v2 复测）
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def load_rankings(start: str, end: str) -> list[dict[str, Any]]:
     """读 [start, end] 排名快照（date, ts, source, rank 升序）。start/end: YYYY-MM-DD。"""
@@ -488,11 +489,18 @@ def list_accumulation_dates() -> list[str]:
 # S176 R4 — OFI 五档快照（独立 store，不喂 trade_journal；conditioning 数据收集器）
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def save_ofi(
-    date: str, ts: str, code: str,
-    ofi: float | None, ofi_abs: float | None, bid_ask_pressure: float | None,
-    buy_vols_json: str | None, sell_vols_json: str | None,
-    seal_amount: float | None, regime: str | None,
+    date: str,
+    ts: str,
+    code: str,
+    ofi: float | None,
+    ofi_abs: float | None,
+    bid_ask_pressure: float | None,
+    buy_vols_json: str | None,
+    sell_vols_json: str | None,
+    seal_amount: float | None,
+    regime: str | None,
 ) -> int:
     """写单股 OFI 五档快照。幂等：PK(date, ts, code) INSERT OR REPLACE。
 
@@ -508,8 +516,19 @@ def save_ofi(
                 (date, ts, code, ofi, ofi_abs, bid_ask_pressure,
                  buy_vols_json, sell_vols_json, seal_amount, regime, snapshot_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (date, ts, code, ofi, ofi_abs, bid_ask_pressure,
-                 buy_vols_json, sell_vols_json, seal_amount, regime, snap_at),
+                (
+                    date,
+                    ts,
+                    code,
+                    ofi,
+                    ofi_abs,
+                    bid_ask_pressure,
+                    buy_vols_json,
+                    sell_vols_json,
+                    seal_amount,
+                    regime,
+                    snap_at,
+                ),
             )
             conn.commit()
             return 1

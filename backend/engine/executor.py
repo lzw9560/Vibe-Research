@@ -18,6 +18,7 @@ Accounting 只对 Executor ACCEPTED 的 fills 算 return；refused fills → sta
 R5 gap bypasses engine：gap Trades（fill_type=intraday_conditional）→ IntradayConditionalFill
 返 untradeable → engine 拒绝。gap run 绕过 engine 直接算 D close→D+1 open。
 """
+
 from __future__ import annotations
 
 from engine.bar_utils import is_halted, is_unbuyable_next_bar
@@ -57,9 +58,7 @@ class Executor:
             return trades.with_fill(None, FILL_UNTRADEABLE, "limit_up_locked")
 
         # 所有 A 股规则通过 → 接受 fill
-        return trades.with_fill(
-            result.entry_price, FILL_ACCEPTED, result.reason or "accepted"
-        )
+        return trades.with_fill(result.entry_price, FILL_ACCEPTED, result.reason or "accepted")
 
 
 def fillability_check(code: str, entry_bar: object) -> tuple[bool, str]:

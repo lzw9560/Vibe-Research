@@ -15,6 +15,7 @@ S079 R9 仓位闸 + 龙虎榜黑名单两层后处理（在 advise_batch 输出�
   Layer 2：cap_by_market_phase —— 按 _market_phase 三状态裁剪仓位上限
   叠加代数：final_cap = min(weather_cap, market_phase_cap, max_total_position)
 """
+
 from __future__ import annotations
 
 import logging
@@ -41,6 +42,7 @@ PARAM_DISCLAIMER = "仓位参数参考值，非执行指令 | 历史统计特征
 @dataclass
 class CandidatePool:
     """候选池。"""
+
     date: str
     candidates: list[GeneScore]
     strong_candidates: list[GeneScore]
@@ -51,6 +53,7 @@ class CandidatePool:
 @dataclass
 class StrategyMatch:
     """战法匹配结果。"""
+
     code: str
     name: str
     matched_strategies: list[StrategySignal]
@@ -66,6 +69,7 @@ class StrategyMatch:
 @dataclass
 class PositionSuggestion:
     """仓位建议。"""
+
     code: str
     name: str
     suggested_pct: float
@@ -80,6 +84,7 @@ class PositionSuggestion:
 @dataclass
 class PreMarketReport:
     """盘前报告。"""
+
     date: str
     generated_at: str
     sentiment_index: float | None = None
@@ -92,16 +97,16 @@ class PreMarketReport:
     total_suggested_position: float = 0.0
     warnings: list[str] = field(default_factory=list)
     # S079 R9-R10 P2 扩展字段（仓位闸 + 龙虎榜风控 + checklist）
-    market_phase: str | None = None           # _market_phase 返回值（冰点/普通/活跃/亢奋/红期）
-    market_phase_cap: float | None = None     # 绿1.0/黄0.5/红0.2
-    position_cap_tier: str | None = None      # green/yellow/red
+    market_phase: str | None = None  # _market_phase 返回值（冰点/普通/活跃/亢奋/红期）
+    market_phase_cap: float | None = None  # 绿1.0/黄0.5/红0.2
+    position_cap_tier: str | None = None  # green/yellow/red
     # S096：P2 现象判据（fired_rule + factors，P2RiskPanel 显"为何此 tier"）
-    p2_factors: dict | None = None            # {zt_count/big_loss/floor/ladder_success/ladder_height}
-    p2_fired_rule: str | None = None          # fired_rule（完整链+红期override+数据降级）
+    p2_factors: dict | None = None  # {zt_count/big_loss/floor/ladder_success/ladder_height}
+    p2_fired_rule: str | None = None  # fired_rule（完整链+红期override+数据降级）
     seat_risk_flags: dict[str, list[str]] = field(default_factory=dict)  # {code: [【拒绝介入】/独食独大/散户霸榜]}
-    data_missing_flags: dict[str, str] = field(default_factory=dict)     # {code: 警示字符串}
+    data_missing_flags: dict[str, str] = field(default_factory=dict)  # {code: 警示字符串}
     execution_checklist: list[str] = field(default_factory=list)
-    param_disclaimer: str | None = None        # "仓位参数参考值，非执行指令..."
+    param_disclaimer: str | None = None  # "仓位参数参考值，非执行指令..."
 
 
 class PreMarketWorkflow:
@@ -145,6 +150,7 @@ class PreMarketWorkflow:
         #   缺涨停池数据时 pool_item=None 降级，PRD 战法标"数据缺失"不命中（既有 9 战法不受影响）
         from sentiment_context import build_context  # noqa: PLC0415
         from strategies.first_board_filter import fetch_zt_pool  # noqa: PLC0415
+
         # S081：PRD2 战法 derived 接线——fetch_derived(code, T-1) 传 match
         from candidate_funnel.sources import derived_source as _derived_src  # noqa: PLC0415
         from vr_paths import prev_trading_date as _prev_td  # noqa: PLC0415
@@ -172,7 +178,10 @@ class PreMarketWorkflow:
                 # S081：PRD2 战法 derived（last_lock/broken_duration/max_drop）从 T-1 派生表取
                 _derived = _derived_src.fetch_derived(stock.code, _t1) if _t1 else None
                 signals = self._strategy_matcher.match(
-                    stock, ctx.weather_state, pool_item=pool_item, derived=_derived,
+                    stock,
+                    ctx.weather_state,
+                    pool_item=pool_item,
+                    derived=_derived,
                 )
                 if signals:
                     best = signals[0]
@@ -222,6 +231,7 @@ class PreMarketWorkflow:
         # 5. 情绪周期（复用现有 STI）
         try:
             from limitup_sti.service import get_sti_latest
+
             sti = await get_sti_latest()
             if sti:
                 report.sentiment_index = sti.get("score")
@@ -282,7 +292,7 @@ class PreMarketWorkflow:
         factors = self._compute_market_phase_factors(trade_date)
         phase = _market_phase(
             zt_count=factors["zt_count"],
-            big_loss=factors.get("big_loss"),       # _emotion 无此字段 → None → 降级
+            big_loss=factors.get("big_loss"),  # _emotion 无此字段 → None → 降级
             floor=factors.get("floor"),
             ladder_success=factors.get("ladder_success"),
             ladder_height=factors.get("ladder_height"),
@@ -305,7 +315,8 @@ class PreMarketWorkflow:
         # would_be_phase = 纯四档（big_loss/floor=None 跳过硬熔断），看硬熔断覆盖了什么
         would_be_phase = _market_phase(
             zt_count=factors["zt_count"],
-            big_loss=None, floor=None,
+            big_loss=None,
+            floor=None,
             ladder_success=factors.get("ladder_success"),
             ladder_height=factors.get("ladder_height"),
         )
@@ -320,7 +331,11 @@ class PreMarketWorkflow:
         # 注：个股仓位分配 = capped_suggestions[i].suggested_pct，总仓位上限 = total_cap
         #   单笔委托金额比例 = suggested_pct（已是总仓位分配，黄色期已在 cap_by_market_phase 砍半）
         checklist = self._build_execution_checklist(
-            phase, tier, total_cap, n_stocks, data_missing_flags,
+            phase,
+            tier,
+            total_cap,
+            n_stocks,
+            data_missing_flags,
         )
 
         return {
@@ -372,6 +387,7 @@ class PreMarketWorkflow:
         """
         try:
             import market as market_mod  # noqa: PLC0415
+
             emotion = market_mod._emotion(trade_date) or {}
             return {
                 "zt_count": emotion.get("zt_count"),
@@ -455,11 +471,13 @@ class PreMarketWorkflow:
         # 八项标准过滤（简化版）
         for stock in screener_result.gene_scores:
             if stock not in candidates and stock not in strong_candidates:
-                filtered_out.append({
-                    "code": stock.code,
-                    "name": stock.name,
-                    "reason": "基因得分未达标",
-                })
+                filtered_out.append(
+                    {
+                        "code": stock.code,
+                        "name": stock.name,
+                        "reason": "基因得分未达标",
+                    }
+                )
 
         sector_distribution: dict[str, int] = {}
         for stock in candidates:

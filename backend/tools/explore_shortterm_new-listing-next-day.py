@@ -29,6 +29,7 @@ A 股特色: 主板 2014-2023 首日+44% 限价→T+1 常一字涨停(买不进)
 - survivorship: cache 仅含仍上市码, 退市新股缺失 → 上偏 (诚实标注)
 - 禁止外推: 新股次日单策略 ≠ 事件驱动有/无 edge ≠ 短线有/无 edge
 """
+
 from __future__ import annotations
 import json
 import sys
@@ -41,7 +42,12 @@ from math import erf, sqrt
 # import shared helpers (DRY) — reuse statistical functions
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tools._factor_helpers import (  # noqa: E402
-    ev_stats, day_paired_t, bonferroni_p, norm_sf_positive, ALPHA, COST,
+    ev_stats,
+    day_paired_t,
+    bonferroni_p,
+    norm_sf_positive,
+    ALPHA,
+    COST,
 )
 
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
@@ -58,8 +64,8 @@ REGIME_FILE = DATA / "index_ma20_regime.json"
 
 # Event windows: entry=T+1 open, exit=T+n close
 WINDOWS = [
-    ("t2", 2),   # T+1 open → T+2 close (1-day hold)
-    ("t5", 5),   # T+1 open → T+5 close (4-day hold)
+    ("t2", 2),  # T+1 open → T+2 close (1-day hold)
+    ("t5", 5),  # T+1 open → T+5 close (4-day hold)
 ]
 
 # Bonferroni: ×5 cross-strategy (task spec) ×2 windows = ×10 total reported
@@ -71,11 +77,12 @@ N_WINDOWS = 2
 BACKFILL_DATES = {"2018-01-02", "2024-06-03", "2025-06-03", "2025-12-25"}
 
 # Era boundaries (A-share new listing limit reform)
-CHUANGYE_REFORM = "2020-08-24"   # 创业板注册制: 前5日无涨跌幅
-MAIN_REFORM = "2023-02-01"       # 主板注册制: 前5日无涨跌幅 (approx date)
+CHUANGYE_REFORM = "2020-08-24"  # 创业板注册制: 前5日无涨跌幅
+MAIN_REFORM = "2023-02-01"  # 主板注册制: 前5日无涨跌幅 (approx date)
 
 
 # ---------- data loading ----------
+
 
 def load_kline_json() -> dict[str, list[dict]]:
     """Load kline cache from JSON. Returns {code: [bars sorted by date]}."""
@@ -109,6 +116,7 @@ def load_regime() -> tuple[dict[str, dict], list[str]]:
 
 # ---------- board classification ----------
 
+
 def board_type(code: str) -> str:
     """Classify by board: main / chuangye / kechuang / beijiao / other."""
     if code.startswith(("300", "301")):
@@ -125,10 +133,10 @@ def board_type(code: str) -> str:
 def era_of(ipo_date: str) -> str:
     """Classify era by IPO date relative to limit reforms."""
     if ipo_date < CHUANGYE_REFORM:
-        return "era1_pre2020"      # 主板+创业板 首日+44%限价, T+1 常
+        return "era1_pre2020"  # 主板+创业板 首日+44%限价, T+1 常
     if ipo_date < MAIN_REFORM:
-        return "era2_2020_2023"    # 创业板/科创板 前5日无限价, 主板仍+44%
-    return "era3_post2023"         # 全部前5日无限价
+        return "era2_2020_2023"  # 创业板/科创板 前5日无限价, 主板仍+44%
+    return "era3_post2023"  # 全部前5日无限价
 
 
 def has_first5_limit(ipo_date: str, board: str) -> bool:
@@ -136,16 +144,17 @@ def has_first5_limit(ipo_date: str, board: str) -> bool:
     If True, T+1 might be locked (can't buy). If False, T+1 is tradeable."""
     if board in ("chuangye", "kechuang"):
         if board == "chuangye" and ipo_date < CHUANGYE_REFORM:
-            return True   # pre-reform 创业板 had limits
-        return False      # post-reform / 科创板: no first-5-day limit
+            return True  # pre-reform 创业板 had limits
+        return False  # post-reform / 科创板: no first-5-day limit
     if board == "main":
         if ipo_date < MAIN_REFORM:
-            return True   # pre-reform 主板 had +44% then 10% limit
-        return False      # post-reform: no first-5-day limit
+            return True  # pre-reform 主板 had +44% then 10% limit
+        return False  # post-reform: no first-5-day limit
     return True  # unknown/beijiao: assume has limit (conservative)
 
 
 # ---------- locked bar check ----------
+
 
 def is_locked_bar(bar: dict) -> bool:
     """Check if bar is 一字 (locked at single price, can't buy).
@@ -159,6 +168,7 @@ def is_locked_bar(bar: dict) -> bool:
 
 
 # ---------- pick construction ----------
+
 
 def build_ipo_picks(
     code_map: dict[str, list[dict]],
@@ -249,29 +259,30 @@ def build_ipo_picks(
         # first-day return (T close vs T open) for context
         t0_open = bars[0].get("open")
         t0_close = bars[0].get("close")
-        first_day_ret = ((t0_close - t0_open) / t0_open * 100
-                         if t0_open and t0_close and t0_open > 0 else None)
+        first_day_ret = (t0_close - t0_open) / t0_open * 100 if t0_open and t0_close and t0_open > 0 else None
 
-        picks.append({
-            "code": code,
-            "ipo_date": ipo_date,
-            "board": board,
-            "era": era,
-            "has_limit_t1": limit_on_t1,
-            "t1_date": t1_date,
-            "t1_bar": t1_bar,
-            "t1_close": t1_close,
-            "entry": entry,
-            "exit_bars": exit_bars,
-            "exit_dates": exit_dates,
-            "exit_closes": exit_closes,
-            "first_day_ret": first_day_ret,
-        })
+        picks.append(
+            {
+                "code": code,
+                "ipo_date": ipo_date,
+                "board": board,
+                "era": era,
+                "has_limit_t1": limit_on_t1,
+                "t1_date": t1_date,
+                "t1_bar": t1_bar,
+                "t1_close": t1_close,
+                "entry": entry,
+                "exit_bars": exit_bars,
+                "exit_dates": exit_dates,
+                "exit_closes": exit_closes,
+                "first_day_ret": first_day_ret,
+            }
+        )
 
     print(f"[build] total codes: {len(code_map)}")
     print(f"[build] skipped backfill (not real IPO): {skipped_backfill}")
     print(f"[build] skipped pre-2018: {skipped_pre2018}")
-    print(f"[build] skipped too few bars (<{max_exit_offset+1}): {skipped_short}")
+    print(f"[build] skipped too few bars (<{max_exit_offset + 1}): {skipped_short}")
     print(f"[build] skipped locked T+1 (一字, can't buy): {skipped_locked}")
     print(f"[build] skipped invalid (missing OHLC): {skipped_invalid}")
     print(f"[build] valid picks: {len(picks)}")
@@ -279,6 +290,7 @@ def build_ipo_picks(
 
 
 # ---------- return functions ----------
+
 
 def ev_window(p: dict, wname: str) -> float | None:
     """Raw EV: T+1 open → T+n close. Realistic entry, close_ev not open_ev."""
@@ -316,6 +328,7 @@ def bhar_window(p: dict, wname: str, index_bars: dict[str, dict]) -> float | Non
 
 # ---------- walk-forward (event-study adapted) ----------
 
+
 def walk_forward_event(
     picks: list[dict],
     ret_fn,
@@ -349,8 +362,10 @@ def walk_forward_event(
     te_rets, te_by_date = _rets(test_dates)
     return {
         "status": "ok",
-        "n_train": len(tr_rets), "n_test": len(te_rets),
-        "n_train_dates": len(train_dates), "n_test_dates": len(test_dates),
+        "n_train": len(tr_rets),
+        "n_test": len(te_rets),
+        "n_train_dates": len(train_dates),
+        "n_test_dates": len(test_dates),
         "train_ev": ev_stats(tr_rets),
         "test_ev": ev_stats(te_rets),
         "train_day_t": day_paired_t(tr_by_date),
@@ -360,14 +375,13 @@ def walk_forward_event(
 
 # ---------- DSR estimation ----------
 
-def estimate_dsr(ev_mean: float, ev_std: float, n_events: int,
-                 n_trials: int, years: float = 8.0) -> dict:
+
+def estimate_dsr(ev_mean: float, ev_std: float, n_events: int, n_trials: int, years: float = 8.0) -> dict:
     """Approximate Deflated Sharpe Ratio (Bailey & Lopez de Prado 2014).
     Multiple-testing haircut: if annualized Sharpe exceeds expected max under
     H0 (no skill) = sqrt(2*ln(N_trials)), the signal survives."""
     if ev_std <= 0 or n_events <= 0:
-        return {"event_sharpe": 0, "ann_sharpe": 0, "dsr_approx": 0,
-                "expected_max_sr": 0, "n_trials": n_trials}
+        return {"event_sharpe": 0, "ann_sharpe": 0, "dsr_approx": 0, "expected_max_sr": 0, "n_trials": n_trials}
     event_sharpe = ev_mean / ev_std
     events_per_year = max(n_events / years, 1)
     ann_sharpe = event_sharpe * sqrt(events_per_year)
@@ -383,6 +397,7 @@ def estimate_dsr(ev_mean: float, ev_std: float, n_events: int,
 
 
 # ---------- analysis per window ----------
+
 
 def analyze_window(
     name: str,
@@ -422,11 +437,12 @@ def analyze_window(
     dt = day_paired_t(by_date)
 
     print(f"\n--- {ret_label} stats ---")
-    print(f"  n={s['n']} n_dates={dt['n_days']} gross_{ret_label}={s['ev']}% "
-          f"std={s['std']}% WR={s['wr']}% t={s['t']} CI[{s['ci_lo']},{s['ci_hi']}]")
-    print(f"  net_{ret_label} (after {COST*100:.1f}% cost): {net:.3f}%")
-    print(f"  day-paired t: n_days={dt['n_days']} mean={dt['mean']}% "
-          f"t={dt['t']} p_one_sided={dt['p_one_sided']}")
+    print(
+        f"  n={s['n']} n_dates={dt['n_days']} gross_{ret_label}={s['ev']}% "
+        f"std={s['std']}% WR={s['wr']}% t={s['t']} CI[{s['ci_lo']},{s['ci_hi']}]"
+    )
+    print(f"  net_{ret_label} (after {COST * 100:.1f}% cost): {net:.3f}%")
+    print(f"  day-paired t: n_days={dt['n_days']} mean={dt['mean']}% t={dt['t']} p_one_sided={dt['p_one_sided']}")
 
     # walk-forward (reuse wname detected above)
     print(f"\n--- walk-forward OOS (前半 train → 后半 test) ---")
@@ -436,13 +452,13 @@ def analyze_window(
         te = wf["test_ev"]
         tr_dt = wf["train_day_t"]
         te_dt = wf["test_day_t"]
-        print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} "
-              f"EV={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
-        print(f"  test:  n={te['n']} n_dates={wf['n_test_dates']} "
-              f"EV={te['ev']}% t={te['t']} day_t={te_dt['t']} "
-              f"p={te_dt['p_one_sided']}")
-        decay = ((tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100
-                 if tr["ev"] != 0 else 0)
+        print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} EV={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
+        print(
+            f"  test:  n={te['n']} n_dates={wf['n_test_dates']} "
+            f"EV={te['ev']}% t={te['t']} day_t={te_dt['t']} "
+            f"p={te_dt['p_one_sided']}"
+        )
+        decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
         print(f"  decay: {decay:.0f}% (train→test)")
     else:
         print(f"  {wf['status']} (n_dates={wf.get('n_dates', 0)})")
@@ -467,19 +483,26 @@ def analyze_window(
 
 # ---------- verdict cascade (§44 v3 for event study) ----------
 
+
 def verdict_cascade(
-    gross: float, net: float, n_dates: int, t_day: float,
-    p_raw: float, p_bonf: float,
-    wf_status: str, wf_train_ev: float, wf_test_ev: float, wf_test_p: float,
-    n_tests: int, subset_name: str,
+    gross: float,
+    net: float,
+    n_dates: int,
+    t_day: float,
+    p_raw: float,
+    p_bonf: float,
+    wf_status: str,
+    wf_train_ev: float,
+    wf_test_ev: float,
+    wf_test_p: float,
+    n_tests: int,
+    subset_name: str,
 ) -> str:
     """§44 v3 verdict cascade for event study."""
     print(f"\n  {subset_name}:")
-    print(f"    gross_EV={gross}% net_EV={net:.3f}% day_t={t_day} "
-          f"Bonf_p(×{n_tests})={p_bonf:.6f} n_dates={n_dates}")
+    print(f"    gross_EV={gross}% net_EV={net:.3f}% day_t={t_day} Bonf_p(×{n_tests})={p_bonf:.6f} n_dates={n_dates}")
     if wf_status == "ok":
-        print(f"    walk-forward: train_EV={wf_train_ev}% test_EV={wf_test_ev}% "
-              f"test_p={wf_test_p}")
+        print(f"    walk-forward: train_EV={wf_train_ev}% test_EV={wf_test_ev}% test_p={wf_test_p}")
 
     if gross < 0:
         print(f"    → FALSIFIED: gross EV={gross}% < 0 (新股次日反转, loser signal)")
@@ -488,34 +511,40 @@ def verdict_cascade(
         print(f"    → UNDERPOWERED: n_dates={n_dates} < 60 (IPO dates 太少)")
         return "underpowered"
     if p_bonf >= ALPHA:
-        print(f"    → FALSIFIED: Bonferroni p={p_bonf:.6f} >= {ALPHA} "
-              f"(not significant after ×{n_tests} correction)")
+        print(f"    → FALSIFIED: Bonferroni p={p_bonf:.6f} >= {ALPHA} (not significant after ×{n_tests} correction)")
         return "edge-falsified"
     if net <= 0:
         print(f"    → FALSIFIED: net EV={net:.3f}% <= 0 (gross edge eaten by cost)")
         return "edge-falsified"
     if wf_status == "ok":
         if wf_train_ev <= 0:
-            print(f"    → EXPLORATORY: train_EV={wf_train_ev}% <= 0 "
-                  f"(edge not in train half, test may be regime overfitting)")
+            print(
+                f"    → EXPLORATORY: train_EV={wf_train_ev}% <= 0 "
+                f"(edge not in train half, test may be regime overfitting)"
+            )
             return "exploratory"
         if wf_test_ev <= 0:
             print(f"    → FALSIFIED: walk-forward test_EV={wf_test_ev}% <= 0")
             return "edge-falsified"
         wf_p_bonf = bonferroni_p(wf_test_p, n_tests)
         if wf_p_bonf >= ALPHA:
-            print(f"    → EXPLORATORY: OOS test EV={wf_test_ev}% > 0 but "
-                  f"test p={wf_test_p} Bonf×{n_tests}={wf_p_bonf} >= {ALPHA} "
-                  f"(not significant OOS)")
+            print(
+                f"    → EXPLORATORY: OOS test EV={wf_test_ev}% > 0 but "
+                f"test p={wf_test_p} Bonf×{n_tests}={wf_p_bonf} >= {ALPHA} "
+                f"(not significant OOS)"
+            )
             return "exploratory"
-        print(f"    → EDGE-CONFIRMED: gross+net EV > 0, Bonferroni PASS, "
-              f"OOS test EV={wf_test_ev}% significant (p={wf_test_p})")
+        print(
+            f"    → EDGE-CONFIRMED: gross+net EV > 0, Bonferroni PASS, "
+            f"OOS test EV={wf_test_ev}% significant (p={wf_test_p})"
+        )
         return "edge-confirmed"
     print(f"    → EXPLORATORY: walk-forward not available")
     return "exploratory"
 
 
 # ---------- main ----------
+
 
 def main() -> None:
     # ---- load data ----
@@ -527,8 +556,7 @@ def main() -> None:
     picks = build_ipo_picks(code_map, max_exit_offset=5)
     if not picks:
         print("\n[verdict] no picks → no-data")
-        _print_summary("new-listing-next-day", "no-data", 0, 0, 0, 1.0,
-                       "No valid IPO picks after filtering")
+        _print_summary("new-listing-next-day", "no-data", 0, 0, 0, 1.0, "No valid IPO picks after filtering")
         return
 
     # ---- descriptive stats ----
@@ -550,9 +578,11 @@ def main() -> None:
         fdr_mean = sum(fdr) / len(fdr)
         fdr_median = statistics.median(fdr)
         fdr_pos = sum(1 for x in fdr if x > 0)
-        print(f"[build] first-day return: mean={fdr_mean:.1f}% "
-              f"median={fdr_median:.1f}% positive={fdr_pos}/{len(fdr)} "
-              f"({fdr_pos/len(fdr)*100:.1f}%)")
+        print(
+            f"[build] first-day return: mean={fdr_mean:.1f}% "
+            f"median={fdr_median:.1f}% positive={fdr_pos}/{len(fdr)} "
+            f"({fdr_pos / len(fdr) * 100:.1f}%)"
+        )
 
     # survivorship warning
     print(f"[build] ⚠ survivorship: cache 仅含仍上市码, 退市新股缺失 → 上偏")
@@ -572,8 +602,7 @@ def main() -> None:
     print(f"{'#' * 70}")
     bhar_results: list[dict] = []
     for wname, offset in WINDOWS:
-        r = analyze_window(f"bhar_{wname}", picks, bhar_window,
-                           index_bars=index_bars, ret_label="BHAR")
+        r = analyze_window(f"bhar_{wname}", picks, bhar_window, index_bars=index_bars, ret_label="BHAR")
         bhar_results.append(r)
 
     # ---- board stratification ----
@@ -581,15 +610,13 @@ def main() -> None:
     print(f"[board stratification] main / chuangye / kechuang")
     print(f"{'#' * 70}")
     board_results: dict[str, list[dict]] = {}
-    for bname, bpicks in defaultdict(list, {b: [p for p in picks if p["board"] == b]
-                                             for b in board_counts}).items():
+    for bname, bpicks in defaultdict(list, {b: [p for p in picks if p["board"] == b] for b in board_counts}).items():
         if bname == "other" or not bpicks:
             continue
         print(f"\n  === board: {bname} (n={len(bpicks)}) ===")
         rr: list[dict] = []
         for wname, offset in WINDOWS:
-            r = analyze_window(f"board_{bname}_{wname}", bpicks, ev_window,
-                               ret_label="EV")
+            r = analyze_window(f"board_{bname}_{wname}", bpicks, ev_window, ret_label="EV")
             rr.append(r)
         board_results[bname] = rr
 
@@ -598,15 +625,13 @@ def main() -> None:
     print(f"[era stratification] pre-2020 / 2020-2023 / post-2023")
     print(f"{'#' * 70}")
     era_results: dict[str, list[dict]] = {}
-    for ename, epicks in defaultdict(list, {e: [p for p in picks if p["era"] == e]
-                                             for e in era_counts}).items():
+    for ename, epicks in defaultdict(list, {e: [p for p in picks if p["era"] == e] for e in era_counts}).items():
         if not epicks:
             continue
         print(f"\n  === era: {ename} (n={len(epicks)}) ===")
         rr2: list[dict] = []
         for wname, offset in WINDOWS:
-            r = analyze_window(f"era_{ename}_{wname}", epicks, ev_window,
-                               ret_label="EV")
+            r = analyze_window(f"era_{ename}_{wname}", epicks, ev_window, ret_label="EV")
             rr2.append(r)
         era_results[ename] = rr2
 
@@ -623,8 +648,11 @@ def main() -> None:
         n_trials = N_CROSS_STRATEGY * N_WINDOWS
         # years span: IPOs from 2018-2026 ~ 8 years
         dsr = estimate_dsr(
-            best_basic["gross_ev"], best_basic["ev_std"],
-            best_basic["n_events"], n_trials, years=8.0,
+            best_basic["gross_ev"],
+            best_basic["ev_std"],
+            best_basic["n_events"],
+            n_trials,
+            years=8.0,
         )
         print(f"  best window: {best_basic['name']}")
         print(f"  event Sharpe (per-event): {dsr['event_sharpe']}")
@@ -640,8 +668,10 @@ def main() -> None:
 
     # ---- Bonferroni + verdict ----
     print(f"\n{'#' * 70}")
-    print(f"[verdict] cross-strategy Bonferroni ×{N_CROSS_STRATEGY} "
-          f"(5 策略并行) + ×{N_WINDOWS} windows = ×{N_CROSS_STRATEGY * N_WINDOWS}")
+    print(
+        f"[verdict] cross-strategy Bonferroni ×{N_CROSS_STRATEGY} "
+        f"(5 策略并行) + ×{N_WINDOWS} windows = ×{N_CROSS_STRATEGY * N_WINDOWS}"
+    )
     print(f"{'#' * 70}")
 
     best = max(
@@ -651,8 +681,7 @@ def main() -> None:
     )
     if not best:
         print("\n  No results with data → no-data")
-        _print_summary("new-listing-next-day", "no-data", 0, 0, 0, 1.0,
-                       "No valid results")
+        _print_summary("new-listing-next-day", "no-data", 0, 0, 0, 1.0, "No valid results")
         return
 
     p_raw = best.get("day_p", 1.0)
@@ -666,14 +695,15 @@ def main() -> None:
     wf_test_p = wf.get("test_day_t", {}).get("p_one_sided", 1.0) if wf_status == "ok" else 1.0
 
     print(f"\n  best window: {best['name']}")
-    print(f"    n_events={best['n_events']} n_dates={best['n_dates']} "
-          f"gross_EV={best['gross_ev']}% net_EV={best['net_ev']:.3f}%")
+    print(
+        f"    n_events={best['n_events']} n_dates={best['n_dates']} "
+        f"gross_EV={best['gross_ev']}% net_EV={best['net_ev']:.3f}%"
+    )
     print(f"    day_t={best['day_t']} raw_p={p_raw}")
     print(f"    Bonferroni ×{N_CROSS_STRATEGY}: p={p_bonf5:.6f}")
     print(f"    Bonferroni ×{N_CROSS_STRATEGY * N_WINDOWS} (with windows): p={p_bonf10:.6f}")
     if wf_status == "ok":
-        print(f"    walk-forward: train_EV={wf_train_ev}% test_EV={wf_test_ev}% "
-              f"test_p={wf_test_p}")
+        print(f"    walk-forward: train_EV={wf_train_ev}% test_EV={wf_test_ev}% test_p={wf_test_p}")
 
     # best board-stratified result
     best_board: dict | None = None
@@ -686,19 +716,28 @@ def main() -> None:
     if best_board:
         bp_raw = best_board.get("day_p", 1.0)
         bp_bonf = bonferroni_p(bp_raw, N_CROSS_STRATEGY)
-        print(f"\n  best board variant: {best_board.get('board_name','?')} "
-              f"{best_board['name']}")
-        print(f"    n_events={best_board['n_events']} n_dates={best_board['n_dates']} "
-              f"gross_EV={best_board['gross_ev']}% net_EV={best_board['net_ev']:.3f}%")
+        print(f"\n  best board variant: {best_board.get('board_name', '?')} {best_board['name']}")
+        print(
+            f"    n_events={best_board['n_events']} n_dates={best_board['n_dates']} "
+            f"gross_EV={best_board['gross_ev']}% net_EV={best_board['net_ev']:.3f}%"
+        )
         print(f"    day_t={best_board['day_t']} Bonf×{N_CROSS_STRATEGY}={bp_bonf:.6f}")
 
     # verdict cascade
     print(f"\n  --- verdict cascade ---")
     verdict = verdict_cascade(
-        best["gross_ev"], best["net_ev"], best["n_dates"], best["day_t"],
-        p_raw, p_bonf5,
-        wf_status, wf_train_ev, wf_test_ev, wf_test_p,
-        N_CROSS_STRATEGY, "all_boards_best",
+        best["gross_ev"],
+        best["net_ev"],
+        best["n_dates"],
+        best["day_t"],
+        p_raw,
+        p_bonf5,
+        wf_status,
+        wf_train_ev,
+        wf_test_ev,
+        wf_test_p,
+        N_CROSS_STRATEGY,
+        "all_boards_best",
     )
 
     # ---- BHAR cross-check ----
@@ -710,12 +749,13 @@ def main() -> None:
     if best_bhar:
         bp_raw2 = best_bhar.get("day_p", 1.0)
         bp_bonf2 = bonferroni_p(bp_raw2, N_CROSS_STRATEGY * N_WINDOWS)
-        print(f"\n  BHAR cross-check: best={best_bhar['name']} "
-              f"BHAR={best_bhar['gross_ev']}% day_t={best_bhar['day_t']} "
-              f"Bonf×{N_CROSS_STRATEGY * N_WINDOWS}={bp_bonf2:.6f}")
+        print(
+            f"\n  BHAR cross-check: best={best_bhar['name']} "
+            f"BHAR={best_bhar['gross_ev']}% day_t={best_bhar['day_t']} "
+            f"Bonf×{N_CROSS_STRATEGY * N_WINDOWS}={bp_bonf2:.6f}"
+        )
         if best_bhar["gross_ev"] < 0:
-            print(f"    BHAR<0: market-adjusted abnormal return 为负 → "
-                  f"raw EV 若为正仅是 market beta 非 IPO edge")
+            print(f"    BHAR<0: market-adjusted abnormal return 为负 → raw EV 若为正仅是 market beta 非 IPO edge")
         else:
             print(f"    BHAR>0: 有正 abnormal return (但需 Bonf+OOS 确认)")
 
@@ -724,31 +764,46 @@ def main() -> None:
     print(f"[SUMMARY]")
     print(f"{'#' * 70}")
     key_finding = (
-        f"best={best['name']} gross_EV={best['gross_ev']}% "
-        f"net={best['net_ev']:.3f}% day_t={best['day_t']} "
-        f"Bonf×{N_CROSS_STRATEGY}={p_bonf5:.4f} "
-        f"wf_test_EV={wf_test_ev}% "
-        f"| BHAR best={best_bhar['gross_ev'] if best_bhar else 'N/A'}% "
-        f"| board: {dict(board_counts)} "
-        f"| era: {dict(era_counts)} "
-        f"| first-day ret mean={fdr_mean:.1f}% (炒新首日暴涨) "
-        f"| ⚠ survivorship: cache 仅含仍上市码, 退市新股缺失 → 上偏 "
-        f"| 禁止外推: 新股次日单策略 ≠ 事件驱动有/无 edge ≠ 短线有/无 edge"
-    ) if best and fdr else (
-        f"best={best['name']} gross_EV={best['gross_ev']}% "
-        f"net={best['net_ev']:.3f}% day_t={best['day_t']} "
-        f"Bonf×{N_CROSS_STRATEGY}={p_bonf5:.4f} "
-        f"| ⚠ survivorship bias "
-        f"| 禁止外推"
+        (
+            f"best={best['name']} gross_EV={best['gross_ev']}% "
+            f"net={best['net_ev']:.3f}% day_t={best['day_t']} "
+            f"Bonf×{N_CROSS_STRATEGY}={p_bonf5:.4f} "
+            f"wf_test_EV={wf_test_ev}% "
+            f"| BHAR best={best_bhar['gross_ev'] if best_bhar else 'N/A'}% "
+            f"| board: {dict(board_counts)} "
+            f"| era: {dict(era_counts)} "
+            f"| first-day ret mean={fdr_mean:.1f}% (炒新首日暴涨) "
+            f"| ⚠ survivorship: cache 仅含仍上市码, 退市新股缺失 → 上偏 "
+            f"| 禁止外推: 新股次日单策略 ≠ 事件驱动有/无 edge ≠ 短线有/无 edge"
+        )
+        if best and fdr
+        else (
+            f"best={best['name']} gross_EV={best['gross_ev']}% "
+            f"net={best['net_ev']:.3f}% day_t={best['day_t']} "
+            f"Bonf×{N_CROSS_STRATEGY}={p_bonf5:.4f} "
+            f"| ⚠ survivorship bias "
+            f"| 禁止外推"
+        )
     )
-    _print_summary("new-listing-next-day", verdict,
-                   best.get("n_events", 0), best.get("n_dates", 0),
-                   best.get("gross_ev", 0), p_bonf5, key_finding)
+    _print_summary(
+        "new-listing-next-day",
+        verdict,
+        best.get("n_events", 0),
+        best.get("n_dates", 0),
+        best.get("gross_ev", 0),
+        p_bonf5,
+        key_finding,
+    )
 
 
 def _print_summary(
-    strategy: str, verdict: str, n_events: int, n_dates: int,
-    ev: float, bonf_p: float, key_finding: str,
+    strategy: str,
+    verdict: str,
+    n_events: int,
+    n_dates: int,
+    ev: float,
+    bonf_p: float,
+    key_finding: str,
 ) -> None:
     print(f"策略: 新股上市次日效应 (new-listing-next-day)")
     print(f"数据: {n_events} IPOs across {n_dates} IPO dates")

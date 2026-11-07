@@ -30,6 +30,7 @@ look-ahead 核查：discount_T = (close_T - nav_T)/nav_T。nav_T 是 T 日收盘
 - 仅测国内权益 ETF（申赎可用，折价应收敛——这是可证伪假设）
 - 若数据 blocked 报 no-data 不臆造；禁止外推
 """
+
 from __future__ import annotations
 import json
 import sys
@@ -43,8 +44,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import akshare as ak
 
 from tools._factor_helpers import (
-    ev_stats, day_paired_t, bonferroni_p, walk_forward, verdict_for,
-    norm_sf_positive, ALPHA,
+    ev_stats,
+    day_paired_t,
+    bonferroni_p,
+    walk_forward,
+    verdict_for,
+    norm_sf_positive,
+    ALPHA,
 )
 
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
@@ -59,16 +65,26 @@ DATA = resolve_data_dir()
 CACHE = DATA / "etf_premium_cache.json"
 
 ETF_COST = 0.15  # ETF round-trip cost % (免印花税, 佣金~0.06% + 滑点~0.09%)
-N_CROSS_STRATEGY = 5   # 机制套利域并行 5 策略 cross-strategy Bonferroni
+N_CROSS_STRATEGY = 5  # 机制套利域并行 5 策略 cross-strategy Bonferroni
 N_FAMILY_VARIANTS = 3  # within-script 3 阈值变体 family Bonferroni
 
 # 国内权益 ETF（申赎可用，折价应收敛——可证伪假设）
 ETF_UNIVERSE = {
-    "510300": "沪深300ETF", "510050": "上证50ETF", "159915": "创业板ETF",
-    "510500": "中证500ETF", "510880": "红利ETF", "512890": "红利低波ETF",
-    "512100": "中证1000ETF", "588000": "科创50ETF", "159901": "深100ETF",
-    "510310": "价值ETF", "159955": "中小盘ETF", "512760": "半导体ETF",
-    "159995": "芯片ETF", "515790": "光伏ETF", "512660": "军工ETF",
+    "510300": "沪深300ETF",
+    "510050": "上证50ETF",
+    "159915": "创业板ETF",
+    "510500": "中证500ETF",
+    "510880": "红利ETF",
+    "512890": "红利低波ETF",
+    "512100": "中证1000ETF",
+    "588000": "科创50ETF",
+    "159901": "深100ETF",
+    "510310": "价值ETF",
+    "159955": "中小盘ETF",
+    "512760": "半导体ETF",
+    "159995": "芯片ETF",
+    "515790": "光伏ETF",
+    "512660": "军工ETF",
 }
 
 
@@ -87,7 +103,8 @@ def fetch_etf(code: str) -> dict:
         if nav_v is None or nav_v <= 0:
             continue
         try:
-            o = float(r["open"]); c = float(r["close"])
+            o = float(r["open"])
+            c = float(r["close"])
         except (ValueError, TypeError):
             continue
         if o <= 0 or c <= 0:
@@ -110,7 +127,7 @@ def load_all_etfs() -> dict[str, dict[str, dict]]:
         try:
             d = fetch_etf(code)
             cache[code] = d
-            print(f"  fetched {code} {name}: {len(d)} days  ({time.time()-t0:.1f}s)")
+            print(f"  fetched {code} {name}: {len(d)} days  ({time.time() - t0:.1f}s)")
         except Exception as e:
             print(f"  FAIL {code} {name}: {type(e).__name__} {str(e)[:80]}")
     with open(CACHE, "w") as f:
@@ -169,19 +186,21 @@ def build_picks(
             nav_t2 = t2["nav"]
             if entry <= 0 or t2_close <= 0 or nav_t1 <= 0 or nav_t2 <= 0:
                 continue
-            picks.append({
-                "code": code,
-                "signal_date": d,
-                "t1_date": t1_date,
-                "t2_date": t2_date,
-                "discount_t": disc,
-                "entry": entry,
-                "t2_close": t2_close,
-                "nav_t1": nav_t1,
-                "nav_t2": nav_t2,
-                # 兼容 helper.walk_forward（它用 zt_date 排序）
-                "zt_date": d,
-            })
+            picks.append(
+                {
+                    "code": code,
+                    "signal_date": d,
+                    "t1_date": t1_date,
+                    "t2_date": t2_date,
+                    "discount_t": disc,
+                    "entry": entry,
+                    "t2_close": t2_close,
+                    "nav_t1": nav_t1,
+                    "nav_t2": nav_t2,
+                    # 兼容 helper.walk_forward（它用 zt_date 排序）
+                    "zt_date": d,
+                }
+            )
     return picks
 
 
@@ -214,45 +233,55 @@ def analyze_variant(name: str, picks: list[dict], threshold: float) -> dict:
     raw_rets = [raw_ev(p) for p in picks]
     raw_s = ev_stats(raw_rets)
     print(f"\n--- raw EV (二级市场价收益, T+1 open→T+2 close) ---")
-    print(f"  n={raw_s['n']} gross_EV={raw_s['ev']}% std={raw_s['std']}% "
-          f"WR={raw_s['wr']}% t={raw_s['t']} CI[{raw_s['ci_lo']},{raw_s['ci_hi']}]")
+    print(
+        f"  n={raw_s['n']} gross_EV={raw_s['ev']}% std={raw_s['std']}% "
+        f"WR={raw_s['wr']}% t={raw_s['t']} CI[{raw_s['ci_lo']},{raw_s['ci_hi']}]"
+    )
     raw_net = raw_s["ev"] - ETF_COST
     print(f"  net EV (after {ETF_COST}% ETF cost): {raw_net:.3f}%")
     raw_by_date: dict[str, list[float]] = defaultdict(list)
     for p in picks:
         raw_by_date[p["signal_date"]].append(raw_ev(p))
     raw_dt = day_paired_t(raw_by_date)
-    print(f"  day-paired: n_days={raw_dt['n_days']} mean={raw_dt['mean']}% "
-          f"t={raw_dt['t']} p_one_sided={raw_dt['p_one_sided']}")
+    print(
+        f"  day-paired: n_days={raw_dt['n_days']} mean={raw_dt['mean']}% "
+        f"t={raw_dt['t']} p_one_sided={raw_dt['p_one_sided']}"
+    )
 
     # ---- BHAR (alpha vs NAV) ----
     bhar_rets = [bhar(p) for p in picks]
     bhar_s = ev_stats(bhar_rets)
     print(f"\n--- BHAR alpha (price_return - nav_return, 折价收敛 alpha) ---")
-    print(f"  n={bhar_s['n']} gross_BHAR={bhar_s['ev']}% std={bhar_s['std']}% "
-          f"WR={bhar_s['wr']}% t={bhar_s['t']} CI[{bhar_s['ci_lo']},{bhar_s['ci_hi']}]")
+    print(
+        f"  n={bhar_s['n']} gross_BHAR={bhar_s['ev']}% std={bhar_s['std']}% "
+        f"WR={bhar_s['wr']}% t={bhar_s['t']} CI[{bhar_s['ci_lo']},{bhar_s['ci_hi']}]"
+    )
     bhar_net = bhar_s["ev"] - ETF_COST
     print(f"  net BHAR (after {ETF_COST}% cost): {bhar_net:.3f}%")
     bhar_by_date: dict[str, list[float]] = defaultdict(list)
     for p in picks:
         bhar_by_date[p["signal_date"]].append(bhar(p))
     bhar_dt = day_paired_t(bhar_by_date)
-    print(f"  day-paired: n_days={bhar_dt['n_days']} mean={bhar_dt['mean']}% "
-          f"t={bhar_dt['t']} p_one_sided={bhar_dt['p_one_sided']}")
+    print(
+        f"  day-paired: n_days={bhar_dt['n_days']} mean={bhar_dt['mean']}% "
+        f"t={bhar_dt['t']} p_one_sided={bhar_dt['p_one_sided']}"
+    )
 
     # ---- walk-forward (BHAR) ----
     print(f"\n--- walk-forward OOS (BHAR, 前半 train → 后半 test) ---")
     wf = walk_forward(picks, bhar)
     if wf["status"] == "ok":
-        tr = wf["train_ev"]; te = wf["test_ev"]
-        tr_dt = wf["train_day_t"]; te_dt = wf["test_day_t"]
-        print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} "
-              f"BHAR={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
-        print(f"  test:  n={te['n']} n_dates={wf['n_test_dates']} "
-              f"BHAR={te['ev']}% t={te['t']} day_t={te_dt['t']} "
-              f"p={te_dt['p_one_sided']}")
-        decay = ((tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100
-                 if tr["ev"] != 0 else 0)
+        tr = wf["train_ev"]
+        te = wf["test_ev"]
+        tr_dt = wf["train_day_t"]
+        te_dt = wf["test_day_t"]
+        print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} BHAR={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
+        print(
+            f"  test:  n={te['n']} n_dates={wf['n_test_dates']} "
+            f"BHAR={te['ev']}% t={te['t']} day_t={te_dt['t']} "
+            f"p={te_dt['p_one_sided']}"
+        )
+        decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
         print(f"  decay: {decay:.0f}% (train→test)")
     else:
         print(f"  {wf['status']} (n_dates={wf.get('n_dates', 0)})")
@@ -265,8 +294,10 @@ def analyze_variant(name: str, picks: list[dict], threshold: float) -> dict:
 
     # Bonferroni: cross-strategy ×5 AND within-family ×3 → 保守取乘积
     n_tests = N_CROSS_STRATEGY * N_FAMILY_VARIANTS
-    print(f"\n--- verdict (BHAR alpha, Bonferroni ×{N_CROSS_STRATEGY}(cross-strat) "
-          f"×{N_FAMILY_VARIANTS}(family) = ×{n_tests}) ---")
+    print(
+        f"\n--- verdict (BHAR alpha, Bonferroni ×{N_CROSS_STRATEGY}(cross-strat) "
+        f"×{N_FAMILY_VARIANTS}(family) = ×{n_tests}) ---"
+    )
     v = verdict_for(
         ev_gross=bhar_s["ev"],
         t_day=bhar_dt["t"],
@@ -298,11 +329,19 @@ def analyze_variant(name: str, picks: list[dict], threshold: float) -> dict:
     )
 
     return {
-        "name": name, "threshold": threshold, "n_picks": len(picks),
+        "name": name,
+        "threshold": threshold,
+        "n_picks": len(picks),
         "n_days": bhar_dt["n_days"],
-        "raw_ev": raw_s, "raw_net": raw_net, "raw_day_t": raw_dt,
-        "bhar": bhar_s, "bhar_net": bhar_net, "bhar_day_t": bhar_dt,
-        "walk_forward": wf, "verdict_bhar": v, "verdict_raw": v_raw,
+        "raw_ev": raw_s,
+        "raw_net": raw_net,
+        "raw_day_t": raw_dt,
+        "bhar": bhar_s,
+        "bhar_net": bhar_net,
+        "bhar_day_t": bhar_dt,
+        "walk_forward": wf,
+        "verdict_bhar": v,
+        "verdict_raw": v_raw,
     }
 
 
@@ -312,13 +351,11 @@ def discount_autocorr(etf_data: dict) -> dict:
     ac1s: list[float] = []
     for code, days in etf_data.items():
         ds = sorted(days.keys())
-        discs = [((days[d]["close"] - days[d]["nav"]) / days[d]["nav"])
-                 for d in ds if days[d]["nav"] > 0]
+        discs = [((days[d]["close"] - days[d]["nav"]) / days[d]["nav"]) for d in ds if days[d]["nav"] > 0]
         if len(discs) < 30:
             continue
         mean = sum(discs) / len(discs)
-        num = sum((discs[i] - mean) * (discs[i - 1] - mean)
-                  for i in range(1, len(discs)))
+        num = sum((discs[i] - mean) * (discs[i - 1] - mean) for i in range(1, len(discs)))
         den = sum((x - mean) ** 2 for x in discs)
         if den > 0:
             ac1 = num / den
@@ -330,16 +367,14 @@ def discount_autocorr(etf_data: dict) -> dict:
     med = ac1s[n // 2]
     mean_ac1 = sum(ac1s) / n
     print(f"\n--- 折价自相关 ac1（持久 vs 回归诊断）---")
-    print(f"  {n} ETFs: median ac1={med:.3f} mean ac1={mean_ac1:.3f} "
-          f"min={ac1s[0]:.3f} max={ac1s[-1]:.3f}")
+    print(f"  {n} ETFs: median ac1={med:.3f} mean ac1={mean_ac1:.3f} min={ac1s[0]:.3f} max={ac1s[-1]:.3f}")
     if med > 0.8:
         print(f"  → ac1>0.8：折价持久（趋势），回归弱 → 策略先验负")
     elif med > 0.5:
         print(f"  → 0.5<ac1<0.8：折价半持久，部分回归 → 策略先验弱")
     else:
         print(f"  → ac1<0.5：折价回归倾向强 → 策略先验正")
-    return {"n_etfs": n, "median_ac1": round(med, 3),
-            "mean_ac1": round(mean_ac1, 3)}
+    return {"n_etfs": n, "median_ac1": round(med, 3), "mean_ac1": round(mean_ac1, 3)}
 
 
 def main() -> None:
@@ -364,8 +399,7 @@ def main() -> None:
     print("  - 跨境 QDII ETF（日经/中韩半导体等）申赎暂停→折价持久→排除（不同 regime）")
 
     calendar = build_calendar(etf_data)
-    print(f"\n  calendar: {len(calendar)} distinct dates "
-          f"({calendar[0]} ~ {calendar[-1]})")
+    print(f"\n  calendar: {len(calendar)} distinct dates ({calendar[0]} ~ {calendar[-1]})")
 
     # 折价自相关诊断
     ac = discount_autocorr(etf_data)
@@ -382,8 +416,7 @@ def main() -> None:
         med = all_discs[n // 2]
         p5 = all_discs[int(n * 0.05)]
         p95 = all_discs[int(n * 0.95)]
-        print(f"\n  全 universe 折价分布: n={n} median={med:.3f}% "
-              f"p5={p5:.3f}% p95={p95:.3f}%")
+        print(f"\n  全 universe 折价分布: n={n} median={med:.3f}% p5={p5:.3f}% p95={p95:.3f}%")
         print(f"  （median 略负 = 结构性——ETF 二级价小幅低于 NAV 因 creation cost/T+1）")
 
     # 3 阈值变体
@@ -403,17 +436,21 @@ def main() -> None:
     print(f"\n\n{'=' * 72}")
     print("汇总（BHAR alpha = 折价收敛，隔离市场 beta）")
     print(f"{'=' * 72}")
-    print(f"{'变体':<14} {'n':>6} {'n_days':>7} {'BHAR%':>8} {'net%':>7} "
-          f"{'day_t':>7} {'p_raw':>9} {'wf_test%':>9} {'verdict':<16}")
+    print(
+        f"{'变体':<14} {'n':>6} {'n_days':>7} {'BHAR%':>8} {'net%':>7} "
+        f"{'day_t':>7} {'p_raw':>9} {'wf_test%':>9} {'verdict':<16}"
+    )
     for r in results:
         if r.get("n_picks", 0) == 0:
             continue
         wf = r.get("walk_forward", {})
         wf_te = wf.get("test_ev", {}).get("ev", "-") if wf.get("status") == "ok" else "-"
-        print(f"{r['name']:<14} {r['n_picks']:>6} {r['n_days']:>7} "
-              f"{r['bhar']['ev']:>8} {r['bhar_net']:>7} "
-              f"{r['bhar_day_t']['t']:>7} {r['bhar_day_t']['p_one_sided']:>9} "
-              f"{str(wf_te):>9} {r['verdict_bhar']:<16}")
+        print(
+            f"{r['name']:<14} {r['n_picks']:>6} {r['n_days']:>7} "
+            f"{r['bhar']['ev']:>8} {r['bhar_net']:>7} "
+            f"{r['bhar_day_t']['t']:>7} {r['bhar_day_t']['p_one_sided']:>9} "
+            f"{str(wf_te):>9} {r['verdict_bhar']:<16}"
+        )
 
     print(f"\n{'=' * 72}")
     print("诚实总结")
@@ -422,8 +459,10 @@ def main() -> None:
     raw_verdicts = [r.get("verdict_raw", "?") for r in results if r.get("n_picks", 0) > 0]
     print(f"BHAR alpha verdicts: {bhar_verdicts}")
     print(f"raw EV verdicts:     {raw_verdicts}")
-    print(f"折价自相关 median ac1: {ac.get('median_ac1', 'n/a')} "
-          f"({'持久' if ac.get('median_ac1', 0) > 0.8 else '部分回归' if ac.get('median_ac1', 0) > 0.5 else '回归倾向'})")
+    print(
+        f"折价自相关 median ac1: {ac.get('median_ac1', 'n/a')} "
+        f"({'持久' if ac.get('median_ac1', 0) > 0.8 else '部分回归' if ac.get('median_ac1', 0) > 0.5 else '回归倾向'})"
+    )
 
     # 最终判定：取最严变体（disc<-0.5%，平衡频率与信号强度）
     primary = next((r for r in results if r["name"] == "disc<-0.5%"), None)

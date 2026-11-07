@@ -9,6 +9,7 @@
 数据：baostock_5min_freeze（13 天 <60 → exploratory）
 跑法：cd backend && .venv/bin/python tools/explore_5min_freeze.py
 """
+
 import json
 import sqlite3
 import statistics
@@ -42,10 +43,15 @@ def load_kline_bars(code):
         except Exception:
             load_kline_bars._all = {}
     raw = load_kline_bars._all.get(code, [])
-    out = [{"date": str(b.get("date", ""))[:10],
+    out = [
+        {
+            "date": str(b.get("date", ""))[:10],
             "open": float(b.get("open", 0) or 0),
-            "close": float(b.get("close", 0) or 0)}
-           for b in raw if b.get("date") and float(b.get("open", 0) or 0) > 0]
+            "close": float(b.get("close", 0) or 0),
+        }
+        for b in raw
+        if b.get("date") and float(b.get("open", 0) or 0) > 0
+    ]
     out.sort(key=lambda x: x["date"])
     load_kline_bars._cache[code] = out
     return out
@@ -67,7 +73,7 @@ def parse_seal_time(bars_json):
     for i, b in enumerate(bars):
         if b.get("close", 0) > 0 and abs(b.get("close", 0) - b.get("high", 0)) < 0.01:
             # 验证后续 volume 衰减（封板后成交枯竭）
-            later_vols = [bars[j].get("volume", 0) for j in range(i+1, min(i+4, len(bars)))]
+            later_vols = [bars[j].get("volume", 0) for j in range(i + 1, min(i + 4, len(bars)))]
             seal_vol = b.get("volume", 0)
             if later_vols and seal_vol > 0:
                 avg_later = sum(later_vols) / len(later_vols)
@@ -112,8 +118,16 @@ def main():
         if d_open <= 0 or d1_open <= 0:
             continue
         edge = (d1_open - d_open) / d_open
-        obs.append({"date": date, "code": code, "edge": edge, "win": 1 if edge > 0 else 0,
-                    "bucket": bucket, "seal_time": seal_time})
+        obs.append(
+            {
+                "date": date,
+                "code": code,
+                "edge": edge,
+                "win": 1 if edge > 0 else 0,
+                "bucket": bucket,
+                "seal_time": seal_time,
+            }
+        )
 
     n = len(obs)
     days = len(set(o["date"] for o in obs))
@@ -125,7 +139,7 @@ def main():
     rets = [o["edge"] for o in obs]
     wr = sum(o["win"] for o in obs) / n
     print(f"\n=== 涨停股 T+1 edge（全样本，entry=当日 open→exit=次日 open）===")
-    print(f"n={n} days={days} net_mean={statistics.mean(rets)*100:.2f}% WR={wr*100:.2f}%")
+    print(f"n={n} days={days} net_mean={statistics.mean(rets) * 100:.2f}% WR={wr * 100:.2f}%")
 
     # 按封板时机分组
     print(f"\n=== 按封板时机分组（5min 粒度）===")
@@ -135,7 +149,7 @@ def main():
             continue
         gr = [o["edge"] for o in g]
         gwr = sum(o["win"] for o in g) / len(g)
-        print(f"  {bucket}: n={len(g)} net_mean={statistics.mean(gr)*100:.2f}% WR={gwr*100:.2f}%")
+        print(f"  {bucket}: n={len(g)} net_mean={statistics.mean(gr) * 100:.2f}% WR={gwr * 100:.2f}%")
 
     # §44 v3 R4 survivorship 标注（全涨停股——无未涨停对照）
     print(f"\n=== §44 v3 审 ===")
@@ -146,7 +160,7 @@ def main():
 
     # 和 seal_timing edge 对比（已知 +10% WR 98% 假 edge）
     print(f"\n=== 对比 seal_timing edge（已知假 edge +10% WR 98%）===")
-    print(f"  本 edge net_mean={statistics.mean(rets)*100:.2f}% WR={wr*100:.2f}%")
+    print(f"  本 edge net_mean={statistics.mean(rets) * 100:.2f}% WR={wr * 100:.2f}%")
     if statistics.mean(rets) > 0.05 and wr > 0.9:
         print(f"  ✓ 与 seal_timing 一致——涨停股 momentum survivorship 假 edge（5min 粒度不改变结论）")
 

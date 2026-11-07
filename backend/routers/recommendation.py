@@ -1,6 +1,7 @@
 """
 Recommendation router.
 """
+
 from fastapi import APIRouter, HTTPException, Query
 from typing import Any, Dict
 
@@ -41,29 +42,34 @@ def multi_arm_recommendations() -> Dict[str, Any]:
     """
     try:
         recs = get_multi_arm_recommendations()
-        return {"data": [
-            {
-                "arm": r.arm,
-                "honest_label": r.honest_label.value,
-                "action_type": r.action_type,
-                "code": r.code,
-                "name": r.name,
-                "sizing_suggestion": r.sizing_suggestion,
-                "coverage_rate": r.coverage_rate,
-                "days_tracked": r.days_tracked,
-                "validated": r.validated,
-                "note": r.note,
-            }
-            for r in recs
-        ]}
+        return {
+            "data": [
+                {
+                    "arm": r.arm,
+                    "honest_label": r.honest_label.value,
+                    "action_type": r.action_type,
+                    "code": r.code,
+                    "name": r.name,
+                    "sizing_suggestion": r.sizing_suggestion,
+                    "coverage_rate": r.coverage_rate,
+                    "days_tracked": r.days_tracked,
+                    "validated": r.validated,
+                    "note": r.note,
+                }
+                for r in recs
+            ]
+        }
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"多臂推荐异常：{e}") from e
 
 
 @router.get("/api/recommendation/{code}")
-async def stock_recommendation(code: str, date: str = Query(None, description="日期，格式 YYYY-MM-DD")) -> Dict[str, Any]:
+async def stock_recommendation(
+    code: str, date: str = Query(None, description="日期，格式 YYYY-MM-DD")
+) -> Dict[str, Any]:
     """获取个股推荐详情。"""
     from routers.common import _validate
+
     code = _validate(code)
     try:
         rec = await get_recommendation(code, date)

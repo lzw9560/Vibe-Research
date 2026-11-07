@@ -10,8 +10,7 @@ from pydantic import BaseModel, PrivateAttr
 
 
 SEAT_DISCLAIMER = (
-    "免责声明：席位标签基于龙虎榜历史数据统计特征，不代表对未来行为的预测，"
-    "不构成投资建议。股市有风险，投资需谨慎。"
+    "免责声明：席位标签基于龙虎榜历史数据统计特征，不代表对未来行为的预测，不构成投资建议。股市有风险，投资需谨慎。"
 )
 
 SEAT_LOOKBACK_DAYS = int(os.getenv("SEAT_LOOKBACK_DAYS", "180"))

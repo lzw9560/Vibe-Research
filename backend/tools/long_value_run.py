@@ -8,6 +8,7 @@ profit_data_multiyear + historical_universe_monthly。
 工程底线：不臆造（缺数据返 None/空 + 标 underpowered）/ 私有数据隔离（只读 .vibe-research/ cache）/
 §44 关联只接线落 Recorder，不改守护区（lift_for_arm/regime_caps 不动）。
 """
+
 from __future__ import annotations
 
 import json
@@ -203,6 +204,7 @@ def load_r1_cache() -> dict:
 
     返 {stock_basic, kline_raw, kline_qfq, profit, universe}——缺的返 {} 不臆造。
     """
+
     def _load(name: str) -> dict:
         p = SCRATCH / name
         return json.loads(p.read_bytes()) if p.exists() else {}
@@ -216,9 +218,7 @@ def load_r1_cache() -> dict:
     }
 
 
-def _month_return(
-    code: str, prev_date: str, curr_date: str, kline_raw: dict[str, list[dict]]
-) -> float | None:
+def _month_return(code: str, prev_date: str, curr_date: str, kline_raw: dict[str, list[dict]]) -> float | None:
     """单股月度收益 = (close[curr] - close[prev]) / close[prev]（不复权，停牌 None）。"""
     bars = kline_raw.get(code, [])
     prev_close = _close_on_or_before(bars, prev_date)
@@ -296,10 +296,14 @@ def wire_q1_q5_spread(
     returns, dates = _build_q1_q5_spread_series(cache)
     if len(returns) < 2:
         return {
-            "line_id": line_id, "status": "underpowered",
-            "note": "有效 spread <2", "returns": returns, "dates": dates,
+            "line_id": line_id,
+            "status": "underpowered",
+            "note": "有效 spread <2",
+            "returns": returns,
+            "dates": dates,
         }
     import sys as _sys  # noqa: PLC0415
+
     _tools_dir = str(Path(__file__).resolve().parent)
     if _tools_dir not in _sys.path:
         _sys.path.insert(0, _tools_dir)
@@ -344,9 +348,7 @@ __all__ = [
 ]
 
 
-def _monthly_return(
-    bars: list[dict], rebalance_date: str, prev_rebalance_date: str | None
-) -> float | None:
+def _monthly_return(bars: list[dict], rebalance_date: str, prev_rebalance_date: str | None) -> float | None:
     """月度收益 = (close_D - close_prev)/close_prev。停牌/无数据返 None。
 
     复用 _close_on_or_before（停牌 volume==0 跳过，不取 stale close）。
@@ -412,13 +414,9 @@ def wire_q1_excess_universe(months: list[str] | None = None) -> dict:
         if not month_universe:
             month_universe = set(kline_raw.keys())
         # T8 select_quintiles 取 Q1（低 PE value，long-only 可实现）
-        q1_codes, _q5_codes, _pe_map = select_quintiles(
-            month, month_universe, kline_raw, profit_cache
-        )
+        q1_codes, _q5_codes, _pe_map = select_quintiles(month, month_universe, kline_raw, profit_cache)
         q1_returns = [
-            r
-            for code in q1_codes
-            if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None
+            r for code in q1_codes if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None
         ]
         u_returns = [
             r
@@ -530,9 +528,7 @@ def _build_survivors_universe_with_inject(
         month_universe = set(universe_cache.get(month, []))
         if not month_universe:
             month_universe = set(kline_raw.keys())
-        q1_codes, _q5_codes, _pe_map = select_quintiles(
-            month, month_universe, kline_raw, profit_cache
-        )
+        q1_codes, _q5_codes, _pe_map = select_quintiles(month, month_universe, kline_raw, profit_cache)
         q1_returns = [
             r
             for code in q1_codes
@@ -647,9 +643,7 @@ def run_sensitivity_two_tier(months: list[str] | None = None) -> dict:
     }
 
 
-def _benchmark_monthly_return(
-    bars: list[dict], rebalance_date: str, prev_rebalance_date: str | None
-) -> float | None:
+def _benchmark_monthly_return(bars: list[dict], rebalance_date: str, prev_rebalance_date: str | None) -> float | None:
     """benchmark（HS300 指数）月度收益——不检查 volume 停牌（指数无停牌）。
 
     用 close 算 (close_D - close_prev)/close_prev，**不调** _close_on_or_before
@@ -711,16 +705,14 @@ def wire_auxiliary_low_high(
         month_universe = set(universe_cache.get(month, []))
         if not month_universe:
             month_universe = set(kline_raw.keys())
-        q1_codes, q5_codes, _pe_map = select_quintiles(
-            month, month_universe, kline_raw, profit_cache
-        )
+        q1_codes, q5_codes, _pe_map = select_quintiles(month, month_universe, kline_raw, profit_cache)
         q1_returns = [
-            r for code in q1_codes
-            if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None
+            r for code in q1_codes if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None
         ]
         # universe 用全 active returns（基准，跟 T10 一致；Q5 作对比但 universe 须 >= survivors 维度）
         u_returns = [
-            r for code in month_universe
+            r
+            for code in month_universe
             if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None
         ]
         if q1_returns and u_returns:
@@ -734,6 +726,7 @@ def wire_auxiliary_low_high(
     all_q1 = [r for rs in survivors_by_month.values() for r in rs]
 
     import sys as _sys  # noqa: PLC0415
+
     _tools_dir = str(Path(__file__).resolve().parent)
     if _tools_dir not in _sys.path:
         _sys.path.insert(0, _tools_dir)
@@ -807,12 +800,9 @@ def wire_secondary_q1_hs300(
         month_universe = set(universe_cache.get(month, []))
         if not month_universe:
             month_universe = set(kline_raw.keys())
-        q1_codes, _q5_codes, _pe_map = select_quintiles(
-            month, month_universe, kline_raw, profit_cache
-        )
+        q1_codes, _q5_codes, _pe_map = select_quintiles(month, month_universe, kline_raw, profit_cache)
         q1_returns = [
-            r for code in q1_codes
-            if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None
+            r for code in q1_codes if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None
         ]
         hs300_ret = _benchmark_monthly_return(hs300_bars, month, prev_month)
         if q1_returns and hs300_ret is not None:
@@ -873,10 +863,12 @@ def gate_cross_primary_consistency(status1: str, status2: str) -> dict:
     s1_edge = status1 in _EDGE_STATUSES
     s2_edge = status2 in _EDGE_STATUSES
     if s1_edge == s2_edge:
-        return {"pass": True, "label": "consistent",
-                "note": f"①② 都{'有' if s1_edge else '无'}edge（{status1} vs {status2}）"}
-    return {"pass": False, "label": "exploratory",
-            "note": f"双 PRIMARY 不一致（{status1} vs {status2}）→降级"}
+        return {
+            "pass": True,
+            "label": "consistent",
+            "note": f"①② 都{'有' if s1_edge else '无'}edge（{status1} vs {status2}）",
+        }
+    return {"pass": False, "label": "exploratory", "note": f"双 PRIMARY 不一致（{status1} vs {status2}）→降级"}
 
 
 def gate_sensitivity_consistency(sensitivity_result: dict) -> dict:
@@ -894,8 +886,7 @@ def gate_sensitivity_consistency(sensitivity_result: dict) -> dict:
     if consistent:
         note = "两档 status 一致→稳" + ("（但 lift 敏感 flag）" if sensitive_flag else "")
         return {"pass": True, "label": "robust", "note": note}
-    return {"pass": False, "label": "exploratory",
-            "note": "依赖退市 return 假设（两档不一致）→降级"}
+    return {"pass": False, "label": "exploratory", "note": "依赖退市 return 假设（两档不一致）→降级"}
 
 
 def gate_delisting_coverage(delisting_map: dict, universe_cache: dict) -> dict:
@@ -914,10 +905,13 @@ def gate_delisting_coverage(delisting_map: dict, universe_cache: dict) -> dict:
     covered = sum(1 for code in delisting_map if code in all_universe_codes)
     coverage = covered / total if total else 1.0
     if coverage >= 0.5:
-        return {"pass": True, "label": "robust",
-                "note": f"退市覆盖率 {coverage:.0%}≥50%", "coverage": coverage}
-    return {"pass": False, "label": "exploratory",
-            "note": f"退市覆盖率 {coverage:.0%}<50%→降级（0 bars 股计分母）", "coverage": coverage}
+        return {"pass": True, "label": "robust", "note": f"退市覆盖率 {coverage:.0%}≥50%", "coverage": coverage}
+    return {
+        "pass": False,
+        "label": "exploratory",
+        "note": f"退市覆盖率 {coverage:.0%}<50%→降级（0 bars 股计分母）",
+        "coverage": coverage,
+    }
 
 
 def _status_of(verdict: object) -> str:
@@ -943,7 +937,9 @@ def wire_s171_full(months: list[str] | None = None) -> dict:
 
     # 跑各 wire（T9 传 r1_cache 避免 reload，其他传 months）
     verdict_1 = wire_q1_q5_spread(
-        line_id="S171_Q1_Q5_spread", frozen_commit="scratch", r1_cache=cache,
+        line_id="S171_Q1_Q5_spread",
+        frozen_commit="scratch",
+        r1_cache=cache,
     )
     verdict_2 = wire_q1_excess_universe(months=months)
     verdict_aux = wire_auxiliary_low_high(months=months)
@@ -1032,7 +1028,9 @@ def dry_run(months: list[str] | None = None) -> dict:
         _q1_raw, _q5_raw, pe_raw = select_quintiles(m, u, kline_raw, profit_cache)
         _q1_qfq, _q5_qfq, pe_qfq = select_quintiles(m, u, kline_qfq or {}, profit_cache)
         # stability: 两法都剔停牌+无 PIT → size 应一致或 raw>0（qfq 空时仍 raw 有值）
-        stability_ok = len(pe_raw) > 0 and (len(pe_qfq) == 0 or abs(len(pe_raw) - len(pe_qfq)) <= max(len(pe_raw), len(pe_qfq)) // 2)
+        stability_ok = len(pe_raw) > 0 and (
+            len(pe_qfq) == 0 or abs(len(pe_raw) - len(pe_qfq)) <= max(len(pe_raw), len(pe_qfq)) // 2
+        )
 
     # 验收 4: 停牌过滤——_close_on_or_before volume==0 跳过（select_quintiles 已调它）
     suspended_ok = True
@@ -1092,6 +1090,7 @@ def mini_wire(months: list[str] | None = None, *, recorder_db: str | Path | None
 
     # 缩减 walk_train=3/walk_test=2/step=2 触发 OOS（月度 6 月 → walk_train 3 + walk_test 2 = 5 窗口有 OOS）
     import sys as _sys  # noqa: PLC0415
+
     _tools_dir = str(Path(__file__).resolve().parent)
     if _tools_dir not in _sys.path:
         _sys.path.insert(0, _tools_dir)
@@ -1184,22 +1183,30 @@ def reproduce_verdict(verdict_id: str) -> dict:
     if record is None:
         return {"data_status": "missing", "note": f"verdict_id {verdict_id} 不存在"}
 
-    stored_status = (
-        record.verdict.get("status") if isinstance(record.verdict, dict) else None
-    )
+    stored_status = record.verdict.get("status") if isinstance(record.verdict, dict) else None
 
     # 显式 verify 参数白名单（不用 inspect.signature——monkeypatch verify 会致签名变 **kwargs，
     # record.params 全被 filter；显式列表 test 友好 + line_id 等 metadata 被过滤不传 verify）
-    _VERIFY_PARAMS = frozenset({
-        "edge_type", "n_comparisons", "n_trials", "round_trip_cost",
-        "window_sanity", "walk_train", "walk_test", "step",
-        "event_materiality_floor", "tradeable", "periods_per_year",
-        "frozen_commit", "data_snapshot_id", "survivors_by_day", "universe_by_day",
-    })
-    verify_kwargs: dict = {
-        k: v for k, v in (record.params or {}).items()
-        if k in _VERIFY_PARAMS and v is not None
-    }
+    _VERIFY_PARAMS = frozenset(
+        {
+            "edge_type",
+            "n_comparisons",
+            "n_trials",
+            "round_trip_cost",
+            "window_sanity",
+            "walk_train",
+            "walk_test",
+            "step",
+            "event_materiality_floor",
+            "tradeable",
+            "periods_per_year",
+            "frozen_commit",
+            "data_snapshot_id",
+            "survivors_by_day",
+            "universe_by_day",
+        }
+    )
+    verify_kwargs: dict = {k: v for k, v in (record.params or {}).items() if k in _VERIFY_PARAMS and v is not None}
     # returns + dates 从 record 取（非 params——Recorder 存 return_series + dates 独立列）
     verify_kwargs["returns"] = record.return_series
     if record.dates is not None:

@@ -29,6 +29,7 @@ entry=T+1 open, exit=T+2/T+5 close。long-only 散户可做（做多博反弹，
 7. 板块类型（主板/中小/创业板/科创板——不同涨跌停幅度+散户结构）
 8. 2023-2026 子条件 sweep（ANY 子条件存活 §44 v3？）
 """
+
 from __future__ import annotations
 import json
 import sys
@@ -42,9 +43,18 @@ from math import sqrt, erf
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools._factor_helpers import (  # noqa: E402
-    ev_stats, day_paired_t, bonferroni_p, walk_forward, verdict_for,
-    norm_sf_positive, ALPHA, COST, SLIPPAGE, STOP_PCT,
-    limit_for_code, load_kline_db,
+    ev_stats,
+    day_paired_t,
+    bonferroni_p,
+    walk_forward,
+    verdict_for,
+    norm_sf_positive,
+    ALPHA,
+    COST,
+    SLIPPAGE,
+    STOP_PCT,
+    limit_for_code,
+    load_kline_db,
 )
 
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
@@ -58,7 +68,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DATA = resolve_data_dir()
 INDEX_CACHE = DATA / "index_ohlc_cache.json"
 
-N_CROSS_STRATEGY = 3   # Round 2 三策略并行 cross-strategy Bonferroni
+N_CROSS_STRATEGY = 3  # Round 2 三策略并行 cross-strategy Bonferroni
 
 # 危机窗口（透明固定，非事后调参）——同 ETF 深挖
 CRISIS_WINDOWS = [
@@ -69,6 +79,7 @@ CRISIS_WINDOWS = [
 
 
 # ---------- data loading ----------
+
 
 def load_index() -> tuple[dict[str, dict], list[str]]:
     """sh.000001 → {date: bar} + sorted calendar. 用于 BHAR benchmark + regime."""
@@ -81,6 +92,7 @@ def load_index() -> tuple[dict[str, dict], list[str]]:
 
 
 # ---------- event detection + pick construction ----------
+
 
 def board_type(code: str) -> str:
     """板块类型：main(主板)/sme(中小板)/chuangye(创业板)/kechuang(科创板)."""
@@ -109,10 +121,12 @@ def is_yizi_dt(bar: dict, prev_close: float, limit: float) -> bool:
     if None in (o, h, l, c):
         return False
     tol = 0.005
-    return (abs(o - lim_down) / lim_down < tol and
-            abs(h - lim_down) / lim_down < tol and
-            abs(l - lim_down) / lim_down < tol and
-            abs(c - lim_down) / lim_down < tol)
+    return (
+        abs(o - lim_down) / lim_down < tol
+        and abs(h - lim_down) / lim_down < tol
+        and abs(l - lim_down) / lim_down < tol
+        and abs(c - lim_down) / lim_down < tol
+    )
 
 
 def build_picks_limit_down_open(
@@ -204,42 +218,45 @@ def build_picks_limit_down_open(
             open_degree = (close - low) / low  # 打开程度
             t1_yizi_dt = is_yizi_dt(t1_bar, close, limit)  # T+1 一字跌停
 
-            picks.append({
-                "code": code,
-                "event_date": event_date,
-                "zt_date": event_date,  # walk_forward 兼容
-                "t1_date": t1_date,
-                "t2_date": t2_date,
-                "t3_date": t3_date,
-                "t4_date": t4_date,
-                "t5_date": t5_date,
-                "prev_close": prev_close,
-                "entry": entry,
-                "t1_close": t1_close,
-                "t2_close": t2_close,
-                "t5_close": t5_close,
-                "t1_bar": t1_bar,
-                "t2_bar": t2_bar,
-                "t3_bar": t3_bar,
-                "t4_bar": t4_bar,
-                "t5_bar": t5_bar,
-                "event_close": close,
-                "event_low": low,
-                "event_high": b.get("high"),
-                "event_open": b.get("open"),
-                "open_degree": open_degree,
-                "t1_yizi_dt": t1_yizi_dt,
-                "limit": limit,
-                "is_st": is_st,
-                "board": board_type(code),
-                "i_t1_open": i_t1_open,
-                "i_t2_close": i_t2_close,
-                "i_t5_close": i_t5_close,
-            })
+            picks.append(
+                {
+                    "code": code,
+                    "event_date": event_date,
+                    "zt_date": event_date,  # walk_forward 兼容
+                    "t1_date": t1_date,
+                    "t2_date": t2_date,
+                    "t3_date": t3_date,
+                    "t4_date": t4_date,
+                    "t5_date": t5_date,
+                    "prev_close": prev_close,
+                    "entry": entry,
+                    "t1_close": t1_close,
+                    "t2_close": t2_close,
+                    "t5_close": t5_close,
+                    "t1_bar": t1_bar,
+                    "t2_bar": t2_bar,
+                    "t3_bar": t3_bar,
+                    "t4_bar": t4_bar,
+                    "t5_bar": t5_bar,
+                    "event_close": close,
+                    "event_low": low,
+                    "event_high": b.get("high"),
+                    "event_open": b.get("open"),
+                    "open_degree": open_degree,
+                    "t1_yizi_dt": t1_yizi_dt,
+                    "limit": limit,
+                    "is_st": is_st,
+                    "board": board_type(code),
+                    "i_t1_open": i_t1_open,
+                    "i_t2_close": i_t2_close,
+                    "i_t5_close": i_t5_close,
+                }
+            )
     return picks
 
 
 # ---------- return functions ----------
+
 
 def raw_ev_t2(p: dict) -> float:
     """散户实际 P&L% T+1 open→T+2 close（含 market beta）."""
@@ -266,8 +283,7 @@ def bhar_t5(p: dict) -> float:
     return stock_ret - mkt_ret
 
 
-def close_ev_stop_t2(p: dict, stop_pct: float = STOP_PCT,
-                     realistic: bool = True) -> tuple[float, str] | None:
+def close_ev_stop_t2(p: dict, stop_pct: float = STOP_PCT, realistic: bool = True) -> tuple[float, str] | None:
     """T+2 -3% stop + R6 gap-through fill（与 helper 一致，适配 limit-down pick）.
 
     Entry=T+1 open. Stop=entry*(1-stop_pct).
@@ -296,8 +312,7 @@ def close_ev_stop_t2(p: dict, stop_pct: float = STOP_PCT,
     return (t2_close - entry) / entry * 100, "t2_close"
 
 
-def close_ev_stop_t5(p: dict, stop_pct: float = STOP_PCT,
-                     realistic: bool = True) -> tuple[float, str] | None:
+def close_ev_stop_t5(p: dict, stop_pct: float = STOP_PCT, realistic: bool = True) -> tuple[float, str] | None:
     """T+5 多日 -3% stop + R6 gap-through fill.
 
     逐日检查 T+1~T+5 stop。T+1 触及→T+2 open 卖（T+1 制度）。
@@ -331,6 +346,7 @@ def close_ev_stop_t5(p: dict, stop_pct: float = STOP_PCT,
 
 # ---------- walk-forward (event-adapted, supports index-aware ret_fn) ----------
 
+
 def walk_forward_event(picks: list[dict], ret_fn) -> dict:
     """前半 train→后半 test by event_date. ret_fn: (p)->float|None."""
     if not picks:
@@ -356,8 +372,10 @@ def walk_forward_event(picks: list[dict], ret_fn) -> dict:
     te_rets = [r for rs in te_by_date.values() for r in rs]
     return {
         "status": "ok",
-        "n_train": len(tr_rets), "n_test": len(te_rets),
-        "n_train_dates": len(train_dates), "n_test_dates": len(test_dates),
+        "n_train": len(tr_rets),
+        "n_test": len(te_rets),
+        "n_train_dates": len(train_dates),
+        "n_test_dates": len(test_dates),
         "train_ev": ev_stats(tr_rets),
         "test_ev": ev_stats(te_rets),
         "train_day_t": day_paired_t(tr_by_date),
@@ -367,10 +385,10 @@ def walk_forward_event(picks: list[dict], ret_fn) -> dict:
 
 # ---------- analysis (per subset: raw EV + BHAR + stop + walk-forward) ----------
 
-def analyze_subset(name: str, picks: list[dict],
-                   ret_fn_raw, ret_fn_bhar, ret_fn_stop,
-                   window_label: str = "T+2",
-                   verbose: bool = True) -> dict:
+
+def analyze_subset(
+    name: str, picks: list[dict], ret_fn_raw, ret_fn_bhar, ret_fn_stop, window_label: str = "T+2", verbose: bool = True
+) -> dict:
     """对一个子集跑全分析：raw EV + BHAR + stop + walk-forward."""
     if not picks:
         if verbose:
@@ -413,39 +431,60 @@ def analyze_subset(name: str, picks: list[dict],
 
     if verbose:
         print(f"\n  {name} [{window_label}]: n={len(picks)} n_days={bhar_dt['n_days']}")
-        print(f"    raw EV:  gross={raw_s['ev']:+.3f}% net={raw_s['ev']-COST*100:+.3f}% "
-              f"day_t={raw_dt['t']} p={raw_dt['p_one_sided']} WR={raw_s['wr']}%")
-        print(f"    BHAR:    gross={bhar_s['ev']:+.3f}% net={bhar_s['ev']-COST*100:+.3f}% "
-              f"day_t={bhar_dt['t']} p={bhar_dt['p_one_sided']} WR={bhar_s['wr']}%")
-        print(f"    beta 泄漏 = raw - BHAR = {raw_s['ev']-bhar_s['ev']:+.3f}% "
-              f"({'raw 通胀(beta 泄漏)' if raw_s['ev'] > bhar_s['ev'] else 'raw 通缩'})")
-        print(f"    stop:    gross={stop_s['ev']:+.3f}% net={stop_s['ev']-COST*100:+.3f}% "
-              f"WR={stop_s['wr']}% day_t={stop_dt['t']}")
+        print(
+            f"    raw EV:  gross={raw_s['ev']:+.3f}% net={raw_s['ev'] - COST * 100:+.3f}% "
+            f"day_t={raw_dt['t']} p={raw_dt['p_one_sided']} WR={raw_s['wr']}%"
+        )
+        print(
+            f"    BHAR:    gross={bhar_s['ev']:+.3f}% net={bhar_s['ev'] - COST * 100:+.3f}% "
+            f"day_t={bhar_dt['t']} p={bhar_dt['p_one_sided']} WR={bhar_s['wr']}%"
+        )
+        print(
+            f"    beta 泄漏 = raw - BHAR = {raw_s['ev'] - bhar_s['ev']:+.3f}% "
+            f"({'raw 通胀(beta 泄漏)' if raw_s['ev'] > bhar_s['ev'] else 'raw 通缩'})"
+        )
+        print(
+            f"    stop:    gross={stop_s['ev']:+.3f}% net={stop_s['ev'] - COST * 100:+.3f}% "
+            f"WR={stop_s['wr']}% day_t={stop_dt['t']}"
+        )
         tot_r = sum(stop_reasons.values()) or 1
-        stop_pct_str = ", ".join(f"{k}:{v}({v/tot_r*100:.0f}%)" for k, v in
-                                 sorted(stop_reasons.items(), key=lambda x: -x[1]))
+        stop_pct_str = ", ".join(
+            f"{k}:{v}({v / tot_r * 100:.0f}%)" for k, v in sorted(stop_reasons.items(), key=lambda x: -x[1])
+        )
         print(f"    exit reasons: {stop_pct_str}")
         if wf_bhar["status"] == "ok":
-            tr = wf_bhar["train_ev"]; te = wf_bhar["test_ev"]
-            print(f"    WF(BHAR): train={tr['ev']:+.3f}% test={te['ev']:+.3f}% "
-                  f"test_p={wf_bhar['test_day_t']['p_one_sided']} "
-                  f"n_tr_dates={wf_bhar['n_train_dates']} n_te_dates={wf_bhar['n_test_dates']}")
+            tr = wf_bhar["train_ev"]
+            te = wf_bhar["test_ev"]
+            print(
+                f"    WF(BHAR): train={tr['ev']:+.3f}% test={te['ev']:+.3f}% "
+                f"test_p={wf_bhar['test_day_t']['p_one_sided']} "
+                f"n_tr_dates={wf_bhar['n_train_dates']} n_te_dates={wf_bhar['n_test_dates']}"
+            )
 
     return {
-        "name": name, "n": len(picks), "n_days": bhar_dt["n_days"],
+        "name": name,
+        "n": len(picks),
+        "n_days": bhar_dt["n_days"],
         "window": window_label,
-        "raw": raw_s, "raw_dt": raw_dt, "raw_net": raw_s["ev"] - COST * 100,
-        "bhar": bhar_s, "bhar_dt": bhar_dt, "bhar_net": bhar_s["ev"] - COST * 100,
-        "stop": stop_s, "stop_dt": stop_dt, "stop_net": stop_s["ev"] - COST * 100,
-        "wf_bhar": wf_bhar, "wf_raw": wf_raw,
+        "raw": raw_s,
+        "raw_dt": raw_dt,
+        "raw_net": raw_s["ev"] - COST * 100,
+        "bhar": bhar_s,
+        "bhar_dt": bhar_dt,
+        "bhar_net": bhar_s["ev"] - COST * 100,
+        "stop": stop_s,
+        "stop_dt": stop_dt,
+        "stop_net": stop_s["ev"] - COST * 100,
+        "wf_bhar": wf_bhar,
+        "wf_raw": wf_raw,
         "beta_leak": round(raw_s["ev"] - bhar_s["ev"], 3),
     }
 
 
 # ---------- regime classification ----------
 
-def classify_regime(date: str, index_map: dict[str, dict],
-                    idx_dates_sorted: list[str]) -> str:
+
+def classify_regime(date: str, index_map: dict[str, dict], idx_dates_sorted: list[str]) -> str:
     """bull/bear/range via 60-day index momentum; crisis via fixed windows."""
     for _label, lo, hi in CRISIS_WINDOWS:
         if lo <= date <= hi:
@@ -481,11 +520,10 @@ def tag_regime(picks: list[dict], index_map: dict[str, dict]) -> None:
 
 # ---------- DSR estimation ----------
 
-def estimate_dsr(ev_mean: float, ev_std: float, n_events: int,
-                 n_trials: int, events_per_year: float) -> dict:
+
+def estimate_dsr(ev_mean: float, ev_std: float, n_events: int, n_trials: int, events_per_year: float) -> dict:
     if ev_std <= 0 or n_events <= 0:
-        return {"event_sharpe": 0, "ann_sharpe": 0, "dsr_approx": 0,
-                "expected_max_sr": 0, "n_trials": n_trials}
+        return {"event_sharpe": 0, "ann_sharpe": 0, "dsr_approx": 0, "expected_max_sr": 0, "n_trials": n_trials}
     event_sharpe = ev_mean / ev_std
     ann_sharpe = event_sharpe * sqrt(events_per_year)
     expected_max_sr = sqrt(2 * math.log(n_trials)) if n_trials > 1 else 0
@@ -501,8 +539,8 @@ def estimate_dsr(ev_mean: float, ev_std: float, n_events: int,
 
 # ---------- verdict (BHAR-based, §44 v3 cascade) ----------
 
-def bhar_verdict(subset: dict, n_cross: int = N_CROSS_STRATEGY,
-                 label: str = "") -> str:
+
+def bhar_verdict(subset: dict, n_cross: int = N_CROSS_STRATEGY, label: str = "") -> str:
     """对 BHAR 出正式 verdict（Bonferroni = cross×2_subsets）."""
     bhar = subset["bhar"]
     bhar_dt = subset["bhar_dt"]
@@ -512,11 +550,17 @@ def bhar_verdict(subset: dict, n_cross: int = N_CROSS_STRATEGY,
     wf_test_ev = wf.get("test_ev", {}).get("ev", 0.0) if wf_status == "ok" else 0.0
     wf_test_p = wf.get("test_day_t", {}).get("p_one_sided", 1.0) if wf_status == "ok" else 1.0
     v = verdict_for(
-        ev_gross=bhar["ev"], t_day=bhar_dt["t"], p_raw=bhar_dt["p_one_sided"],
-        wf_status=wf_status, wf_train_ev=wf_train_ev, wf_test_ev=wf_test_ev,
+        ev_gross=bhar["ev"],
+        t_day=bhar_dt["t"],
+        p_raw=bhar_dt["p_one_sided"],
+        wf_status=wf_status,
+        wf_train_ev=wf_train_ev,
+        wf_test_ev=wf_test_ev,
         wf_test_p=wf_test_p,
-        n_days=bhar_dt["n_days"], net_ev=subset["bhar_net"],
-        subset_name=label or subset["name"], n_cross_factor=n_cross,
+        n_days=bhar_dt["n_days"],
+        net_ev=subset["bhar_net"],
+        subset_name=label or subset["name"],
+        n_cross_factor=n_cross,
     )
     n_tests = max(2, n_cross * 2)
     subset["bonf_p"] = bonferroni_p(bhar_dt["p_one_sided"], n_tests)
@@ -526,6 +570,7 @@ def bhar_verdict(subset: dict, n_cross: int = N_CROSS_STRATEGY,
 
 
 # ---------- main ----------
+
 
 def main() -> None:
     print("=" * 78)
@@ -540,8 +585,7 @@ def main() -> None:
     picks = build_picks_limit_down_open(code_map, calendar, index_map)
     n_dates = len(set(p["event_date"] for p in picks))
     ev_dates = sorted(set(p["event_date"] for p in picks))
-    print(f"\n[build] 跌停打开 events: {len(picks)} across {n_dates} days "
-          f"({ev_dates[0]} ~ {ev_dates[-1]})")
+    print(f"\n[build] 跌停打开 events: {len(picks)} across {n_dates} days ({ev_dates[0]} ~ {ev_dates[-1]})")
     if not picks:
         print("[verdict] no picks → no-data")
         return
@@ -596,8 +640,7 @@ def main() -> None:
     }
     open_results = {}
     for bname, bp in open_buckets.items():
-        open_results[bname] = analyze_subset(f"open={bname}", bp, rf_raw_t2,
-                                             rf_bhar_t2, rf_stop_t2, "T+2")
+        open_results[bname] = analyze_subset(f"open={bname}", bp, rf_raw_t2, rf_bhar_t2, rf_stop_t2, "T+2")
 
     # ================================================================
     # 维度 4: regime 分层（bull/bear/range/crisis）
@@ -612,9 +655,7 @@ def main() -> None:
     for rname in ("bull", "bear", "range", "crisis"):
         rp = regime_picks.get(rname, [])
         if rp:
-            regime_results[rname] = analyze_subset(f"regime={rname}", rp,
-                                                   rf_raw_t2, rf_bhar_t2,
-                                                   rf_stop_t2, "T+2")
+            regime_results[rname] = analyze_subset(f"regime={rname}", rp, rf_raw_t2, rf_bhar_t2, rf_stop_t2, "T+2")
 
     # ================================================================
     # 维度 5: 结构断点 / era
@@ -631,26 +672,26 @@ def main() -> None:
     for label, lo, hi in eras:
         ep = [p for p in picks if lo <= p["event_date"] <= hi]
         if ep:
-            era_results[label] = analyze_subset(f"era={label}", ep, rf_raw_t2,
-                                                rf_bhar_t2, rf_stop_t2, "T+2")
+            era_results[label] = analyze_subset(f"era={label}", ep, rf_raw_t2, rf_bhar_t2, rf_stop_t2, "T+2")
 
     # 年度趋势
     print(f"\n--- 年度 BHAR 趋势（T+2）---")
-    print(f"{'year':<6} {'n':>6} {'n_days':>7} {'raw%':>8} {'BHAR%':>8} "
-          f"{'net%':>7} {'day_t':>7} {'p':>9}")
+    print(f"{'year':<6} {'n':>6} {'n_days':>7} {'raw%':>8} {'BHAR%':>8} {'net%':>7} {'day_t':>7} {'p':>9}")
     yearly = []
     for yr in range(2018, 2027):
-        lo = f"{yr}-01-01"; hi = f"{yr}-12-31"
+        lo = f"{yr}-01-01"
+        hi = f"{yr}-12-31"
         yp = [p for p in picks if lo <= p["event_date"] <= hi]
         if not yp:
             continue
-        yr_sub = analyze_subset(str(yr), yp, rf_raw_t2, rf_bhar_t2,
-                                rf_stop_t2, "T+2", verbose=False)
+        yr_sub = analyze_subset(str(yr), yp, rf_raw_t2, rf_bhar_t2, rf_stop_t2, "T+2", verbose=False)
         yearly.append((yr, yr_sub))
-        print(f"{yr:<6} {yr_sub['n']:>6} {yr_sub['n_days']:>7} "
-              f"{yr_sub['raw']['ev']:>+8} {yr_sub['bhar']['ev']:>+8} "
-              f"{yr_sub['bhar_net']:>+7} {yr_sub['bhar_dt']['t']:>7} "
-              f"{yr_sub['bhar_dt']['p_one_sided']:>9}")
+        print(
+            f"{yr:<6} {yr_sub['n']:>6} {yr_sub['n_days']:>7} "
+            f"{yr_sub['raw']['ev']:>+8} {yr_sub['bhar']['ev']:>+8} "
+            f"{yr_sub['bhar_net']:>+7} {yr_sub['bhar_dt']['t']:>7} "
+            f"{yr_sub['bhar_dt']['p_one_sided']:>9}"
+        )
 
     # ================================================================
     # 维度 6: T+1 状态（一字跌停 vs normal）
@@ -660,14 +701,12 @@ def main() -> None:
     print("=" * 78)
     yizi_picks = [p for p in picks if p["t1_yizi_dt"]]
     normal_picks = [p for p in picks if not p["t1_yizi_dt"]]
-    print(f"  T+1 一字跌停: {len(yizi_picks)} ({len(yizi_picks)/len(picks)*100:.1f}%)")
-    print(f"  T+1 normal:   {len(normal_picks)} ({len(normal_picks)/len(picks)*100:.1f}%)")
+    print(f"  T+1 一字跌停: {len(yizi_picks)} ({len(yizi_picks) / len(picks) * 100:.1f}%)")
+    print(f"  T+1 normal:   {len(normal_picks)} ({len(normal_picks) / len(picks) * 100:.1f}%)")
     if yizi_picks:
-        analyze_subset("T+1 一字跌停", yizi_picks, rf_raw_t2, rf_bhar_t2,
-                       rf_stop_t2, "T+2")
+        analyze_subset("T+1 一字跌停", yizi_picks, rf_raw_t2, rf_bhar_t2, rf_stop_t2, "T+2")
     if normal_picks:
-        analyze_subset("T+1 normal", normal_picks, rf_raw_t2, rf_bhar_t2,
-                       rf_stop_t2, "T+2")
+        analyze_subset("T+1 normal", normal_picks, rf_raw_t2, rf_bhar_t2, rf_stop_t2, "T+2")
 
     # ================================================================
     # 维度 7: 板块类型分层
@@ -682,9 +721,7 @@ def main() -> None:
     for bname in ("main", "sme", "chuangye", "kechuang"):
         bp = board_picks.get(bname, [])
         if bp:
-            board_results[bname] = analyze_subset(f"board={bname}", bp,
-                                                  rf_raw_t2, rf_bhar_t2,
-                                                  rf_stop_t2, "T+2")
+            board_results[bname] = analyze_subset(f"board={bname}", bp, rf_raw_t2, rf_bhar_t2, rf_stop_t2, "T+2")
 
     # ================================================================
     # 维度 8: 2023-2026 子条件 sweep（ANY 存活？）
@@ -699,10 +736,11 @@ def main() -> None:
     print(f"  近期 events: {len(recent)}")
 
     sub_conds = []
-    for wname, rf_r, rf_b, rf_s in (("T2", rf_raw_t2, rf_bhar_t2, rf_stop_t2),
-                                      ("T5", rf_raw_t5, rf_bhar_t5, rf_stop_t5)):
-        for oname, ofilt in (("all", None), ("micro", "<0.01"),
-                              ("half", "0.01-0.03"), ("full", ">=0.03")):
+    for wname, rf_r, rf_b, rf_s in (
+        ("T2", rf_raw_t2, rf_bhar_t2, rf_stop_t2),
+        ("T5", rf_raw_t5, rf_bhar_t5, rf_stop_t5),
+    ):
+        for oname, ofilt in (("all", None), ("micro", "<0.01"), ("half", "0.01-0.03"), ("full", ">=0.03")):
             for rname, rset in (("all", None),):
                 for tname, tfilt in (("all", None), ("normal", "normal")):
                     subset_picks = recent
@@ -717,8 +755,8 @@ def main() -> None:
                     if not subset_picks:
                         continue
                     sc = analyze_subset(
-                        f"23-26 {wname} open={oname} t1={tname}", subset_picks,
-                        rf_r, rf_b, rf_s, wname, verbose=False)
+                        f"23-26 {wname} open={oname} t1={tname}", subset_picks, rf_r, rf_b, rf_s, wname, verbose=False
+                    )
                     sub_conds.append(sc)
                     # bear/crisis splits
                     for crname in ("bear", "crisis"):
@@ -726,7 +764,13 @@ def main() -> None:
                         if cp:
                             cr_sc = analyze_subset(
                                 f"23-26 {wname} open={oname} t1={tname} {crname}",
-                                cp, rf_r, rf_b, rf_s, wname, verbose=False)
+                                cp,
+                                rf_r,
+                                rf_b,
+                                rf_s,
+                                wname,
+                                verbose=False,
+                            )
                             sub_conds.append(cr_sc)
 
     n_sub = len(sub_conds)
@@ -734,8 +778,7 @@ def main() -> None:
     print(f"\n  测试 {n_sub} 个子条件，within-script Bonferroni ×{n_bonf_sub}")
 
     survivors = []
-    print(f"\n{'子条件':<46} {'n':>5} {'BHAR%':>8} {'net%':>7} {'p_raw':>9} "
-          f"{'p_bonf':>9} {'verdict':<14}")
+    print(f"\n{'子条件':<46} {'n':>5} {'BHAR%':>8} {'net%':>7} {'p_raw':>9} {'p_bonf':>9} {'verdict':<14}")
     for sc in sub_conds:
         p_bonf = bonferroni_p(sc["bhar_dt"]["p_one_sided"], n_bonf_sub)
         sc["p_bonf_sub"] = p_bonf
@@ -751,9 +794,11 @@ def main() -> None:
             v = "survives-bonf"
         sc["sub_verdict"] = v
         flag = " <== survives" if v == "survives-bonf" else ""
-        print(f"{sc['name']:<46} {sc['n']:>5} {sc['bhar']['ev']:>+8} "
-              f"{sc['bhar_net']:>+7} {sc['bhar_dt']['p_one_sided']:>9} "
-              f"{p_bonf:>9} {v:<14}{flag}")
+        print(
+            f"{sc['name']:<46} {sc['n']:>5} {sc['bhar']['ev']:>+8} "
+            f"{sc['bhar_net']:>+7} {sc['bhar_dt']['p_one_sided']:>9} "
+            f"{p_bonf:>9} {v:<14}{flag}"
+        )
         if v == "survives-bonf":
             survivors.append(sc)
 
@@ -765,14 +810,18 @@ def main() -> None:
     print("=" * 78)
     # T+2 BHAR 是主口径
     dsr = estimate_dsr(
-        sub_t2["bhar"]["ev"], sub_t2["bhar"]["std"],
-        sub_t2["n"], n_trials=N_CROSS_STRATEGY * 4,  # 3 strategies × ~4 variants
+        sub_t2["bhar"]["ev"],
+        sub_t2["bhar"]["std"],
+        sub_t2["n"],
+        n_trials=N_CROSS_STRATEGY * 4,  # 3 strategies × ~4 variants
         events_per_year=len(picks) / max(1, (2026 - 2018 + 1)),
     )
-    print(f"  T+2 BHAR: event Sharpe={dsr['event_sharpe']} "
-          f"ann Sharpe={dsr['ann_sharpe']} "
-          f"expected max SR(n_trials={dsr['n_trials']})={dsr['expected_max_sr']} "
-          f"DSR≈{dsr['dsr_approx']}")
+    print(
+        f"  T+2 BHAR: event Sharpe={dsr['event_sharpe']} "
+        f"ann Sharpe={dsr['ann_sharpe']} "
+        f"expected max SR(n_trials={dsr['n_trials']})={dsr['expected_max_sr']} "
+        f"DSR≈{dsr['dsr_approx']}"
+    )
     if dsr["dsr_approx"] < 0:
         print(f"  → DSR<0: 多重检验校正后 Sharpe 不显著（overfitting 风险）")
     else:
@@ -794,14 +843,22 @@ def main() -> None:
     print("诚实总结")
     print("=" * 78)
 
-    print(f"\n[BHAR gate] T+2 raw={sub_t2['raw']['ev']:+.3f}% vs "
-          f"BHAR={sub_t2['bhar']['ev']:+.3f}% → beta 泄漏={sub_t2['beta_leak']:+.3f}%")
-    print(f"  → {'raw 通胀了 edge（反弹含 market beta 非 stock-specific）' if sub_t2['beta_leak'] > 0 else 'raw 通缩了 edge'}")
-    print(f"  T+5 raw={sub_t5['raw']['ev']:+.3f}% vs BHAR={sub_t5['bhar']['ev']:+.3f}% "
-          f"→ beta 泄漏={sub_t5['beta_leak']:+.3f}%")
+    print(
+        f"\n[BHAR gate] T+2 raw={sub_t2['raw']['ev']:+.3f}% vs "
+        f"BHAR={sub_t2['bhar']['ev']:+.3f}% → beta 泄漏={sub_t2['beta_leak']:+.3f}%"
+    )
+    print(
+        f"  → {'raw 通胀了 edge（反弹含 market beta 非 stock-specific）' if sub_t2['beta_leak'] > 0 else 'raw 通缩了 edge'}"
+    )
+    print(
+        f"  T+5 raw={sub_t5['raw']['ev']:+.3f}% vs BHAR={sub_t5['bhar']['ev']:+.3f}% "
+        f"→ beta 泄漏={sub_t5['beta_leak']:+.3f}%"
+    )
 
-    print(f"\n[窗口] T+2 BHAR={sub_t2['bhar']['ev']:+.3f}% net={sub_t2['bhar_net']:+.3f}% | "
-          f"T+5 BHAR={sub_t5['bhar']['ev']:+.3f}% net={sub_t5['bhar_net']:+.3f}%")
+    print(
+        f"\n[窗口] T+2 BHAR={sub_t2['bhar']['ev']:+.3f}% net={sub_t2['bhar_net']:+.3f}% | "
+        f"T+5 BHAR={sub_t5['bhar']['ev']:+.3f}% net={sub_t5['bhar_net']:+.3f}%"
+    )
     print(f"  stop: T+2 net={sub_t2['stop_net']:+.3f}% | T+5 stop net={sub_t5['stop_net']:+.3f}%")
 
     # 打开程度单调性
@@ -836,23 +893,27 @@ def main() -> None:
             print(f"{bname}→BHAR={r['bhar']['ev']:+.3f}%  ", end="")
     print()
 
-    print(f"\n[2023-2026 子条件] {n_sub} 测试，Bonf×{n_bonf_sub}，"
-          f"存活 {len(survivors)} 个")
+    print(f"\n[2023-2026 子条件] {n_sub} 测试，Bonf×{n_bonf_sub}，存活 {len(survivors)} 个")
     if survivors:
         for s in survivors:
-            print(f"    {s['name']}: BHAR={s['bhar']['ev']:+.3f}% n={s['n']} "
-                  f"n_days={s['n_days']} p_bonf={s['p_bonf_sub']:.6f}")
+            print(
+                f"    {s['name']}: BHAR={s['bhar']['ev']:+.3f}% n={s['n']} "
+                f"n_days={s['n_days']} p_bonf={s['p_bonf_sub']:.6f}"
+            )
 
-    print(f"\n[DSR] T+2 BHAR DSR≈{dsr['dsr_approx']} "
-          f"(ann Sharpe={dsr['ann_sharpe']} vs expected max={dsr['expected_max_sr']})")
+    print(
+        f"\n[DSR] T+2 BHAR DSR≈{dsr['dsr_approx']} "
+        f"(ann Sharpe={dsr['ann_sharpe']} vs expected max={dsr['expected_max_sr']})"
+    )
 
     print(f"\n[正式 verdict]")
     print(f"  全样本 T+2 BHAR: {v_t2}")
     print(f"  全样本 T+5 BHAR: {v_t5}")
 
-    print(f"\n[stop 保护] T+2 stop net={sub_t2['stop_net']:+.3f}% | "
-          f"T+5 stop net={sub_t5['stop_net']:+.3f}%")
-    print(f"  → {'stop 改善 EV（控制尾部风险有效）' if sub_t2['stop_net'] > sub_t2['bhar_net'] else 'stop 恶化 EV（反弹太快 stop 误杀）'}")
+    print(f"\n[stop 保护] T+2 stop net={sub_t2['stop_net']:+.3f}% | T+5 stop net={sub_t5['stop_net']:+.3f}%")
+    print(
+        f"  → {'stop 改善 EV（控制尾部风险有效）' if sub_t2['stop_net'] > sub_t2['bhar_net'] else 'stop 恶化 EV（反弹太快 stop 误杀）'}"
+    )
 
     print("\n禁外推声明：本测仅跌停打开承接单策略。ETF折溢价/大股东增持是独立策略，")
     print("不因跌停打开 edge 结果外推'事件驱动有/无 edge'。")

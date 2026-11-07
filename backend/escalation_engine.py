@@ -14,6 +14,7 @@ tracking_pool.current_status 是 tracking 级 label，NOT workflow_state enum（
 **R7 两池同步**：escalation run date T 查 tracking_pool 活跃 track → 对每 track 用 (code,T)
 查 workflow_state；无行 → ensure_candidate 再 transition（pre-涨停候选不在 workflow_state）。
 """
+
 from __future__ import annotations
 
 import json
@@ -127,7 +128,9 @@ def escalate(
     #    每日 escalate 增 1（trading day；manual 多次触发或 over-increment，cron daily 为准）。
     for t in tracking_repo.get_active_tracks("tracking"):
         tracking_repo.update_tracking_status(
-            t.code, t.first_admit_date, "tracking",
+            t.code,
+            t.first_admit_date,
+            "tracking",
             tracking_age_days=t.tracking_age_days + 1,
         )
 
@@ -148,6 +151,8 @@ def escalate(
         if _should_decay(t, snaps):
             # T12 decay: WATCHING→FILTERED reason='decayed'（非→CANDIDATE 防振荡 loop）
             workflow_repo.transition(t.code, run_date, "filtered", reason="decayed")
-            tracking_repo.update_tracking_status(t.code, t.first_admit_date, "decayed", tracking_age_days=t.tracking_age_days)
+            tracking_repo.update_tracking_status(
+                t.code, t.first_admit_date, "decayed", tracking_age_days=t.tracking_age_days
+            )
 
     return promoted

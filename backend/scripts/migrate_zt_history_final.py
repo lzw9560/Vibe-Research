@@ -17,6 +17,7 @@
     cd backend && .venv/bin/python -m scripts.migrate_zt_history_final
     cd backend && .venv/bin/python -m scripts.migrate_zt_history_final --dry-run
 """
+
 from __future__ import annotations
 
 import argparse
@@ -66,8 +67,7 @@ def migrate(dry_run: bool = False) -> dict:
     conn.row_factory = sqlite3.Row
     try:
         # 取所有 date
-        dates = [r[0] for r in conn.execute(
-            "SELECT DISTINCT date FROM zt_history ORDER BY date")]
+        dates = [r[0] for r in conn.execute("SELECT DISTINCT date FROM zt_history ORDER BY date")]
         total_dates = len(dates)
         total_deleted = 0
         total_kept_rows = 0
@@ -78,7 +78,9 @@ def migrate(dry_run: bool = False) -> dict:
             # 该 date 下所有 snapshot_at，取最晚一条时点
             snap_rows = conn.execute(
                 "SELECT snapshot_at, COUNT(*) c FROM zt_history WHERE date = ? "
-                "GROUP BY snapshot_at ORDER BY snapshot_at", (d,)).fetchall()
+                "GROUP BY snapshot_at ORDER BY snapshot_at",
+                (d,),
+            ).fetchall()
             if len(snap_rows) <= 1:
                 # 单时点：无需删行，只需判 is_final 并 UPDATE
                 if not snap_rows:
@@ -86,8 +88,8 @@ def migrate(dry_run: bool = False) -> dict:
                 latest_snap = snap_rows[-1]["snapshot_at"]
                 is_final = _is_final_by_time(latest_snap)
                 rowcount = conn.execute(
-                    "UPDATE zt_history SET is_final = ? WHERE date = ?",
-                    (1 if is_final else 0, d)).rowcount
+                    "UPDATE zt_history SET is_final = ? WHERE date = ?", (1 if is_final else 0, d)
+                ).rowcount
                 total_kept_rows += rowcount
                 if is_final:
                     final_count += 1
@@ -100,12 +102,12 @@ def migrate(dry_run: bool = False) -> dict:
 
             # 数删除行
             del_count = conn.execute(
-                "SELECT COUNT(*) FROM zt_history WHERE date = ? AND snapshot_at != ?",
-                (d, latest_snap)).fetchone()[0]
+                "SELECT COUNT(*) FROM zt_history WHERE date = ? AND snapshot_at != ?", (d, latest_snap)
+            ).fetchone()[0]
             # 取保留行
             keep_rows = conn.execute(
-                "SELECT * FROM zt_history WHERE date = ? AND snapshot_at = ?",
-                (d, latest_snap)).fetchall()
+                "SELECT * FROM zt_history WHERE date = ? AND snapshot_at = ?", (d, latest_snap)
+            ).fetchall()
 
             if not dry_run:
                 conn.execute("DELETE FROM zt_history WHERE date = ?", (d,))
@@ -115,7 +117,8 @@ def migrate(dry_run: bool = False) -> dict:
                      snapshot_at, is_final)
                     VALUES (:date, :code, :name, :lbc, :zbc, :fbt, :fund, :zje, :p,
                             :ltsz, :fundamt, :hybk, :snapshot_at, :is_final)""",
-                    [{**dict(r), "is_final": 1 if is_final else 0} for r in keep_rows])
+                    [{**dict(r), "is_final": 1 if is_final else 0} for r in keep_rows],
+                )
 
             total_deleted += del_count
             total_kept_rows += len(keep_rows)
@@ -162,8 +165,8 @@ def main() -> None:
     conn = sqlite3.connect(zth._DB_PATH)
     try:
         dups = conn.execute(
-            "SELECT date, COUNT(DISTINCT snapshot_at) c FROM zt_history "
-            "GROUP BY date HAVING c > 1").fetchall()
+            "SELECT date, COUNT(DISTINCT snapshot_at) c FROM zt_history GROUP BY date HAVING c > 1"
+        ).fetchall()
         print("\n=== 验证：每日唯一（多时点日应为空）===")
         if dups:
             for r in dups:
@@ -171,9 +174,7 @@ def main() -> None:
         else:
             print("  ✅ 所有 date 均唯一时点")
         print("\n=== 验证：最近 5 日 final 标记 ===")
-        for r in conn.execute(
-                "SELECT date, is_final FROM zt_history GROUP BY date "
-                "ORDER BY date DESC LIMIT 5"):
+        for r in conn.execute("SELECT date, is_final FROM zt_history GROUP BY date ORDER BY date DESC LIMIT 5"):
             print(f"  {r[0]}: is_final={r[1]}")
     finally:
         conn.close()

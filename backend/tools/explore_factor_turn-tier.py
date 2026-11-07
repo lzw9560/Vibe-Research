@@ -16,6 +16,7 @@
 - walk-forward OOS (前半 train → 后半 test)
 - 禁止外推: 单因子 ≠ 打板有/无 edge
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -47,18 +48,22 @@ N_CROSS_FACTOR = 6  # 6 因子并行测试 → Bonferroni ×6*2=×12
 
 def make_turn_filter(lo: float, hi: float) -> Callable[[str, int, dict, dict, dict], bool]:
     """filter_fn: t_bar.turn in [lo, hi). None/缺失 turn → False (跳过)."""
+
     def _f(code: str, lbc: int, t_bar: dict, t1_bar: dict, t2_bar: dict) -> bool:
         t = t_bar.get("turn")
         if t is None:
             return False
         return lo <= t < hi
+
     return _f
 
 
 def make_all_valid_turn_filter() -> Callable[[str, int, dict, dict, dict], bool]:
     """baseline: 任意 turn (但必须有 turn 数据, 非 None)."""
+
     def _f(code: str, lbc: int, t_bar: dict, t1_bar: dict, t2_bar: dict) -> bool:
         return t_bar.get("turn") is not None
+
     return _f
 
 
@@ -72,19 +77,17 @@ def main() -> None:
     code_map, all_dates = load_kline_db()
     zt_rows = load_zt()
     calendar = sorted(all_dates)
-    print(f"  kline codes={len(code_map)} calendar days={len(calendar)} "
-          f"zt_rows={len(zt_rows)}")
-    print(f"  zt date range: {min(d for d,_,_ in zt_rows)} ~ "
-          f"{max(d for d,_,_ in zt_rows)}")
+    print(f"  kline codes={len(code_map)} calendar days={len(calendar)} zt_rows={len(zt_rows)}")
+    print(f"  zt date range: {min(d for d, _, _ in zt_rows)} ~ {max(d for d, _, _ in zt_rows)}")
 
     # ---- baseline: all picks with valid turn (no tier filter) ----
     print("\n[2] baseline: 全部 zt picks (有 turn 数据, 无 tier 过滤)")
-    baseline_picks = build_picks_generic(
-        code_map, calendar, zt_rows, filter_fn=make_all_valid_turn_filter()
-    )
+    baseline_picks = build_picks_generic(code_map, calendar, zt_rows, filter_fn=make_all_valid_turn_filter())
     baseline_res = analyze_subset(
-        "baseline_all_valid_turn", baseline_picks,
-        ret_fn_basic=close_ev_basic, ret_fn_stop=close_ev_stop,
+        "baseline_all_valid_turn",
+        baseline_picks,
+        ret_fn_basic=close_ev_basic,
+        ret_fn_stop=close_ev_stop,
         ret_fn_label="close_ev",
     )
 
@@ -94,12 +97,12 @@ def main() -> None:
     for name, lo, hi in TIERS:
         label = f"{name}({lo:.0f}-{hi:.0f}%)" if hi != float("inf") else f"{name}(>={lo:.0f}%)"
         print(f"\n\n>>> tier: {label}")
-        picks = build_picks_generic(
-            code_map, calendar, zt_rows, filter_fn=make_turn_filter(lo, hi)
-        )
+        picks = build_picks_generic(code_map, calendar, zt_rows, filter_fn=make_turn_filter(lo, hi))
         res = analyze_subset(
-            name, picks,
-            ret_fn_basic=close_ev_basic, ret_fn_stop=close_ev_stop,
+            name,
+            picks,
+            ret_fn_basic=close_ev_basic,
+            ret_fn_stop=close_ev_stop,
             ret_fn_label="close_ev",
         )
         tier_results.append(res)
@@ -143,8 +146,10 @@ def main() -> None:
     print("\n\n" + "=" * 70)
     print("[5] 汇总")
     print("=" * 70)
-    print(f"\n{'tier':<20} {'n_picks':>8} {'n_days':>7} {'gross_ev%':>10} "
-          f"{'net_ev%':>9} {'day_t':>7} {'p_raw':>9} {'verdict':<16}")
+    print(
+        f"\n{'tier':<20} {'n_picks':>8} {'n_days':>7} {'gross_ev%':>10} "
+        f"{'net_ev%':>9} {'day_t':>7} {'p_raw':>9} {'verdict':<16}"
+    )
     print("-" * 90)
 
     # baseline row
@@ -152,21 +157,24 @@ def main() -> None:
     if b.get("n_picks", 0) > 0:
         be = b["basic_ev"]
         bdt = b["basic_day_t"]
-        print(f"{'baseline(all turn)':<20} {b['n_picks']:>8} {bdt['n_days']:>7} "
-              f"{be['ev']:>10.3f} {be['ev']-0.3:>9.3f} {bdt['t']:>7.2f} "
-              f"{bdt['p_one_sided']:>9.4f} {'(reference)':<16}")
+        print(
+            f"{'baseline(all turn)':<20} {b['n_picks']:>8} {bdt['n_days']:>7} "
+            f"{be['ev']:>10.3f} {be['ev'] - 0.3:>9.3f} {bdt['t']:>7.2f} "
+            f"{bdt['p_one_sided']:>9.4f} {'(reference)':<16}"
+        )
 
     for res, (name, v) in zip(tier_results, verdicts):
         np_ = res.get("n_picks", 0)
         if np_ == 0:
-            print(f"{name:<20} {0:>8} {0:>7} {'N/A':>10} {'N/A':>9} "
-                  f"{'N/A':>7} {'N/A':>9} {v:<16}")
+            print(f"{name:<20} {0:>8} {0:>7} {'N/A':>10} {'N/A':>9} {'N/A':>7} {'N/A':>9} {v:<16}")
             continue
         be = res["basic_ev"]
         bdt = res["basic_day_t"]
-        print(f"{name:<20} {np_:>8} {bdt['n_days']:>7} {be['ev']:>10.3f} "
-              f"{be['ev']-0.3:>9.3f} {bdt['t']:>7.2f} {bdt['p_one_sided']:>9.4f} "
-              f"{v:<16}")
+        print(
+            f"{name:<20} {np_:>8} {bdt['n_days']:>7} {be['ev']:>10.3f} "
+            f"{be['ev'] - 0.3:>9.3f} {bdt['t']:>7.2f} {bdt['p_one_sided']:>9.4f} "
+            f"{v:<16}"
+        )
 
     # ---- factor-level honest verdict ----
     print("\n" + "=" * 70)

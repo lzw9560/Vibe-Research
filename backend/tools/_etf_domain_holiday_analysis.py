@@ -5,6 +5,7 @@
 3. 宽基 vs 行业 ETF 节前差异
 4. 动量参考 (节前信号是否=前期涨幅的延续)
 """
+
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 import json
 import sys
@@ -14,6 +15,7 @@ from statistics import mean, median, stdev
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vr_paths import resolve_data_dir
+
 CACHE = str(resolve_data_dir())
 
 with open(f"{CACHE}/index_ohlc_cache.json") as f:
@@ -30,30 +32,41 @@ date_idx = {d: i for i, d in enumerate(dates)}
 # ---------- 1. build long-holiday list from trading calendar gaps ----------
 holiday_gaps = []
 for i in range(1, len(dates)):
-    d0 = datetime.strptime(dates[i-1], "%Y-%m-%d")
+    d0 = datetime.strptime(dates[i - 1], "%Y-%m-%d")
     d1 = datetime.strptime(dates[i], "%Y-%m-%d")
     gap_days = (d1 - d0).days  # calendar days between consecutive trading days
     if gap_days >= 5:  # >=5 cal days => at least 3 non-weekend days off (Fri->Wed+)
-        holiday_gaps.append({
-            "last_pre": dates[i-1],
-            "first_post": dates[i],
-            "gap_days": gap_days,
-            # weekday of last_pre
-            "weekday": d0.weekday(),  # 0=Mon
-            "month": d0.month,
-        })
+        holiday_gaps.append(
+            {
+                "last_pre": dates[i - 1],
+                "first_post": dates[i],
+                "gap_days": gap_days,
+                # weekday of last_pre
+                "weekday": d0.weekday(),  # 0=Mon
+                "month": d0.month,
+            }
+        )
+
 
 # classify long holidays: 春节(1-2月), 国庆(9-10月, combined中秋), 劳动节(5月), 其他(清明4月/端午6月/中秋9-10月)
 def classify(g):
     m = datetime.strptime(g["last_pre"], "%Y-%m-%d").month
-    if m in (1,2): return "春节"
-    if m == 5: return "劳动节"
-    if m in (9,10): return "国庆中秋"
-    if m == 4: return "清明"
-    if m == 6: return "端午"
-    if m in (7,8): return "其他夏"
-    if m in (11,12): return "其他冬"
+    if m in (1, 2):
+        return "春节"
+    if m == 5:
+        return "劳动节"
+    if m in (9, 10):
+        return "国庆中秋"
+    if m == 4:
+        return "清明"
+    if m == 6:
+        return "端午"
+    if m in (7, 8):
+        return "其他夏"
+    if m in (11, 12):
+        return "其他冬"
     return "其他"
+
 
 for g in holiday_gaps:
     g["type"] = classify(g)
@@ -62,6 +75,7 @@ for g in holiday_gaps:
 print("=== Trading-calendar long gaps (>=5 cal days) ===")
 print(f"total gaps: {len(holiday_gaps)}")
 from collections import Counter
+
 print("by type:", Counter(g["type"] for g in holiday_gaps))
 print("by gap_days:", Counter(g["gap_days"] for g in holiday_gaps))
 

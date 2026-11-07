@@ -9,10 +9,14 @@ low_absorption 在旧 STRATEGY_REGISTRY（dict）与 STRATEGY_FUNNEL_REGISTRY（
 均有注册且 match 分支存在（:754-761），spec A2 要求合并后 12 项，故归入本文件
 （implementation-prompt B1 的"7 个"为 off-by-one 遗漏，详见 S086 核实记录）。
 """
+
 from __future__ import annotations
 
 from strategies.strategy_base import (
-    BaseStrategy, ConditionEval, StrategyMatchResult, make_data_unavailable_result,
+    BaseStrategy,
+    ConditionEval,
+    StrategyMatchResult,
+    make_data_unavailable_result,
 )
 
 
@@ -94,14 +98,20 @@ class ConsecutiveRelayStrategy(BaseStrategy):
         c2_hit = seal >= 60
         conditions = [
             ConditionEval(
-                condition_id="consecutive_relay.c1", condition_name="连板历史",
-                factor="zt_count_250d", threshold=">= 2", actual_value=str(zt),
+                condition_id="consecutive_relay.c1",
+                condition_name="连板历史",
+                factor="zt_count_250d",
+                threshold=">= 2",
+                actual_value=str(zt),
                 state="hit" if c1_hit else "miss",
                 description=f"250日涨停 {zt} 次（阈值≥2）",
             ),
             ConditionEval(
-                condition_id="consecutive_relay.c2", condition_name="封板能力",
-                factor="封板率", threshold=">= 60", actual_value=f"{seal:.1f}%",
+                condition_id="consecutive_relay.c2",
+                condition_name="封板能力",
+                factor="封板率",
+                threshold=">= 60",
+                actual_value=f"{seal:.1f}%",
                 state="hit" if c2_hit else "miss",
                 description=f"封板率 {seal:.1f}%（阈值≥60%）",
             ),
@@ -109,10 +119,15 @@ class ConsecutiveRelayStrategy(BaseStrategy):
         hit_count = sum(1 for c in conditions if c.state == "hit")
         fired = c1_hit and c2_hit
         return StrategyMatchResult(
-            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
-            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            strategy_code=self.code,
+            strategy_name=self.name,
+            conditions=conditions,
+            hit_count=hit_count,
+            total_count=len(conditions),
+            fired=fired,
             fire_rule="全条件命中",
-            confidence=min(seal / 100, 1.0) if fired else None, data_ok=True,
+            confidence=min(seal / 100, 1.0) if fired else None,
+            data_ok=True,
         )
 
     def compute_confidence(self, matches, ctx) -> float:
@@ -134,14 +149,20 @@ class BreakResealStrategy(BaseStrategy):
         c2_hit = seal >= 80
         conditions = [
             ConditionEval(
-                condition_id="break_reseal.c1", condition_name="黄金区频次",
-                factor="zt_count_250d", threshold="[3,5]", actual_value=str(zt),
+                condition_id="break_reseal.c1",
+                condition_name="黄金区频次",
+                factor="zt_count_250d",
+                threshold="[3,5]",
+                actual_value=str(zt),
                 state="hit" if c1_hit else "miss",
                 description=f"250日涨停 {zt} 次（黄金区 3-5）",
             ),
             ConditionEval(
-                condition_id="break_reseal.c2", condition_name="强封板",
-                factor="封板率", threshold=">= 80", actual_value=f"{seal:.1f}%",
+                condition_id="break_reseal.c2",
+                condition_name="强封板",
+                factor="封板率",
+                threshold=">= 80",
+                actual_value=f"{seal:.1f}%",
                 state="hit" if c2_hit else "miss",
                 description=f"封板率 {seal:.1f}%（阈值≥80%）",
             ),
@@ -149,10 +170,15 @@ class BreakResealStrategy(BaseStrategy):
         hit_count = sum(1 for c in conditions if c.state == "hit")
         fired = c1_hit and c2_hit
         return StrategyMatchResult(
-            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
-            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            strategy_code=self.code,
+            strategy_name=self.name,
+            conditions=conditions,
+            hit_count=hit_count,
+            total_count=len(conditions),
+            fired=fired,
             fire_rule="全条件命中",
-            confidence=0.7 if fired else None, data_ok=True,
+            confidence=0.7 if fired else None,
+            data_ok=True,
         )
 
     def compute_confidence(self, matches, ctx) -> float:
@@ -174,11 +200,15 @@ class LowAbsorptionStrategy(BaseStrategy):
         # S097 + S153 R5：C1 回调MA5 + C2 均线多头 + C3 缩量 vol_brk<1.0；无 pattern → data_ok=False
         pattern = _get_pattern(ctx)
         if pattern is None:
-            return make_data_unavailable_result(self.code, self.name, [
-                ("low_absorption.c1", "回调MA5", "ma5_proximity", "<= 3"),
-                ("low_absorption.c2", "均线多头", "ma_bullish", "True"),
-                ("low_absorption.c3", "缩量回调", "volume_breakout_ratio", "< 1.0"),
-            ])
+            return make_data_unavailable_result(
+                self.code,
+                self.name,
+                [
+                    ("low_absorption.c1", "回调MA5", "ma5_proximity", "<= 3"),
+                    ("low_absorption.c2", "均线多头", "ma_bullish", "True"),
+                    ("low_absorption.c3", "缩量回调", "volume_breakout_ratio", "< 1.0"),
+                ],
+            )
         ma5_prox = pattern.ma5_proximity
         ma_bull = pattern.ma_bullish
         vol_brk = pattern.volume_breakout_ratio
@@ -206,23 +236,46 @@ class LowAbsorptionStrategy(BaseStrategy):
             c3_state, c3_desc = "miss", f"量比 {vol_brk:.2f}（≥1.0，未缩量）"
             c3_val = f"{vol_brk:.2f}"
         conditions = [
-            ConditionEval(condition_id="low_absorption.c1", condition_name="回调MA5",
-                factor="ma5_proximity", threshold="<= 3", actual_value=c1_val,
-                state=c1_state, description=c1_desc),
-            ConditionEval(condition_id="low_absorption.c2", condition_name="均线多头",
-                factor="ma_bullish", threshold="True", actual_value=c2_val,
-                state=c2_state, description=c2_desc),
-            ConditionEval(condition_id="low_absorption.c3", condition_name="缩量回调",
-                factor="volume_breakout_ratio", threshold="< 1.0", actual_value=c3_val,
-                state=c3_state, description=c3_desc),
+            ConditionEval(
+                condition_id="low_absorption.c1",
+                condition_name="回调MA5",
+                factor="ma5_proximity",
+                threshold="<= 3",
+                actual_value=c1_val,
+                state=c1_state,
+                description=c1_desc,
+            ),
+            ConditionEval(
+                condition_id="low_absorption.c2",
+                condition_name="均线多头",
+                factor="ma_bullish",
+                threshold="True",
+                actual_value=c2_val,
+                state=c2_state,
+                description=c2_desc,
+            ),
+            ConditionEval(
+                condition_id="low_absorption.c3",
+                condition_name="缩量回调",
+                factor="volume_breakout_ratio",
+                threshold="< 1.0",
+                actual_value=c3_val,
+                state=c3_state,
+                description=c3_desc,
+            ),
         ]
         hit_count = sum(1 for c in conditions if c.state == "hit")
         fired = c1_state == "hit" and c2_state == "hit" and c3_state == "hit"
         return StrategyMatchResult(
-            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
-            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            strategy_code=self.code,
+            strategy_name=self.name,
+            conditions=conditions,
+            hit_count=hit_count,
+            total_count=len(conditions),
+            fired=fired,
             fire_rule="全条件命中",
-            confidence=0.5 if fired else None, data_ok=True,
+            confidence=0.5 if fired else None,
+            data_ok=True,
         )
 
     def compute_confidence(self, matches, ctx) -> float:
@@ -249,8 +302,11 @@ class NShapeCounterattackStrategy(BaseStrategy):
         c1_hit = 2 <= zt <= 10
         conditions = [
             ConditionEval(
-                condition_id="n_shape_counterattack.c1", condition_name="N字区间",
-                factor="zt_count_250d", threshold="[2,10]", actual_value=str(zt),
+                condition_id="n_shape_counterattack.c1",
+                condition_name="N字区间",
+                factor="zt_count_250d",
+                threshold="[2,10]",
+                actual_value=str(zt),
                 state="hit" if c1_hit else "miss",
                 description=f"250日涨停 {zt} 次（[2,10] 区间，N字反击历史）",
             ),
@@ -258,10 +314,15 @@ class NShapeCounterattackStrategy(BaseStrategy):
         hit_count = sum(1 for c in conditions if c.state == "hit")
         fired = c1_hit
         return StrategyMatchResult(
-            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
-            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            strategy_code=self.code,
+            strategy_name=self.name,
+            conditions=conditions,
+            hit_count=hit_count,
+            total_count=len(conditions),
+            fired=fired,
             fire_rule="全条件命中",
-            confidence=0.5 if fired else None, data_ok=True,
+            confidence=0.5 if fired else None,
+            data_ok=True,
         )
 
     def compute_confidence(self, matches, ctx) -> float:
@@ -283,11 +344,15 @@ class PlatformBreakoutStrategy(BaseStrategy):
         # S097 + S153 R4：C1 横盘≥5 + C2 放量突破>2 + C3 紧平台 amplitude≤6.0；无 pattern → data_ok=False
         pattern = _get_pattern(ctx)
         if pattern is None:
-            return make_data_unavailable_result(self.code, self.name, [
-                ("platform_breakout.c1", "横盘", "consolidation_days", ">= 5"),
-                ("platform_breakout.c2", "放量突破", "volume_breakout_ratio", "> 2"),
-                ("platform_breakout.c3", "紧平台", "consolidation_amplitude", "<= 6.0"),
-            ])
+            return make_data_unavailable_result(
+                self.code,
+                self.name,
+                [
+                    ("platform_breakout.c1", "横盘", "consolidation_days", ">= 5"),
+                    ("platform_breakout.c2", "放量突破", "volume_breakout_ratio", "> 2"),
+                    ("platform_breakout.c3", "紧平台", "consolidation_amplitude", "<= 6.0"),
+                ],
+            )
         cons = pattern.consolidation_days
         vol_brk = pattern.volume_breakout_ratio
         cons_amp = pattern.consolidation_amplitude
@@ -315,23 +380,46 @@ class PlatformBreakoutStrategy(BaseStrategy):
             c3_state, c3_desc = "miss", f"振幅 {cons_amp:.2f}%（>6.0，平台松散）"
             c3_val = f"{cons_amp:.2f}"
         conditions = [
-            ConditionEval(condition_id="platform_breakout.c1", condition_name="横盘",
-                factor="consolidation_days", threshold=">= 5", actual_value=c1_val,
-                state=c1_state, description=c1_desc),
-            ConditionEval(condition_id="platform_breakout.c2", condition_name="放量突破",
-                factor="volume_breakout_ratio", threshold="> 2", actual_value=c2_val,
-                state=c2_state, description=c2_desc),
-            ConditionEval(condition_id="platform_breakout.c3", condition_name="紧平台",
-                factor="consolidation_amplitude", threshold="<= 6.0", actual_value=c3_val,
-                state=c3_state, description=c3_desc),
+            ConditionEval(
+                condition_id="platform_breakout.c1",
+                condition_name="横盘",
+                factor="consolidation_days",
+                threshold=">= 5",
+                actual_value=c1_val,
+                state=c1_state,
+                description=c1_desc,
+            ),
+            ConditionEval(
+                condition_id="platform_breakout.c2",
+                condition_name="放量突破",
+                factor="volume_breakout_ratio",
+                threshold="> 2",
+                actual_value=c2_val,
+                state=c2_state,
+                description=c2_desc,
+            ),
+            ConditionEval(
+                condition_id="platform_breakout.c3",
+                condition_name="紧平台",
+                factor="consolidation_amplitude",
+                threshold="<= 6.0",
+                actual_value=c3_val,
+                state=c3_state,
+                description=c3_desc,
+            ),
         ]
         hit_count = sum(1 for c in conditions if c.state == "hit")
         fired = c1_state == "hit" and c2_state == "hit" and c3_state == "hit"
         return StrategyMatchResult(
-            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
-            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            strategy_code=self.code,
+            strategy_name=self.name,
+            conditions=conditions,
+            hit_count=hit_count,
+            total_count=len(conditions),
+            fired=fired,
             fire_rule="全条件命中",
-            confidence=0.5 if fired else None, data_ok=True,
+            confidence=0.5 if fired else None,
+            data_ok=True,
         )
 
     def compute_confidence(self, matches, ctx) -> float:
@@ -364,14 +452,20 @@ class EndOfDaySneakStrategy(BaseStrategy):
         c2_hit = premium > 15
         conditions = [
             ConditionEval(
-                condition_id="end_of_day_sneak.c1", condition_name="尾盘封板",
-                factor="封板率", threshold=">= 40", actual_value=f"{seal:.1f}%",
+                condition_id="end_of_day_sneak.c1",
+                condition_name="尾盘封板",
+                factor="封板率",
+                threshold=">= 40",
+                actual_value=f"{seal:.1f}%",
                 state="hit" if c1_hit else "miss",
                 description=f"封板率 {seal:.1f}%（阈值≥40%）",
             ),
             ConditionEval(
-                condition_id="end_of_day_sneak.c2", condition_name="溢价能力",
-                factor="次日溢价率", threshold="> 15", actual_value=f"{premium:.1f}%",
+                condition_id="end_of_day_sneak.c2",
+                condition_name="溢价能力",
+                factor="次日溢价率",
+                threshold="> 15",
+                actual_value=f"{premium:.1f}%",
                 state="hit" if c2_hit else "miss",
                 description=f"次日溢价率 {premium:.1f}%（阈值>15%，全量P75）",
             ),
@@ -379,10 +473,15 @@ class EndOfDaySneakStrategy(BaseStrategy):
         hit_count = sum(1 for c in conditions if c.state == "hit")
         fired = c1_hit and c2_hit
         return StrategyMatchResult(
-            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
-            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            strategy_code=self.code,
+            strategy_name=self.name,
+            conditions=conditions,
+            hit_count=hit_count,
+            total_count=len(conditions),
+            fired=fired,
             fire_rule="全条件命中",
-            confidence=0.4 if fired else None, data_ok=True,
+            confidence=0.4 if fired else None,
+            data_ok=True,
         )
 
     def compute_confidence(self, matches, ctx) -> float:
@@ -411,9 +510,13 @@ class DragonHeadStrategy(BaseStrategy):
         pattern = msc.get("pattern") if isinstance(msc, dict) else None
         sector_rank = msc.get("sector_rank")
         if pattern is None:
-            return make_data_unavailable_result(self.code, self.name, [
-                ("dragon_head.c1", "板块领涨", "sector_rank", "<= 3"),
-            ])
+            return make_data_unavailable_result(
+                self.code,
+                self.name,
+                [
+                    ("dragon_head.c1", "板块领涨", "sector_rank", "<= 3"),
+                ],
+            )
         if sector_rank is None:
             c1_state, c1_desc, c1_val, c1_hit = "data_unavailable", "sector_rank 数据缺失", None, False
         else:
@@ -423,18 +526,27 @@ class DragonHeadStrategy(BaseStrategy):
             c1_val = str(sector_rank)
         conditions = [
             ConditionEval(
-                condition_id="dragon_head.c1", condition_name="板块领涨",
-                factor="sector_rank", threshold="<= 3", actual_value=c1_val,
-                state=c1_state, description=c1_desc,
+                condition_id="dragon_head.c1",
+                condition_name="板块领涨",
+                factor="sector_rank",
+                threshold="<= 3",
+                actual_value=c1_val,
+                state=c1_state,
+                description=c1_desc,
             ),
         ]
         hit_count = sum(1 for c in conditions if c.state == "hit")
         fired = c1_hit
         return StrategyMatchResult(
-            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
-            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            strategy_code=self.code,
+            strategy_name=self.name,
+            conditions=conditions,
+            hit_count=hit_count,
+            total_count=len(conditions),
+            fired=fired,
             fire_rule="全条件命中",
-            confidence=0.5 if fired else None, data_ok=True,
+            confidence=0.5 if fired else None,
+            data_ok=True,
         )
 
     def compute_confidence(self, matches, ctx) -> float:
@@ -474,11 +586,15 @@ class FirstBoardLimitupStrategy(BaseStrategy):
 
         # 无 msc 任一字段 → data_unavailable 整战法降级（涨停 pipeline 无 msc，诚实不臆造）
         if pattern is None and sector_rank is None and zt_count_today is None and seal_to_float is None:
-            return make_data_unavailable_result(self.code, self.name, [
-                ("first_board_limitup.c1", "龙头地位", "sector_rank", "<= 3"),
-                ("first_board_limitup.c2", "板块共振", "zt_count_today", ">= 2"),
-                ("first_board_limitup.c3", "封单精品", "seal_to_float_ratio", ">= 0.005"),
-            ])
+            return make_data_unavailable_result(
+                self.code,
+                self.name,
+                [
+                    ("first_board_limitup.c1", "龙头地位", "sector_rank", "<= 3"),
+                    ("first_board_limitup.c2", "板块共振", "zt_count_today", ">= 2"),
+                    ("first_board_limitup.c3", "封单精品", "seal_to_float_ratio", ">= 0.005"),
+                ],
+            )
 
         # C1 龙头地位: high_gene=1（ctx.gene，涨停路径有）OR sector_rank≤3（msc，非涨停 funnel）
         # S203 wiring(a) phase 1：涨停路径 gene_obj 有 high_gene（无 sector_rank），C1 用 high_gene 兜底
@@ -513,23 +629,46 @@ class FirstBoardLimitupStrategy(BaseStrategy):
             c3_val = str(seal_to_float)
 
         conditions = [
-            ConditionEval(condition_id="first_board_limitup.c1", condition_name="龙头地位",
-                          factor="sector_rank", threshold="<= 3", actual_value=c1_val,
-                          state=c1_state, description=c1_desc),
-            ConditionEval(condition_id="first_board_limitup.c2", condition_name="板块共振",
-                          factor="zt_count_today", threshold=">= 2", actual_value=c2_val,
-                          state=c2_state, description=c2_desc),
-            ConditionEval(condition_id="first_board_limitup.c3", condition_name="封单精品",
-                          factor="seal_to_float_ratio", threshold=">= 0.005", actual_value=c3_val,
-                          state=c3_state, description=c3_desc),
+            ConditionEval(
+                condition_id="first_board_limitup.c1",
+                condition_name="龙头地位",
+                factor="sector_rank",
+                threshold="<= 3",
+                actual_value=c1_val,
+                state=c1_state,
+                description=c1_desc,
+            ),
+            ConditionEval(
+                condition_id="first_board_limitup.c2",
+                condition_name="板块共振",
+                factor="zt_count_today",
+                threshold=">= 2",
+                actual_value=c2_val,
+                state=c2_state,
+                description=c2_desc,
+            ),
+            ConditionEval(
+                condition_id="first_board_limitup.c3",
+                condition_name="封单精品",
+                factor="seal_to_float_ratio",
+                threshold=">= 0.005",
+                actual_value=c3_val,
+                state=c3_state,
+                description=c3_desc,
+            ),
         ]
         hit_count = sum(1 for c in conditions if c.state == "hit")
         fired = c1_hit and c2_hit and c3_hit
         return StrategyMatchResult(
-            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
-            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            strategy_code=self.code,
+            strategy_name=self.name,
+            conditions=conditions,
+            hit_count=hit_count,
+            total_count=len(conditions),
+            fired=fired,
             fire_rule="全条件命中",
-            confidence=0.6 if fired else None, data_ok=True,
+            confidence=0.6 if fired else None,
+            data_ok=True,
         )
 
     def compute_confidence(self, matches, ctx) -> float:
@@ -552,17 +691,20 @@ def _detect_leader_drop_reversal(bars):
         # round 4 位避 float 噪声（-7% 算成 -0.06999 → round -0.07 精确）
         drop_pct = round((float(prev["close"]) - float(prev["open"])) / float(prev["open"]), 4)
         c2_hit = drop_pct <= -0.07
-        c2_desc = f"T-1 日内跌幅 {drop_pct*100:.1f}%（阈值≤-7%，龙头大跌）"
+        c2_desc = f"T-1 日内跌幅 {drop_pct * 100:.1f}%（阈值≤-7%，龙头大跌）"
         # C3 T 吞没: curr.close ≥ prev.open（吞没前日阴线）AND curr.open ≤ prev.close（低开反包）
-        c3_hit = (float(curr["close"]) >= float(prev["open"])
-                  and float(curr["open"]) <= float(prev["close"]))
-        c3_desc = (f"T close {curr['close']} ≥ T-1 open {prev['open']}（吞没）且 "
-                   f"T open {curr['open']} ≤ T-1 close {prev['close']}（低开反包）")
+        c3_hit = float(curr["close"]) >= float(prev["open"]) and float(curr["open"]) <= float(prev["close"])
+        c3_desc = (
+            f"T close {curr['close']} ≥ T-1 open {prev['open']}（吞没）且 "
+            f"T open {curr['open']} ≤ T-1 close {prev['close']}（低开反包）"
+        )
         # C4 放量: curr.volume / prev.volume ≥ 1.2
         prev_vol = float(prev.get("volume", 0))
         curr_vol = float(curr.get("volume", 0))
-        c4_hit = (prev_vol > 0 and curr_vol / prev_vol >= 1.2)
-        c4_desc = f"T 量比 {curr_vol/prev_vol:.2f}（阈值≥1.2，爆量反包）" if prev_vol > 0 else "T-1 volume=0 无法算量比"
+        c4_hit = prev_vol > 0 and curr_vol / prev_vol >= 1.2
+        c4_desc = (
+            f"T 量比 {curr_vol / prev_vol:.2f}（阈值≥1.2，爆量反包）" if prev_vol > 0 else "T-1 volume=0 无法算量比"
+        )
         return c2_hit, c3_hit, c4_hit, [c2_desc, c3_desc, c4_desc]
     except (TypeError, ValueError, ZeroDivisionError, KeyError) as e:
         return None, None, None, [f"bars 解析失败: {e}"]
@@ -593,12 +735,21 @@ class LeaderDropReversalStrategy(BaseStrategy):
 
         # 无 bars + 无龙头确认 → data_unavailable 整战法降级
         if bars is None and high_gene is None and sector_rank is None:
-            return make_data_unavailable_result(self.code, self.name, [
-                ("leader_drop_reversal.c1", "龙头确认", "high_gene/sector_rank", "high_gene=1 or sector_rank<=3"),
-                ("leader_drop_reversal.c2", "T-1 大跌", "bars close/open", "<= -7%"),
-                ("leader_drop_reversal.c3", "T 吞没", "bars close/open", "curr.close>=prev.open & curr.open<=prev.close"),
-                ("leader_drop_reversal.c4", "放量", "bars volume", ">= 1.2x"),
-            ])
+            return make_data_unavailable_result(
+                self.code,
+                self.name,
+                [
+                    ("leader_drop_reversal.c1", "龙头确认", "high_gene/sector_rank", "high_gene=1 or sector_rank<=3"),
+                    ("leader_drop_reversal.c2", "T-1 大跌", "bars close/open", "<= -7%"),
+                    (
+                        "leader_drop_reversal.c3",
+                        "T 吞没",
+                        "bars close/open",
+                        "curr.close>=prev.open & curr.open<=prev.close",
+                    ),
+                    ("leader_drop_reversal.c4", "放量", "bars volume", ">= 1.2x"),
+                ],
+            )
 
         # C1 龙头确认: high_gene=1 或 sector_rank≤3
         if high_gene is None and sector_rank is None:
@@ -623,26 +774,55 @@ class LeaderDropReversalStrategy(BaseStrategy):
             c2_val = c3_val = c4_val = "见 desc"
 
         conditions = [
-            ConditionEval(condition_id="leader_drop_reversal.c1", condition_name="龙头确认",
-                          factor="high_gene/sector_rank", threshold="hg=1 or sr<=3", actual_value=c1_val,
-                          state=c1_state, description=c1_desc),
-            ConditionEval(condition_id="leader_drop_reversal.c2", condition_name="T-1 大跌",
-                          factor="bars close/open", threshold="<= -7%", actual_value=c2_val,
-                          state=c2_state, description=c2_desc),
-            ConditionEval(condition_id="leader_drop_reversal.c3", condition_name="T 吞没",
-                          factor="bars close/open", threshold="curr.close>=prev.open & curr.open<=prev.close",
-                          actual_value=c3_val, state=c3_state, description=c3_desc),
-            ConditionEval(condition_id="leader_drop_reversal.c4", condition_name="放量",
-                          factor="bars volume", threshold=">= 1.2x", actual_value=c4_val,
-                          state=c4_state, description=c4_desc),
+            ConditionEval(
+                condition_id="leader_drop_reversal.c1",
+                condition_name="龙头确认",
+                factor="high_gene/sector_rank",
+                threshold="hg=1 or sr<=3",
+                actual_value=c1_val,
+                state=c1_state,
+                description=c1_desc,
+            ),
+            ConditionEval(
+                condition_id="leader_drop_reversal.c2",
+                condition_name="T-1 大跌",
+                factor="bars close/open",
+                threshold="<= -7%",
+                actual_value=c2_val,
+                state=c2_state,
+                description=c2_desc,
+            ),
+            ConditionEval(
+                condition_id="leader_drop_reversal.c3",
+                condition_name="T 吞没",
+                factor="bars close/open",
+                threshold="curr.close>=prev.open & curr.open<=prev.close",
+                actual_value=c3_val,
+                state=c3_state,
+                description=c3_desc,
+            ),
+            ConditionEval(
+                condition_id="leader_drop_reversal.c4",
+                condition_name="放量",
+                factor="bars volume",
+                threshold=">= 1.2x",
+                actual_value=c4_val,
+                state=c4_state,
+                description=c4_desc,
+            ),
         ]
         hit_count = sum(1 for c in conditions if c.state == "hit")
         fired = all(c.state == "hit" for c in conditions)
         return StrategyMatchResult(
-            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
-            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            strategy_code=self.code,
+            strategy_name=self.name,
+            conditions=conditions,
+            hit_count=hit_count,
+            total_count=len(conditions),
+            fired=fired,
             fire_rule="全条件命中",
-            confidence=0.55 if fired else None, data_ok=True,
+            confidence=0.55 if fired else None,
+            data_ok=True,
         )
 
     def compute_confidence(self, matches, ctx) -> float:
@@ -697,11 +877,15 @@ class Relay23Strategy(BaseStrategy):
 
         # 无 lbc + 无 bars → 整战法 data_unavailable（涨停 pipeline 未构造 msc 时诚实降级）
         if lbc is None and bars is None:
-            return make_data_unavailable_result(self.code, self.name, [
-                ("relay_23.c1", "当下连板", "lbc", ">= 2"),
-                ("relay_23.c2", "量比健康区", "bars volume ratio", "[1.5, 2.5]"),
-                ("relay_23.c3", "Dragon Score", "dimension_registry", "占位待接线"),
-            ])
+            return make_data_unavailable_result(
+                self.code,
+                self.name,
+                [
+                    ("relay_23.c1", "当下连板", "lbc", ">= 2"),
+                    ("relay_23.c2", "量比健康区", "bars volume ratio", "[1.5, 2.5]"),
+                    ("relay_23.c3", "Dragon Score", "dimension_registry", "占位待接线"),
+                ],
+            )
 
         # C1 当下连板 lbc≥2（涨停池 raw lbc，区别 consecutive_relay 的 250 日历史频次）
         if lbc is None:
@@ -719,24 +903,47 @@ class Relay23Strategy(BaseStrategy):
         c3_state, c3_desc, c3_val = "data_unavailable", "Dragon Score 占位（dimension_registry 接线待）", None
 
         conditions = [
-            ConditionEval(condition_id="relay_23.c1", condition_name="当下连板",
-                          factor="lbc", threshold=">= 2", actual_value=c1_val,
-                          state=c1_state, description=c1_desc),
-            ConditionEval(condition_id="relay_23.c2", condition_name="量比健康区",
-                          factor="bars volume ratio", threshold="[1.5, 2.5]", actual_value=c2_val,
-                          state=c2_state, description=c2_desc),
-            ConditionEval(condition_id="relay_23.c3", condition_name="Dragon Score",
-                          factor="dimension_registry", threshold="占位待接线", actual_value=c3_val,
-                          state=c3_state, description=c3_desc),
+            ConditionEval(
+                condition_id="relay_23.c1",
+                condition_name="当下连板",
+                factor="lbc",
+                threshold=">= 2",
+                actual_value=c1_val,
+                state=c1_state,
+                description=c1_desc,
+            ),
+            ConditionEval(
+                condition_id="relay_23.c2",
+                condition_name="量比健康区",
+                factor="bars volume ratio",
+                threshold="[1.5, 2.5]",
+                actual_value=c2_val,
+                state=c2_state,
+                description=c2_desc,
+            ),
+            ConditionEval(
+                condition_id="relay_23.c3",
+                condition_name="Dragon Score",
+                factor="dimension_registry",
+                threshold="占位待接线",
+                actual_value=c3_val,
+                state=c3_state,
+                description=c3_desc,
+            ),
         ]
         hit_count = sum(1 for c in conditions if c.state == "hit")
         # C3 占位 data_unavailable 不阻塞——fire = C1+C2 命中（Dragon Score 接线后改为全条件）
         fired = c1_hit and c2_hit
         return StrategyMatchResult(
-            strategy_code=self.code, strategy_name=self.name, conditions=conditions,
-            hit_count=hit_count, total_count=len(conditions), fired=fired,
+            strategy_code=self.code,
+            strategy_name=self.name,
+            conditions=conditions,
+            hit_count=hit_count,
+            total_count=len(conditions),
+            fired=fired,
             fire_rule="C1+C2 命中（C3 Dragon Score 占位待接线）",
-            confidence=0.5 if fired else None, data_ok=True,
+            confidence=0.5 if fired else None,
+            data_ok=True,
         )
 
     def compute_confidence(self, matches, ctx) -> float:

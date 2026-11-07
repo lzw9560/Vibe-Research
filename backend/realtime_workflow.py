@@ -7,6 +7,7 @@
 3. 动态仓位管理
 4. 生成交易信号
 """
+
 from __future__ import annotations
 
 import logging
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RealtimeSignal:
     """实时信号。"""
+
     timestamp: str
     code: str
     name: str
@@ -33,6 +35,7 @@ class RealtimeSignal:
 @dataclass
 class BombAlert:
     """炸板预警。"""
+
     timestamp: str
     code: str
     name: str
@@ -46,6 +49,7 @@ class BombAlert:
 @dataclass
 class PositionAdjustment:
     """仓位调整。"""
+
     timestamp: str
     code: str
     name: str
@@ -88,7 +92,9 @@ class RealtimeWorkflow:
         # TODO: 接入实时行情数据
         return None
 
-    async def check_bomb_alerts(self, code: str, name: str, seal_amount: float, prev_seal_amount: float) -> BombAlert | None:
+    async def check_bomb_alerts(
+        self, code: str, name: str, seal_amount: float, prev_seal_amount: float
+    ) -> BombAlert | None:
         """检查炸板预警。"""
         if seal_amount <= 0:
             return None
@@ -102,7 +108,7 @@ class RealtimeWorkflow:
                 code=code,
                 name=name,
                 alert_level="yellow",
-                condition=f"封单5分钟减少{abs(change_5min)*100:.0f}%",
+                condition=f"封单5分钟减少{abs(change_5min) * 100:.0f}%",
                 current_seal_amount=seal_amount,
                 seal_amount_change_5min=change_5min,
                 recommendation="密切关注，准备减仓",
@@ -114,7 +120,9 @@ class RealtimeWorkflow:
 
         return None
 
-    def adjust_position(self, code: str, name: str, action: str, reason: str, old_pct: float, new_pct: float) -> PositionAdjustment:
+    def adjust_position(
+        self, code: str, name: str, action: str, reason: str, old_pct: float, new_pct: float
+    ) -> PositionAdjustment:
         """记录仓位调整。"""
         adj = PositionAdjustment(
             timestamp=datetime.now().isoformat(),

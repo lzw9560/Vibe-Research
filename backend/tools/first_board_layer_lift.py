@@ -19,6 +19,7 @@ grill-decisions.md 硬剔除（待 B1 验证后校准）：
 - 层2 筹码结构：换手>30%
 - 层3 市场环境：同板块涨停<2且无题材（孤板）；创业板**不剔除**（改分组展示，不进剔除）
 """
+
 from __future__ import annotations
 
 import statistics
@@ -33,10 +34,10 @@ from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost �
 
 # grill-decisions.md 硬剔除阈值（待 B1 验证后校准——本脚本就是验它们的）
 LAYER_THRESHOLDS: dict = {
-    "max_break_times": 2,        # 层1：炸板次数 ≥2 剔除
-    "min_seal_ratio": 0.001,     # 层1：封单/流通市值 <0.1% 剔除
-    "max_turnover": 30.0,        # 层2：换手率 >30% 剔除
-    "min_sector_zt_count": 2,   # 层3：同板块涨停 <2 且无题材（孤板）剔除
+    "max_break_times": 2,  # 层1：炸板次数 ≥2 剔除
+    "min_seal_ratio": 0.001,  # 层1：封单/流通市值 <0.1% 剔除
+    "max_turnover": 30.0,  # 层2：换手率 >30% 剔除
+    "min_sector_zt_count": 2,  # 层3：同板块涨停 <2 且无题材（孤板）剔除
 }
 
 # 扣 0.4% 成本（佣金+滑点，弱近似，与 Phase 0 / first_board_settlement 一致）
@@ -49,6 +50,7 @@ FROZEN_COMMIT = "39736f4"
 # ─────────────────────────────────────────────────────────────────────────────
 # 逐层剔除（纯函数，镜像 grill-decisions.md 硬剔除）
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def exclude_layer1_seal_quality(fb: dict, thresholds: dict | None = None) -> tuple[bool, str | None]:
     """层1 封板质量：炸板≥2 / 封单/流通市值<0.1%。
@@ -123,6 +125,7 @@ def apply_layers(first_boards: list[dict]) -> dict:
 # 策略口径标的收益 + day-paired lift
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def target_return(d1_open: float | None, d2_close: float | None) -> float | None:
     """策略标的收益：(D+2 close - D+1 open)/D+1 open * 100。
 
@@ -164,14 +167,19 @@ def day_paired_lift(
         r_wr = _winrate(r)
         s_mean = statistics.mean(s)
         r_mean = statistics.mean(r)
-        day_lifts.append({
-            "date": date,
-            "surv_n": len(s), "raw_n": len(r),
-            "surv_winrate": round(s_wr, 4), "raw_winrate": round(r_wr, 4),
-            "surv_mean": round(s_mean, 4), "raw_mean": round(r_mean, 4),
-            "winrate_lift": round(s_wr / r_wr, 4) if r_wr > 0 else None,
-            "mean_lift": round(s_mean / r_mean, 4) if r_mean != 0 else None,
-        })
+        day_lifts.append(
+            {
+                "date": date,
+                "surv_n": len(s),
+                "raw_n": len(r),
+                "surv_winrate": round(s_wr, 4),
+                "raw_winrate": round(r_wr, 4),
+                "surv_mean": round(s_mean, 4),
+                "raw_mean": round(r_mean, 4),
+                "winrate_lift": round(s_wr / r_wr, 4) if r_wr > 0 else None,
+                "mean_lift": round(s_mean / r_mean, 4) if r_mean != 0 else None,
+            }
+        )
     wr_lifts = [d["winrate_lift"] for d in day_lifts if d["winrate_lift"] is not None]
     m_lifts = [d["mean_lift"] for d in day_lifts if d["mean_lift"] is not None]
     return {
@@ -203,6 +211,7 @@ def four_state(lift: float | None, n: int) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # live 辅助（纯函数，可离线测）
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _to_float(v) -> float | None:
     """raw 字段归一 float 或 None（东财 '-'/'null'/None/str 都收）。"""
@@ -272,8 +281,9 @@ def _sector_zt_count_from_pool(pool: list[dict], hybk) -> int:
     return sum(1 for it in pool if (it.get("hybk") or "") == hybk)
 
 
-def _normalize_fb(item: dict, pool: list[dict], bars: list[dict], d_date: str,
-                  concept_tags: list[str] | None = None) -> dict:
+def _normalize_fb(
+    item: dict, pool: list[dict], bars: list[dict], d_date: str, concept_tags: list[str] | None = None
+) -> dict:
     """normalize 首板 raw pool item → 剔除所需 dict。
 
     纯函数（bars/pool/concept_tags 已取好传入）。concept_tags 默认空（live 简化：
@@ -296,9 +306,11 @@ def _normalize_fb(item: dict, pool: list[dict], bars: list[dict], d_date: str,
 # live 主流程（em_zt_topic_pool 历史取数 + baostock kline + matrix 输出）
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _fetch_bars_with_turn(code: str, start: str, end: str, bs) -> list[dict]:
     """baostock qfq 日K（date/open/close/turn），比 Phase 0 多 keep turn（层2 换手用）。"""
     from tools.first_board_premium_baseline import _bs_code
+
     bsc = _bs_code(code)
     if not bsc:
         return []
@@ -326,6 +338,7 @@ def _trading_dates_from_baostock(days_back: int, end_date: str) -> list[str]:
     """
     from datetime import datetime, timedelta
     import baostock as bs
+
     start = (datetime.strptime(end_date, "%Y-%m-%d") - timedelta(days=days_back)).strftime("%Y-%m-%d")
     dates: list[str] = []
     try:
@@ -340,9 +353,11 @@ def _trading_dates_from_baostock(days_back: int, end_date: str) -> list[str]:
             bs.logout()
         except Exception as e_logout:  # noqa: BLE001
             import logging
+
             logging.getLogger(__name__).warning("first_board_layer_lift 失败（降级，不阻塞）: %s", e_logout)
     except Exception as e:  # noqa: BLE001
         import logging
+
         logging.getLogger(__name__).warning("first_board_layer_lift 失败（降级，不阻塞）: %s", e)
     return sorted(dates)
 
@@ -400,8 +415,7 @@ def run_layer_lift(days_back: int = 120, fetch_miss: bool = True) -> dict:
             continue
         if not pool:
             continue
-        fb_items = [it for it in pool
-                    if _is_first_board(it) and len(str(it.get("c", "") or "").strip()) == 6]
+        fb_items = [it for it in pool if _is_first_board(it) and len(str(it.get("c", "") or "").strip()) == 6]
         if not fb_items:
             continue
 
@@ -422,6 +436,7 @@ def run_layer_lift(days_back: int = 120, fetch_miss: bool = True) -> dict:
         if fetch_miss and miss_codes:
             try:
                 import baostock as bs
+
                 if getattr(bs.login(), "error_code", "0") == "0":
                     for i, code in enumerate(sorted(set(miss_codes))):
                         if i and i % 50 == 0:
@@ -429,7 +444,10 @@ def run_layer_lift(days_back: int = 120, fetch_miss: bool = True) -> dict:
                                 bs.logout()
                             except Exception as e:  # noqa: BLE001
                                 import logging
-                                logging.getLogger(__name__).warning("first_board_layer_lift 失败（降级，不阻塞）: %s", e)
+
+                                logging.getLogger(__name__).warning(
+                                    "first_board_layer_lift 失败（降级，不阻塞）: %s", e
+                                )
                             bs.login()
                         start = (datetime.strptime(d_date, "%Y-%m-%d") - timedelta(days=5)).strftime("%Y-%m-%d")
                         end = (datetime.strptime(d_date, "%Y-%m-%d") + timedelta(days=10)).strftime("%Y-%m-%d")
@@ -443,6 +461,7 @@ def run_layer_lift(days_back: int = 120, fetch_miss: bool = True) -> dict:
                         bs.logout()
                     except Exception as e:  # noqa: BLE001
                         import logging
+
                         logging.getLogger(__name__).warning("first_board_layer_lift 失败（降级，不阻塞）: %s", e)
             except ImportError:
                 print("[B1] baostock 未装，cache_miss 股跳过 turn/D+2")
@@ -486,27 +505,34 @@ def run_layer_lift(days_back: int = 120, fetch_miss: bool = True) -> dict:
         lift = lift_res["winrate_lift_avg"]
         n = lift_res["surv_n_pooled"]
         per_layer[layer_name] = {
-            **lift_res, "lift": lift, "n": n,
+            **lift_res,
+            "lift": lift,
+            "n": n,
             "validation_status": four_state(lift, n),
         }
 
     matrix = {
         "generated_at": datetime.now().isoformat(),
-        "params": {"days_back": days_back, "cost_pct": COST_PCT,
-                   "date_range": [dates[0], dates[-1]], "n_dates": len(dates)},
+        "params": {
+            "days_back": days_back,
+            "cost_pct": COST_PCT,
+            "date_range": [dates[0], dates[-1]],
+            "n_dates": len(dates),
+        },
         "n_first_boards_total": n_first_boards,
         "thresholds": LAYER_THRESHOLDS,
         "per_layer": per_layer,
-        "note": ("策略口径 (D+2close-D+1open)/D+1open；day-paired lift 非池化（§44 防假象）；"
-                 "四态 §44；题材简化（concept_tags=[]，孤板=sector<2，后续可接 ths_limit_up_pool）"),
+        "note": (
+            "策略口径 (D+2close-D+1open)/D+1open；day-paired lift 非池化（§44 防假象）；"
+            "四态 §44；题材简化（concept_tags=[]，孤板=sector<2，后续可接 ths_limit_up_pool）"
+        ),
     }
     out_path = out_dir / "matrix.json"
     out_path.write_text(json.dumps(matrix, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[B1] 矩阵已存：{out_path}")
     for ln in ("layer0_raw", "layer1", "layer2", "layer3"):
         s = per_layer.get(ln, {})
-        print(f"  {ln}: n={s.get('n')} lift={s.get('winrate_lift_avg')} "
-              f"status={s.get('validation_status', '-')}")
+        print(f"  {ln}: n={s.get('n')} lift={s.get('winrate_lift_avg')} status={s.get('validation_status', '-')}")
 
     # ── S168 接线：3 layer verdict 落 Recorder + lineage（§44v2 verifier）──
     _raw_universe = dict(by_day["layer0"])
@@ -527,14 +553,18 @@ def run_layer_lift(days_back: int = 120, fetch_miss: bool = True) -> dict:
             survivors_by_day=dict(_surv),
             universe_by_day=_raw_universe,
             n_comparisons=3,  # 3 layer 同族 Bonferroni K=3（honest count；非模板 8，§1.2 不臆造）
-            round_trip_cost=sum(_all_layer_costs) / len(_all_layer_costs) if _all_layer_costs else 0.0,  # S201b: per-trade mean 非 flat 0.70
+            round_trip_cost=sum(_all_layer_costs) / len(_all_layer_costs)
+            if _all_layer_costs
+            else 0.0,  # S201b: per-trade mean 非 flat 0.70
             script="tools/first_board_layer_lift.py",
-            params={"layer": _arm_name, "thresholds": LAYER_THRESHOLDS,
-                    "cost_pct": COST_PCT, "days_back": days_back},
+            params={"layer": _arm_name, "thresholds": LAYER_THRESHOLDS, "cost_pct": COST_PCT, "days_back": days_back},
         )
         s168_verdicts[_arm_name] = {
-            "status": _v.status, "selection_lift": _v.selection_lift,
-            "n": _v.n, "days_robust": _v.days_robust, "note": _v.note,
+            "status": _v.status,
+            "selection_lift": _v.selection_lift,
+            "n": _v.n,
+            "days_robust": _v.days_robust,
+            "note": _v.note,
         }
     matrix["s168_verdicts"] = s168_verdicts
     return matrix
@@ -543,6 +573,7 @@ def run_layer_lift(days_back: int = 120, fetch_miss: bool = True) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 # baostock 算涨停历史（替代 em_zt_topic_pool ~3 周限制；8 月 cache 窗口）
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _compute_zt_history(cache: dict[str, list[dict]], pct_threshold: float = 9.9) -> list[dict]:
     """从 baostock kline cache 算涨停历史：每 (code, D) 涨停事件。
@@ -574,18 +605,24 @@ def _compute_zt_history(cache: dict[str, list[dict]], pct_threshold: float = 9.9
                 j -= 1
             d1_open = _to_float(bars[i + 1].get("open")) if i + 1 < len(bars) else None
             d2_close = _to_float(bars[i + 2].get("close")) if i + 2 < len(bars) else None
-            events.append({
-                "date": b.get("date"), "code": code, "lbc": lbc,
-                "is_first_board": lbc == 1,
-                "d1_open": d1_open, "d2_close": d2_close,
-                "target_return": target_return(d1_open, d2_close),
-                "turnover_pct": _to_float(b.get("turn")),
-            })
+            events.append(
+                {
+                    "date": b.get("date"),
+                    "code": code,
+                    "lbc": lbc,
+                    "is_first_board": lbc == 1,
+                    "d1_open": d1_open,
+                    "d2_close": d2_close,
+                    "target_return": target_return(d1_open, d2_close),
+                    "turnover_pct": _to_float(b.get("turn")),
+                }
+            )
     return events
 
 
-def _compute_movers(cache: dict[str, list[dict]], pct_lo: float, pct_hi: float,
-                     turn_min: float | None = None) -> tuple[dict, dict]:
+def _compute_movers(
+    cache: dict[str, list[dict]], pct_lo: float, pct_hi: float, turn_min: float | None = None
+) -> tuple[dict, dict]:
     """扫 cache：movers = D pctChg in [lo, hi) 的 target_return by day；
     non_movers = 其余（pctChg 不在该档但有 D+1/D+2）by day。disjoint，within-subset baseline。
     """
@@ -636,12 +673,20 @@ def run_momentum_broaden(pct_lo: float = 5.0, pct_hi: float = 9.9) -> dict:
     matrix = {
         "generated_at": __import__("datetime").datetime.now().isoformat(),
         "mode": f"momentum-broaden (pctChg {pct_lo}-{pct_hi}%, non-涨停 strong)",
-        "movers": {"n": len(movers_returns), "winrate": round(_winrate(movers_returns), 4),
-                   "mean_pct": round(statistics.mean(movers_returns), 4) if movers_returns else None,
-                   "n_dates": len(movers)},
-        "non_movers_baseline": {"n": len(nm_returns), "winrate": round(_winrate(nm_returns), 4),
-                                 "mean_pct": round(statistics.mean(nm_returns), 4) if nm_returns else None},
-        "lift": lift, "n": n, "validation_status": four_state(lift, n),
+        "movers": {
+            "n": len(movers_returns),
+            "winrate": round(_winrate(movers_returns), 4),
+            "mean_pct": round(statistics.mean(movers_returns), 4) if movers_returns else None,
+            "n_dates": len(movers),
+        },
+        "non_movers_baseline": {
+            "n": len(nm_returns),
+            "winrate": round(_winrate(nm_returns), 4),
+            "mean_pct": round(statistics.mean(nm_returns), 4) if nm_returns else None,
+        },
+        "lift": lift,
+        "n": n,
+        "validation_status": four_state(lift, n),
         "note": "within-subset day-paired（1121 cache proxy baseline，非 §44 真 day-cluster-random；lift 内抵消）",
     }
     out_dir = Path(__file__).resolve().parents[2] / ".scratch" / "s077-layer-lift"
@@ -649,8 +694,10 @@ def run_momentum_broaden(pct_lo: float = 5.0, pct_hi: float = 9.9) -> dict:
     out_path = out_dir / "matrix_momentum.json"
     out_path.write_text(json.dumps(matrix, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[momentum] 矩阵已存：{out_path}")
-    print(f"  movers: n={len(movers_returns)} winrate={matrix['movers']['winrate']} "
-          f"mean={matrix['movers']['mean_pct']} dates={matrix['movers']['n_dates']}")
+    print(
+        f"  movers: n={len(movers_returns)} winrate={matrix['movers']['winrate']} "
+        f"mean={matrix['movers']['mean_pct']} dates={matrix['movers']['n_dates']}"
+    )
     print(f"  non_movers: n={len(nm_returns)} winrate={matrix['non_movers_baseline']['winrate']}")
     print(f"  lift={lift} n={n} status={matrix['validation_status']}")
     return matrix
@@ -693,7 +740,8 @@ def run_layer_lift_baostock() -> dict:
 
     raw_returns = [r for rs in raw_by_day.values() for r in rs]
     raw_stats = {
-        "n": len(raw_returns), "winrate": round(_winrate(raw_returns), 4),
+        "n": len(raw_returns),
+        "winrate": round(_winrate(raw_returns), 4),
         "mean_pct": round(statistics.mean(raw_returns), 4) if raw_returns else None,
         "n_dates": len(raw_by_day),
         "note": "raw 首板基线（baostock 算，pctChg>=9.9 代理，8 月 cache 窗口）",
@@ -706,19 +754,25 @@ def run_layer_lift_baostock() -> dict:
     matrix = {
         "generated_at": __import__("datetime").datetime.now().isoformat(),
         "mode": "baostock-computed (pctChg>=9.9 代理)",
-        "n_codes": len(cache), "n_zt_events": n_zt, "n_first_boards": n_fb,
+        "n_codes": len(cache),
+        "n_zt_events": n_zt,
+        "n_first_boards": n_fb,
         "raw_first_board": raw_stats,
         "layer2_turnover": l2_stats,
-        "note": ("涨停代理 pctChg>=9.9（主板+10%/创业+20%抓，ST漏）；层1/3 跳过"
-                 "（baostock 无 zbc/fund/hybk）；1121 cache codes 选择偏（lift 内抵消）"),
+        "note": (
+            "涨停代理 pctChg>=9.9（主板+10%/创业+20%抓，ST漏）；层1/3 跳过"
+            "（baostock 无 zbc/fund/hybk）；1121 cache codes 选择偏（lift 内抵消）"
+        ),
     }
     out_dir = Path(__file__).resolve().parents[2] / ".scratch" / "s077-layer-lift"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "matrix_baostock.json"
     out_path.write_text(json.dumps(matrix, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[B1-baostock] 矩阵已存：{out_path}")
-    print(f"  raw_first_board: n={raw_stats['n']} winrate={raw_stats['winrate']} "
-          f"mean={raw_stats['mean_pct']} dates={raw_stats['n_dates']}")
+    print(
+        f"  raw_first_board: n={raw_stats['n']} winrate={raw_stats['winrate']} "
+        f"mean={raw_stats['mean_pct']} dates={raw_stats['n_dates']}"
+    )
     print(f"  layer2_turnover: n={n} lift={lift} status={l2_stats['validation_status']}")
     return matrix
 
@@ -734,8 +788,14 @@ def run_momentum_scan() -> dict:
     if not cache:
         print("[momentum-scan] 无 kline cache，中止")
         return {"error": "no cache"}
-    ranges = [(0.0, 3.0, "跌平0-3"), (3.0, 5.0, "温和3-5"), (5.0, 7.0, "强势5-7"),
-              (7.0, 9.9, "近涨停7-9.9"), (9.9, 11.0, "涨停9.9+"), (5.0, 9.9, "动量放宽5-9.9")]
+    ranges = [
+        (0.0, 3.0, "跌平0-3"),
+        (3.0, 5.0, "温和3-5"),
+        (5.0, 7.0, "强势5-7"),
+        (7.0, 9.9, "近涨停7-9.9"),
+        (9.9, 11.0, "涨停9.9+"),
+        (5.0, 9.9, "动量放宽5-9.9"),
+    ]
     vols = [(None, "无放量"), (5.0, "放量turn>=5")]
     results = []
     for lo, hi, label in ranges:
@@ -748,12 +808,17 @@ def run_momentum_scan() -> dict:
             lift_res = day_paired_lift(movers, non_movers)
             lift = lift_res["winrate_lift_avg"]
             n = lift_res["surv_n_pooled"]
-            results.append({
-                "range": label, "vol": vol_label, "n": n,
-                "movers_winrate": round(_winrate(mr), 4),
-                "movers_mean": round(statistics.mean(mr), 4),
-                "lift": lift, "status": four_state(lift, n),
-            })
+            results.append(
+                {
+                    "range": label,
+                    "vol": vol_label,
+                    "n": n,
+                    "movers_winrate": round(_winrate(mr), 4),
+                    "movers_mean": round(statistics.mean(mr), 4),
+                    "lift": lift,
+                    "status": four_state(lift, n),
+                }
+            )
     out_dir = Path(__file__).resolve().parents[2] / ".scratch" / "s077-layer-lift"
     out_dir.mkdir(parents=True, exist_ok=True)
     matrix = {"generated_at": datetime.now().isoformat(), "mode": "momentum-scan", "results": results}
@@ -762,13 +827,16 @@ def run_momentum_scan() -> dict:
     print(f"[momentum-scan] 表已存：{out_path}")
     print(f"  {'range':<16} {'vol':<12} {'n':<7} {'winrate':<8} {'lift':<8} status")
     for r in results:
-        print(f"  {r['range']:<16} {r['vol']:<12} {r['n']:<7} "
-              f"{str(r.get('movers_winrate', '-')):<8} {str(r['lift']):<8} {r['status']}")
+        print(
+            f"  {r['range']:<16} {r['vol']:<12} {r['n']:<7} "
+            f"{str(r.get('movers_winrate', '-')):<8} {str(r['lift']):<8} {r['status']}"
+        )
     return matrix
 
 
 def main(argv: list[str] | None = None) -> int:
     import sys
+
     argv = list(argv) if argv is not None else list(sys.argv[1:])
     if "--momentum-scan" in argv:
         run_momentum_scan()

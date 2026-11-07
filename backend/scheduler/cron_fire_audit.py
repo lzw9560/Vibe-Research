@@ -17,6 +17,7 @@ receipt jsonl schema（稳定契约，executors/audit.py 解析依赖）：
     {"ts": iso-Beijing, "task_name": str, "status": str|None,
      "output_path": str|None, "n_rows": int|None, "duration_ms": float|None}
 """
+
 from __future__ import annotations
 
 import functools
@@ -137,17 +138,22 @@ def fire_receipt(task_name: str) -> Callable[[Callable], Callable]:
       仍设→audit 走 last_run_at 判 fired，不误判 missed）。
     - receipt 写盘失败（log_fire_receipt 内部 try/except）→ 不影响 executor 返回值。
     """
+
     def deco(fn: Callable) -> Callable:
         @functools.wraps(fn)
         def wrapper(payload: dict[str, Any]) -> dict[str, Any]:
             t0 = time.perf_counter()
             result = fn(payload)
             log_fire_receipt(
-                task_name, payload, result,
+                task_name,
+                payload,
+                result,
                 duration_ms=(time.perf_counter() - t0) * 1000,
             )
             return result
+
         return wrapper
+
     return deco
 
 

@@ -45,6 +45,7 @@
   cd /Users/lizhiwei/project/code/stock/Vibe-Research/backend
   .venv/bin/python tools/explore_factor_short-term-reversal.py
 """
+
 from __future__ import annotations
 
 import json
@@ -75,15 +76,16 @@ FACTOR_ZOO = DATA / "factor_zoo_data.json"
 KLINE_DB = DATA / "baostock_kline_cache.db"
 
 N_DECILES = 10
-WINSOR_LOW = 1.0     # 1st percentile
-WINSOR_HIGH = 99.0   # 99th percentile
-CROSS_FACTOR_N = 4   # 4 factors in the sweep (momentum, reversal, size, vol)
+WINSOR_LOW = 1.0  # 1st percentile
+WINSOR_HIGH = 99.0  # 99th percentile
+CROSS_FACTOR_N = 4  # 4 factors in the sweep (momentum, reversal, size, vol)
 COST_PER_ROUNDTRIP = 0.003  # 0.3% per round-trip (from helper COST)
 # long-short = 2 round-trips per rebalance (long buy+sell, short sell+buy)
 COST_LONG_SHORT = 2 * COST_PER_ROUNDTRIP  # 0.6% per rebalance
 
 
 # ===================== data loading =====================
+
 
 def load_factor_zoo() -> dict:
     """Load factor_zoo_data.json (factor snapshots + market returns + calendar)."""
@@ -126,8 +128,8 @@ def load_kline_closes() -> dict[str, dict[str, float]]:
 
 # ===================== cross-sectional portfolio =====================
 
-def winsorize(values: np.ndarray, low_pct: float = WINSOR_LOW,
-              high_pct: float = WINSOR_HIGH) -> np.ndarray:
+
+def winsorize(values: np.ndarray, low_pct: float = WINSOR_LOW, high_pct: float = WINSOR_HIGH) -> np.ndarray:
     """Winsorize at low_pct / high_pct percentiles (clip, not drop)."""
     if len(values) == 0:
         return values
@@ -136,8 +138,7 @@ def winsorize(values: np.ndarray, low_pct: float = WINSOR_LOW,
     return np.clip(values, lo, hi)
 
 
-def build_deciles(factor_values: dict[str, float],
-                  n_deciles: int = N_DECILES) -> dict[int, list[str]]:
+def build_deciles(factor_values: dict[str, float], n_deciles: int = N_DECILES) -> dict[int, list[str]]:
     """Sort by factor value ascending, assign to n_deciles equal-sized groups.
 
     D1 = lowest factor values (for reversal: most oversold = LONG)
@@ -164,10 +165,9 @@ def build_deciles(factor_values: dict[str, float],
     return assignments
 
 
-def stock_return(kline_closes: dict[str, dict[str, float]],
-                 code: str,
-                 calendar: list[str],
-                 entry_idx: int, exit_idx: int) -> float | None:
+def stock_return(
+    kline_closes: dict[str, dict[str, float]], code: str, calendar: list[str], entry_idx: int, exit_idx: int
+) -> float | None:
     """Close-to-close return from entry_date to exit_date.
 
     If exit_date close is missing (suspended), uses nearest available close
@@ -198,9 +198,7 @@ def stock_return(kline_closes: dict[str, dict[str, float]],
     return c_exit / c_entry - 1.0
 
 
-def market_return(mkt_pctchg: dict[str, float],
-                  calendar: list[str],
-                  entry_idx: int, exit_idx: int) -> float | None:
+def market_return(mkt_pctchg: dict[str, float], calendar: list[str], entry_idx: int, exit_idx: int) -> float | None:
     """Compound daily market returns from entry_idx+1 to exit_idx (close-to-close).
 
     market_return = product(1 + pctChg[d]/100 for d in [entry+1 .. exit]) - 1
@@ -213,7 +211,7 @@ def market_return(mkt_pctchg: dict[str, float],
         pchg = mkt_pctchg.get(calendar[i])
         if pchg is None:
             continue
-        ret *= (1.0 + pchg / 100.0)
+        ret *= 1.0 + pchg / 100.0
         found = True
     if not found:
         return None
@@ -222,10 +220,8 @@ def market_return(mkt_pctchg: dict[str, float],
 
 # ===================== factor return series =====================
 
-def build_series(factor_zoo: dict,
-                 kline_closes: dict[str, dict[str, float]],
-                 factor_idx: int,
-                 stride: int) -> dict:
+
+def build_series(factor_zoo: dict, kline_closes: dict[str, dict[str, float]], factor_idx: int, stride: int) -> dict:
     """Build the cross-sectional factor return time series.
 
     For each rebalance date (selected by stride):
@@ -277,8 +273,7 @@ def build_series(factor_zoo: dict,
         for code, vals in snap_raw.items():
             if isinstance(vals, list) and len(vals) > factor_idx:
                 v = vals[factor_idx]
-                if v is not None and not (isinstance(v, float) and
-                                          (math.isnan(v) or math.isinf(v))):
+                if v is not None and not (isinstance(v, float) and (math.isnan(v) or math.isinf(v))):
                     snap[code] = float(v)
 
         if not snap:
@@ -342,8 +337,8 @@ def build_series(factor_zoo: dict,
 
 # ===================== CAPM regression (Newey-West HAC SE) =====================
 
-def newey_west(y: np.ndarray, X: np.ndarray,
-               max_lag: int | None = None) -> dict:
+
+def newey_west(y: np.ndarray, X: np.ndarray, max_lag: int | None = None) -> dict:
     """OLS regression with Newey-West HAC standard errors.
 
     y: (n,) dependent variable
@@ -379,7 +374,7 @@ def newey_west(y: np.ndarray, X: np.ndarray,
         for t in range(lag, n):
             xt = X[t].reshape(-1, 1)
             xt_l = X[t - lag].reshape(-1, 1)
-            cross = (xt @ xt_l.T + xt_l @ xt.T)
+            cross = xt @ xt_l.T + xt_l @ xt.T
             S += w * residuals[t] * residuals[t - lag] * cross
 
     cov = XtX_inv @ S @ XtX_inv
@@ -398,8 +393,7 @@ def newey_west(y: np.ndarray, X: np.ndarray,
     }
 
 
-def capm_regression(factor_returns: list[float],
-                    market_returns: list[float]) -> dict:
+def capm_regression(factor_returns: list[float], market_returns: list[float]) -> dict:
     """CAPM time-series regression: factor_return = alpha + beta*MKT + e.
 
     alpha = risk-adjusted factor return (Jensen's alpha for zero-investment portfolio).
@@ -443,6 +437,7 @@ def capm_regression(factor_returns: list[float],
 
 # ===================== series statistics =====================
 
+
 def series_stats(returns: list[float], freq_per_year: float = 50.0) -> dict:
     """Basic stats for factor return series.
 
@@ -482,8 +477,8 @@ def series_stats(returns: list[float], freq_per_year: float = 50.0) -> dict:
 
 # ===================== walk-forward OOS =====================
 
-def walk_forward(factor_returns: list[float],
-                 market_returns: list[float]) -> dict:
+
+def walk_forward(factor_returns: list[float], market_returns: list[float]) -> dict:
     """Walk-forward: first half train → second half test.
 
     For each half: CAPM alpha + basic stats.
@@ -512,24 +507,18 @@ def walk_forward(factor_returns: list[float],
         "test_stats": test_stats,
         "train_capm": train_capm,
         "test_capm": test_capm,
-        "train_alpha_pct": (train_capm.get("alpha_pct", 0.0)
-                            if train_capm["status"] == "ok" else 0.0),
-        "test_alpha_pct": (test_capm.get("alpha_pct", 0.0)
-                           if test_capm["status"] == "ok" else 0.0),
-        "test_alpha_t": (test_capm.get("alpha_t", 0.0)
-                         if test_capm["status"] == "ok" else 0.0),
-        "test_alpha_p_one_sided": (test_capm.get("alpha_p_one_sided", 1.0)
-                                   if test_capm["status"] == "ok" else 1.0),
-        "train_mean_pct": (train_stats.get("mean_pct", 0.0)
-                           if train_stats["status"] == "ok" else 0.0),
-        "test_mean_pct": (test_stats.get("mean_pct", 0.0)
-                          if test_stats["status"] == "ok" else 0.0),
-        "test_p_one_sided": (test_stats.get("p_one_sided", 1.0)
-                             if test_stats["status"] == "ok" else 1.0),
+        "train_alpha_pct": (train_capm.get("alpha_pct", 0.0) if train_capm["status"] == "ok" else 0.0),
+        "test_alpha_pct": (test_capm.get("alpha_pct", 0.0) if test_capm["status"] == "ok" else 0.0),
+        "test_alpha_t": (test_capm.get("alpha_t", 0.0) if test_capm["status"] == "ok" else 0.0),
+        "test_alpha_p_one_sided": (test_capm.get("alpha_p_one_sided", 1.0) if test_capm["status"] == "ok" else 1.0),
+        "train_mean_pct": (train_stats.get("mean_pct", 0.0) if train_stats["status"] == "ok" else 0.0),
+        "test_mean_pct": (test_stats.get("mean_pct", 0.0) if test_stats["status"] == "ok" else 0.0),
+        "test_p_one_sided": (test_stats.get("p_one_sided", 1.0) if test_stats["status"] == "ok" else 1.0),
     }
 
 
 # ===================== Benjamini-Hochberg FDR =====================
+
 
 def benjamini_hochberg(p_values: list[float]) -> list[float]:
     """BH FDR-adjusted p-values (less conservative than Bonferroni).
@@ -554,9 +543,10 @@ def benjamini_hochberg(p_values: list[float]) -> list[float]:
 
 # ===================== verdict =====================
 
-def compute_verdict(stats_basic: dict, capm: dict, wf: dict,
-                    n_total_tests: int, n_rebalances: int,
-                    cost_per_rebal: float) -> str:
+
+def compute_verdict(
+    stats_basic: dict, capm: dict, wf: dict, n_total_tests: int, n_rebalances: int, cost_per_rebal: float
+) -> str:
     """Honest verdict cascade for cross-sectional factor return.
 
     1. factor_return_mean < 0 → falsified (negative factor return, reversal doesn't work)
@@ -581,7 +571,7 @@ def compute_verdict(stats_basic: dict, capm: dict, wf: dict,
 
     print(f"\n  Verdict cascade (Bonferroni ×{n_total_tests}):")
     print(f"    factor_return_mean = {mean_pct:.4f}%/rebalance")
-    print(f"    net (after {cost_per_rebal*100:.1f}% cost) = {net_per_rebal*100:.4f}%/rebalance")
+    print(f"    net (after {cost_per_rebal * 100:.1f}% cost) = {net_per_rebal * 100:.4f}%/rebalance")
     print(f"    raw t = {stats_basic['t']:.2f}, raw p_one_sided = {p_raw:.6f}")
     print(f"    Bonferroni p = {p_bonf:.6f}")
 
@@ -600,8 +590,10 @@ def compute_verdict(stats_basic: dict, capm: dict, wf: dict,
         alpha_t = capm["alpha_t"]
         alpha_p = capm["alpha_p_one_sided"]
         alpha_bonf = bonferroni_p(alpha_p, n_total_tests)
-        print(f"    CAPM alpha = {alpha_pct:.4f}%, alpha_t = {alpha_t:.2f}, "
-              f"alpha_p_one_sided = {alpha_p:.6f}, Bonf = {alpha_bonf:.6f}")
+        print(
+            f"    CAPM alpha = {alpha_pct:.4f}%, alpha_t = {alpha_t:.2f}, "
+            f"alpha_p_one_sided = {alpha_p:.6f}, Bonf = {alpha_bonf:.6f}"
+        )
         if alpha_pct < 0:
             print(f"    → FALSIFIED: CAPM alpha = {alpha_pct:.4f}% < 0")
             return "falsified"
@@ -617,30 +609,33 @@ def compute_verdict(stats_basic: dict, capm: dict, wf: dict,
         te_alpha = wf["test_alpha_pct"]
         te_p = wf["test_alpha_p_one_sided"]
         te_bonf = bonferroni_p(te_p, n_total_tests)
-        print(f"    walk-forward: train_alpha = {tr_alpha:.4f}%, "
-              f"test_alpha = {te_alpha:.4f}%, test_p = {te_p:.6f}, "
-              f"test_Bonf = {te_bonf:.6f}")
+        print(
+            f"    walk-forward: train_alpha = {tr_alpha:.4f}%, "
+            f"test_alpha = {te_alpha:.4f}%, test_p = {te_p:.6f}, "
+            f"test_Bonf = {te_bonf:.6f}"
+        )
         if tr_alpha <= 0:
-            print(f"    → EXPLORATORY: train alpha = {tr_alpha:.4f}% <= 0 "
-                  f"(edge not in train half, test may be regime overfitting)")
+            print(
+                f"    → EXPLORATORY: train alpha = {tr_alpha:.4f}% <= 0 "
+                f"(edge not in train half, test may be regime overfitting)"
+            )
             return "exploratory"
         if te_alpha <= 0:
             print(f"    → FALSIFIED: walk-forward test alpha = {te_alpha:.4f}% <= 0")
             return "falsified"
         if te_bonf >= alpha:
-            print(f"    → EXPLORATORY: OOS test alpha > 0 but "
-                  f"Bonf p = {te_bonf:.6f} >= {alpha} (not significant OOS)")
+            print(f"    → EXPLORATORY: OOS test alpha > 0 but Bonf p = {te_bonf:.6f} >= {alpha} (not significant OOS)")
             return "exploratory"
     else:
         print(f"    → EXPLORATORY: walk-forward not available ({wf['status']})")
         return "exploratory"
 
-    print(f"    → EDGE-CONFIRMED: factor mean > 0, CAPM alpha > 0, "
-          f"Bonferroni PASS, walk-forward OOS significant")
+    print(f"    → EDGE-CONFIRMED: factor mean > 0, CAPM alpha > 0, Bonferroni PASS, walk-forward OOS significant")
     return "edge-confirmed"
 
 
 # ===================== main =====================
+
 
 def main() -> None:
     print("=" * 70)
@@ -654,13 +649,13 @@ def main() -> None:
     meta = fz["metadata"]
     calendar = fz["trading_dates"]
     rebal_all = fz["rebalance_dates"]
-    print(f"    codes_total={meta['n_stocks_total']} dates={meta['n_dates']} "
-          f"range={meta['date_range']}")
-    print(f"    rebalance_dates={len(rebal_all)} "
-          f"(every {fz.get('rebalance_freq', '5d')})")
-    print(f"    cross_section: avg={meta['cross_section_size']['avg_codes_per_rebalance']} "
-          f"min={meta['cross_section_size']['min']} "
-          f"max={meta['cross_section_size']['max']}")
+    print(f"    codes_total={meta['n_stocks_total']} dates={meta['n_dates']} range={meta['date_range']}")
+    print(f"    rebalance_dates={len(rebal_all)} (every {fz.get('rebalance_freq', '5d')})")
+    print(
+        f"    cross_section: avg={meta['cross_section_size']['avg_codes_per_rebalance']} "
+        f"min={meta['cross_section_size']['min']} "
+        f"max={meta['cross_section_size']['max']}"
+    )
     print(f"    market benchmark: sh.000001 ({len(fz['market_returns']['sh.000001'])} dates)")
 
     print("\n==> loading kline closes (compact, vol>0 only) ...", flush=True)
@@ -669,28 +664,39 @@ def main() -> None:
 
     # ---- 2. Define variants ----
     variants = [
-        {"name": "reversal_5d_weekly",
-         "factor_idx": 1, "stride": 1,
-         "label": "5d lookback, weekly rebalance (canonical Jegadeesh-Lehmann)",
-         "freq_label": "weekly"},
-        {"name": "reversal_5d_biweekly",
-         "factor_idx": 1, "stride": 2,
-         "label": "5d lookback, biweekly rebalance",
-         "freq_label": "biweekly"},
-        {"name": "reversal_5d_monthly",
-         "factor_idx": 1, "stride": 4,
-         "label": "5d lookback, monthly rebalance",
-         "freq_label": "monthly"},
-        {"name": "reversal_15d_weekly",
-         "factor_idx": 0, "stride": 1,
-         "label": "15d lookback, weekly rebalance (longer reversal horizon)",
-         "freq_label": "weekly"},
+        {
+            "name": "reversal_5d_weekly",
+            "factor_idx": 1,
+            "stride": 1,
+            "label": "5d lookback, weekly rebalance (canonical Jegadeesh-Lehmann)",
+            "freq_label": "weekly",
+        },
+        {
+            "name": "reversal_5d_biweekly",
+            "factor_idx": 1,
+            "stride": 2,
+            "label": "5d lookback, biweekly rebalance",
+            "freq_label": "biweekly",
+        },
+        {
+            "name": "reversal_5d_monthly",
+            "factor_idx": 1,
+            "stride": 4,
+            "label": "5d lookback, monthly rebalance",
+            "freq_label": "monthly",
+        },
+        {
+            "name": "reversal_15d_weekly",
+            "factor_idx": 0,
+            "stride": 1,
+            "label": "15d lookback, weekly rebalance (longer reversal horizon)",
+            "freq_label": "weekly",
+        },
     ]
 
     n_within = len(variants)
     n_total_tests = CROSS_FACTOR_N * n_within  # ×16
-    print(f"\n==> Bonferroni: cross_factor×{CROSS_FACTOR_N} × within_reversal×{n_within} "
-          f"= ×{n_total_tests}")
+    print(f"\n==> Bonferroni: cross_factor×{CROSS_FACTOR_N} × within_reversal×{n_within} = ×{n_total_tests}")
 
     # ---- 3. Build factor return series for each variant ----
     results: list[dict] = []
@@ -717,57 +723,70 @@ def main() -> None:
         net_mean_pct = gross_mean_pct - cost_per_rebal * 100
 
         print(f"  n_rebalances: {len(fr)}")
-        print(f"  avg stocks/period: {sum(series['n_codes_per_period'])/len(series['n_codes_per_period']):.0f}")
+        print(f"  avg stocks/period: {sum(series['n_codes_per_period']) / len(series['n_codes_per_period']):.0f}")
         print(f"  period: {series['rebal_dates'][0]} ~ {series['rebal_dates'][-1]}")
-        print(f"  factor_return_mean: {gross_mean_pct:.4f}%/rebalance  "
-              f"std: {s_basic['std_pct']:.4f}%  WR: {s_basic['wr']:.1f}%")
+        print(
+            f"  factor_return_mean: {gross_mean_pct:.4f}%/rebalance  "
+            f"std: {s_basic['std_pct']:.4f}%  WR: {s_basic['wr']:.1f}%"
+        )
         print(f"  raw t: {s_basic['t']:.2f}  raw p_one_sided: {s_basic['p_one_sided']:.6f}")
         print(f"  Sharpe (annualized): {s_basic['sharpe_annual']:.2f}")
-        print(f"  net (after {cost_per_rebal*100:.1f}% long-short cost): "
-              f"{net_mean_pct:.4f}%/rebalance")
+        print(f"  net (after {cost_per_rebal * 100:.1f}% long-short cost): {net_mean_pct:.4f}%/rebalance")
         p_bonf = bonferroni_p(s_basic["p_one_sided"], n_total_tests)
         print(f"  Bonferroni p (×{n_total_tests}): {p_bonf:.6f}")
 
         if capm["status"] == "ok":
-            print(f"  CAPM: alpha={capm['alpha_pct']:.4f}%  beta={capm['beta']:.3f}  "
-                  f"alpha_t={capm['alpha_t']:.2f} (HAC lag={capm['max_lag']})")
-            print(f"  CAPM alpha p_one_sided: {capm['alpha_p_one_sided']:.6f}  "
-                  f"Bonf: {bonferroni_p(capm['alpha_p_one_sided'], n_total_tests):.6f}")
+            print(
+                f"  CAPM: alpha={capm['alpha_pct']:.4f}%  beta={capm['beta']:.3f}  "
+                f"alpha_t={capm['alpha_t']:.2f} (HAC lag={capm['max_lag']})"
+            )
+            print(
+                f"  CAPM alpha p_one_sided: {capm['alpha_p_one_sided']:.6f}  "
+                f"Bonf: {bonferroni_p(capm['alpha_p_one_sided'], n_total_tests):.6f}"
+            )
 
         if wf["status"] == "ok":
             print(f"  walk-forward: n_train={wf['n_train']} n_test={wf['n_test']}")
             print(f"    train: mean={wf['train_mean_pct']:.4f}% alpha={wf['train_alpha_pct']:.4f}%")
-            print(f"    test:  mean={wf['test_mean_pct']:.4f}% alpha={wf['test_alpha_pct']:.4f}% "
-                  f"alpha_t={wf['test_alpha_t']:.2f} alpha_p={wf['test_alpha_p_one_sided']:.6f}")
+            print(
+                f"    test:  mean={wf['test_mean_pct']:.4f}% alpha={wf['test_alpha_pct']:.4f}% "
+                f"alpha_t={wf['test_alpha_t']:.2f} alpha_p={wf['test_alpha_p_one_sided']:.6f}"
+            )
 
-        results.append({
-            "name": v["name"],
-            "status": "ok",
-            "variant": v,
-            "n_rebalances": len(fr),
-            "stats": s_basic,
-            "capm": capm,
-            "walk_forward": wf,
-            "factor_returns": fr,
-            "market_returns": mr,
-            "rebal_dates": series["rebal_dates"],
-            "long_returns": series["long_returns"],
-            "short_returns": series["short_returns"],
-            "gross_mean_pct": gross_mean_pct,
-            "net_mean_pct": net_mean_pct,
-            "cost_per_rebal_pct": cost_per_rebal * 100,
-            "p_bonf_mean": p_bonf,
-        })
+        results.append(
+            {
+                "name": v["name"],
+                "status": "ok",
+                "variant": v,
+                "n_rebalances": len(fr),
+                "stats": s_basic,
+                "capm": capm,
+                "walk_forward": wf,
+                "factor_returns": fr,
+                "market_returns": mr,
+                "rebal_dates": series["rebal_dates"],
+                "long_returns": series["long_returns"],
+                "short_returns": series["short_returns"],
+                "gross_mean_pct": gross_mean_pct,
+                "net_mean_pct": net_mean_pct,
+                "cost_per_rebal_pct": cost_per_rebal * 100,
+                "p_bonf_mean": p_bonf,
+            }
+        )
 
     # ---- 4. Summary table ----
     print(f"\n{'=' * 70}")
     print(f"汇总表 (cross-sectional long-short, CAPM alpha, Newey-West HAC SE)")
     print(f"{'=' * 70}")
-    print(f"  {'variant':<26} {'n':>5} {'mean%':>8} {'std%':>7} {'t':>6} "
-          f"{'p_raw':>8} {'Bonf×16':>9} {'alpha%':>8} {'a_t':>6} "
-          f"{'sharpe':>7} {'verdict':<14}")
-    print(f"  {'-'*26} {'-'*5} {'-'*8} {'-'*7} {'-'*6} {'-'*8} {'-'*9} "
-          f"{'-'*8} {'-'*6} {'-'*7} {'-'*14}")
+    print(
+        f"  {'variant':<26} {'n':>5} {'mean%':>8} {'std%':>7} {'t':>6} "
+        f"{'p_raw':>8} {'Bonf×16':>9} {'alpha%':>8} {'a_t':>6} "
+        f"{'sharpe':>7} {'verdict':<14}"
+    )
+    print(
+        f"  {'-' * 26} {'-' * 5} {'-' * 8} {'-' * 7} {'-' * 6} {'-' * 8} {'-' * 9} "
+        f"{'-' * 8} {'-' * 6} {'-' * 7} {'-' * 14}"
+    )
 
     verdicts: list[str] = []
     for r in results:
@@ -777,15 +796,16 @@ def main() -> None:
             continue
         s = r["stats"]
         c = r["capm"]
-        v = compute_verdict(s, c, r["walk_forward"], n_total_tests,
-                            r["n_rebalances"], COST_LONG_SHORT)
+        v = compute_verdict(s, c, r["walk_forward"], n_total_tests, r["n_rebalances"], COST_LONG_SHORT)
         verdicts.append(v)
         alpha_pct = c.get("alpha_pct", 0) if c["status"] == "ok" else 0
         alpha_t = c.get("alpha_t", 0) if c["status"] == "ok" else 0
-        print(f"  {r['name']:<26} {r['n_rebalances']:>5} {s['mean_pct']:>8.4f} "
-              f"{s['std_pct']:>7.4f} {s['t']:>6.2f} {s['p_one_sided']:>8.6f} "
-              f"{r['p_bonf_mean']:>9.6f} {alpha_pct:>8.4f} {alpha_t:>6.2f} "
-              f"{s['sharpe_annual']:>7.2f} {v:<14}")
+        print(
+            f"  {r['name']:<26} {r['n_rebalances']:>5} {s['mean_pct']:>8.4f} "
+            f"{s['std_pct']:>7.4f} {s['t']:>6.2f} {s['p_one_sided']:>8.6f} "
+            f"{r['p_bonf_mean']:>9.6f} {alpha_pct:>8.4f} {alpha_t:>6.2f} "
+            f"{s['sharpe_annual']:>7.2f} {v:<14}"
+        )
 
     # ---- 5. BH FDR sensitivity ----
     print(f"\n{'=' * 70}")
@@ -803,9 +823,11 @@ def main() -> None:
     # Simplified: BH on our 4 variants, then note cross-factor would increase
     for r, pa in zip(results, bh_adj):
         if r["status"] == "ok":
-            print(f"  {r['name']:<26} raw_p={r['stats']['p_one_sided']:.6f}  "
-                  f"BH_adj={pa:.6f}  "
-                  f"{'PASS' if pa < 0.05 else 'FAIL'} at 0.05")
+            print(
+                f"  {r['name']:<26} raw_p={r['stats']['p_one_sided']:.6f}  "
+                f"BH_adj={pa:.6f}  "
+                f"{'PASS' if pa < 0.05 else 'FAIL'} at 0.05"
+            )
         else:
             print(f"  {r['name']:<26} (no data)")
 
@@ -818,16 +840,15 @@ def main() -> None:
         fr = main_r["factor_returns"]
         lr = main_r["long_returns"]
         sr = main_r["short_returns"]
-        print(f"  long leg (D1 oversold): mean={sum(lr)/len(lr)*100:.4f}%/rebalance")
-        print(f"  short leg (D10 overbought): mean={sum(sr)/len(sr)*100:.4f}%/rebalance")
+        print(f"  long leg (D1 oversold): mean={sum(lr) / len(lr) * 100:.4f}%/rebalance")
+        print(f"  short leg (D10 overbought): mean={sum(sr) / len(sr) * 100:.4f}%/rebalance")
         print(f"  long-short spread: {main_r['gross_mean_pct']:.4f}%/rebalance")
         print(f"  cost (2 round-trips): {main_r['cost_per_rebal_pct']:.1f}%/rebalance")
         print(f"  net: {main_r['net_mean_pct']:.4f}%/rebalance")
         # Year split
         n = len(fr)
         q1, q2, q3 = n // 4, n // 2, 3 * n // 4
-        for label, lo, hi in [("Q1(early)", 0, q1), ("Q2", q1, q2),
-                              ("Q3", q2, q3), ("Q4(late)", q3, n)]:
+        for label, lo, hi in [("Q1(early)", 0, q1), ("Q2", q1, q2), ("Q3", q2, q3), ("Q4(late)", q3, n)]:
             seg = fr[lo:hi]
             if seg:
                 m = sum(seg) / len(seg) * 100

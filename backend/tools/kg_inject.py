@@ -9,6 +9,7 @@
 - 不碰选股分/§44v2——认知层非交易信号
 - 秘密走 env：VR_LLM_API_KEY 走 os.environ，不贴 key 值
 """
+
 from __future__ import annotations
 
 import json

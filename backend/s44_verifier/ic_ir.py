@@ -8,6 +8,7 @@ verdict HIGH 优先 spec（quant workflow ww1bqpg70）：
 
 IC/IR 是 Alphalens 因子筛选层，与 §44v2 lift 策略验证层互补非替代。
 """
+
 from __future__ import annotations
 
 import logging
@@ -20,6 +21,7 @@ from scipy import stats as sp_stats
 logger = logging.getLogger(__name__)
 
 # ── get_kline 统一接口 ──────────────────────────────────────────────────────
+
 
 def get_kline(
     code: str,
@@ -51,6 +53,7 @@ def get_kline(
     # 1. KlineCache（含 baostock fallback）
     try:
         from engine.bars_provider import KlineCacheBarsProvider
+
         provider = KlineCacheBarsProvider()
         all_bars = provider(code)
         if all_bars:
@@ -61,6 +64,7 @@ def get_kline(
     # 2. baostock 直拉 fallback
     try:
         from engine.bars_provider import _baostock_a_share_hist
+
         bars = _baostock_a_share_hist(code)
         if bars:
             return _filter_by_date(bars, start_dt, end_dt)
@@ -70,9 +74,7 @@ def get_kline(
     return []
 
 
-def _filter_by_date(
-    bars: list[dict], start_dt: datetime, end_dt: datetime
-) -> list[dict]:
+def _filter_by_date(bars: list[dict], start_dt: datetime, end_dt: datetime) -> list[dict]:
     """过滤 bars 在 [start, end] 范围内。"""
     out = []
     for b in bars:
@@ -197,12 +199,13 @@ def layered_backtest(
     group_size = len(fv) // n_groups
     group_means = []
     for g in range(n_groups):
-        idx = order[g * group_size:(g + 1) * group_size]
+        idx = order[g * group_size : (g + 1) * group_size]
         group_means.append(float(np.mean(fr[idx])))
 
     # Jonckheere-Terpstra 单调性（近似：检查是否单调递减，因子值高→收益高）
-    monotonic = all(group_means[i] <= group_means[i + 1] for i in range(n_groups - 1)) or \
-                all(group_means[i] >= group_means[i + 1] for i in range(n_groups - 1))
+    monotonic = all(group_means[i] <= group_means[i + 1] for i in range(n_groups - 1)) or all(
+        group_means[i] >= group_means[i + 1] for i in range(n_groups - 1)
+    )
 
     # 最高组 vs 最低组 t-test
     top_idx = order[-group_size:]
@@ -231,11 +234,7 @@ def ic_ir_verdict(
     """
     ir, std_hac = compute_ic_ir(ic_series)
     mean_ic = float(np.mean(ic_series)) if ic_series else 0.0
-    passes = (
-        mean_ic > IC_FLOOR
-        and ir > IR_FLOOR
-        and n_panels >= PANEL_MIN
-    )
+    passes = mean_ic > IC_FLOOR and ir > IR_FLOOR and n_panels >= PANEL_MIN
     return {
         "mean_ic": mean_ic,
         "ir_hac": ir,
@@ -247,6 +246,7 @@ def ic_ir_verdict(
 
 
 # ── 行业中性化 ─────────────────────────────────────────────────────────────
+
 
 def industry_demean(
     factor_values: np.ndarray,

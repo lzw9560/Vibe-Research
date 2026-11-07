@@ -12,6 +12,7 @@
 合规：只判定客观数值差异、给采用值，不输出"哪个源对"的主观结论；>5% 不采用
 任一值（adopted=None），强制回原始财报核实——不臆造、不静默吞差异。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -21,26 +22,26 @@ from enum import Enum
 class Verdict(Enum):
     """交叉验证结论档位（误差门控）。"""
 
-    CONSISTENT = "consistent"              # ≤1%：多源一致，取主源
-    DIFFERENCE = "difference"              # 1-5%：存在差异，取主源但标记
+    CONSISTENT = "consistent"  # ≤1%：多源一致，取主源
+    DIFFERENCE = "difference"  # 1-5%：存在差异，取主源但标记
     MAJOR_DIFFERENCE = "major_difference"  # >5%：重大差异，不采用，须查原始财报
-    SINGLE_SOURCE = "single_source"        # 仅一个有效源，采用该源
-    UNKNOWN = "unknown"                    # 全部缺失，无法判定
+    SINGLE_SOURCE = "single_source"  # 仅一个有效源，采用该源
+    UNKNOWN = "unknown"  # 全部缺失，无法判定
 
 
 # 误差门控阈值（百分数），与 financial-data skill + tools/financial_rigor.py 一致
-CONSISTENT_THRESHOLD_PCT = 1.0   # ≤1% → 一致
-DIFFERENCE_THRESHOLD_PCT = 5.0   # 1-5% → 差异；>5% → 重大差异
+CONSISTENT_THRESHOLD_PCT = 1.0  # ≤1% → 一致
+DIFFERENCE_THRESHOLD_PCT = 5.0  # 1-5% → 差异；>5% → 重大差异
 
 
 @dataclass(frozen=True)
 class ValidationResult:
     """单字段交叉验证结果。"""
 
-    field: str                              # 字段名（如 revenue/roe）
+    field: str  # 字段名（如 revenue/roe）
     verdict: Verdict
-    adopted_value: float | None = None      # 采用值（MAJOR_DIFFERENCE/UNKNOWN 时 None）
-    adopted_source: str | None = None       # 主源名（首个有效源）
+    adopted_value: float | None = None  # 采用值（MAJOR_DIFFERENCE/UNKNOWN 时 None）
+    adopted_source: str | None = None  # 主源名（首个有效源）
     max_deviation_pct: float | None = None  # 主源 vs 最大偏差源的误差百分数
     sources: dict[str, float | None] | None = None  # 原始各源值（可观测）
 
@@ -97,8 +98,10 @@ def cross_validate(field: str, values: dict[str, float | None]) -> ValidationRes
     n_valid = sum(1 for v in values.values() if v is not None)
     if n_valid == 1:
         return ValidationResult(
-            field=field, verdict=Verdict.SINGLE_SOURCE,
-            adopted_value=val, adopted_source=src_name,
+            field=field,
+            verdict=Verdict.SINGLE_SOURCE,
+            adopted_value=val,
+            adopted_source=src_name,
             sources=dict(values),
         )
 
@@ -114,7 +117,10 @@ def cross_validate(field: str, values: dict[str, float | None]) -> ValidationRes
 
     adopted = None if verdict is Verdict.MAJOR_DIFFERENCE else val
     return ValidationResult(
-        field=field, verdict=verdict,
-        adopted_value=adopted, adopted_source=src_name,
-        max_deviation_pct=dev_f, sources=dict(values),
+        field=field,
+        verdict=verdict,
+        adopted_value=adopted,
+        adopted_source=src_name,
+        max_deviation_pct=dev_f,
+        sources=dict(values),
     )

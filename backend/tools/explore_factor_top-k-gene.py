@@ -30,6 +30,7 @@ close_ev vs blanket。测"高确信集中"是否提 EV。
   cd /Users/lizhiwei/project/code/stock/Vibe-Research/backend
   .venv/bin/python tools/explore_factor_top-k-gene.py
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -72,9 +73,7 @@ def load_gene_scores() -> dict[str, dict[str, float]]:
     conn = sqlite3.connect(str(GENE_DB))
     by_date: dict[str, dict[str, float]] = defaultdict(dict)
     n = 0
-    for d, code, score in conn.execute(
-        "SELECT date, code, total_score FROM gene_scores"
-    ):
+    for d, code, score in conn.execute("SELECT date, code, total_score FROM gene_scores"):
         if score is None:
             continue
         by_date[d][code] = float(score)
@@ -83,9 +82,7 @@ def load_gene_scores() -> dict[str, dict[str, float]]:
     return dict(by_date), n
 
 
-def attach_gene_scores(
-    picks: list[dict], gene: dict[str, dict[str, float]]
-) -> tuple[list[dict], int]:
+def attach_gene_scores(picks: list[dict], gene: dict[str, dict[str, float]]) -> tuple[list[dict], int]:
     """给每个 pick 附 gene_score (按 zt_date+code 查). 返回 (picks, n_with_score).
 
     无 gene_score 的 pick 标 score=None——仍在 blanket, 但不进 top-k 排名。
@@ -100,9 +97,7 @@ def attach_gene_scores(
     return picks, n_with
 
 
-def select_topk_per_date(
-    picks: list[dict], k: int
-) -> list[dict]:
+def select_topk_per_date(picks: list[dict], k: int) -> list[dict]:
     """每 zt_date 取 gene_score 最高的 top-k picks (只含有 score 的).
 
     同日不足 k 个则全取。返回 picks (浅拷贝引用, 不改原)。
@@ -129,11 +124,9 @@ def main() -> None:
     calendar = sorted(all_dates)
     zt_rows = load_zt()
     gene, n_gene = load_gene_scores()
-    print(f"  kline codes: {len(code_map)}, calendar: {len(calendar)} "
-          f"({calendar[0]} ~ {calendar[-1]})")
+    print(f"  kline codes: {len(code_map)}, calendar: {len(calendar)} ({calendar[0]} ~ {calendar[-1]})")
     print(f"  zt rows: {len(zt_rows)}")
-    print(f"  gene_scores: {n_gene} rows, {len(gene)} dates "
-          f"({min(gene)} ~ {max(gene)})")
+    print(f"  gene_scores: {n_gene} rows, {len(gene)} dates ({min(gene)} ~ {max(gene)})")
     print(f"  gene_scores.db: {GENE_DB}")
 
     # ---- 构建 blanket picks (no filter) ----
@@ -141,15 +134,16 @@ def main() -> None:
     blanket = build_picks_generic(code_map, calendar, zt_rows, filter_fn=None)
     blanket, n_with = attach_gene_scores(blanket, gene)
     print(f"  blanket picks: {len(blanket)}")
-    print(f"  其中有 gene_score: {n_with} ({n_with/max(len(blanket),1)*100:.1f}%)")
+    print(f"  其中有 gene_score: {n_with} ({n_with / max(len(blanket), 1) * 100:.1f}%)")
 
     # 日期域: 有 ≥1 gene-scored pick 的 zt_date (top-k 子集的日期域)
-    gene_dates_with_picks = sorted({
-        p["zt_date"] for p in blanket if p.get("gene_score") is not None
-    })
-    print(f"  gene-scored pick 日期数: {len(gene_dates_with_picks)} "
-          f"({gene_dates_with_picks[0]} ~ {gene_dates_with_picks[-1]})"
-          if gene_dates_with_picks else "  无 gene-scored pick 日期")
+    gene_dates_with_picks = sorted({p["zt_date"] for p in blanket if p.get("gene_score") is not None})
+    print(
+        f"  gene-scored pick 日期数: {len(gene_dates_with_picks)} "
+        f"({gene_dates_with_picks[0]} ~ {gene_dates_with_picks[-1]})"
+        if gene_dates_with_picks
+        else "  无 gene-scored pick 日期"
+    )
 
     if not gene_dates_with_picks:
         print("\n  → no-data: 无 zt pick 能匹配 gene_score (日期/code 不重叠)")
@@ -187,7 +181,8 @@ def main() -> None:
     results: list[tuple[str, list[dict], dict]] = []
     for name, picks in subsets:
         r = analyze_subset(
-            name, picks,
+            name,
+            picks,
             ret_fn_basic=close_ev_basic,
             ret_fn_stop=close_ev_stop,
             ret_fn_label="close_ev",
@@ -210,20 +205,37 @@ def main() -> None:
             # baseline 只汇总, 不出 factor verdict
             ev = r.get("basic_ev", {}).get("ev", 0.0)
             dt = r.get("basic_day_t", {})
-            summary_rows.append({
-                "name": name, "n_picks": len(picks),
-                "n_days": dt.get("n_days", 0), "ev_gross": ev,
-                "t_day": dt.get("t", 0.0), "p_raw": dt.get("p_one_sided", 1.0),
-                "wf_train_ev": (r.get("wf_basic", {}).get("train_ev", {}).get("ev", 0.0)
-                                if r.get("wf_basic", {}).get("status") == "ok" else 0.0),
-                "wf_test_ev": (r.get("wf_basic", {}).get("test_ev", {}).get("ev", 0.0)
-                               if r.get("wf_basic", {}).get("status") == "ok" else 0.0),
-                "wf_test_t": (r.get("wf_basic", {}).get("test_day_t", {}).get("t", 0.0)
-                              if r.get("wf_basic", {}).get("status") == "ok" else 0.0),
-                "wf_test_p": (r.get("wf_basic", {}).get("test_day_t", {}).get("p_one_sided", 1.0)
-                              if r.get("wf_basic", {}).get("status") == "ok" else 1.0),
-                "verdict": "(baseline)",
-            })
+            summary_rows.append(
+                {
+                    "name": name,
+                    "n_picks": len(picks),
+                    "n_days": dt.get("n_days", 0),
+                    "ev_gross": ev,
+                    "t_day": dt.get("t", 0.0),
+                    "p_raw": dt.get("p_one_sided", 1.0),
+                    "wf_train_ev": (
+                        r.get("wf_basic", {}).get("train_ev", {}).get("ev", 0.0)
+                        if r.get("wf_basic", {}).get("status") == "ok"
+                        else 0.0
+                    ),
+                    "wf_test_ev": (
+                        r.get("wf_basic", {}).get("test_ev", {}).get("ev", 0.0)
+                        if r.get("wf_basic", {}).get("status") == "ok"
+                        else 0.0
+                    ),
+                    "wf_test_t": (
+                        r.get("wf_basic", {}).get("test_day_t", {}).get("t", 0.0)
+                        if r.get("wf_basic", {}).get("status") == "ok"
+                        else 0.0
+                    ),
+                    "wf_test_p": (
+                        r.get("wf_basic", {}).get("test_day_t", {}).get("p_one_sided", 1.0)
+                        if r.get("wf_basic", {}).get("status") == "ok"
+                        else 1.0
+                    ),
+                    "verdict": "(baseline)",
+                }
+            )
             continue
         if not picks or r.get("n_picks", 0) == 0:
             print(f"\n  {name}: 无 picks → no-data")
@@ -243,54 +255,78 @@ def main() -> None:
         wf_test_t = wf.get("test_day_t", {}).get("t", 0.0) if wf_status == "ok" else 0.0
         wf_test_p = wf.get("test_day_t", {}).get("p_one_sided", 1.0) if wf_status == "ok" else 1.0
         v = verdict_for(
-            ev_gross, t_day, p_raw, wf_status, wf_train_ev,
-            wf_test_ev, wf_test_p, n_days, net_ev, name,
+            ev_gross,
+            t_day,
+            p_raw,
+            wf_status,
+            wf_train_ev,
+            wf_test_ev,
+            wf_test_p,
+            n_days,
+            net_ev,
+            name,
             n_cross_factor=6,  # ×12 = 6 factors × 2 subsets
         )
         verdicts.append(v)
-        summary_rows.append({
-            "name": name, "n_picks": len(picks), "n_days": n_days,
-            "ev_gross": ev_gross, "net_ev": round(net_ev, 3),
-            "t_day": t_day, "p_raw": p_raw,
-            "bonf_x12": bonferroni_p(p_raw, 12),
-            "wf_status": wf_status, "wf_train_ev": wf_train_ev,
-            "wf_test_ev": wf_test_ev, "wf_test_t": wf_test_t,
-            "wf_test_p": wf_test_p, "verdict": v,
-        })
+        summary_rows.append(
+            {
+                "name": name,
+                "n_picks": len(picks),
+                "n_days": n_days,
+                "ev_gross": ev_gross,
+                "net_ev": round(net_ev, 3),
+                "t_day": t_day,
+                "p_raw": p_raw,
+                "bonf_x12": bonferroni_p(p_raw, 12),
+                "wf_status": wf_status,
+                "wf_train_ev": wf_train_ev,
+                "wf_test_ev": wf_test_ev,
+                "wf_test_t": wf_test_t,
+                "wf_test_p": wf_test_p,
+                "verdict": v,
+            }
+        )
 
     # ---- 汇总表 ----
     print(f"\n{'=' * 70}")
     print("汇总表 (close_ev %, per-day-mean t, R6 gap-through fill)")
     print(f"{'=' * 70}")
-    print(f"  {'subset':<22} {'n':>6} {'days':>5} {'gross%':>8} "
-          f"{'day_t':>6} {'p_raw':>8} {'Bonf×12':>8} {'wf_tr%':>7} "
-          f"{'wf_te%':>7} {'wf_te_p':>7} {'verdict':<14}")
+    print(
+        f"  {'subset':<22} {'n':>6} {'days':>5} {'gross%':>8} "
+        f"{'day_t':>6} {'p_raw':>8} {'Bonf×12':>8} {'wf_tr%':>7} "
+        f"{'wf_te%':>7} {'wf_te_p':>7} {'verdict':<14}"
+    )
     for s in summary_rows:
         if s.get("verdict") == "no-data":
-            print(f"  {s['name']:<22} {'-':>6} {'-':>5} {'-':>8} "
-                  f"{'-':>6} {'-':>8} {'-':>8} {'-':>7} {'-':>7} {'-':>7} no-data")
+            print(
+                f"  {s['name']:<22} {'-':>6} {'-':>5} {'-':>8} "
+                f"{'-':>6} {'-':>8} {'-':>8} {'-':>7} {'-':>7} {'-':>7} no-data"
+            )
             continue
         v = s.get("verdict", "")
         bonf = s.get("bonf_x12", "-")
         if v == "(baseline)":
             bonf = "-"
-        print(f"  {s['name']:<22} {s.get('n_picks','-'):>6} {s.get('n_days','-'):>5} "
-              f"{s.get('ev_gross','-'):>8} {s.get('t_day','-'):>6} "
-              f"{s.get('p_raw','-'):>8} {bonf if bonf!='-' else '-':>8} "
-              f"{s.get('wf_train_ev','-'):>7} {s.get('wf_test_ev','-'):>7} "
-              f"{s.get('wf_test_p','-'):>7} {v:<14}")
+        print(
+            f"  {s['name']:<22} {s.get('n_picks', '-'):>6} {s.get('n_days', '-'):>5} "
+            f"{s.get('ev_gross', '-'):>8} {s.get('t_day', '-'):>6} "
+            f"{s.get('p_raw', '-'):>8} {bonf if bonf != '-' else '-':>8} "
+            f"{s.get('wf_train_ev', '-'):>7} {s.get('wf_test_ev', '-'):>7} "
+            f"{s.get('wf_test_p', '-'):>7} {v:<14}"
+        )
 
     # ---- concentration 增量对比 (top-k vs 同 universe baseline) ----
     print(f"\n{'=' * 70}")
     print("集中度增量: top-k EV − all_gene_scored EV (同 universe, 正=集中提 EV)")
     print(f"{'=' * 70}")
-    base_ev = next((s.get("ev_gross", 0.0) for s in summary_rows
-                    if s["name"] == "all_gene_scored"), 0.0)
+    base_ev = next((s.get("ev_gross", 0.0) for s in summary_rows if s["name"] == "all_gene_scored"), 0.0)
     for s in summary_rows:
         if s["name"] in ("top-1", "top-3", "top-5"):
             delta = s.get("ev_gross", 0.0) - base_ev
-            print(f"  {s['name']:<10}: EV={s.get('ev_gross','-'):+.3f}%  "
-                  f"Δ vs all_gene_scored({base_ev:+.3f}%) = {delta:+.3f}%")
+            print(
+                f"  {s['name']:<10}: EV={s.get('ev_gross', '-'):+.3f}%  "
+                f"Δ vs all_gene_scored({base_ev:+.3f}%) = {delta:+.3f}%"
+            )
 
     # ---- overall ----
     if "edge-confirmed" in verdicts:

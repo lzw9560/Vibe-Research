@@ -53,17 +53,13 @@ class LabelConfig:
 
     def __post_init__(self) -> None:
         if self.horizon not in _VALID_HORIZONS:
-            raise ValueError(
-                f"horizon must be one of {_VALID_HORIZONS}, got '{self.horizon}'"
-            )
+            raise ValueError(f"horizon must be one of {_VALID_HORIZONS}, got '{self.horizon}'")
         if self.direction not in _VALID_DIRECTIONS:
-            raise ValueError(
-                f"direction must be one of {_VALID_DIRECTIONS}, "
-                f"got '{self.direction}'"
-            )
+            raise ValueError(f"direction must be one of {_VALID_DIRECTIONS}, got '{self.direction}'")
 
 
 # ── Pure functions ─────────────────────────────────────────────────────
+
 
 def _horizon_days(config: LabelConfig) -> int:
     """Return the number of calendar days for *config*'s horizon."""

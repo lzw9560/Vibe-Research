@@ -27,6 +27,7 @@
 
 **同步骨架**：本模块不做轮询，接收已采集数据；轮询逻辑由调度层驱动。
 """
+
 from __future__ import annotations
 
 import logging
@@ -48,20 +49,21 @@ _logger = logging.getLogger(__name__)
 # 标注"待回测校准"：实际阈值需用 30 天首板候选确认数据回测后调整。
 CONFIRM_THRESHOLDS: dict = {
     # ── 竞价过滤（027-028）─────────────────────────────────────────────
-    "auction_high_max": 5.0,        # 高开 >5% 剔除（追高风险）
-    "auction_high_min": 1.0,        # 高开 1-3% 健康区间
-    "auction_high_good_max": 3.0,   # 高开 1-3% 健康区间上限
-    "auction_high_observe_max": 5.0, # 高开 3-5% 保留但标"偏大观察"
-    "auction_low_max": 0.0,         # 低开 ≤0% 剔除（核按钮风险）
+    "auction_high_max": 5.0,  # 高开 >5% 剔除（追高风险）
+    "auction_high_min": 1.0,  # 高开 1-3% 健康区间
+    "auction_high_good_max": 3.0,  # 高开 1-3% 健康区间上限
+    "auction_high_observe_max": 5.0,  # 高开 3-5% 保留但标"偏大观察"
+    "auction_low_max": 0.0,  # 低开 ≤0% 剔除（核按钮风险）
     # ── 开盘确认（030-033）─────────────────────────────────────────────
-    "open_vol_ratio_min": 1.5,      # 量比 >1.5（必要条件②）
-    "open_sample_count": 5,         # 9:31-9:35 共 5 个采样点
+    "open_vol_ratio_min": 1.5,  # 量比 >1.5（必要条件②）
+    "open_sample_count": 5,  # 9:31-9:35 共 5 个采样点
 }
 
 
 # ===========================================================================
 # 027-028 竞价确认（T 日 9:25）
 # ===========================================================================
+
 
 def fetch_auction_data(candidate_codes: list[str]) -> dict[str, dict]:
     """T 日 9:25 调 tencent_quote 取候选每只竞价数据。
@@ -108,7 +110,8 @@ def fetch_auction_data(candidate_codes: list[str]) -> dict[str, dict]:
 
 
 def filter_by_auction(
-    candidates: list[dict], auction_data: dict,
+    candidates: list[dict],
+    auction_data: dict,
 ) -> tuple[list[dict], list[dict]]:
     """竞价过滤。
 
@@ -154,18 +157,22 @@ def filter_by_auction(
 
         # 规则1：高开 >5% → 剔除（追高风险）
         if pct > high_max:
-            dropped.append({
-                "code": code,
-                "reason": f"高开{pct:.1f}%>5%追高风险",
-            })
+            dropped.append(
+                {
+                    "code": code,
+                    "reason": f"高开{pct:.1f}%>5%追高风险",
+                }
+            )
             continue
 
         # 规则2：低开 ≤0% → 剔除（核按钮风险）
         if pct <= low_max:
-            dropped.append({
-                "code": code,
-                "reason": f"低开{pct:.1f}%核按钮风险",
-            })
+            dropped.append(
+                {
+                    "code": code,
+                    "reason": f"低开{pct:.1f}%核按钮风险",
+                }
+            )
             continue
 
         # 规则3：高开 3-5% → 保留但标"偏大观察"
@@ -181,6 +188,7 @@ def filter_by_auction(
 # ===========================================================================
 # 030-033 开盘 10 分钟确认（T 日 9:30-9:35）
 # ===========================================================================
+
 
 def fetch_open_price(code: str) -> float | None:
     """T 日 9:30 调 tencent_quote 取开盘价。
@@ -241,7 +249,7 @@ def check_open_support(code: str, open_price: float, samples: list[float]) -> di
 
     # confirmed = ①②③ 全满足（①在竞价层已过滤，②③在此判定）
     vol_ratio_threshold = CONFIRM_THRESHOLDS["open_vol_ratio_min"]
-    vol_ok = (vol_ratio is not None and vol_ratio > vol_ratio_threshold)
+    vol_ok = vol_ratio is not None and vol_ratio > vol_ratio_threshold
     confirmed = open_held and vol_ok
 
     return {
@@ -258,7 +266,8 @@ def check_open_support(code: str, open_price: float, samples: list[float]) -> di
 
 
 def confirm_candidates(
-    candidates: list[dict], open_samples: dict,
+    candidates: list[dict],
+    open_samples: dict,
 ) -> list[dict]:
     """对竞价确认的候选逐只做开盘确认。
 
@@ -288,18 +297,20 @@ def confirm_candidates(
 
         if open_price is None:
             # 开盘价缺失 → 降级，confirmed=False
-            out.append({
-                "code": code,
-                "open_price": None,
-                "min_low": None,
-                "open_held": False,
-                "vol_ratio": None,
-                "vol_ratio_ok": False,
-                "confirmed": False,
-                "samples": samples,
-                "note": "开盘价缺失",
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            })
+            out.append(
+                {
+                    "code": code,
+                    "open_price": None,
+                    "min_low": None,
+                    "open_held": False,
+                    "vol_ratio": None,
+                    "vol_ratio_ok": False,
+                    "confirmed": False,
+                    "samples": samples,
+                    "note": "开盘价缺失",
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                }
+            )
             continue
 
         result = check_open_support(code, open_price, samples)
@@ -314,6 +325,7 @@ def confirm_candidates(
 # ===========================================================================
 # 主入口
 # ===========================================================================
+
 
 def run_first_board_confirm(
     candidates: list[dict],
@@ -360,40 +372,44 @@ def run_first_board_confirm(
     confirm_records: list[dict] = []
     # 竞价剔除记录
     for d in auction_dropped:
-        confirm_records.append({
-            "code": d["code"],
-            "stage": "auction",
-            "confirmed": False,
-            "reason": d["reason"],
-            # 5 维度值（竞价剔除的只有 ①）
-            "auction_open_pct": _safe_pct(auction_data, d["code"]),
-            "vol_ratio": None,
-            "open_held": None,
-            "auction_vol_ratio": _safe_vol_ratio(auction_data, d["code"]),
-            "manual_bid_ask_ratio": None,
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        })
+        confirm_records.append(
+            {
+                "code": d["code"],
+                "stage": "auction",
+                "confirmed": False,
+                "reason": d["reason"],
+                # 5 维度值（竞价剔除的只有 ①）
+                "auction_open_pct": _safe_pct(auction_data, d["code"]),
+                "vol_ratio": None,
+                "open_held": None,
+                "auction_vol_ratio": _safe_vol_ratio(auction_data, d["code"]),
+                "manual_bid_ask_ratio": None,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
     # 开盘确认记录（含 open_confirmed + open_dropped）
-    for r in (open_confirmed + open_dropped):
+    for r in open_confirmed + open_dropped:
         auction = r.get("auction") or {}
-        confirm_records.append({
-            "code": r.get("code", ""),
-            "stage": "open",
-            "confirmed": r.get("confirmed", False),
-            "open_price": r.get("open_price"),
-            "min_low": r.get("min_low"),
-            "open_held": r.get("open_held"),
-            "vol_ratio": r.get("vol_ratio"),
-            "vol_ratio_ok": r.get("vol_ratio_ok"),
-            "samples": r.get("samples"),
-            # 5 维度值
-            "auction_open_pct": auction.get("auction_open_pct") if isinstance(auction, dict) else None,
-            "auction_vol_ratio": _calc_auction_vol_ratio(auction),
-            "manual_bid_ask_ratio": None,  # ⑤ 人工标注，字段预留
-            "total": r.get("total"),
-            "note": r.get("note", auction.get("note") if isinstance(auction, dict) else None),
-            "timestamp": r.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-        })
+        confirm_records.append(
+            {
+                "code": r.get("code", ""),
+                "stage": "open",
+                "confirmed": r.get("confirmed", False),
+                "open_price": r.get("open_price"),
+                "min_low": r.get("min_low"),
+                "open_held": r.get("open_held"),
+                "vol_ratio": r.get("vol_ratio"),
+                "vol_ratio_ok": r.get("vol_ratio_ok"),
+                "samples": r.get("samples"),
+                # 5 维度值
+                "auction_open_pct": auction.get("auction_open_pct") if isinstance(auction, dict) else None,
+                "auction_vol_ratio": _calc_auction_vol_ratio(auction),
+                "manual_bid_ask_ratio": None,  # ⑤ 人工标注，字段预留
+                "total": r.get("total"),
+                "note": r.get("note", auction.get("note") if isinstance(auction, dict) else None),
+                "timestamp": r.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+            }
+        )
 
     return {
         "auction_confirmed": auction_confirmed,
@@ -407,6 +423,7 @@ def run_first_board_confirm(
 # ===========================================================================
 # 辅助函数
 # ===========================================================================
+
 
 def _to_float(v) -> float | None:
     """raw 字段归一 float 或 None。"""
@@ -464,10 +481,8 @@ if __name__ == "__main__":
         {"code": "600127", "name": "金健米业", "total": 60.0},
     ]
     auction = {
-        "001358": {"auction_open": 10.21, "last_close": 10.0,
-                   "auction_open_pct": 2.1, "auction_amount_wan": 5000},
-        "600127": {"auction_open": 5.30, "last_close": 5.0,
-                   "auction_open_pct": 6.0, "auction_amount_wan": 3000},
+        "001358": {"auction_open": 10.21, "last_close": 10.0, "auction_open_pct": 2.1, "auction_amount_wan": 5000},
+        "600127": {"auction_open": 5.30, "last_close": 5.0, "auction_open_pct": 6.0, "auction_amount_wan": 3000},
     }
     samples = {
         "001358": [10.21, 10.25, 10.30, 10.28, 10.35],

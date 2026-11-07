@@ -4,6 +4,7 @@
 状态流转：
   候选池 → 观察池 → 监控池 → 持仓池 → 结算池
 """
+
 from __future__ import annotations
 
 from enum import Enum
@@ -11,6 +12,7 @@ from enum import Enum
 
 class WorkflowStatus(str, Enum):
     """工作流状态枚举。"""
+
     PENDING = "pending"
     CANDIDATE = "candidate"
     WATCHING = "watching"
@@ -24,7 +26,11 @@ class WorkflowStatus(str, Enum):
 _ALLOWED_TRANSITIONS = {
     WorkflowStatus.PENDING: [WorkflowStatus.CANDIDATE, WorkflowStatus.FILTERED],
     WorkflowStatus.CANDIDATE: [WorkflowStatus.WATCHING, WorkflowStatus.FILTERED],
-    WorkflowStatus.WATCHING: [WorkflowStatus.MONITORING, WorkflowStatus.FILTERED, WorkflowStatus.CANDIDATE],  # S049 D7：取消观察→回候选池
+    WorkflowStatus.WATCHING: [
+        WorkflowStatus.MONITORING,
+        WorkflowStatus.FILTERED,
+        WorkflowStatus.CANDIDATE,
+    ],  # S049 D7：取消观察→回候选池
     WorkflowStatus.MONITORING: [WorkflowStatus.HOLDING, WorkflowStatus.FILTERED],
     WorkflowStatus.HOLDING: [WorkflowStatus.SETTLED, WorkflowStatus.FILTERED],
     WorkflowStatus.SETTLED: [WorkflowStatus.CANDIDATE],  # 下一轮循环

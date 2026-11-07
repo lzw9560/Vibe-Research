@@ -5,6 +5,7 @@
 build 后 multi_rotation 加维度3（概念，国产芯片/通信技术），不阻塞（用缓存）。
 concept_blocks 走东财 slist（非 push2his，不 IP 限流），但 per 股慢（106 请求 ~2min）。
 """
+
 import json
 import sqlite3
 import sys
@@ -51,7 +52,7 @@ def main() -> None:
         except Exception:
             continue
         if (i + 1) % 20 == 0:
-            print(f"  [{i+1}/{len(pool)}] {code}: {len(concept_map.get(code, []))} 概念")
+            print(f"  [{i + 1}/{len(pool)}] {code}: {len(concept_map.get(code, []))} 概念")
 
     _CACHE.write_text(json.dumps(concept_map, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"✅ concept_map 缓存: {len(concept_map)} 股 → {_CACHE}")

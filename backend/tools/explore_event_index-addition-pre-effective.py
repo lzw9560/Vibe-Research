@@ -41,6 +41,7 @@
   - 单事件策略无数据 ≠ 事件驱动有/无 edge ≠ 短线有/无 edge
   - 本 no-data 仅指 announcement→effective 窗口 *未测*（数据不可得），非"该窗口无 edge"
 """
+
 from __future__ import annotations
 import sys
 from pathlib import Path
@@ -48,7 +49,12 @@ from pathlib import Path
 # import shared helpers (DRY — task 要求 import _factor_helpers)
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tools._factor_helpers import (  # noqa: E402
-    ev_stats, day_paired_t, bonferroni_p, norm_sf_positive, ALPHA, COST,
+    ev_stats,
+    day_paired_t,
+    bonferroni_p,
+    norm_sf_positive,
+    ALPHA,
+    COST,
 )
 
 STRATEGY = "index-addition-pre-effective"
@@ -64,8 +70,9 @@ CROSS_STRATEGY_N = 4  # Bonferroni ×4 (2 策略 × 2 窗口 announcement-gap + 
 def probe_baostock_announcement_date() -> dict:
     """实测 baostock 是否提供指数调整 announcement 日。返回 {available, fields, methods}."""
     import baostock as bs
+
     lg = bs.login()
-    login_ok = (lg.error_code == "0")
+    login_ok = lg.error_code == "0"
     out = {"available": False, "login_ok": login_ok, "fields": [], "has_announcement_fn": False}
     if not login_ok:
         bs.logout()
@@ -89,6 +96,7 @@ def probe_akshare_announcement_date() -> dict:
     """实测 akshare 是否提供 CSI 历史调整 announcement 日。返回 {available, detail}."""
     import akshare as ak
     import inspect
+
     out = {"available": False, "detail": []}
 
     # 1. 当前成份 snapshot（确认'日期'是快照非公告日）
@@ -121,9 +129,11 @@ def probe_akshare_announcement_date() -> dict:
         out["detail"].append(f"index_detail_hist_adjust_cni error: {e}")
 
     # 3. 扫描所有 index adjust/cons 函数
-    fns = [n for n in dir(ak)
-           if "index" in n.lower()
-           and ("adjust" in n.lower() or "cons" in n.lower() or "detail" in n.lower())]
+    fns = [
+        n
+        for n in dir(ak)
+        if "index" in n.lower() and ("adjust" in n.lower() or "cons" in n.lower() or "detail" in n.lower())
+    ]
     has_ann_fn = any("announce" in n.lower() for n in fns)
     out["has_announcement_fn"] = has_ann_fn
     out["index_funcs"] = fns
@@ -157,8 +167,10 @@ def main() -> None:
     print("=" * 72)
     print(f"假设: 公告后→生效前被动资金 forced buying → pre-effective run-up")
     print(f"entry=announcement+1 open, exit=effective close, BHAR vs matched index")
-    print(f"过严口径: BHAR 非 raw EV (除权除息教训) | per-day-mean t | Bonf×{CROSS_STRATEGY_N} | "
-          f"walk-forward OOS + train_ev>0")
+    print(
+        f"过严口径: BHAR 非 raw EV (除权除息教训) | per-day-mean t | Bonf×{CROSS_STRATEGY_N} | "
+        f"walk-forward OOS + train_ev>0"
+    )
     print()
 
     # ---- 1. 数据前提探测（独立实测，非引用 probe）----
@@ -169,25 +181,33 @@ def main() -> None:
     print(f"    login_ok={bs_probe['login_ok']}")
     print(f"    query_hs300_stocks fields={bs_probe['fields']}")
     print(f"    'updateDate' = 生效/快照日 (如 2024-06-17), 非 announcement 日")
-    print(f"    全 query_* 方法 ({len(bs_probe.get('methods', []))}): "
-          f"{bs_probe.get('methods', [])[:8]}{'...' if len(bs_probe.get('methods', []))>8 else ''}")
-    print(f"    has_announcement_fn={bs_probe['has_announcement_fn']} → "
-          f"{'有' if bs_probe['available'] else '无'} announcement 日")
+    print(
+        f"    全 query_* 方法 ({len(bs_probe.get('methods', []))}): "
+        f"{bs_probe.get('methods', [])[:8]}{'...' if len(bs_probe.get('methods', [])) > 8 else ''}"
+    )
+    print(
+        f"    has_announcement_fn={bs_probe['has_announcement_fn']} → "
+        f"{'有' if bs_probe['available'] else '无'} announcement 日"
+    )
 
     print("\n(b) akshare...")
     ak_probe = probe_akshare_announcement_date()
     for d in ak_probe["detail"]:
         print(f"    {d}")
     print(f"    index adjust/cons funcs: {ak_probe.get('index_funcs', [])}")
-    print(f"    has_announcement_fn={ak_probe.get('has_announcement_fn', False)} → "
-          f"{'有' if ak_probe['available'] else '无'} announcement 日")
+    print(
+        f"    has_announcement_fn={ak_probe.get('has_announcement_fn', False)} → "
+        f"{'有' if ak_probe['available'] else '无'} announcement 日"
+    )
 
     announcement_available = bs_probe["available"] or ak_probe["available"]
     print(f"\n(c) 其他通道（probe 已测+WebSearch 补充验证）:")
     print(f"    csindex.com.cn: 公告日公开但无 REST API; WebFetch 被域名策略拦截")
     print(f"    sse.com.cn / szse.cn: WebFetch 全拦截")
-    print(f"    WebSearch: 能从新闻引述提取近 1-2 年对照表 (如 2025-11-28 公告→2025-12-12 "
-          f"生效, gap 14 天=Shleifer 窗口), 但手动汇编日历非可 fetch 结构化源, 2018-2023 须逐条搜")
+    print(
+        f"    WebSearch: 能从新闻引述提取近 1-2 年对照表 (如 2025-11-28 公告→2025-12-12 "
+        f"生效, gap 14 天=Shleifer 窗口), 但手动汇编日历非可 fetch 结构化源, 2018-2023 须逐条搜"
+    )
     print(f"    付费 CSDN 数据集 (2005-2023, ¥12-23): 唯一含结构化公告日, 需用户购买决策")
 
     print(f"\n>>> announcement 日可编程获取: {announcement_available}")
@@ -245,9 +265,9 @@ def main() -> None:
     print(f"    n_events={n_events} n_dates={n_dates} BHAR_gross={bhar_gross}% net={bhar_net}%")
     print(f"    (Bonferroni×{CROSS_STRATEGY_N}, walk-forward, DSR/PBO 均不可运行——无 picks)")
 
-    print(f"\n{'='*72}")
+    print(f"\n{'=' * 72}")
     print(f"[FINAL SUMMARY] {STRATEGY}")
-    print(f"{'='*72}")
+    print(f"{'=' * 72}")
     print(f"策略: {STRATEGY}")
     print(f"定义: {FILTER_DEF}")
     print(f"verdict: {verdict}")

@@ -33,6 +33,7 @@ BHAR=-0.075% 消失。本脚本深挖：
 - 子条件 sweep 多重检验用 within-script Bonferroni 严控（防 p-hacking）
 - 禁止外推：ETF 折溢价单策略 ≠ 机制套利域有/无 edge
 """
+
 from __future__ import annotations
 import json
 import sys
@@ -44,7 +45,12 @@ from math import sqrt
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools._factor_helpers import (
-    ev_stats, day_paired_t, bonferroni_p, walk_forward, verdict_for, ALPHA,
+    ev_stats,
+    day_paired_t,
+    bonferroni_p,
+    walk_forward,
+    verdict_for,
+    ALPHA,
 )
 
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
@@ -60,21 +66,28 @@ ETF_CACHE = DATA / "etf_premium_cache.json"
 INDEX_CACHE = DATA / "index_ohlc_cache.json"
 
 ETF_COST = 0.15  # ETF round-trip cost % (免印花税, 佣金~0.06% + 滑点~0.09%)
-N_CROSS_STRATEGY = 3   # Round 2 三策略并行 cross-strategy Bonferroni
+N_CROSS_STRATEGY = 3  # Round 2 三策略并行 cross-strategy Bonferroni
 N_FAMILY_VARIANTS = 5  # within-script 5 阈值变体 family Bonferroni（维度 4）
 
 # 国内权益 ETF universe（同 Round 1，跨境 QDII 排除）
 ETF_UNIVERSE = {
     # 宽基指数（broad-base）
-    "510300": ("沪深300ETF", "broad"), "510050": ("上证50ETF", "broad"),
-    "510500": ("中证500ETF", "broad"), "510880": ("红利ETF", "broad"),
-    "512890": ("红利低波ETF", "broad"), "512100": ("中证1000ETF", "broad"),
-    "588000": ("科创50ETF", "broad"), "159901": ("深100ETF", "broad"),
-    "510310": ("价值ETF", "broad"), "159955": ("中小盘ETF", "broad"),
+    "510300": ("沪深300ETF", "broad"),
+    "510050": ("上证50ETF", "broad"),
+    "510500": ("中证500ETF", "broad"),
+    "510880": ("红利ETF", "broad"),
+    "512890": ("红利低波ETF", "broad"),
+    "512100": ("中证1000ETF", "broad"),
+    "588000": ("科创50ETF", "broad"),
+    "159901": ("深100ETF", "broad"),
+    "510310": ("价值ETF", "broad"),
+    "159955": ("中小盘ETF", "broad"),
     "159915": ("创业板ETF", "broad"),
     # 行业/主题（sector/theme）
-    "512760": ("半导体ETF", "sector"), "159995": ("芯片ETF", "sector"),
-    "515790": ("光伏ETF", "sector"), "512660": ("军工ETF", "sector"),
+    "512760": ("半导体ETF", "sector"),
+    "159995": ("芯片ETF", "sector"),
+    "515790": ("光伏ETF", "sector"),
+    "512660": ("军工ETF", "sector"),
 }
 
 # 危机窗口（透明固定，非事后调参）
@@ -88,6 +101,7 @@ CRISIS_WINDOWS = [
 
 
 # ---------- data loading ----------
+
 
 def load_etf_data() -> dict[str, dict[str, dict]]:
     with open(ETF_CACHE) as f:
@@ -110,6 +124,7 @@ def build_calendar(etf_data: dict[str, dict[str, dict]]) -> list[str]:
 
 
 # ---------- pick construction (event-driven, configurable exit window) ----------
+
 
 def is_yizi_etf_proxy(t1_open: float, t_close: float) -> bool:
     """ETF 一字涨停代理（无 high/low）：T+1 open 接近 +10% 涨停价 → 可能买不进.
@@ -180,24 +195,27 @@ def build_picks_window(
             # is_yizi ETF 代理（§44 v3）
             if is_yizi_etf_proxy(entry, close_signal):
                 continue
-            picks.append({
-                "code": code,
-                "signal_date": d,
-                "t1_date": t1_date,
-                "exit_date": exit_date,
-                "hold_days": hold_days,
-                "discount_t": disc,
-                "entry": entry,
-                "exit_close": exit_close,
-                "nav_signal": nav_signal,  # T close NAV（信号时已知，无 look-ahead）
-                "nav_t1": nav_t1,         # T+1 close NAV
-                "nav_exit": nav_exit,     # T+k close NAV
-                "zt_date": d,              # 兼容 helper.walk_forward 排序
-            })
+            picks.append(
+                {
+                    "code": code,
+                    "signal_date": d,
+                    "t1_date": t1_date,
+                    "exit_date": exit_date,
+                    "hold_days": hold_days,
+                    "discount_t": disc,
+                    "entry": entry,
+                    "exit_close": exit_close,
+                    "nav_signal": nav_signal,  # T close NAV（信号时已知，无 look-ahead）
+                    "nav_t1": nav_t1,  # T+1 close NAV
+                    "nav_exit": nav_exit,  # T+k close NAV
+                    "zt_date": d,  # 兼容 helper.walk_forward 排序
+                }
+            )
     return picks
 
 
 # ---------- BHAR: R1 (beta-leak) vs corrected (beta-neutral) ----------
+
 
 def bhar_r1(p: dict) -> float:
     """Round 1 BHAR = price_ret - nav_ret（有 T+1 日内 beta 泄漏）.
@@ -234,6 +252,7 @@ def raw_ev(p: dict) -> float:
 
 # ---------- analysis (per subset, both BHAR calibers) ----------
 
+
 def analyze_subset(name: str, picks: list[dict], verbose: bool = True) -> dict:
     """对一个子集跑 R1 + 修正 BHAR 全分析."""
     if not picks:
@@ -266,32 +285,46 @@ def analyze_subset(name: str, picks: list[dict], verbose: bool = True) -> dict:
 
     if verbose:
         print(f"\n  {name}: n={len(picks)} n_days={cor_dt['n_days']}")
-        print(f"    R1 BHAR:    gross={r1_s['ev']:+.3f}% net={r1_s['ev']-ETF_COST:+.3f}% "
-              f"day_t={r1_dt['t']} p={r1_dt['p_one_sided']} WR={r1_s['wr']}%")
-        print(f"    修正 BHAR:  gross={cor_s['ev']:+.3f}% net={cor_s['ev']-ETF_COST:+.3f}% "
-              f"day_t={cor_dt['t']} p={cor_dt['p_one_sided']} WR={cor_s['wr']}%")
-        print(f"    raw EV:     gross={raw_s['ev']:+.3f}% net={raw_s['ev']-ETF_COST:+.3f}% "
-              f"WR={raw_s['wr']}%")
-        print(f"    beta 泄漏 = R1 - 修正 = {r1_s['ev']-cor_s['ev']:+.3f}% "
-              f"({'R1 通胀' if r1_s['ev'] > cor_s['ev'] else 'R1 通缩'})")
+        print(
+            f"    R1 BHAR:    gross={r1_s['ev']:+.3f}% net={r1_s['ev'] - ETF_COST:+.3f}% "
+            f"day_t={r1_dt['t']} p={r1_dt['p_one_sided']} WR={r1_s['wr']}%"
+        )
+        print(
+            f"    修正 BHAR:  gross={cor_s['ev']:+.3f}% net={cor_s['ev'] - ETF_COST:+.3f}% "
+            f"day_t={cor_dt['t']} p={cor_dt['p_one_sided']} WR={cor_s['wr']}%"
+        )
+        print(f"    raw EV:     gross={raw_s['ev']:+.3f}% net={raw_s['ev'] - ETF_COST:+.3f}% WR={raw_s['wr']}%")
+        print(
+            f"    beta 泄漏 = R1 - 修正 = {r1_s['ev'] - cor_s['ev']:+.3f}% "
+            f"({'R1 通胀' if r1_s['ev'] > cor_s['ev'] else 'R1 通缩'})"
+        )
         if wf["status"] == "ok":
-            tr = wf["train_ev"]; te = wf["test_ev"]
-            print(f"    walk-forward(修正): train={tr['ev']:+.3f}% test={te['ev']:+.3f}% "
-                  f"test_p={wf['test_day_t']['p_one_sided']} "
-                  f"n_train_dates={wf['n_train_dates']} n_test_dates={wf['n_test_dates']}")
+            tr = wf["train_ev"]
+            te = wf["test_ev"]
+            print(
+                f"    walk-forward(修正): train={tr['ev']:+.3f}% test={te['ev']:+.3f}% "
+                f"test_p={wf['test_day_t']['p_one_sided']} "
+                f"n_train_dates={wf['n_train_dates']} n_test_dates={wf['n_test_dates']}"
+            )
 
     return {
-        "name": name, "n": len(picks), "n_days": cor_dt["n_days"],
-        "r1": r1_s, "r1_dt": r1_dt, "r1_net": r1_s["ev"] - ETF_COST,
-        "cor": cor_s, "cor_dt": cor_dt, "cor_net": cor_s["ev"] - ETF_COST,
-        "raw": raw_s, "raw_net": raw_s["ev"] - ETF_COST,
+        "name": name,
+        "n": len(picks),
+        "n_days": cor_dt["n_days"],
+        "r1": r1_s,
+        "r1_dt": r1_dt,
+        "r1_net": r1_s["ev"] - ETF_COST,
+        "cor": cor_s,
+        "cor_dt": cor_dt,
+        "cor_net": cor_s["ev"] - ETF_COST,
+        "raw": raw_s,
+        "raw_net": raw_s["ev"] - ETF_COST,
         "walk_forward": wf,
         "beta_leak": round(r1_s["ev"] - cor_s["ev"], 3),
     }
 
 
-def formal_verdict(subset: dict, n_cross: int = N_CROSS_STRATEGY,
-                   n_within: int = 1, label: str = "") -> str:
+def formal_verdict(subset: dict, n_cross: int = N_CROSS_STRATEGY, n_within: int = 1, label: str = "") -> str:
     """对修正 BHAR 出正式 verdict（Bonferroni = cross×within×2_subsets）."""
     cor = subset["cor"]
     cor_dt = subset["cor_dt"]
@@ -302,10 +335,16 @@ def formal_verdict(subset: dict, n_cross: int = N_CROSS_STRATEGY,
     wf_test_p = wf.get("test_day_t", {}).get("p_one_sided", 1.0) if wf_status == "ok" else 1.0
     n_tests = max(2, n_cross * n_within * 2)
     v = verdict_for(
-        ev_gross=cor["ev"], t_day=cor_dt["t"], p_raw=cor_dt["p_one_sided"],
-        wf_status=wf_status, wf_train_ev=wf_train_ev, wf_test_ev=wf_test_ev,
-        wf_test_p=wf_test_p, n_days=cor_dt["n_days"],
-        net_ev=subset["cor_net"], subset_name=label or subset["name"],
+        ev_gross=cor["ev"],
+        t_day=cor_dt["t"],
+        p_raw=cor_dt["p_one_sided"],
+        wf_status=wf_status,
+        wf_train_ev=wf_train_ev,
+        wf_test_ev=wf_test_ev,
+        wf_test_p=wf_test_p,
+        n_days=cor_dt["n_days"],
+        net_ev=subset["cor_net"],
+        subset_name=label or subset["name"],
         n_cross_factor=n_cross * n_within,
     )
     p_bonf = bonferroni_p(cor_dt["p_one_sided"], n_tests)
@@ -317,8 +356,8 @@ def formal_verdict(subset: dict, n_cross: int = N_CROSS_STRATEGY,
 
 # ---------- regime classification ----------
 
-def classify_regime(date: str, index_map: dict[str, dict],
-                    idx_dates_sorted: list[str]) -> str:
+
+def classify_regime(date: str, index_map: dict[str, dict], idx_dates_sorted: list[str]) -> str:
     """bull/bear/range via 60-day index momentum; crisis via fixed windows."""
     for label, lo, hi in CRISIS_WINDOWS:
         if lo <= date <= hi:
@@ -362,6 +401,7 @@ def tag_regime(picks: list[dict], index_map: dict[str, dict]) -> dict[str, list[
 
 # ---------- main ----------
 
+
 def main() -> None:
     print("=" * 78)
     print("ETF 折溢价 Round 2 深挖——edge 消亡诊断（唯一 formal-pass）")
@@ -371,8 +411,9 @@ def main() -> None:
     index_map = load_index()
     calendar = build_calendar(etf_data)
     total_bars = sum(len(v) for v in etf_data.values())
-    print(f"\n[数据] {len(etf_data)} ETFs, {total_bars} bar-days, "
-          f"{calendar[0]} ~ {calendar[-1]} ({len(calendar)} dates)")
+    print(
+        f"\n[数据] {len(etf_data)} ETFs, {total_bars} bar-days, {calendar[0]} ~ {calendar[-1]} ({len(calendar)} dates)"
+    )
     print(f"[指数] sh.000001 {len(index_map)} days")
 
     broad_codes = {c for c, (_, t) in ETF_UNIVERSE.items() if t == "broad"}
@@ -409,31 +450,31 @@ def main() -> None:
     print("\n--- era 分层（disc<-0.3% 1d，修正 BHAR）---")
     era_results = []
     for label, lo, hi in eras:
-        pk = build_picks_window(etf_data, calendar, -0.3, hold_days=1,
-                                date_lo=lo, date_hi=hi)
+        pk = build_picks_window(etf_data, calendar, -0.3, hold_days=1, date_lo=lo, date_hi=hi)
         r = analyze_subset(label, pk)
         era_results.append(r)
 
     # 年度趋势
     print("\n--- 年度 BHAR 趋势（修正 BHAR，看 edge 何时死）---")
-    print(f"{'year':<6} {'n':>6} {'n_days':>7} {'BHAR%':>9} {'net%':>8} "
-          f"{'day_t':>7} {'p':>9}")
+    print(f"{'year':<6} {'n':>6} {'n_days':>7} {'BHAR%':>9} {'net%':>8} {'day_t':>7} {'p':>9}")
     yearly_trend = []
     for yr in range(2015, 2027):
-        lo = f"{yr}-01-01"; hi = f"{yr}-12-31"
-        pk = build_picks_window(etf_data, calendar, -0.3, hold_days=1,
-                                date_lo=lo, date_hi=hi)
+        lo = f"{yr}-01-01"
+        hi = f"{yr}-12-31"
+        pk = build_picks_window(etf_data, calendar, -0.3, hold_days=1, date_lo=lo, date_hi=hi)
         if not pk:
             continue
         r = analyze_subset(str(yr), pk, verbose=False)
         yearly_trend.append((yr, r))
-        print(f"{yr:<6} {r['n']:>6} {r['n_days']:>7} {r['cor']['ev']:>+9} "
-              f"{r['cor_net']:>+8} {r['cor_dt']['t']:>7} {r['cor_dt']['p_one_sided']:>9}")
+        print(
+            f"{yr:<6} {r['n']:>6} {r['n_days']:>7} {r['cor']['ev']:>+9} "
+            f"{r['cor_net']:>+8} {r['cor_dt']['t']:>7} {r['cor_dt']['p_one_sided']:>9}"
+        )
 
     # 断点定位：哪一年 BHAR 首次转负且持续
     flip_year = None
     for i, (yr, r) in enumerate(yearly_trend):
-        if r["cor"]["ev"] < 0 and i + 1 < len(yearly_trend) and yearly_trend[i+1][1]["cor"]["ev"] < 0:
+        if r["cor"]["ev"] < 0 and i + 1 < len(yearly_trend) and yearly_trend[i + 1][1]["cor"]["ev"] < 0:
             flip_year = yr
             break
     print(f"\n  断点: BHAR 首次持续转负年 = {flip_year}")
@@ -445,8 +486,10 @@ def main() -> None:
     print("维度 2: regime 分层——edge 是否集中在 bear/危机？")
     print("=" * 78)
     by_regime = tag_regime(picks_full, index_map)
-    print(f"bull={len(by_regime['bull'])} bear={len(by_regime['bear'])} "
-          f"range={len(by_regime['range'])} crisis={len(by_regime['crisis'])}")
+    print(
+        f"bull={len(by_regime['bull'])} bear={len(by_regime['bear'])} "
+        f"range={len(by_regime['range'])} crisis={len(by_regime['crisis'])}"
+    )
     regime_results = {}
     for rname in ("bull", "bear", "range", "crisis"):
         r = analyze_subset(f"regime={rname}", by_regime[rname])
@@ -461,7 +504,7 @@ def main() -> None:
     window_results = []
     for hd in (1, 2, 4, 5):
         pk = build_picks_window(etf_data, calendar, -0.3, hold_days=hd)
-        r = analyze_subset(f"hold={hd}d (exit T+{hd+1})", pk)
+        r = analyze_subset(f"hold={hd}d (exit T+{hd + 1})", pk)
         window_results.append((hd, r))
 
     # ============================================================
@@ -482,10 +525,8 @@ def main() -> None:
     print("\n" + "=" * 78)
     print("维度 5: ETF 类型分层——edge 是否集中宽基或行业？")
     print("=" * 78)
-    pk_broad = build_picks_window(etf_data, calendar, -0.3, hold_days=1,
-                                  etf_filter=broad_codes)
-    pk_sector = build_picks_window(etf_data, calendar, -0.3, hold_days=1,
-                                   etf_filter=sector_codes)
+    pk_broad = build_picks_window(etf_data, calendar, -0.3, hold_days=1, etf_filter=broad_codes)
+    pk_sector = build_picks_window(etf_data, calendar, -0.3, hold_days=1, etf_filter=sector_codes)
     analyze_subset("宽基(broad)", pk_broad)
     analyze_subset("行业(sector)", pk_sector)
 
@@ -502,30 +543,24 @@ def main() -> None:
     sub_conds = []
     for thr in (-0.3, -0.5, -1.0):
         for hd in (1, 2, 4):
-            for fname, fset in (("all", None), ("broad", broad_codes),
-                                 ("sector", sector_codes)):
-                pk = build_picks_window(etf_data, calendar, thr, hold_days=hd,
-                                        etf_filter=fset,
-                                        date_lo=RECENT_LO, date_hi=RECENT_HI)
+            for fname, fset in (("all", None), ("broad", broad_codes), ("sector", sector_codes)):
+                pk = build_picks_window(
+                    etf_data, calendar, thr, hold_days=hd, etf_filter=fset, date_lo=RECENT_LO, date_hi=RECENT_HI
+                )
                 if not pk:
                     continue
                 # regime split
                 rg = tag_regime(pk, index_map)
                 # 全 regime
-                r = analyze_subset(
-                    f"23-26 thr{thr} h{hd} {fname}", pk, verbose=False)
+                r = analyze_subset(f"23-26 thr{thr} h{hd} {fname}", pk, verbose=False)
                 sub_conds.append(r)
                 # bear only
                 if rg["bear"]:
-                    rb = analyze_subset(
-                        f"23-26 thr{thr} h{hd} {fname} bear", rg["bear"],
-                        verbose=False)
+                    rb = analyze_subset(f"23-26 thr{thr} h{hd} {fname} bear", rg["bear"], verbose=False)
                     sub_conds.append(rb)
                 # crisis only
                 if rg["crisis"]:
-                    rc = analyze_subset(
-                        f"23-26 thr{thr} h{hd} {fname} crisis", rg["crisis"],
-                        verbose=False)
+                    rc = analyze_subset(f"23-26 thr{thr} h{hd} {fname} crisis", rg["crisis"], verbose=False)
                     sub_conds.append(rc)
 
     n_sub = len(sub_conds)
@@ -535,8 +570,7 @@ def main() -> None:
     print(f"  within-script Bonferroni ×{n_sub}×{N_CROSS_STRATEGY}(cross)×2 = ×{n_bonf_sub}")
 
     survivors = []
-    print(f"\n{'子条件':<40} {'n':>5} {'BHAR%':>8} {'net%':>7} {'p_raw':>9} "
-          f"{'p_bonf':>9} {'verdict':<14}")
+    print(f"\n{'子条件':<40} {'n':>5} {'BHAR%':>8} {'net%':>7} {'p_raw':>9} {'p_bonf':>9} {'verdict':<14}")
     for sc in sub_conds:
         p_bonf = bonferroni_p(sc["cor_dt"]["p_one_sided"], n_bonf_sub)
         sc["p_bonf_sub"] = p_bonf
@@ -553,9 +587,11 @@ def main() -> None:
             v = "survives-bonf"
         sc["sub_verdict"] = v
         flag = " <== survives Bonf" if v == "survives-bonf" else ""
-        print(f"{sc['name']:<40} {sc['n']:>5} {sc['cor']['ev']:>+8} "
-              f"{sc['cor_net']:>+7} {sc['cor_dt']['p_one_sided']:>9} "
-              f"{p_bonf:>9} {v:<14}{flag}")
+        print(
+            f"{sc['name']:<40} {sc['n']:>5} {sc['cor']['ev']:>+8} "
+            f"{sc['cor_net']:>+7} {sc['cor_dt']['p_one_sided']:>9} "
+            f"{p_bonf:>9} {v:<14}{flag}"
+        )
         if v == "survives-bonf":
             survivors.append(sc)
 
@@ -567,17 +603,16 @@ def main() -> None:
     print("=" * 78)
 
     # 全样本（disc<-0.3% 1d）
-    v_full = formal_verdict(sub_full, n_cross=N_CROSS_STRATEGY,
-                            n_within=N_FAMILY_VARIANTS,
-                            label="全样本 disc<-0.3% 1d (修正BHAR)")
+    v_full = formal_verdict(
+        sub_full, n_cross=N_CROSS_STRATEGY, n_within=N_FAMILY_VARIANTS, label="全样本 disc<-0.3% 1d (修正BHAR)"
+    )
 
     # 2023-2026 全样本
-    picks_recent = build_picks_window(etf_data, calendar, -0.3, hold_days=1,
-                                      date_lo=RECENT_LO, date_hi=RECENT_HI)
+    picks_recent = build_picks_window(etf_data, calendar, -0.3, hold_days=1, date_lo=RECENT_LO, date_hi=RECENT_HI)
     sub_recent = analyze_subset("2023-2026 disc<-0.3% 1d", picks_recent)
-    v_recent = formal_verdict(sub_recent, n_cross=N_CROSS_STRATEGY,
-                              n_within=N_FAMILY_VARIANTS,
-                              label="2023-2026 disc<-0.3% 1d (修正BHAR)")
+    v_recent = formal_verdict(
+        sub_recent, n_cross=N_CROSS_STRATEGY, n_within=N_FAMILY_VARIANTS, label="2023-2026 disc<-0.3% 1d (修正BHAR)"
+    )
 
     # ============================================================
     # 诚实总结
@@ -585,8 +620,10 @@ def main() -> None:
     print("\n" + "=" * 78)
     print("诚实总结")
     print("=" * 78)
-    print(f"\n[BHAR 口径] R1 全样本 gross={sub_full['r1']['ev']:+.3f}% vs "
-          f"修正={sub_full['cor']['ev']:+.3f}% → beta 泄漏={sub_full['beta_leak']:+.3f}%")
+    print(
+        f"\n[BHAR 口径] R1 全样本 gross={sub_full['r1']['ev']:+.3f}% vs "
+        f"修正={sub_full['cor']['ev']:+.3f}% → beta 泄漏={sub_full['beta_leak']:+.3f}%"
+    )
     print(f"  → {'R1 通胀了 edge（beta 泄漏假 edge 成分）' if sub_full['beta_leak'] > 0 else 'R1 通缩了 edge'}")
 
     print(f"\n[结构断点] 断点年={flip_year}")
@@ -594,14 +631,18 @@ def main() -> None:
     print(f"  2020-2022 修正 BHAR={era_results[1]['cor']['ev']:+.3f}%")
     print(f"  2023-2026 修正 BHAR={era_results[2]['cor']['ev']:+.3f}%")
 
-    print(f"\n[regime] bear BHAR={regime_results['bear']['cor']['ev']:+.3f}% "
-          f"crisis={regime_results['crisis']['cor']['ev']:+.3f}% "
-          f"bull={regime_results['bull']['cor']['ev']:+.3f}%")
+    print(
+        f"\n[regime] bear BHAR={regime_results['bear']['cor']['ev']:+.3f}% "
+        f"crisis={regime_results['crisis']['cor']['ev']:+.3f}% "
+        f"bull={regime_results['bull']['cor']['ev']:+.3f}%"
+    )
 
     # 窗口最佳
     best_win = max(window_results, key=lambda x: x[1]["cor"]["ev"])
-    print(f"\n[窗口] 最佳 hold={best_win[0]}d BHAR={best_win[1]['cor']['ev']:+.3f}% "
-          f"(1d={window_results[0][1]['cor']['ev']:+.3f}%)")
+    print(
+        f"\n[窗口] 最佳 hold={best_win[0]}d BHAR={best_win[1]['cor']['ev']:+.3f}% "
+        f"(1d={window_results[0][1]['cor']['ev']:+.3f}%)"
+    )
 
     # 阈值单调性
     print(f"\n[阈值单调] ", end="")
@@ -609,13 +650,14 @@ def main() -> None:
         print(f"{thr}%→{r['cor']['ev']:+.3f}%  ", end="")
     print()
 
-    print(f"\n[2023-2026 子条件] {n_sub} 测试，Bonf×{n_bonf_sub}，"
-          f"存活 {len(survivors)} 个")
+    print(f"\n[2023-2026 子条件] {n_sub} 测试，Bonf×{n_bonf_sub}，存活 {len(survivors)} 个")
     if survivors:
         print("  存活子条件：")
         for s in survivors:
-            print(f"    {s['name']}: BHAR={s['cor']['ev']:+.3f}% "
-                  f"n={s['n']} n_days={s['n_days']} p_bonf={s['p_bonf_sub']:.6f}")
+            print(
+                f"    {s['name']}: BHAR={s['cor']['ev']:+.3f}% "
+                f"n={s['n']} n_days={s['n_days']} p_bonf={s['p_bonf_sub']:.6f}"
+            )
 
     print(f"\n[正式 verdict]")
     print(f"  全样本(2005-2026): {v_full}")

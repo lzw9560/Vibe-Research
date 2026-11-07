@@ -32,13 +32,28 @@ _INDICES = (
     {"key": "hsi", "name": "恒生指数", "secid": "100.HSI", "region": "港股"},
     {"key": "hstech", "name": "恒生科技", "secid": "124.HSTECH", "region": "港股"},
     {"key": "a50", "name": "富时A50", "secid": "100.XIN9", "region": "外盘期货"},
-    {"key": "n225", "name": "日经225", "secid": "100.N225", "region": "亚太"},  # S088 Q2：实测 stock/get 返数据（2026-08-20 探测 price=66216 chg+1.36%）
-    {"key": "kospi", "name": "韩国KOSPI", "secid": "100.KS11", "region": "亚太"},  # S088 Q3：实测返数据（韩国半导体 SKL/三星，与 SOX 互补覆盖半导体周期）
+    {
+        "key": "n225",
+        "name": "日经225",
+        "secid": "100.N225",
+        "region": "亚太",
+    },  # S088 Q2：实测 stock/get 返数据（2026-08-20 探测 price=66216 chg+1.36%）
+    {
+        "key": "kospi",
+        "name": "韩国KOSPI",
+        "secid": "100.KS11",
+        "region": "亚太",
+    },  # S088 Q3：实测返数据（韩国半导体 SKL/三星，与 SOX 互补覆盖半导体周期）
 )
 
 # 搜索返回的 MktNum → (secucode 后缀, 市场名)
-_MKT = {105: (".O", "NASDAQ"), 106: (".N", "NYSE"), 107: (".O", "US"), 116: (".HK", "HK"),
-        177: (".KS", "KR")}  # 177=韩股（Kospi/Kosdaq，含三星/SK海力士等半导体龙头）；东财仅行情、无 F10 财务
+_MKT = {
+    105: (".O", "NASDAQ"),
+    106: (".N", "NYSE"),
+    107: (".O", "US"),
+    116: (".HK", "HK"),
+    177: (".KS", "KR"),
+}  # 177=韩股（Kospi/Kosdaq，含三星/SK海力士等半导体龙头）；东财仅行情、无 F10 财务
 
 _QUOTE_FIELDS = "f43,f44,f45,f46,f48,f57,f58,f59,f60,f116,f170"
 
@@ -60,8 +75,7 @@ def _push2_stock_get(secid: str, fields: str) -> dict | None:
         start_i = _gs_host[0]
     for i in range(start_i, len(_GS_HOSTS)):
         try:
-            r = astock.em_get(f"https://{_GS_HOSTS[i]}/api/qt/stock/get",
-                              params=params, headers=_UA_H, timeout=5)
+            r = astock.em_get(f"https://{_GS_HOSTS[i]}/api/qt/stock/get", params=params, headers=_UA_H, timeout=5)
             d = r.json().get("data")
         except Exception:
             continue
@@ -82,15 +96,18 @@ def _price(d: dict, key: str):
     dec = d.get("f59")
     if not isinstance(dec, int):  # 注意：不能用 `or 2`——韩元等 f59=0 会被误判成 2，价格被多除 100 倍
         dec = 2
-    return round(v / (10 ** dec), dec)
+    return round(v / (10**dec), dec)
 
 
 def _quote_from(d: dict) -> dict:
     chg = d.get("f170")
     return {
-        "code": d.get("f57"), "name": d.get("f58"),
-        "price": _price(d, "f43"), "open": _price(d, "f46"),
-        "high": _price(d, "f44"), "low": _price(d, "f45"),
+        "code": d.get("f57"),
+        "name": d.get("f58"),
+        "price": _price(d, "f43"),
+        "open": _price(d, "f46"),
+        "high": _price(d, "f44"),
+        "low": _price(d, "f45"),
         "prev_close": _price(d, "f60"),
         "amount": d.get("f48") if isinstance(d.get("f48"), (int, float)) else None,
         "mcap": d.get("f116") if isinstance(d.get("f116"), (int, float)) and d.get("f116") else None,
@@ -113,14 +130,18 @@ def _fetch_sox_datacenter() -> dict | None:
         rows = astock.eastmoney_datacenter(
             "RPT_INDUSTRY_INDEX",
             filter_str='(INDICATOR_ID="EMI00055562")',
-            page_size=1, sort_columns="REPORT_DATE", sort_types="-1",
+            page_size=1,
+            sort_columns="REPORT_DATE",
+            sort_types="-1",
         )
         if not rows:
             return None
         r = rows[0]
         cr = r.get("CHANGE_RATE")
         return {
-            "key": "sox", "name": "费城半导体", "region": "外围半导体",
+            "key": "sox",
+            "name": "费城半导体",
+            "region": "外围半导体",
             "price": r.get("INDICATOR_VALUE"),
             "change_pct": round(float(cr), 2) if isinstance(cr, (int, float)) else None,
             # S112 review fix：SOX 走 datacenter 日频报告（非 push2delay 延时镜像），
@@ -144,14 +165,18 @@ def global_indices() -> list[dict]:
         if not d:
             continue
         chg = d.get("f170")
-        out.append({
-            "key": idx["key"], "name": idx["name"], "region": idx["region"],
-            "price": _price(d, "f43"),
-            "change_pct": round(chg / 100, 2) if isinstance(chg, (int, float)) else None,
-            # S112 R7：延时标记透传（push2delay 镜像→True），让前端可见"这是延时数据"
-            # （market._cached 5min passthrough，直接进 /api/global/indices 响应）。
-            "is_delayed": bool(d.get("_is_delayed", False)),
-        })
+        out.append(
+            {
+                "key": idx["key"],
+                "name": idx["name"],
+                "region": idx["region"],
+                "price": _price(d, "f43"),
+                "change_pct": round(chg / 100, 2) if isinstance(chg, (int, float)) else None,
+                # S112 R7：延时标记透传（push2delay 镜像→True），让前端可见"这是延时数据"
+                # （market._cached 5min passthrough，直接进 /api/global/indices 响应）。
+                "is_delayed": bool(d.get("_is_delayed", False)),
+            }
+        )
     sox = _fetch_sox_datacenter()
     if sox:
         out.append(sox)
@@ -180,8 +205,7 @@ def _search(q: str) -> dict | None:
     搜 BABA 混入 05593(窝轮)，且 SecurityType 分不开(正股与 ETF 同为 Type7、正股港股与窝轮同为 Type6)。
     正股的 Code 恰好等于查询词，故精确匹配 Code==q 最稳；无精确匹配(名称查询)才退回第一条。
     """
-    params = {"input": q, "type": 14,
-              "token": "D43BF722C8E33BDC906FB84D85E326E8", "count": 10}
+    params = {"input": q, "type": 14, "token": "D43BF722C8E33BDC906FB84D85E326E8", "count": 10}
 
     rows, last_error = None, None
     for url in _SEARCH_ENDPOINTS:
@@ -207,12 +231,11 @@ def _search(q: str) -> dict | None:
         data = table.get("Data") if isinstance(table, dict) else None
         if not isinstance(data, list):
             last_error = (
-                f"{url} → 响应结构异常（缺少 QuotationCodeTable.Data 或类型不对）"
-                f"，可能是接口改版或被风控页拦截"
+                f"{url} → 响应结构异常（缺少 QuotationCodeTable.Data 或类型不对），可能是接口改版或被风控页拦截"
             )
             continue
 
-        rows = data   # 结构正常但为空 = 真的没匹配到
+        rows = data  # 结构正常但为空 = 真的没匹配到
         break
 
     if rows is None:
@@ -236,8 +259,13 @@ def _search(q: str) -> dict | None:
     mkt, s = next(((m, x) for m, x in matches if str(x.get("Code", "")).upper() == q), matches[0])
     suffix, market = _MKT[mkt]
     code = s.get("Code", "")
-    return {"code": code, "name": s.get("Name", ""), "secid_prefix": mkt,
-            "secucode": f"{code}{suffix}", "market": market}
+    return {
+        "code": code,
+        "name": s.get("Name", ""),
+        "secid_prefix": mkt,
+        "secucode": f"{code}{suffix}",
+        "market": market,
+    }
 
 
 def resolve_symbol(query: str) -> dict | None:
@@ -270,7 +298,10 @@ def _key_metrics(secucode: str) -> dict | None:
     rows = astock.eastmoney_datacenter(
         f"RPT_{market}F10_FN_GMAININDICATOR",
         filter_str=f'(SECUCODE="{secucode}")',
-        page_size=1, sort_columns="REPORT_DATE", sort_types="-1")
+        page_size=1,
+        sort_columns="REPORT_DATE",
+        sort_types="-1",
+    )
     if not rows:
         return None
     m = rows[0]
@@ -300,7 +331,9 @@ def us_hk_stock(query: str) -> dict:
         "market": info["market"],
         "quote": quote,
         "metrics": _key_metrics(info["secucode"]) if info["market"] != "KR" else None,  # 韩股东财无 F10 财务
-        "quote_status": "unavailable" if d is None else None,  # S132 R1：源断（双 host 全挂）标 unavailable 非"valid null quote"，mapper 透传 LLM
+        "quote_status": "unavailable"
+        if d is None
+        else None,  # S132 R1：源断（双 host 全挂）标 unavailable 非"valid null quote"，mapper 透传 LLM
     }
 
 
@@ -337,7 +370,10 @@ def hk_cashflow(query: str, periods: int = 8) -> dict:
     rows = astock.eastmoney_datacenter(
         "RPT_HKSK_FN_CASHFLOW",
         filter_str=f'(SECUCODE="{info["secucode"]}"){item_filter}',
-        page_size=300, sort_columns="REPORT_DATE", sort_types="-1")
+        page_size=300,
+        sort_columns="REPORT_DATE",
+        sort_types="-1",
+    )
     if not rows:
         return {}
     by_period: dict[str, dict] = {}
@@ -346,11 +382,16 @@ def hk_cashflow(query: str, periods: int = 8) -> dict:
         code = str(r.get("STD_ITEM_CODE") or "")
         if not rd or code not in _HK_CF_ITEMS:
             continue
-        p = by_period.setdefault(rd, {
-            "report_date": rd, "report": r.get("REPORT"),
-            "currency": r.get("CURRENCY"), "account_standard": r.get("ACCOUNT_STANDARD"),
-            "items": {},
-        })
+        p = by_period.setdefault(
+            rd,
+            {
+                "report_date": rd,
+                "report": r.get("REPORT"),
+                "currency": r.get("CURRENCY"),
+                "account_standard": r.get("ACCOUNT_STANDARD"),
+                "items": {},
+            },
+        )
         amt, yoy = r.get("AMOUNT"), r.get("YOY_RATIO")
         p["items"][_HK_CF_ITEMS[code]] = {
             "amount": amt if isinstance(amt, (int, float)) else None,
@@ -360,7 +401,9 @@ def hk_cashflow(query: str, periods: int = 8) -> dict:
         return {}
     periods_out = sorted(by_period.values(), key=lambda x: x["report_date"], reverse=True)[:periods]
     return {
-        "code": info["code"], "name": info["name"], "market": "HK",
+        "code": info["code"],
+        "name": info["name"],
+        "market": "HK",
         "currency": periods_out[0].get("currency"),
         "item_order": [_HK_CF_ITEMS[c] for c in _HK_CF_ORDER],
         "periods": periods_out,

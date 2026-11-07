@@ -6,6 +6,7 @@ Slack 发送提醒服务
 1. 通过 Slack Bot API 或 Incoming Webhook 发送 Slack 消息
    （同时配置时优先使用 Bot API，确保文本与图片发送到同一频道）
 """
+
 import logging
 import json
 from typing import Optional
@@ -24,7 +25,6 @@ _TEXT_LIMIT = 39000
 
 
 class SlackSender:
-
     def __init__(self, config: Config):
         """
         初始化 Slack 配置
@@ -32,10 +32,10 @@ class SlackSender:
         Args:
             config: 配置对象
         """
-        self._slack_webhook_url = getattr(config, 'slack_webhook_url', None)
-        self._slack_bot_token = getattr(config, 'slack_bot_token', None)
-        self._slack_channel_id = getattr(config, 'slack_channel_id', None)
-        self._webhook_verify_ssl = getattr(config, 'webhook_verify_ssl', True)
+        self._slack_webhook_url = getattr(config, "slack_webhook_url", None)
+        self._slack_bot_token = getattr(config, "slack_bot_token", None)
+        self._slack_channel_id = getattr(config, "slack_channel_id", None)
+        self._webhook_verify_ssl = getattr(config, "webhook_verify_ssl", True)
 
     @property
     def _use_bot(self) -> bool:
@@ -87,14 +87,8 @@ class SlackSender:
         # 按 block text 上限拆分
         pos = 0
         while pos < len(content):
-            segment = content[pos:pos + _BLOCK_TEXT_LIMIT]
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": segment
-                }
-            })
+            segment = content[pos : pos + _BLOCK_TEXT_LIMIT]
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": segment}})
             pos += _BLOCK_TEXT_LIMIT
         return blocks
 
@@ -115,8 +109,8 @@ class SlackSender:
             }
             response = requests.post(
                 self._slack_webhook_url,
-                data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
-                headers={'Content-Type': 'application/json; charset=utf-8'},
+                data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                headers={"Content-Type": "application/json; charset=utf-8"},
                 timeout=timeout_seconds or 15,
                 verify=self._webhook_verify_ssl,
             )
@@ -141,8 +135,8 @@ class SlackSender:
         """
         try:
             headers = {
-                'Authorization': f'Bearer {self._slack_bot_token}',
-                'Content-Type': 'application/json; charset=utf-8',
+                "Authorization": f"Bearer {self._slack_bot_token}",
+                "Content-Type": "application/json; charset=utf-8",
             }
             payload = {
                 "channel": self._slack_channel_id,
@@ -150,8 +144,8 @@ class SlackSender:
                 "blocks": self._build_blocks(content),
             }
             response = requests.post(
-                'https://slack.com/api/chat.postMessage',
-                data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
+                "https://slack.com/api/chat.postMessage",
+                data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
                 headers=headers,
                 timeout=timeout_seconds or 15,
             )
@@ -181,31 +175,31 @@ class SlackSender:
         """
         # Bot 模式：使用新版文件上传 API
         if self._use_bot:
-            headers = {'Authorization': f'Bearer {self._slack_bot_token}'}
+            headers = {"Authorization": f"Bearer {self._slack_bot_token}"}
             try:
                 # Step 1: 获取上传 URL
                 resp1 = requests.post(
-                    'https://slack.com/api/files.getUploadURLExternal',
+                    "https://slack.com/api/files.getUploadURLExternal",
                     headers=headers,
                     data={
-                        'filename': 'report.png',
-                        'length': len(image_bytes),
+                        "filename": "report.png",
+                        "length": len(image_bytes),
                     },
                     timeout=30,
                 )
                 result1 = resp1.json()
                 if not result1.get("ok"):
-                    logger.error("Slack 获取上传 URL 失败: %s", result1.get('error', 'unknown'))
-                    raise RuntimeError(result1.get('error', 'unknown'))
+                    logger.error("Slack 获取上传 URL 失败: %s", result1.get("error", "unknown"))
+                    raise RuntimeError(result1.get("error", "unknown"))
 
-                upload_url = result1['upload_url']
-                file_id = result1['file_id']
+                upload_url = result1["upload_url"]
+                file_id = result1["file_id"]
 
                 # Step 2: 上传文件内容（raw body，不能用 multipart）
                 resp2 = requests.post(
                     upload_url,
                     data=image_bytes,
-                    headers={'Content-Type': 'application/octet-stream'},
+                    headers={"Content-Type": "application/octet-stream"},
                     timeout=30,
                 )
                 if resp2.status_code != 200:
@@ -214,11 +208,11 @@ class SlackSender:
 
                 # Step 3: 完成上传并分享到频道
                 resp3 = requests.post(
-                    'https://slack.com/api/files.completeUploadExternal',
-                    headers={**headers, 'Content-Type': 'application/json'},
+                    "https://slack.com/api/files.completeUploadExternal",
+                    headers={**headers, "Content-Type": "application/json"},
                     json={
-                        'files': [{'id': file_id, 'title': '股票分析报告'}],
-                        'channel_id': self._slack_channel_id,
+                        "files": [{"id": file_id, "title": "股票分析报告"}],
+                        "channel_id": self._slack_channel_id,
                     },
                     timeout=30,
                 )
@@ -226,7 +220,7 @@ class SlackSender:
                 if result3.get("ok"):
                     logger.info("Slack Bot 图片发送成功")
                     return True
-                logger.error("Slack 完成上传失败: %s", result3.get('error', 'unknown'))
+                logger.error("Slack 完成上传失败: %s", result3.get("error", "unknown"))
             except Exception as e:
                 logger.error("Slack Bot 图片发送异常: %s", e)
 

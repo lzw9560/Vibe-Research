@@ -16,6 +16,7 @@
 - zt_history.db: 涨停+连板+fbt 首封时间
 - dragon_tiger_history.db: 8 年席位 2123 天（inst_dominant walk-forward OOS edge-confirmed）
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -40,8 +41,8 @@ DT_DB = DATA / "dragon_tiger_history.db"
 
 # 第一层财务硬过滤阈值（用户给 + 项目 sound）
 MIN_AVG_AMT = 1.5e8  # 5 日均成交下限 1.5 亿
-MIN_MV = 30e8        # 流通市值下限 30 亿（待 hithink 接入）
-MAX_MV = 150e8       # 流通市值上限 150 亿（待 hithink 接入）
+MIN_MV = 30e8  # 流通市值下限 30 亿（待 hithink 接入）
+MAX_MV = 150e8  # 流通市值上限 150 亿（待 hithink 接入）
 MAX_DEBT_RATIO = 85  # 资产负债率上限 85%（待 hithink 财报接入）
 
 # 第二层情绪因子阈值（标 falsified，不假装 alpha）
@@ -74,13 +75,14 @@ INST_DOMINANT_META = "edge-confirmed walk-forward OOS (8年25327 mean+0.390% day
 @dataclass(frozen=True)
 class FilterResult:
     """排雷结果（借鉴安全审查 JSON 模板）。"""
+
     code: str
     name: str
     is_passed: bool
-    risk_level: str            # None/Low/High
-    hit_rules: list            # 命中的雷/因子
+    risk_level: str  # None/Low/High
+    hit_rules: list  # 命中的雷/因子
     reason: str
-    safe_action: str           # Pass(观察池)/Block(剔除)/Refuse(黑名单)
+    safe_action: str  # Pass(观察池)/Block(剔除)/Refuse(黑名单)
     verdicts: dict
     tactics_meta: dict
 
@@ -143,8 +145,14 @@ def _check_institutional_seat(code: str) -> dict:
     if not rows:
         return {"has_lhb": False, "inst_seats": [], "inst_net_pct": 0.0, "is_inst_dominant": False}
     inst_keywords = (
-        "机构专用", "总部", "高盛", "瑞银", "股通", "摩根",
-        "中信证券股份有限公司上海分公司", "国际金融",
+        "机构专用",
+        "总部",
+        "高盛",
+        "瑞银",
+        "股通",
+        "摩根",
+        "中信证券股份有限公司上海分公司",
+        "国际金融",
     )
     inst_seats = [r for r in rows if any(k in (r[0] or "") for k in inst_keywords)]
     total_buy = sum((r[1] or 0) for r in rows)
@@ -182,7 +190,7 @@ def first_layer_filter(code: str, name: str, bars: list[dict]) -> tuple[bool, li
     # 5 日均成交额（baostock bar 有 amount）
     avg_amt = sum((b.get("amount", 0) or 0) for b in last5[:5]) / 5
     if avg_amt < MIN_AVG_AMT:
-        hits.append(f"5 日均成交 {avg_amt/1e8:.2f}亿 < 1.5 亿")
+        hits.append(f"5 日均成交 {avg_amt / 1e8:.2f}亿 < 1.5 亿")
 
     # TODO T1.8: 流通市值从 hithink 取（30-150 亿）
     # TODO T1.9: 资产负债率从 hithink 财报取（>85% 剔除）
@@ -275,9 +283,15 @@ def filter_stock(code: str, tactic: str = "战法1_弱转强", zt: dict | None =
     pass1, hits1 = first_layer_filter(code, name, bars)
     if not pass1:
         return FilterResult(
-            code=code, name=name, is_passed=False, risk_level="High",
-            hit_rules=hits1, reason=f"第一层财务硬过滤未通过: {hits1}",
-            safe_action="Block", verdicts=VERDICTS, tactics_meta={},
+            code=code,
+            name=name,
+            is_passed=False,
+            risk_level="High",
+            hit_rules=hits1,
+            reason=f"第一层财务硬过滤未通过: {hits1}",
+            safe_action="Block",
+            verdicts=VERDICTS,
+            tactics_meta={},
         )
 
     # 第二层情绪因子匹配（标 falsified）
@@ -292,9 +306,15 @@ def filter_stock(code: str, tactic: str = "战法1_弱转强", zt: dict | None =
     )
 
     return FilterResult(
-        code=code, name=name, is_passed=pass2, risk_level=risk,
-        hit_rules=hits2, reason=reason, safe_action=action,
-        verdicts=VERDICTS, tactics_meta=meta,
+        code=code,
+        name=name,
+        is_passed=pass2,
+        risk_level=risk,
+        hit_rules=hits2,
+        reason=reason,
+        safe_action=action,
+        verdicts=VERDICTS,
+        tactics_meta=meta,
     )
 
 
@@ -315,6 +335,7 @@ def to_json(r: FilterResult) -> dict:
 
 if __name__ == "__main__":
     import sys
+
     code = sys.argv[1] if len(sys.argv) > 1 else "sh.600519"  # 默认贵州茅台测试
     tactic = sys.argv[2] if len(sys.argv) > 2 else "战法1_弱转强"
     r = filter_stock(code, tactic)

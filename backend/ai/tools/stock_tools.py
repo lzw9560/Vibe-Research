@@ -8,6 +8,7 @@
 方向性研判由 LLM 在 SYSTEM_PROMPT 约束下给出，工具不越权。
 东财端点经 `em_get`（astock 内部已封装），不裸调 requests（工程底线）。
 """
+
 from __future__ import annotations
 
 import astock
@@ -18,6 +19,7 @@ from .registry import register_tool
 
 
 # ── 5 个数据工具（A 股 + 美港股） ─────────────────────────────────────
+
 
 @register_tool(
     "query_quote",
@@ -95,6 +97,7 @@ def query_intraday_features(code: str, days: int = 5) -> list[dict]:
     # 懒导入：stock_tools import 时 risk 可能未就绪 + 避免循环；fresh env 表不存在返 []
     import sqlite3  # noqa: PLC0415
     from risk.seal_intraday_collector import _get_conn  # noqa: PLC0415
+
     note = "辅助非 edge（§44 H2 lift=0.7843 劣于随机，仅供看盘中结构）"
     try:
         conn = _get_conn()
@@ -112,9 +115,12 @@ def query_intraday_features(code: str, days: int = 5) -> list[dict]:
         return []
     return [
         {
-            "date": r["date"], "last_lock_time": r["last_lock_time"],
-            "broken_duration_min": r["broken_duration_min"], "max_drop_pct": r["max_drop_pct"],
-            "limit_price": r["limit_price"], "data_status": r["data_status"],
+            "date": r["date"],
+            "last_lock_time": r["last_lock_time"],
+            "broken_duration_min": r["broken_duration_min"],
+            "max_drop_pct": r["max_drop_pct"],
+            "limit_price": r["limit_price"],
+            "data_status": r["data_status"],
             "note": note,
         }
         for r in rows
@@ -124,6 +130,7 @@ def query_intraday_features(code: str, days: int = 5) -> list[dict]:
 # ── 2 个预测工具（S017 T11，研究参考性 payload + 免责） ───────────────
 # 懒导入 routers.prediction：避免 stock_tools → routers → app → chat →
 # ai.tools → stock_tools 的循环（chat.py import 时 routers 可能尚未就绪）。
+
 
 @register_tool(
     "prediction_short_sector",
@@ -147,8 +154,7 @@ def prediction_short_sector(stage: str, date: str | None = None) -> dict:
 
 @register_tool(
     "prediction_intraday_framework",
-    "查盘中教育性研判框架（S4 看什么/怎么判）：量比/分时量价/封板资金/龙头属性。"
-    "教育参考，非信号、非交易指令。",
+    "查盘中教育性研判框架（S4 看什么/怎么判）：量比/分时量价/封板资金/龙头属性。教育参考，非信号、非交易指令。",
     params=None,
 )
 def prediction_intraday_framework() -> dict:
@@ -159,6 +165,7 @@ def prediction_intraday_framework() -> dict:
 
 # ── S104：hithink 特色数据工具（异动/飙升/热股榜，项目从无独立源） ──────
 
+
 @register_tool(
     "query_skyrocket",
     "查 A 股飙升榜（同花顺口径，hithink 独家）：rank/heat/rank_change/rank_trend。"
@@ -167,17 +174,18 @@ def prediction_intraday_framework() -> dict:
 )
 def query_skyrocket(period: str = "day") -> list[dict]:
     from data.sources.hithink_src import skyrocket
+
     return skyrocket(str(period))
 
 
 @register_tool(
     "query_hot_stock",
-    "查 A 股热股榜（同花顺口径，hithink 独家）：rank/heat/rank_change/rank_trend。"
-    "东财无此数据源。period=day / hour。",
+    "查 A 股热股榜（同花顺口径，hithink 独家）：rank/heat/rank_change/rank_trend。东财无此数据源。period=day / hour。",
     params={"period": {"description": "周期：day(日榜) / hour(小时榜)", "default": "day"}},
 )
 def query_hot_stock(period: str = "day") -> list[dict]:
     from data.sources.hithink_src import hot_stock
+
     return hot_stock(str(period))
 
 
@@ -189,4 +197,5 @@ def query_hot_stock(period: str = "day") -> list[dict]:
 )
 def query_anomaly(tag_codes: str | None = None) -> list[dict]:
     from data.sources.hithink_src import anomaly_list
+
     return anomaly_list(tag_codes)

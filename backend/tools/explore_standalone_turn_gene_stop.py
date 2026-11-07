@@ -32,6 +32,7 @@ composite 教训: composite top-5 basic +0.731% 但 stop -0.084% → basic 无�
   cd /Users/lizhiwei/project/code/stock/Vibe-Research/backend
   .venv/bin/python tools/explore_standalone_turn_gene_stop.py
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -72,6 +73,7 @@ N_TESTS = max(2, N_CROSS_FACTOR * 2)  # = 4
 
 # ---------- helpers ----------
 
+
 def _stop_ret_fn(p: dict) -> float | None:
     """Wrapper: close_ev_stop returns (float, str), walk_forward needs float."""
     r = close_ev_stop(p)
@@ -111,22 +113,33 @@ def run_standalone(
     factor_picks = [p for p in blanket if p.get(factor) is not None]
     topk = select_topk_by_factor(factor_picks, factor, k)
 
-    print(f"\n  {name}: universe={len(factor_picks)} picks → top-{k}={len(topk)} "
-          f"({len(set(p['zt_date'] for p in topk))} days)")
+    print(
+        f"\n  {name}: universe={len(factor_picks)} picks → top-{k}={len(topk)} "
+        f"({len(set(p['zt_date'] for p in topk))} days)"
+    )
 
     if not topk:
         print(f"  → no-data: 无 pick 有 {factor}")
         return {
-            "name": name, "factor": factor, "n_picks": 0,
-            "basic_ev": 0.0, "n_days": 0, "stop_bonf_x4": 1.0,
-            "stop_day_t": 0.0, "stop_ev_gross": 0.0, "stop_ev_net": 0.0,
-            "verdict": "underpowered", "walk_forward_test_ev": 0.0,
-            "walk_forward_test_p": 1.0, "walk_forward_train_ev": 0.0,
+            "name": name,
+            "factor": factor,
+            "n_picks": 0,
+            "basic_ev": 0.0,
+            "n_days": 0,
+            "stop_bonf_x4": 1.0,
+            "stop_day_t": 0.0,
+            "stop_ev_gross": 0.0,
+            "stop_ev_net": 0.0,
+            "verdict": "underpowered",
+            "walk_forward_test_ev": 0.0,
+            "walk_forward_test_p": 1.0,
+            "walk_forward_train_ev": 0.0,
         }
 
     # analyze_subset (basic + stop + R6 + walk_forward_basic)
     r = analyze_subset(
-        f"{name} (top-{k})", topk,
+        f"{name} (top-{k})",
+        topk,
         ret_fn_basic=close_ev_basic,
         ret_fn_stop=close_ev_stop,
         ret_fn_label="close_ev",
@@ -150,28 +163,29 @@ def run_standalone(
     wf_status = wf_stop.get("status", "no_picks")
     wf_train_ev = wf_stop.get("train_ev", {}).get("ev", 0.0) if wf_status == "ok" else 0.0
     wf_test_ev = wf_stop.get("test_ev", {}).get("ev", 0.0) if wf_status == "ok" else 0.0
-    wf_test_p = (wf_stop.get("test_day_t", {}).get("p_one_sided", 1.0)
-                 if wf_status == "ok" else 1.0)
+    wf_test_p = wf_stop.get("test_day_t", {}).get("p_one_sided", 1.0) if wf_status == "ok" else 1.0
 
     stop_bonf_x4 = bonferroni_p(stop_p_raw, N_TESTS)
 
     # verdict: 喂 stop 变体 EV (非 basic!) — composite 教训
     v = verdict_for(
-        stop_ev_gross,        # ev_gross = STOP variant
-        stop_t_day,           # t_day = stop variant
-        stop_p_raw,           # p_raw = stop variant
-        wf_status,            # wf_status from stop walk_forward
-        wf_train_ev,          # train_ev from stop walk_forward
-        wf_test_ev,           # test_ev from stop walk_forward
-        wf_test_p,            # test_p from stop walk_forward
-        stop_n_days,          # n_days from stop variant
-        stop_ev_net,          # net_ev = stop EV - cost
+        stop_ev_gross,  # ev_gross = STOP variant
+        stop_t_day,  # t_day = stop variant
+        stop_p_raw,  # p_raw = stop variant
+        wf_status,  # wf_status from stop walk_forward
+        wf_train_ev,  # train_ev from stop walk_forward
+        wf_test_ev,  # test_ev from stop walk_forward
+        wf_test_p,  # test_p from stop walk_forward
+        stop_n_days,  # n_days from stop variant
+        stop_ev_net,  # net_ev = stop EV - cost
         f"{name} (stop variant)",
         n_cross_factor=N_CROSS_FACTOR,  # ×4
     )
 
     return {
-        "name": name, "factor": factor, "n_picks": len(topk),
+        "name": name,
+        "factor": factor,
+        "n_picks": len(topk),
         "basic_ev": basic_ev,
         "n_days": stop_n_days,
         "stop_bonf_x4": stop_bonf_x4,
@@ -189,6 +203,7 @@ def run_standalone(
 
 # ---------- main ----------
 
+
 def main() -> None:
     print("=" * 70)
     print("standalone turn + gene 加 stop 变体最终测试")
@@ -203,12 +218,12 @@ def main() -> None:
     zt_rows = load_zt()
     gene, n_gene = load_gene_scores()
     calendar = sorted(all_dates)
-    print(f"  kline codes={len(code_map)} calendar days={len(calendar)} "
-          f"zt_rows={len(zt_rows)}")
-    print(f"  zt date range: {min(d for d,_,_ in zt_rows)} ~ "
-          f"{max(d for d,_,_ in zt_rows)}")
-    print(f"  gene_scores: {n_gene} rows, {len(gene)} dates "
-          f"({min(gene) if gene else 'N/A'} ~ {max(gene) if gene else 'N/A'})")
+    print(f"  kline codes={len(code_map)} calendar days={len(calendar)} zt_rows={len(zt_rows)}")
+    print(f"  zt date range: {min(d for d, _, _ in zt_rows)} ~ {max(d for d, _, _ in zt_rows)}")
+    print(
+        f"  gene_scores: {n_gene} rows, {len(gene)} dates "
+        f"({min(gene) if gene else 'N/A'} ~ {max(gene) if gene else 'N/A'})"
+    )
 
     # ---- build blanket picks ----
     print("\n[2] 构建 blanket picks (entry=T+1 open, exit=T+2 close, 一字涨停跳过)…")
@@ -218,9 +233,8 @@ def main() -> None:
     # ---- attach factors (turn + gene_score 等 5 因子) ----
     print("\n[3] 附因子 (turn + gene_score 等 5 因子) ...")
     blanket, n_complete, counts = attach_factors(blanket, code_map, gene)
-    print(f"  turn 覆盖: {counts['turn']} ({counts['turn']/max(len(blanket),1)*100:.1f}%)")
-    print(f"  gene_score 覆盖: {counts['gene_score']} "
-          f"({counts['gene_score']/max(len(blanket),1)*100:.1f}%)")
+    print(f"  turn 覆盖: {counts['turn']} ({counts['turn'] / max(len(blanket), 1) * 100:.1f}%)")
+    print(f"  gene_score 覆盖: {counts['gene_score']} ({counts['gene_score'] / max(len(blanket), 1) * 100:.1f}%)")
     print(f"  注: turn 全样本 (2024-06+), gene_score 仅 2026-01-05+ (183 天)")
 
     # ---- [4] turn-alone ----
@@ -241,23 +255,26 @@ def main() -> None:
 
     # ---- [6] summary table ----
     print(f"\n{'=' * 70}")
-    print(f"[6] 汇总 (close_ev %, per-day-mean t, Bonf ×{N_TESTS}, "
-          f"walk-forward stop, verdict)")
+    print(f"[6] 汇总 (close_ev %, per-day-mean t, Bonf ×{N_TESTS}, walk-forward stop, verdict)")
     print(f"{'=' * 70}")
-    hdr = (f"  {'component':<12} {'n':>5} {'days':>5} "
-           f"{'basic%':>8} {'stop_gr%':>8} {'stop_net%':>9} "
-           f"{'stop_t':>6} {'Bonf×4':>9} "
-           f"{'wf_tr%':>7} {'wf_te%':>7} {'wf_te_p':>8} {'verdict':<16}")
+    hdr = (
+        f"  {'component':<12} {'n':>5} {'days':>5} "
+        f"{'basic%':>8} {'stop_gr%':>8} {'stop_net%':>9} "
+        f"{'stop_t':>6} {'Bonf×4':>9} "
+        f"{'wf_tr%':>7} {'wf_te%':>7} {'wf_te_p':>8} {'verdict':<16}"
+    )
     print(hdr)
-    print(f"  {'-'*108}")
+    print(f"  {'-' * 108}")
     for r, label in [(r_turn, "turn"), (r_gene, "gene")]:
-        print(f"  {label:<12} {r['n_picks']:>5} {r['n_days']:>5} "
-              f"{r['basic_ev']:>+8.3f} {r['stop_ev_gross']:>+8.3f} "
-              f"{r['stop_ev_net']:>+9.3f} "
-              f"{r['stop_day_t']:>6.2f} {r['stop_bonf_x4']:>9.6f} "
-              f"{r['walk_forward_train_ev']:>+7.3f} "
-              f"{r['walk_forward_test_ev']:>+7.3f} "
-              f"{r['walk_forward_test_p']:>8.4f} {r['verdict']:<16}")
+        print(
+            f"  {label:<12} {r['n_picks']:>5} {r['n_days']:>5} "
+            f"{r['basic_ev']:>+8.3f} {r['stop_ev_gross']:>+8.3f} "
+            f"{r['stop_ev_net']:>+9.3f} "
+            f"{r['stop_day_t']:>6.2f} {r['stop_bonf_x4']:>9.6f} "
+            f"{r['walk_forward_train_ev']:>+7.3f} "
+            f"{r['walk_forward_test_ev']:>+7.3f} "
+            f"{r['walk_forward_test_p']:>8.4f} {r['verdict']:<16}"
+        )
 
     # ---- [7] honest notes ----
     _print_honest_notes(r_turn, r_gene)

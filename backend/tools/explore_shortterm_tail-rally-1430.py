@@ -37,6 +37,7 @@ T收盘买 T+1开盘卖 的隔夜收益 > 市场隔夜漂移).
   - DSR/PBO: N/A (单隔夜信号无 return series, DSR 需 Sharpe series).
   - 禁止外推: 代理结果 ≠ 短线/隔夜 有/无 edge.
 """
+
 from __future__ import annotations
 import sys
 from pathlib import Path
@@ -45,17 +46,24 @@ from statistics import mean, pstdev
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _factor_helpers import (  # noqa: E402
-    load_kline_db, limit_for_code, is_yizi_t1,
-    ev_stats, day_paired_t, bonferroni_p, walk_forward, verdict_for,
-    COST, ALPHA,
+    load_kline_db,
+    limit_for_code,
+    is_yizi_t1,
+    ev_stats,
+    day_paired_t,
+    bonferroni_p,
+    walk_forward,
+    verdict_for,
+    COST,
+    ALPHA,
 )
 
 # ---------- 代理参数 ----------
-CLOSE_STRENGTH_THRESH = 0.90   # close 在当日区间上部 >= 90% (强收代理)
-VOL_SURGE_MULT = 1.5           # 量增: vol_T >= 1.5 × 近5日均量
+CLOSE_STRENGTH_THRESH = 0.90  # close 在当日区间上部 >= 90% (强收代理)
+VOL_SURGE_MULT = 1.5  # 量增: vol_T >= 1.5 × 近5日均量
 VOL_LOOKBACK = 5
-OVERNIGHT_COST = 0.0015        # 隔夜往返成本 0.15% (买佣0.025+卖佣0.025+印花0.05+滑点)
-N_CROSS_STRATEGY = 5          # 跨策略 Bonferroni ×5
+OVERNIGHT_COST = 0.0015  # 隔夜往返成本 0.15% (买佣0.025+卖佣0.025+印花0.05+滑点)
+N_CROSS_STRATEGY = 5  # 跨策略 Bonferroni ×5
 FAMILY_THRESHOLDS = (0.80, 0.90, 0.95)  # 家族阈值敏感性 (cross-parameter Bonf)
 
 
@@ -65,9 +73,9 @@ def load_data():
     code_map, all_dates = load_kline_db()
     calendar = sorted(all_dates)
     import json
+
     idx = json.load(open(resolve_data_dir() / "index_ma20_regime.json"))
-    print(f"    codes={len(code_map)} dates={len(calendar)} "
-          f"({calendar[0]}..{calendar[-1]}) index_days={len(idx)}")
+    print(f"    codes={len(code_map)} dates={len(calendar)} ({calendar[0]}..{calendar[-1]}) index_days={len(idx)}")
     return code_map, calendar, idx
 
 
@@ -78,7 +86,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 from vr_paths import resolve_data_dir
-
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -122,15 +129,15 @@ def is_limit_closed(bar, prev_close, code, is_st):
     lim = limit_for_code(code, is_st)
     pc = bar.get("pctChg")
     pct = pc if pc is not None else (bar.get("close", 0) - prev_close) / prev_close * 100
-    up_closed = pct >= lim * 100 - 0.3   # 涨停封板 (含一字)
+    up_closed = pct >= lim * 100 - 0.3  # 涨停封板 (含一字)
     dn_closed = pct <= -lim * 100 + 0.3  # 跌停封板
     return up_closed, dn_closed
 
 
 # ---------- build_picks: 日K代理 (非 zt-based) ----------
-def build_picks_tail_rally(code_map, calendar, market_overnight,
-                           close_thresh=CLOSE_STRENGTH_THRESH,
-                           vol_mult=VOL_SURGE_MULT):
+def build_picks_tail_rally(
+    code_map, calendar, market_overnight, close_thresh=CLOSE_STRENGTH_THRESH, vol_mult=VOL_SURGE_MULT
+):
     """代理: close_strength >= thresh AND 量增 → T close 买, T+1 open 卖."""
     date_idx = {d: i for i, d in enumerate(calendar)}
     picks = []
@@ -195,8 +202,12 @@ def build_picks_tail_rally(code_map, calendar, market_overnight,
             exit_px = t1_open
             lim = limit_for_code(code, is_st)
             # 一字跌停: open==low 且 open <= close*(1-lim)
-            if (t1_low is not None and abs(t1_open - t1_low) / t1_open < 0.005
-                    and prev_close and t1_open <= prev_close * (1 - lim + 0.005)):
+            if (
+                t1_low is not None
+                and abs(t1_open - t1_low) / t1_open < 0.005
+                and prev_close
+                and t1_open <= prev_close * (1 - lim + 0.005)
+            ):
                 exit_px = t1_close if t1_close and t1_close > 0 else t1_open
                 exit_reason = "t1_limit_down_fill_close"
 
@@ -204,12 +215,21 @@ def build_picks_tail_rally(code_map, calendar, market_overnight,
             mkt = market_overnight.get(d)
             bhar = ret - mkt if mkt is not None else None
 
-            picks.append({
-                "code": code, "zt_date": d, "t1_date": d_next,
-                "entry": c, "t1_bar": t1_bar, "t_close": c,
-                "close_strength": round(cs, 3), "vol_surge": round(vol / vmean, 2) if vmean else 0,
-                "ret": ret, "bhar": bhar, "exit_reason": exit_reason,
-            })
+            picks.append(
+                {
+                    "code": code,
+                    "zt_date": d,
+                    "t1_date": d_next,
+                    "entry": c,
+                    "t1_bar": t1_bar,
+                    "t_close": c,
+                    "close_strength": round(cs, 3),
+                    "vol_surge": round(vol / vmean, 2) if vmean else 0,
+                    "ret": ret,
+                    "bhar": bhar,
+                    "exit_reason": exit_reason,
+                }
+            )
     return picks, skipped
 
 
@@ -226,7 +246,7 @@ def analyze_proxy(name, picks, n_cross=N_CROSS_STRATEGY):
     s = ev_stats(rets)
     net_ev = s["ev"] - OVERNIGHT_COST * 100
     print(f"\n--- 原始隔夜 EV (T close -> T+1 open, no cost) ---")
-    print(f"  n={s['n']} gross_EV={s['ev']}% net_EV(overnight cost {OVERNIGHT_COST*100}%)={net_ev:.3f}%")
+    print(f"  n={s['n']} gross_EV={s['ev']}% net_EV(overnight cost {OVERNIGHT_COST * 100}%)={net_ev:.3f}%")
     print(f"  std={s['std']}% WR={s['wr']}% t={s['t']} CI[{s['ci_lo']},{s['ci_hi']}]")
 
     # 市场隔夜基准对比
@@ -243,12 +263,13 @@ def analyze_proxy(name, picks, n_cross=N_CROSS_STRATEGY):
         if p["bhar"] is not None:
             bhar_by_date[p["zt_date"]].append(p["bhar"])
     bdt = day_paired_t(bhar_by_date)
-    print(f"  n_days={bdt['n_days']} BHAR_mean={bdt['mean']}% std={bdt['std']}% "
-          f"t={bdt['t']} p_one_sided={bdt['p_one_sided']}")
+    print(
+        f"  n_days={bdt['n_days']} BHAR_mean={bdt['mean']}% std={bdt['std']}% "
+        f"t={bdt['t']} p_one_sided={bdt['p_one_sided']}"
+    )
     n_tests = max(2, n_cross)
     p_bonf = bonferroni_p(bdt["p_one_sided"], n_tests)
-    print(f"  Bonferroni ×{n_tests} (cross-strategy): p={p_bonf:.6f} "
-          f"{'PASS' if p_bonf < ALPHA else 'FAIL'}")
+    print(f"  Bonferroni ×{n_tests} (cross-strategy): p={p_bonf:.6f} {'PASS' if p_bonf < ALPHA else 'FAIL'}")
 
     # 原始 EV day-paired (无 BHAR)
     ret_by_date = defaultdict(list)
@@ -261,14 +282,17 @@ def analyze_proxy(name, picks, n_cross=N_CROSS_STRATEGY):
     # walk-forward (用 ret_fn 返回 ret)
     def ret_fn(p):
         return p["ret"]
+
     wf = walk_forward(picks, ret_fn)
     print(f"\n--- walk-forward OOS (前半 train → 后半 test) ---")
     if wf["status"] == "ok":
         tr, te = wf["train_ev"], wf["test_ev"]
         print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} EV={tr['ev']}% t={tr['t']}")
-        print(f"  test:  n={te['n']} n_dates={wf['n_test_dates']} EV={te['ev']}% t={te['t']} "
-              f"day_t={wf['test_day_t']['t']}")
-        decay = ((tr['ev'] - te['ev']) / abs(tr['ev']) * 100) if tr['ev'] else 0
+        print(
+            f"  test:  n={te['n']} n_dates={wf['n_test_dates']} EV={te['ev']}% t={te['t']} "
+            f"day_t={wf['test_day_t']['t']}"
+        )
+        decay = ((tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100) if tr["ev"] else 0
         print(f"  decay: {decay:.0f}% (train→test)")
     else:
         print(f"  {wf['status']} (n_dates={wf.get('n_dates', 0)})")
@@ -284,13 +308,17 @@ def analyze_proxy(name, picks, n_cross=N_CROSS_STRATEGY):
     # verdict (用 BHAR day-t, 因为 BHAR 才是真 edge)
     print(f"\n--- verdict (基于 BHAR day-paired, Bonf ×{n_cross}) ---")
     v = verdict_for(
-        ev_gross=bdt["mean"], t_day=bdt["t"], p_raw=bdt["p_one_sided"],
+        ev_gross=bdt["mean"],
+        t_day=bdt["t"],
+        p_raw=bdt["p_one_sided"],
         wf_status=wf["status"],
         wf_train_ev=wf.get("train_ev", {}).get("ev", 0),
         wf_test_ev=wf.get("test_ev", {}).get("ev", 0),
         wf_test_p=wf.get("test_day_t", {}).get("p_one_sided", 1),
-        n_days=bdt["n_days"], net_ev=bdt["mean"] - OVERNIGHT_COST * 100,
-        subset_name=f"{name} (BHAR)", n_cross_factor=n_cross,
+        n_days=bdt["n_days"],
+        net_ev=bdt["mean"] - OVERNIGHT_COST * 100,
+        subset_name=f"{name} (BHAR)",
+        n_cross_factor=n_cross,
     )
     return {"n": len(picks), "ev": s, "bhar_day_t": bdt, "wf": wf, "verdict": v}
 
@@ -308,8 +336,10 @@ def regime_stratify(picks, idx):
             if p["bhar"] is not None:
                 by_date[p["zt_date"]].append(p["bhar"])
         bdt = day_paired_t(by_date)
-        print(f"  {reg}: n_picks={len(sub)} n_dates={bdt['n_days']} "
-              f"BHAR_mean={bdt['mean']}% t={bdt['t']} p={bdt['p_one_sided']}")
+        print(
+            f"  {reg}: n_picks={len(sub)} n_dates={bdt['n_days']} "
+            f"BHAR_mean={bdt['mean']}% t={bdt['t']} p={bdt['p_one_sided']}"
+        )
 
 
 # ---------- main ----------
@@ -317,20 +347,16 @@ def main():
     print("=" * 72)
     print("tail-rally-1430 (尾盘14:30异动) — 日K代理探索")
     print("=" * 72)
-    print("\n!! 诚实声明: 原始 14:30 策略需 5min 数据隔离 14:30-15:00 段, "
-          "5min 实测批量全 timeout → 原始策略 NO-DATA.")
-    print("!! 本脚本测日K代理 (强收+量增→隔夜gap), 测的是不同假设, "
-          "代理 verdict ≠ 原始 14:30 策略 verdict.\n")
+    print("\n!! 诚实声明: 原始 14:30 策略需 5min 数据隔离 14:30-15:00 段, 5min 实测批量全 timeout → 原始策略 NO-DATA.")
+    print("!! 本脚本测日K代理 (强收+量增→隔夜gap), 测的是不同假设, 代理 verdict ≠ 原始 14:30 策略 verdict.\n")
 
     code_map, calendar, idx = load_data()
 
     print("\n[2] 构建市场隔夜基准 (全市场等权 T close->T+1 open) ...")
     market, _ = build_market_overnight(code_map, calendar)
-    print(f"    market_overnight: {len(market)} dates, "
-          f"mean={mean(market.values()):.4f}%/night")
+    print(f"    market_overnight: {len(market)} dates, mean={mean(market.values()):.4f}%/night")
 
-    print(f"\n[3] 构建代理 picks (close_strength>={CLOSE_STRENGTH_THRESH}, "
-          f"vol_surge>={VOL_SURGE_MULT}x) ...")
+    print(f"\n[3] 构建代理 picks (close_strength>={CLOSE_STRENGTH_THRESH}, vol_surge>={VOL_SURGE_MULT}x) ...")
     picks, skipped = build_picks_tail_rally(code_map, calendar, market)
     print(f"    picks={len(picks)} skipped={dict(skipped)}")
     if picks:
@@ -345,8 +371,7 @@ def main():
         print(f"    per-year: {dict(sorted(per_year.items()))}")
 
     # 主代理分析
-    res = analyze_proxy(f"strong-close+vol-surge (cs>={CLOSE_STRENGTH_THRESH},vol>={VOL_SURGE_MULT}x)",
-                        picks)
+    res = analyze_proxy(f"strong-close+vol-surge (cs>={CLOSE_STRENGTH_THRESH},vol>={VOL_SURGE_MULT}x)", picks)
 
     if picks:
         regime_stratify(picks, idx)
@@ -362,8 +387,10 @@ def main():
                 by_date[p["zt_date"]].append(p["bhar"])
         bdt = day_paired_t(by_date)
         family_results.append((th, len(fp), bdt))
-        print(f"  cs>={th}: n={len(fp)} n_dates={bdt['n_days']} "
-              f"BHAR_mean={bdt['mean']}% t={bdt['t']} p={bdt['p_one_sided']}")
+        print(
+            f"  cs>={th}: n={len(fp)} n_dates={bdt['n_days']} "
+            f"BHAR_mean={bdt['mean']}% t={bdt['t']} p={bdt['p_one_sided']}"
+        )
     # 家族 Bonferroni ×len
     if family_results:
         print(f"\n  家族 Bonferroni ×{len(FAMILY_THRESHOLDS)} (cross-parameter):")
@@ -373,27 +400,32 @@ def main():
 
     # 无量增条件 (纯强收) 对照——隔离量增的贡献
     print(f"\n{'=' * 72}\n对照: 纯强收无量增 (隔离 vol_surge 贡献)\n{'=' * 72}")
-    fp_novol, _ = build_picks_tail_rally(code_map, calendar, market,
-                                         close_thresh=CLOSE_STRENGTH_THRESH, vol_mult=0.0)
+    fp_novol, _ = build_picks_tail_rally(code_map, calendar, market, close_thresh=CLOSE_STRENGTH_THRESH, vol_mult=0.0)
     by_date = defaultdict(list)
     for p in fp_novol:
         if p["bhar"] is not None:
             by_date[p["zt_date"]].append(p["bhar"])
     bdt_nv = day_paired_t(by_date)
-    print(f"  纯强收 (cs>={CLOSE_STRENGTH_THRESH}, 无量增): n={len(fp_novol)} "
-          f"n_dates={bdt_nv['n_days']} BHAR_mean={bdt_nv['mean']}% t={bdt_nv['t']} "
-          f"p={bdt_nv['p_one_sided']}")
-    print(f"  → 对比主代理: 量增条件 {'缩小' if len(fp_novol) > len(picks) else '扩大'}了样本 "
-          f"({len(fp_novol)} -> {len(picks)})")
+    print(
+        f"  纯强收 (cs>={CLOSE_STRENGTH_THRESH}, 无量增): n={len(fp_novol)} "
+        f"n_dates={bdt_nv['n_days']} BHAR_mean={bdt_nv['mean']}% t={bdt_nv['t']} "
+        f"p={bdt_nv['p_one_sided']}"
+    )
+    print(
+        f"  → 对比主代理: 量增条件 {'缩小' if len(fp_novol) > len(picks) else '扩大'}了样本 "
+        f"({len(fp_novol)} -> {len(picks)})"
+    )
 
     print(f"\n{'=' * 72}\n最终诚实结论\n{'=' * 72}")
     print(f"原始 14:30 策略: NO-DATA (5min 不可得, 无法隔离 14:30-15:00 段).")
     if res:
         print(f"日K代理 (强收+量增→隔夜gap BHAR): verdict={res.get('verdict', '?')}")
         bdt = res.get("bhar_day_t", {})
-        print(f"  n_picks={res.get('n', 0)} n_dates={bdt.get('n_days', 0)} "
-              f"BHAR_mean={bdt.get('mean', 0)}% day_t={bdt.get('t', 0)} "
-              f"p={bdt.get('p_one_sided', 1)}")
+        print(
+            f"  n_picks={res.get('n', 0)} n_dates={bdt.get('n_days', 0)} "
+            f"BHAR_mean={bdt.get('mean', 0)}% day_t={bdt.get('t', 0)} "
+            f"p={bdt.get('p_one_sided', 1)}"
+        )
         print(f"  ⚠ 代理 verdict ≠ 原始 14:30 策略 verdict (不同假设).")
         print(f"  ⚠ survivorship: cache 仅含现上市股 (退市股缺失).")
         print(f"  ⚠ close_strength 无法区分早涨横盘 vs 14:30 尾盘拉升 (信号污染).")

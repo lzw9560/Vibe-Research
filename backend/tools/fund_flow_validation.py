@@ -17,6 +17,7 @@
 用法：cd backend && .venv/bin/python tools/fund_flow_validation.py
 （IP 封时 push2his 断连 → 多数 fetch 失败 → n 小；需 IP 解封后跑）
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -52,6 +53,7 @@ def _t1_main_net(code: str, t1_date: str) -> float | None:
     """取 code 在 t1_date 的 main_net。先直连（stock_fund_flow_120d），断连/只1日 → 代理池 fallback。"""
     import astock
     from proxy_pool import fetch_fund_flow_via_pool
+
     rows = None
     try:
         rows = astock.stock_fund_flow_120d(code)
@@ -70,9 +72,12 @@ def _t1_main_net(code: str, t1_date: str) -> float | None:
 def main(sample_per_day: int = 100, sleep_s: float = 2.5) -> int:
     conn = sqlite3.connect(str(DB), timeout=10)
     try:
-        dates = [r[0] for r in conn.execute(
-            "SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
-        ).fetchall()]
+        dates = [
+            r[0]
+            for r in conn.execute(
+                "SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
+            ).fetchall()
+        ]
         date_set = set(dates)
         all_codes = [r[0] for r in conn.execute("SELECT code FROM code_industry").fetchall()]
     finally:
@@ -87,8 +92,12 @@ def main(sample_per_day: int = 100, sleep_s: float = 2.5) -> int:
             continue
         t1 = d  # T-1
         conn = sqlite3.connect(str(DB), timeout=10)
-        zt_T = {r[0] for r in conn.execute(
-            "SELECT DISTINCT code FROM gene_scores WHERE date=? AND data_source='eastmoney_live'", (d1,)).fetchall()}
+        zt_T = {
+            r[0]
+            for r in conn.execute(
+                "SELECT DISTINCT code FROM gene_scores WHERE date=? AND data_source='eastmoney_live'", (d1,)
+            ).fetchall()
+        }
         conn.close()
         pos = list(zt_T)[:sample_per_day]
         neg_pool = [c for c in all_codes if c not in zt_T]
@@ -121,16 +130,19 @@ def main(sample_per_day: int = 100, sleep_s: float = 2.5) -> int:
     bb_lo, bb_hi = _wilson(b_pos, q)
     print(f"\n=== T-1 资金流 → T 涨停 §44 60日复验窗口验证 ===")
     print(f"样本: {n}（fetched ok={fetch_ok} fail={fetch_fail}）")
-    print(f"top-quintile T-1 main_net: 涨停 {t_pos}/{q} = {t_rate*100:.2f}% CI[{tb_lo*100:.2f},{tb_hi*100:.2f}]")
-    print(f"bottom-quintile          : 涨停 {b_pos}/{q} = {b_rate*100:.2f}% CI[{bb_lo*100:.2f},{bb_hi*100:.2f}]")
-    print(f"lift = {lift:.3f}x → {'≥2x §44 validated' if lift >= 2.0 else '<2x §44 未 validated（不阻断，60日后复验）'}"
-          f"{'；CI 不重叠（显著）' if tb_lo > bb_hi else '；CI 重叠（不显著）'}")
+    print(f"top-quintile T-1 main_net: 涨停 {t_pos}/{q} = {t_rate * 100:.2f}% CI[{tb_lo * 100:.2f},{tb_hi * 100:.2f}]")
+    print(f"bottom-quintile          : 涨停 {b_pos}/{q} = {b_rate * 100:.2f}% CI[{bb_lo * 100:.2f},{bb_hi * 100:.2f}]")
+    print(
+        f"lift = {lift:.3f}x → {'≥2x §44 validated' if lift >= 2.0 else '<2x §44 未 validated（不阻断，60日后复验）'}"
+        f"{'；CI 不重叠（显著）' if tb_lo > bb_hi else '；CI 重叠（不显著）'}"
+    )
     print(f"caveat: sample_per_day={sample_per_day}（样本化降 scale）；push2his 断连则 fail 多、n 小。")
     return 0
 
 
 if __name__ == "__main__":
     import argparse
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--sample", type=int, default=100, help="每日正/负类样本数（降 scale）")
     ap.add_argument("--sleep", type=float, default=2.5, help="fetch 间隔秒（限流防封）")

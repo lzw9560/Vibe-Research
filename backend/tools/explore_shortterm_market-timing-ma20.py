@@ -29,6 +29,7 @@ A 股特殊性:
 跑法:
   cd /Users/lizhiwei/project/code/stock/Vibe-Research/backend && .venv/bin/python tools/explore_shortterm_market-timing-ma20.py
 """
+
 from __future__ import annotations
 
 import json
@@ -74,6 +75,7 @@ N_CROSS_FACTOR = 5  # 5 MA variants sharing trend-following philosophy
 # Data: fetch index OHLC from baostock (monthly chunks, cached)
 # ------------------------------------------------------------------
 
+
 def fetch_index_ohlc(code: str, start: str, end: str) -> list[dict]:
     """Fetch daily OHLC from baostock, monthly chunks. Returns list of bars."""
     try:
@@ -111,21 +113,25 @@ def fetch_index_ohlc(code: str, start: str, end: str) -> list[dict]:
         rs = bs.query_history_k_data_plus(
             code,
             "date,open,high,low,close,volume,amount,pctChg",
-            start_date=ms, end_date=me, frequency="d",
+            start_date=ms,
+            end_date=me,
+            frequency="d",
         )
         while (rs.error_code == "0") and rs.next():
             row = rs.get_row_data()
             try:
-                bars.append({
-                    "date": row[0],
-                    "open": float(row[1]),
-                    "high": float(row[2]),
-                    "low": float(row[3]),
-                    "close": float(row[4]),
-                    "volume": float(row[5]) if row[5] else 0.0,
-                    "amount": float(row[6]) if row[6] else 0.0,
-                    "pctChg": float(row[7]) if row[7] else 0.0,
-                })
+                bars.append(
+                    {
+                        "date": row[0],
+                        "open": float(row[1]),
+                        "high": float(row[2]),
+                        "low": float(row[3]),
+                        "close": float(row[4]),
+                        "volume": float(row[5]) if row[5] else 0.0,
+                        "amount": float(row[6]) if row[6] else 0.0,
+                        "pctChg": float(row[7]) if row[7] else 0.0,
+                    }
+                )
             except (ValueError, IndexError):
                 pass
         y, m = ny, nm
@@ -157,7 +163,7 @@ def load_index_data() -> tuple[list[str], list[float], list[float] | None]:
         dates = [b["date"] for b in bars]
         closes = [b["close"] for b in bars]
         opens = [b.get("open") for b in bars]
-        print(f"  fetched {len(bars)} bars in {time.time()-t0:.1f}s, {dates[0]}~{dates[-1]}")
+        print(f"  fetched {len(bars)} bars in {time.time() - t0:.1f}s, {dates[0]}~{dates[-1]}")
         return dates, closes, opens
 
     # Fallback: regime file (close only, no open)
@@ -177,6 +183,7 @@ def load_index_data() -> tuple[list[str], list[float], list[float] | None]:
 # MA computation
 # ------------------------------------------------------------------
 
+
 def compute_ma(closes: list[float], n: int) -> list[float | None]:
     """Simple rolling mean of last n closes values."""
     ma: list[float | None] = [None] * len(closes)
@@ -188,6 +195,7 @@ def compute_ma(closes: list[float], n: int) -> list[float | None]:
 # ------------------------------------------------------------------
 # Build timing positions (lagged by 1 day to avoid look-ahead)
 # ------------------------------------------------------------------
+
 
 def build_timing_positions(
     closes: list[float],
@@ -220,6 +228,7 @@ def build_timing_positions(
 # ------------------------------------------------------------------
 # Compute daily excess returns
 # ------------------------------------------------------------------
+
 
 def compute_excess_returns(
     closes: list[float],
@@ -272,6 +281,7 @@ def compute_excess_returns(
 # Newey-West HAC t-test (autocorrelation-consistent)
 # ------------------------------------------------------------------
 
+
 def newey_west_t(returns: list[float], max_lag: int = 20) -> tuple[float, float]:
     """Newey-West HAC t-stat for mean of autocorrelated series.
     Returns (t_stat, hac_se).
@@ -298,6 +308,7 @@ def newey_west_t(returns: list[float], max_lag: int = 20) -> tuple[float, float]
 # ------------------------------------------------------------------
 # Walk-forward for timing (temporal split)
 # ------------------------------------------------------------------
+
 
 def timing_walk_forward(
     dates: list[str],
@@ -334,6 +345,7 @@ def timing_walk_forward(
 # Cumulative returns + drawdown
 # ------------------------------------------------------------------
 
+
 def cum_returns(daily_rets: list[float]) -> list[float]:
     """Cumulative return multipliers (starting at 1.0)."""
     cum = [1.0]
@@ -359,6 +371,7 @@ def max_drawdown(cum: list[float]) -> float:
 # Main analysis for one MA variant
 # ------------------------------------------------------------------
 
+
 def analyze_timing(
     name: str,
     dates: list[str],
@@ -369,7 +382,7 @@ def analyze_timing(
 ) -> dict:
     """Full analysis for one MA timing variant."""
     print(f"\n{'=' * 70}")
-    print(f"变体: {name} (MA{ma_n}, rebalance={rebalance_freq}d, cost={cost_per_switch*100:.1f}%/switch)")
+    print(f"变体: {name} (MA{ma_n}, rebalance={rebalance_freq}d, cost={cost_per_switch * 100:.1f}%/switch)")
     print(f"{'=' * 70}")
 
     ma = compute_ma(closes, ma_n)
@@ -386,10 +399,13 @@ def analyze_timing(
     n_out = n_days - n_in
     n_switches = ret["n_switches"]
 
-    print(f"\n  仓位统计: in-market={n_in}d ({n_in/n_days*100:.1f}%), "
-          f"out-market={n_out}d ({n_out/n_days*100:.1f}%)")
-    print(f"  交易次数: {n_switches} switches (~{n_switches//2} round-trips), "
-          f"total cost={ret['total_cost']*100:.2f}%")
+    print(
+        f"\n  仓位统计: in-market={n_in}d ({n_in / n_days * 100:.1f}%), "
+        f"out-market={n_out}d ({n_out / n_days * 100:.1f}%)"
+    )
+    print(
+        f"  交易次数: {n_switches} switches (~{n_switches // 2} round-trips), total cost={ret['total_cost'] * 100:.2f}%"
+    )
     if n_switches > 0:
         avg_hold = n_in / max(n_switches // 2, 1)
         print(f"  平均持仓: {avg_hold:.1f} 天/trade")
@@ -397,36 +413,40 @@ def analyze_timing(
     # ---- Gross excess (before cost) ----
     gross_s = ev_stats(gross)
     print(f"\n--- gross excess (before cost) ---")
-    print(f"  n={gross_s['n']} mean_daily={gross_s['ev']}% std={gross_s['std']}% "
-          f"WR={gross_s['wr']}% simple_t={gross_s['t']}")
+    print(
+        f"  n={gross_s['n']} mean_daily={gross_s['ev']}% std={gross_s['std']}% "
+        f"WR={gross_s['wr']}% simple_t={gross_s['t']}"
+    )
 
     # ---- Net excess (after cost) ----
     net_s = ev_stats(net)
-    print(f"\n--- net excess (after {cost_per_switch*100:.1f}%/switch cost) ---")
-    print(f"  n={net_s['n']} mean_daily={net_s['ev']}% std={net_s['std']}% "
-          f"WR={net_s['wr']}% simple_t={net_s['t']}")
+    print(f"\n--- net excess (after {cost_per_switch * 100:.1f}%/switch cost) ---")
+    print(f"  n={net_s['n']} mean_daily={net_s['ev']}% std={net_s['std']}% WR={net_s['wr']}% simple_t={net_s['t']}")
 
     # ---- Per-day t (simple, from helper) ----
     net_by_date = {d: [r] for d, r in zip(ret_dates, net)}
     net_dt = day_paired_t(net_by_date)
-    print(f"  day-paired (simple): n_days={net_dt['n_days']} mean={net_dt['mean']}% "
-          f"t={net_dt['t']} p_one_sided={net_dt['p_one_sided']}")
+    print(
+        f"  day-paired (simple): n_days={net_dt['n_days']} mean={net_dt['mean']}% "
+        f"t={net_dt['t']} p_one_sided={net_dt['p_one_sided']}"
+    )
 
     # ---- Newey-West HAC t (autocorrelation-adjusted, more honest) ----
     nw_t_net, nw_se_net = newey_west_t([r / 100 for r in net], max_lag=20)
     nw_p_net = norm_sf_positive(nw_t_net)
     nw_t_gross, _ = newey_west_t([r / 100 for r in gross], max_lag=20)
     nw_p_gross = norm_sf_positive(nw_t_gross)
-    print(f"  Newey-West HAC t (lag=20): gross_t={nw_t_gross:.3f} (p={nw_p_gross:.6f}), "
-          f"net_t={nw_t_net:.3f} (p={nw_p_net:.6f})")
+    print(
+        f"  Newey-West HAC t (lag=20): gross_t={nw_t_gross:.3f} (p={nw_p_gross:.6f}), "
+        f"net_t={nw_t_net:.3f} (p={nw_p_net:.6f})"
+    )
 
     # ---- Walk-forward OOS ----
     print(f"\n--- walk-forward OOS (temporal split, net excess) ---")
     wf = timing_walk_forward(ret_dates, [r / 100 for r in net], max_lag=20)
     if wf["status"] == "ok":
         print(f"  train: n={wf['n_train']} daily_ev={wf['train_ev']}% NW_t={wf['train_t']}")
-        print(f"  test:  n={wf['n_test']} daily_ev={wf['test_ev']}% NW_t={wf['test_t']} "
-              f"p={wf['test_p']}")
+        print(f"  test:  n={wf['n_test']} daily_ev={wf['test_ev']}% NW_t={wf['test_t']} p={wf['test_p']}")
     else:
         print(f"  {wf['status']}")
 
@@ -452,12 +472,12 @@ def analyze_timing(
     sr_strat = (statistics.mean(strat_rets) / statistics.pstdev(strat_rets) * sqrt(250)) if strat_rets else 0
 
     print(f"\n--- cumulative performance (BHAR) ---")
-    print(f"  buy-and-hold: total={total_idx:.2f}% annual={ann_idx:.2f}% "
-          f"Sharpe={sr_idx:.3f} maxDD={mdd_idx:.1f}%")
-    print(f"  MA timing:    total={total_strat:.2f}% annual={ann_strat:.2f}% "
-          f"Sharpe={sr_strat:.3f} maxDD={mdd_strat:.1f}%")
+    print(f"  buy-and-hold: total={total_idx:.2f}% annual={ann_idx:.2f}% Sharpe={sr_idx:.3f} maxDD={mdd_idx:.1f}%")
+    print(
+        f"  MA timing:    total={total_strat:.2f}% annual={ann_strat:.2f}% Sharpe={sr_strat:.3f} maxDD={mdd_strat:.1f}%"
+    )
     print(f"  BHAR (excess): {bhar:.2f}% (annualized excess: {ann_excess:.2f}%)")
-    print(f"  maxDD reduction: {mdd_idx - mdd_strat:.1f}% ({mdd_strat/mdd_idx*100:.1f}% of B&H)")
+    print(f"  maxDD reduction: {mdd_idx - mdd_strat:.1f}% ({mdd_strat / mdd_idx * 100:.1f}% of B&H)")
 
     # ---- Verdict ----
     ev_gross = gross_s["ev"]  # mean daily gross excess %
@@ -511,9 +531,7 @@ def analyze_timing(
         # Excess (alpha) Sharpe — NOT total strategy Sharpe (which includes beta).
         # Total strat SR is misleading for DSR: high because it holds index (market beta).
         # Excess SR = mean(net_excess) / std(net_excess) * sqrt(250) — alpha from timing only.
-        "excess_sr": round(
-            (net_s["ev"] / net_s["std"] * sqrt(250)) if net_s["std"] > 0 else 0.0, 3
-        ),
+        "excess_sr": round((net_s["ev"] / net_s["std"] * sqrt(250)) if net_s["std"] > 0 else 0.0, 3),
         "bhar": round(bhar, 2),
         "ann_excess": round(ann_excess, 2),
         "total_idx": round(total_idx, 2),
@@ -532,8 +550,8 @@ def analyze_timing(
 # DSR (simplified Deflated Sharpe Ratio)
 # ------------------------------------------------------------------
 
-def simplified_dsr(sr: float, n_trials: int, n_obs: int,
-                   skew: float, kurt: float) -> float:
+
+def simplified_dsr(sr: float, n_trials: int, n_obs: int, skew: float, kurt: float) -> float:
     """Simplified DSR per Bailey & Lopez de Prado (2014).
 
     Tests if observed annualized Sharpe is inflated by multiple testing.
@@ -561,7 +579,7 @@ def simplified_dsr(sr: float, n_trials: int, n_obs: int,
     e_max_sr = sqrt(sr_var_under_null) * e_max_z
 
     # Variance of observed SR (with higher-moment adjustment)
-    denom_var = sr_var_under_null * (1 - skew * sr + (kurt - 1) / 4 * sr ** 2)
+    denom_var = sr_var_under_null * (1 - skew * sr + (kurt - 1) / 4 * sr**2)
     if denom_var <= 0:
         return 0.0
 
@@ -574,6 +592,7 @@ def simplified_dsr(sr: float, n_trials: int, n_obs: int,
 # ------------------------------------------------------------------
 # Main
 # ------------------------------------------------------------------
+
 
 def main() -> None:
     print("=" * 70)
@@ -611,18 +630,22 @@ def main() -> None:
     print(f"\n\n{'=' * 70}")
     print(f"[3] 5 变体汇总表 (Bonferroni ×{N_CROSS_FACTOR})")
     print(f"{'=' * 70}")
-    print(f"{'Variant':<16} {'n_days':>7} {'switch':>7} {'gross_ev%':>10} {'net_ev%':>10} "
-          f"{'NW_t':>8} {'NW_p':>10} {'Bonf_p':>10} {'BHAR%':>10} {'ann_ex%':>8} "
-          f"{'MDD_idx':>8} {'MDD_str':>8} {'verdict':>14}")
+    print(
+        f"{'Variant':<16} {'n_days':>7} {'switch':>7} {'gross_ev%':>10} {'net_ev%':>10} "
+        f"{'NW_t':>8} {'NW_p':>10} {'Bonf_p':>10} {'BHAR%':>10} {'ann_ex%':>8} "
+        f"{'MDD_idx':>8} {'MDD_str':>8} {'verdict':>14}"
+    )
     print("-" * 140)
     for r in results:
         bonf_p = bonferroni_p(r["nw_p"], N_CROSS_FACTOR * 2)
-        print(f"{r['name']:<16} {r['n_days']:>7} {r['n_switches']:>7} "
-              f"{r['gross_ev']:>10.4f} {r['net_ev']:>10.4f} "
-              f"{r['nw_t']:>8.3f} {r['nw_p']:>10.6f} {bonf_p:>10.6f} "
-              f"{r['bhar']:>10.2f} {r['ann_excess']:>8.2f} "
-              f"{r['mdd_idx']:>8.1f} {r['mdd_strat']:>8.1f} "
-              f"{r['verdict_nw']:>14}")
+        print(
+            f"{r['name']:<16} {r['n_days']:>7} {r['n_switches']:>7} "
+            f"{r['gross_ev']:>10.4f} {r['net_ev']:>10.4f} "
+            f"{r['nw_t']:>8.3f} {r['nw_p']:>10.6f} {bonf_p:>10.6f} "
+            f"{r['bhar']:>10.2f} {r['ann_excess']:>8.2f} "
+            f"{r['mdd_idx']:>8.1f} {r['mdd_strat']:>8.1f} "
+            f"{r['verdict_nw']:>14}"
+        )
 
     # ---- DSR (simplified) ----
     print(f"\n--- Simplified DSR (Deflated Sharpe Ratio) on EXCESS/alpha Sharpe ---")
@@ -641,9 +664,11 @@ def main() -> None:
             skew=skew_approx,
             kurt=kurt_approx,
         )
-        print(f"  {r['name']}: excess_SR={r['excess_sr']:.3f} "
-              f"(total strat SR={r['sr_strat']:.3f} includes beta) "
-              f"→ DSR P(timing alpha>0)={dsr:.4f}")
+        print(
+            f"  {r['name']}: excess_SR={r['excess_sr']:.3f} "
+            f"(total strat SR={r['sr_strat']:.3f} includes beta) "
+            f"→ DSR P(timing alpha>0)={dsr:.4f}"
+        )
 
     # ---- Honest verdict summary ----
     print(f"\n{'=' * 70}")
@@ -653,18 +678,23 @@ def main() -> None:
         bonf_p = bonferroni_p(r["nw_p"], N_CROSS_FACTOR * 2)
         wf = r["wf"]
         print(f"\n  {r['name']}:")
-        print(f"    gross_daily_ev={r['gross_ev']}% net_daily_ev={r['net_ev']}% "
-              f"(after {r['n_switches']}×{ETF_ONE_WAY_COST*100:.1f}% cost)")
-        print(f"    NW_t={r['nw_t']} NW_p={r['nw_p']} Bonf_p(×{N_CROSS_FACTOR*2})={bonf_p:.6f}")
-        print(f"    simple_t={r['simple_t']} simple_p={r['simple_p']} "
-              f"(simple t OVERSTATES — daily excess autocorrelated)")
+        print(
+            f"    gross_daily_ev={r['gross_ev']}% net_daily_ev={r['net_ev']}% "
+            f"(after {r['n_switches']}×{ETF_ONE_WAY_COST * 100:.1f}% cost)"
+        )
+        print(f"    NW_t={r['nw_t']} NW_p={r['nw_p']} Bonf_p(×{N_CROSS_FACTOR * 2})={bonf_p:.6f}")
+        print(
+            f"    simple_t={r['simple_t']} simple_p={r['simple_p']} (simple t OVERSTATES — daily excess autocorrelated)"
+        )
         if wf["status"] == "ok":
-            print(f"    walk-forward: train_ev={wf['train_ev']}% test_ev={wf['test_ev']}% "
-                  f"test_NW_t={wf['test_t']} test_p={wf['test_p']}")
-        print(f"    BHAR={r['bhar']}% (ann_excess={r['ann_excess']}%) "
-              f"Sharpe: idx={r['sr_idx']} strat={r['sr_strat']}")
-        print(f"    maxDD: B&H={r['mdd_idx']}% timing={r['mdd_strat']}% "
-              f"(reduced by {r['mdd_idx']-r['mdd_strat']:.1f}%)")
+            print(
+                f"    walk-forward: train_ev={wf['train_ev']}% test_ev={wf['test_ev']}% "
+                f"test_NW_t={wf['test_t']} test_p={wf['test_p']}"
+            )
+        print(f"    BHAR={r['bhar']}% (ann_excess={r['ann_excess']}%) Sharpe: idx={r['sr_idx']} strat={r['sr_strat']}")
+        print(
+            f"    maxDD: B&H={r['mdd_idx']}% timing={r['mdd_strat']}% (reduced by {r['mdd_idx'] - r['mdd_strat']:.1f}%)"
+        )
         print(f"    → VERDICT (NW-t): {r['verdict_nw']}")
         print(f"    → VERDICT (simple-t): {r['verdict_simple']}")
 

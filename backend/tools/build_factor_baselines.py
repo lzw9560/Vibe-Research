@@ -41,6 +41,7 @@
 
 输出: .vibe-research/factor_baselines.json
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -63,21 +64,22 @@ KLINE_DB = DATA / "baostock_kline_cache.db"
 INDEX_CACHE = DATA / "index_ohlc_cache.json"
 OUT = DATA / "factor_baselines.json"
 
-LIQ_AMT_FLOOR = 50_000_000.0      # 20d 均成交额 >= 5000 万元 (与 factor_zoo 一致)
-SIZE_DAYS = 20                    # size 信号回看窗
-UMD_SHORT = 21                    # 跳过最近 1 月 (~21 交易日)
-UMD_LONG = 252                    # 12 月回看 (~252 交易日)
-MIN_DECILE_STOCKS = 5              # 腿内至少 5 只当日有收益才计
-MIN_CROSS_SECTION = 20            # 再平衡日横截面 < 20 跳过
+LIQ_AMT_FLOOR = 50_000_000.0  # 20d 均成交额 >= 5000 万元 (与 factor_zoo 一致)
+SIZE_DAYS = 20  # size 信号回看窗
+UMD_SHORT = 21  # 跳过最近 1 月 (~21 交易日)
+UMD_LONG = 252  # 12 月回看 (~252 交易日)
+MIN_DECILE_STOCKS = 5  # 腿内至少 5 只当日有收益才计
+MIN_CROSS_SECTION = 20  # 再平衡日横截面 < 20 跳过
 
 
 # ---------- data loading ----------
+
 
 def scan_kline_dates() -> set[str]:
     """Quick pre-scan: all dates present in kline cache (for calendar alignment)."""
     conn = sqlite3.connect(str(KLINE_DB))
     dates: set[str] = set()
-    for bj, in conn.execute("SELECT bars_json FROM kline"):
+    for (bj,) in conn.execute("SELECT bars_json FROM kline"):
         try:
             bars = json.loads(bj)
         except (json.JSONDecodeError, TypeError):
@@ -160,6 +162,7 @@ def daily_returns(close: np.ndarray) -> np.ndarray:
 
 # ---------- month-end rebalance dates ----------
 
+
 def month_end_dates(calendar: list[str]) -> list[int]:
     """Indices of the last trading day of each calendar month."""
     out: list[int] = []
@@ -174,6 +177,7 @@ def month_end_dates(calendar: list[str]) -> list[int]:
 
 # ---------- decile formation ----------
 
+
 def winsorize(vals: np.ndarray, lo: float = 0.01, hi: float = 0.99) -> np.ndarray:
     finite = vals[np.isfinite(vals)]
     if finite.size == 0:
@@ -182,8 +186,7 @@ def winsorize(vals: np.ndarray, lo: float = 0.01, hi: float = 0.99) -> np.ndarra
     return np.clip(vals, qlo, qhi)
 
 
-def form_decile_legs(signal: np.ndarray, long_is_top: bool
-                     ) -> tuple[np.ndarray, np.ndarray]:
+def form_decile_legs(signal: np.ndarray, long_is_top: bool) -> tuple[np.ndarray, np.ndarray]:
     """Given a 1-D signal array (nan = ineligible), return (long_idx, short_idx).
     long_is_top=True → long=top decile (winners); False → long=bottom decile (small).
     Winsorize eligible signals 1/99, then rank. Decile = 10%."""
@@ -193,22 +196,23 @@ def form_decile_legs(signal: np.ndarray, long_is_top: bool
         return np.array([], dtype=int), np.array([], dtype=int)
     sig_elig = signal[eligible].copy()
     sig_w = winsorize(sig_elig)
-    order = np.argsort(sig_w)                  # ascending
+    order = np.argsort(sig_w)  # ascending
     ndec = max(1, n // 10)
     if long_is_top:
-        long_local = order[n - ndec:]          # top
-        short_local = order[:ndec]             # bottom
+        long_local = order[n - ndec :]  # top
+        short_local = order[:ndec]  # bottom
     else:
-        long_local = order[:ndec]             # bottom (small)
-        short_local = order[n - ndec:]         # top (big)
+        long_local = order[:ndec]  # bottom (small)
+        short_local = order[n - ndec :]  # top (big)
     return eligible[long_local], eligible[short_local]
 
 
 # ---------- factor series construction ----------
 
-def build_smb_series(close: np.ndarray, amount: np.ndarray, ret: np.ndarray,
-                     calendar: list[str], rebal_idx: list[int]
-                     ) -> dict[str, float]:
+
+def build_smb_series(
+    close: np.ndarray, amount: np.ndarray, ret: np.ndarray, calendar: list[str], rebal_idx: list[int]
+) -> dict[str, float]:
     """SMB daily returns: month-end rebalance, log(20d mean amount) signal.
     long = small (bottom decile), short = big (top decile)."""
     series: dict[str, float] = {}
@@ -217,7 +221,7 @@ def build_smb_series(close: np.ndarray, amount: np.ndarray, ret: np.ndarray,
         # need 20d history ending at ri
         if ri - SIZE_DAYS + 1 < 0:
             continue
-        amt_window = amount[:, ri - SIZE_DAYS + 1: ri + 1]   # [nc, 20]
+        amt_window = amount[:, ri - SIZE_DAYS + 1 : ri + 1]  # [nc, 20]
         # explicit finite-mean (all-nan rows → nan, no empty-slice warning)
         finite_mask = np.isfinite(amt_window)
         finite_cnt = finite_mask.sum(axis=1)
@@ -225,8 +229,7 @@ def build_smb_series(close: np.ndarray, amount: np.ndarray, ret: np.ndarray,
         mean_amt = np.where(finite_cnt > 0, finite_sum / np.maximum(finite_cnt, 1), np.nan)
         # eligibility: 20d history present (finite), mean_amt >= floor, formation amount>0
         form_amt = amount[:, ri]
-        elig = (np.isfinite(mean_amt) & (mean_amt >= LIQ_AMT_FLOOR)
-                & np.isfinite(form_amt) & (form_amt > 0))
+        elig = np.isfinite(mean_amt) & (mean_amt >= LIQ_AMT_FLOOR) & np.isfinite(form_amt) & (form_amt > 0)
         signal = np.full(close.shape[0], np.nan)
         signal[elig] = np.log(mean_amt[elig])
         long_idx, short_idx = form_decile_legs(signal, long_is_top=False)
@@ -245,16 +248,15 @@ def build_smb_series(close: np.ndarray, amount: np.ndarray, ret: np.ndarray,
     return series
 
 
-def build_umd_series(close: np.ndarray, ret: np.ndarray, calendar: list[str],
-                      rebal_idx: list[int]) -> dict[str, float]:
+def build_umd_series(close: np.ndarray, ret: np.ndarray, calendar: list[str], rebal_idx: list[int]) -> dict[str, float]:
     """UMD daily returns: month-end rebalance, 12-2 momentum signal.
     long = winners (top decile), short = losers (bottom decile)."""
     series: dict[str, float] = {}
     for k, ri in enumerate(rebal_idx):
-        if ri - UMD_LONG < 0:                    # need 12m history
+        if ri - UMD_LONG < 0:  # need 12m history
             continue
-        c_now = close[:, ri - UMD_SHORT]          # ~1 month ago
-        c_past = close[:, ri - UMD_LONG]          # ~12 months ago
+        c_now = close[:, ri - UMD_SHORT]  # ~1 month ago
+        c_past = close[:, ri - UMD_LONG]  # ~12 months ago
         signal = c_now / c_past - 1.0
         signal[~np.isfinite(signal)] = np.nan
         # eligibility: both endpoints finite & positive
@@ -277,6 +279,7 @@ def build_umd_series(close: np.ndarray, ret: np.ndarray, calendar: list[str],
 
 # ---------- stats + correlations ----------
 
+
 def series_stats(series: dict[str, float], label: str) -> dict:
     vals = np.array([v for v in series.values() if np.isfinite(v)], dtype=np.float64)
     n = vals.size
@@ -284,10 +287,11 @@ def series_stats(series: dict[str, float], label: str) -> dict:
         return {"label": label, "n": 0}
     mean = float(vals.mean())
     std = float(vals.std(ddof=1)) if n > 1 else 0.0
-    sharpe = mean / std * (252 ** 0.5) if std > 0 else 0.0
+    sharpe = mean / std * (252**0.5) if std > 0 else 0.0
     wr = float((vals > 0).mean() * 100)
     return {
-        "label": label, "n": int(n),
+        "label": label,
+        "n": int(n),
         "mean_pct": round(mean * 100, 5),
         "std_pct": round(std * 100, 5),
         "annualized_mean_pct": round(mean * 100 * 252, 4),
@@ -320,6 +324,7 @@ def correlation_matrix(mkt: dict, smb: dict, umd: dict) -> dict:
 
 # ---------- main ----------
 
+
 def main() -> int:
     print("==> loading calendar + index ...", flush=True)
     kline_dates = scan_kline_dates()
@@ -328,24 +333,24 @@ def main() -> int:
 
     print("==> loading kline panels (close + amount) ...", flush=True)
     close, amount, codes = load_panels(calendar)
-    print(f"    codes={len(codes)} close_shape={close.shape} "
-          f"finite_close={int(np.isfinite(close).sum())}", flush=True)
+    print(f"    codes={len(codes)} close_shape={close.shape} finite_close={int(np.isfinite(close).sum())}", flush=True)
 
     ret = daily_returns(close)
 
     rebal_idx = month_end_dates(calendar)
-    print(f"==> month-end rebalance dates: {len(rebal_idx)} "
-          f"first={calendar[rebal_idx[0]]} last={calendar[rebal_idx[-1]]}", flush=True)
+    print(
+        f"==> month-end rebalance dates: {len(rebal_idx)} "
+        f"first={calendar[rebal_idx[0]]} last={calendar[rebal_idx[-1]]}",
+        flush=True,
+    )
 
     print("==> building SMB daily series ...", flush=True)
     smb = build_smb_series(close, amount, ret, calendar, rebal_idx)
-    print(f"    SMB days={len(smb)} "
-          f"range {min(smb)}~{max(smb)}" if smb else "    SMB empty", flush=True)
+    print(f"    SMB days={len(smb)} range {min(smb)}~{max(smb)}" if smb else "    SMB empty", flush=True)
 
     print("==> building UMD daily series ...", flush=True)
     umd = build_umd_series(close, ret, calendar, rebal_idx)
-    print(f"    UMD days={len(umd)} "
-          f"range {min(umd)}~{max(umd)}" if umd else "    UMD empty", flush=True)
+    print(f"    UMD days={len(umd)} range {min(umd)}~{max(umd)}" if umd else "    UMD empty", flush=True)
 
     corr = correlation_matrix(mkt, smb, umd)
 
@@ -353,7 +358,7 @@ def main() -> int:
         "metadata": {
             "built_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "methodology": "Fama-French/Carhart cross-sectional decile long-short, "
-                           "monthly rebalance, daily holding returns (decimal)",
+            "monthly rebalance, daily holding returns (decimal)",
             "market_benchmark": "sh.000001 (上证综指, price index excl. dividends)",
             "rebalance_freq": "monthly (last trading day of month)",
             "holding": "T+1 close to next rebalance close; constituents fixed during holding",
@@ -365,7 +370,7 @@ def main() -> int:
             "n_dates": len(calendar),
             "n_codes_loaded": len(codes),
             "survivorship_note": "early 2018-2020 cross-section ~264-766 from non-random "
-                                 "backfill; unbalanced panel; small-cap leg survivorship bias",
+            "backfill; unbalanced panel; small-cap leg survivorship bias",
             "caveats": [
                 "SMB size proxy = log(20d mean amount) is liquidity/turnover proxy, NOT true "
                 "market cap (needs shares outstanding). High-amount stocks may be high-turnover "
@@ -381,9 +386,9 @@ def main() -> int:
         },
         "factors_built": ["mkt", "smb", "umd"],
         "hml_blocker": "no historical PB/book-value data locally; HML skipped per task "
-                       "(跳过 allowed). Only current-snapshot PB available via valuation skill, "
-                       "not the monthly historical PB series needed for cross-sectional decile "
-                       "formation. To build true HML, must first populate a historical PB panel.",
+        "(跳过 allowed). Only current-snapshot PB available via valuation skill, "
+        "not the monthly historical PB series needed for cross-sectional decile "
+        "formation. To build true HML, must first populate a historical PB panel.",
         "factor_series": {
             "mkt": dict(sorted(mkt.items())),
             "smb": dict(sorted(smb.items())),
@@ -402,9 +407,11 @@ def main() -> int:
     print("\n=== factor stats ===")
     for k in ["mkt", "smb", "umd"]:
         s = out["factor_stats"][k]
-        print(f"  {k:4s}: n={s.get('n',0):4d} mean={s.get('mean_pct','?')}%/d "
-              f"std={s.get('std_pct','?')}%/d ann_sharpe={s.get('annualized_sharpe','?')} "
-              f"wr={s.get('wr_pct','?')}%")
+        print(
+            f"  {k:4s}: n={s.get('n', 0):4d} mean={s.get('mean_pct', '?')}%/d "
+            f"std={s.get('std_pct', '?')}%/d ann_sharpe={s.get('annualized_sharpe', '?')} "
+            f"wr={s.get('wr_pct', '?')}%"
+        )
     print("\n=== correlation matrix (aligned) ===")
     if "matrix" in corr:
         m = corr["matrix"]

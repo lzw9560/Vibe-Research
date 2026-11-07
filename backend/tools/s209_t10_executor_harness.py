@@ -16,6 +16,7 @@ DRY 复用 lianban_lift pattern（simulate_holding + wire_verdict），不重写
 跑法：cd backend && .venv/bin/python tools/s209_t10_executor_harness.py
 依赖：.vibe-research/baostock_kline_cache.json + zt_history.db（zero em_get，全离线 cache）。
 """
+
 import datetime  # noqa: F401
 import sqlite3
 import statistics
@@ -55,9 +56,7 @@ def _zt_history_dates() -> list[str]:
         return []
     conn = sqlite3.connect(str(ZT_DB))
     try:
-        rows = conn.execute(
-            "SELECT DISTINCT date FROM zt_history WHERE lbc=1 AND is_final=1 ORDER BY date"
-        ).fetchall()
+        rows = conn.execute("SELECT DISTINCT date FROM zt_history WHERE lbc=1 AND is_final=1 ORDER BY date").fetchall()
     finally:
         conn.close()
     return [r[0] for r in rows if r[0]]
@@ -145,8 +144,10 @@ def main() -> dict[str, Any]:
     wr_all = all_wins / n_obs
     net_mean = statistics.mean(o["net"] for o in obs)
     mean_cost = sum(o["cost"] for o in obs) / n_obs if obs else 0.0
-    print(f"\nobs={n_obs} days={days} | all net-WR(首板 D+1): {wr_all*100:.2f}% net_mean={net_mean:.2f}% "
-          f"(扣 cost ~{mean_cost:.2f}%)")
+    print(
+        f"\nobs={n_obs} days={days} | all net-WR(首板 D+1): {wr_all * 100:.2f}% net_mean={net_mean:.2f}% "
+        f"(扣 cost ~{mean_cost:.2f}%)"
+    )
 
     # day_paired: picks = all lbc==1（post_first_board 是 binary arm，无 score-ranked quintile split）。
     # 同日 picks == universe（all first-board）→ selection lift≈1.0 by design；
@@ -173,8 +174,12 @@ def main() -> dict[str, Any]:
         round_trip_cost=round(mean_cost, 4),
         script="tools/s209_t10_executor_harness.py",
         params={
-            "arm": "post_first_board", "path": list(PARAMS), "cost": "per_trade",
-            "source": "scan_pre_limitup", "lbc": 1, "quintile": "none_binary_arm",
+            "arm": "post_first_board",
+            "path": list(PARAMS),
+            "cost": "per_trade",
+            "source": "scan_pre_limitup",
+            "lbc": 1,
+            "quintile": "none_binary_arm",
         },
     )
     # event wire_verdict（群体净收益 > 0，K=2 Bonferroni；event 不用 survivors/universe）
@@ -188,12 +193,17 @@ def main() -> dict[str, Any]:
         round_trip_cost=round(mean_cost, 4),
         script="tools/s209_t10_executor_harness.py",
         params={
-            "arm": "post_first_board", "path": list(PARAMS), "cost": "per_trade",
-            "source": "scan_pre_limitup", "lbc": 1,
+            "arm": "post_first_board",
+            "path": list(PARAMS),
+            "cost": "per_trade",
+            "source": "scan_pre_limitup",
+            "lbc": 1,
         },
     )
-    print(f"\n[verdict] selection: status={v_sel.status} lift={v_sel.selection_lift} "
-          f"n={v_sel.n} days_robust={v_sel.days_robust}")
+    print(
+        f"\n[verdict] selection: status={v_sel.status} lift={v_sel.selection_lift} "
+        f"n={v_sel.n} days_robust={v_sel.days_robust}"
+    )
     print(f"[verdict] event:     status={v_evt.status} n={v_evt.n} days_robust={v_evt.days_robust}")
     return {
         "selection": _verdict_summary(v_sel),

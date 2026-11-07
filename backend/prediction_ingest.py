@@ -7,6 +7,7 @@
 
 入账幂等：同日同源同股一条（UNIQUE 约束 + OR IGNORE）。
 """
+
 from __future__ import annotations
 
 import logging
@@ -18,8 +19,7 @@ import prediction_ledger as pl
 _logger = logging.getLogger("vibe-research")
 
 
-def ingest_funnel_candidates(date_str: str | None = None,
-                              db_path: str = pl.WINRATE_DB_PATH) -> dict[str, Any]:
+def ingest_funnel_candidates(date_str: str | None = None, db_path: str = pl.WINRATE_DB_PATH) -> dict[str, Any]:
     """漏斗 final 候选 → 预测入账。
 
     预测=次日溢价>0，horizon=1（T+1）。
@@ -31,7 +31,12 @@ def ingest_funnel_candidates(date_str: str | None = None,
         from config import AssistantDefaultConfig
 
         d = AssistantDefaultConfig()
-        cfg = ThresholdConfig(mode=d.CANDIDATE_FUNNEL_MODE, base=__import__("candidate_funnel.models", fromlist=["BaseThreshold"]).BaseThreshold(**d.CANDIDATE_FUNNEL_BASE))
+        cfg = ThresholdConfig(
+            mode=d.CANDIDATE_FUNNEL_MODE,
+            base=__import__("candidate_funnel.models", fromlist=["BaseThreshold"]).BaseThreshold(
+                **d.CANDIDATE_FUNNEL_BASE
+            ),
+        )
     except Exception as exc:
         _logger.warning("[prediction_ingest] 漏斗配置失败: %s", exc)
         return {"ingested": 0, "error": str(exc)}
@@ -67,8 +72,7 @@ def ingest_funnel_candidates(date_str: str | None = None,
     return {"ingested": ingested, "skipped": skipped, "date": target_date}
 
 
-def ingest_strategy_hits(date_str: str | None = None,
-                          db_path: str = pl.WINRATE_DB_PATH) -> dict[str, Any]:
+def ingest_strategy_hits(date_str: str | None = None, db_path: str = pl.WINRATE_DB_PATH) -> dict[str, Any]:
     """战法命中 → 预测入账。
 
     用今日 gene_scores 跑战法匹配（match_strategies，sync），命中即入账。
@@ -85,6 +89,7 @@ def ingest_strategy_hits(date_str: str | None = None,
     try:
         # get_screener_result 是 async，用 asyncio.run 取结果
         import asyncio
+
         screener_result = asyncio.run(ls.get_screener_result(target_date))
         gene_scores = screener_result.gene_scores if screener_result else []
     except Exception as exc:
@@ -120,8 +125,7 @@ def ingest_strategy_hits(date_str: str | None = None,
     return {"ingested": ingested, "skipped": skipped, "date": target_date}
 
 
-def ingest_all(date_str: str | None = None,
-                db_path: str = pl.WINRATE_DB_PATH) -> dict[str, Any]:
+def ingest_all(date_str: str | None = None, db_path: str = pl.WINRATE_DB_PATH) -> dict[str, Any]:
     """盘后调度入口：漏斗 + 战法全量入账。"""
     r1 = ingest_funnel_candidates(date_str, db_path)
     r2 = ingest_strategy_hits(date_str, db_path)

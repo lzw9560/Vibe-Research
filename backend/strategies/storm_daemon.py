@@ -7,6 +7,7 @@ daemon 每 30min 存外围快照（get_global_indices）+ 新闻（fetch_radar�
 不碰 scheduled_tasks（并发编辑器在改，独立 daemon 避免冲突）。
 测试禁：VR_STORM_DAEMON=0（conftest 设）。刷新语境 tab：前端 useQuery refetchInterval 轮询。
 """
+
 from __future__ import annotations
 
 import json
@@ -63,9 +64,9 @@ def fetch_snapshot() -> dict:
         radar = newsradar.fetch_radar() or {}
         # S088 grill Q5：fetch_radar 顶层无 items 键，是 industries 嵌套 items，须扁平化
         snap["news_items"] = (
-            [it for ind in (radar.get("industries", []) or [])
-             for it in (ind.get("items", []) or [])]
-            if isinstance(radar, dict) else []
+            [it for ind in (radar.get("industries", []) or []) for it in (ind.get("items", []) or [])]
+            if isinstance(radar, dict)
+            else []
         )
         news_fetch_ok = bool(snap["news_items"])
         if not news_fetch_ok:
@@ -118,10 +119,7 @@ def get_t1_global_snapshot(date: str) -> dict | None:
         if not isinstance(snaps, list) or not snaps:
             return None
         # S116：过滤遮蔽坏快照，取最近非空夜间好快照（fetch_ok 缺省 True 兼容旧无 provenance 快照）
-        good = [
-            s for s in snaps
-            if isinstance(s, dict) and s.get("global_indices") and s.get("fetch_ok", True)
-        ]
+        good = [s for s in snaps if isinstance(s, dict) and s.get("global_indices") and s.get("fetch_ok", True)]
         if good:
             return good[-1]
         # 全坏→返最近坏 + 标 degraded（不可变拷贝，不污染落盘；供 storm_predictor 诚实标）

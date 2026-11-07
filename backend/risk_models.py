@@ -19,27 +19,27 @@ class OneDayRisk(BaseModel):
     code: str
     date: str
     # 动态评分（实时更新）
-    risk_score: float = 50.0              # 风险评分 (0-100)，随资金流动态变化
-    risk_level: str = "MEDIUM"            # HIGH/MEDIUM/LOW，基于risk_score动态判定
-    score_components: dict = {}           # 各维度得分明细（用于解释）
+    risk_score: float = 50.0  # 风险评分 (0-100)，随资金流动态变化
+    risk_level: str = "MEDIUM"  # HIGH/MEDIUM/LOW，基于risk_score动态判定
+    score_components: dict = {}  # 各维度得分明细（用于解释）
     # 资金流维度（动态）
-    capital_flow_signal: float = 0.0      # 资金流信号 (-1 到 +1)，实时更新
-    capital_flow_trend: str = ""          # 流入/流出/震荡，基于时序判断
-    big_fund_detected: bool = False       # 是否检测到大基金
-    big_fund_type: str = ""               # 大基金类型 (游资/机构/北向)
-    fund_flow_history: list[dict] = []    # 近5日资金流历史（用于趋势判断）
+    capital_flow_signal: float = 0.0  # 资金流信号 (-1 到 +1)，实时更新
+    capital_flow_trend: str = ""  # 流入/流出/震荡，基于时序判断
+    big_fund_detected: bool = False  # 是否检测到大基金
+    big_fund_type: str = ""  # 大基金类型 (游资/机构/北向)
+    fund_flow_history: list[dict] = []  # 近5日资金流历史（用于趋势判断）
     # 龙虎榜维度（半动态）
-    dragon_tiger_risk: float = 0.0        # 龙虎榜风险评分（T+1更新）
-    one_day_seats: list[str] = []         # 一日游特征席位
-    multi_seat_signal: bool = False       # 多席位同时出现信号
-    seat_confidence: float = 0.0          # 席位识别置信度
+    dragon_tiger_risk: float = 0.0  # 龙虎榜风险评分（T+1更新）
+    one_day_seats: list[str] = []  # 一日游特征席位
+    multi_seat_signal: bool = False  # 多席位同时出现信号
+    seat_confidence: float = 0.0  # 席位识别置信度
     # 综合判断
-    recommendation: str = ""              # 建议 (关注风险/谨慎参与/可正常参与)
-    factors: list[str] = []               # 风险因素列表
-    last_updated: str = ""                # 最后更新时间（用于前端展示时效性）
-    data_status: str = "ok"               # ok | missing | degraded（数据诚实标记，对齐 sentiment_context:45）
+    recommendation: str = ""  # 建议 (关注风险/谨慎参与/可正常参与)
+    factors: list[str] = []  # 风险因素列表
+    last_updated: str = ""  # 最后更新时间（用于前端展示时效性）
+    data_status: str = "ok"  # ok | missing | degraded（数据诚实标记，对齐 sentiment_context:45）
     # 动态阈值
-    dynamic_thresholds: dict = {}         # 基于市场环境的动态阈值
+    dynamic_thresholds: dict = {}  # 基于市场环境的动态阈值
     # 原有字段（保留兼容）
     risk_factors: list[str] = []
     max_drawdown: float = 0.0
@@ -68,6 +68,7 @@ def get_dynamic_thresholds(sti_phase: str | None = None) -> dict:
 # ===========================================================================
 # 资金流趋势判断
 # ===========================================================================
+
 
 def calculate_capital_flow_trend(fund_flow_history: list[dict]) -> str:
     """根据近5日资金流历史判断趋势。"""
@@ -98,6 +99,7 @@ def calculate_capital_flow_trend(fund_flow_history: list[dict]) -> str:
 # 动态风险评分更新
 # ===========================================================================
 
+
 async def calculate_base_risk(code: str) -> tuple[float, str]:
     """计算个股基础风险评分（静态部分）。
 
@@ -113,6 +115,7 @@ async def calculate_base_risk(code: str) -> tuple[float, str]:
     """
     try:
         import limitup_screener as ls
+
         result = await ls.get_screener_result()
         for g in result.gene_scores:
             if g.code == code:
@@ -122,9 +125,7 @@ async def calculate_base_risk(code: str) -> tuple[float, str]:
         # 未入 screener：合法中性先验（非取数故障）
         return 50.0, "ok"
     except Exception as e:
-        logging.getLogger("risk_models").warning(
-            "calculate_base_risk(%s) 取数失败，降级中性先验 50.0: %s", code, e
-        )
+        logging.getLogger("risk_models").warning("calculate_base_risk(%s) 取数失败，降级中性先验 50.0: %s", code, e)
         return 50.0, "missing"
 
 
@@ -161,18 +162,15 @@ async def get_current_sti_phase() -> tuple[str | None, str]:
     """
     try:
         import limitup_sti as ls_sti
+
         engine = ls_sti.get_sti_engine()
         db = engine._get_db()
-        row = db.execute(
-            "SELECT phase FROM sti_timeline WHERE phase IS NOT NULL ORDER BY date DESC LIMIT 1"
-        ).fetchone()
+        row = db.execute("SELECT phase FROM sti_timeline WHERE phase IS NOT NULL ORDER BY date DESC LIMIT 1").fetchone()
         if row:
             return row["phase"], "ok"
         return None, "ok"
     except Exception as e:
-        logging.getLogger("risk_models").warning(
-            "get_current_sti_phase() 取数失败，降级 missing: %s", e
-        )
+        logging.getLogger("risk_models").warning("get_current_sti_phase() 取数失败，降级 missing: %s", e)
         return None, "missing"
 
 
@@ -242,8 +240,7 @@ async def update_one_day_risk_realtime(code: str) -> OneDayRisk:
 
     # 10. 数据诚实性：聚合 data_status（base+cf+dt+seat+conc+trio+sti 9 态，S129 R2 + S131 R2 含 sti）
     data_status = _merge_data_status(
-        base_status, cf_status, dt_status, seat_status, conc_status,
-        vol_status, dd_status, liq_status, sti_status
+        base_status, cf_status, dt_status, seat_status, conc_status, vol_status, dd_status, liq_status, sti_status
     )
     # last_updated 仍以资金流（实时向量）为准：cf 非 ok 则不戳 now（对齐 S111 R4）；
     # risk-trio 缺失只抬 data_status，不回退 last_updated——risk_score 由 base+cf 决定，
@@ -291,6 +288,7 @@ async def update_one_day_risk_realtime(code: str) -> OneDayRisk:
 # 龙虎榜与席位风险计算
 # ===========================================================================
 
+
 async def _get_dragon_tiger_risk(code: str) -> tuple[float, str]:
     """计算龙虎榜风险评分（0-100，越高风险越大）。
 
@@ -307,6 +305,7 @@ async def _get_dragon_tiger_risk(code: str) -> tuple[float, str]:
     """
     try:
         from fallback import get_with_fallback_meta
+
         cache_key = f"dragon_tiger:{code}"
         payload, meta = await asyncio.to_thread(
             get_with_fallback_meta,
@@ -317,9 +316,7 @@ async def _get_dragon_tiger_risk(code: str) -> tuple[float, str]:
         )
         dt = dragon_tiger_from_dict(payload)
     except Exception as e:
-        logging.getLogger("risk_models").warning(
-            "_get_dragon_tiger_risk(%s) 取数失败，降级 missing: %s", code, e
-        )
+        logging.getLogger("risk_models").warning("_get_dragon_tiger_risk(%s) 取数失败，降级 missing: %s", code, e)
         return 0.0, "missing"
 
     # 命中陈旧缓存（源断/限流返空时降级）：不基于陈旧算非零风险，标 degraded（对齐 R4）
@@ -378,6 +375,7 @@ async def _get_seat_info(code: str) -> dict:
     try:
         import seat_engine as se
         from fallback import get_with_fallback_meta
+
         cache_key = f"seat_info:{code}"
         date_str = datetime.now(se.BEIJING_TZ).strftime("%Y-%m-%d")
         signal, meta = await asyncio.to_thread(
@@ -388,9 +386,7 @@ async def _get_seat_info(code: str) -> dict:
             fallback_value=None,
         )
     except Exception as e:
-        logging.getLogger("risk_models").warning(
-            "_get_seat_info(%s) 取数失败，降级 missing: %s", code, e
-        )
+        logging.getLogger("risk_models").warning("_get_seat_info(%s) 取数失败，降级 missing: %s", code, e)
         return _empty("missing")
 
     # 命中陈旧缓存（源断时降级）：不基于陈旧算席位，标 degraded（对齐 R1/R4）
@@ -438,6 +434,7 @@ async def _get_seat_info(code: str) -> dict:
 # 波动率、回撤与风险指标计算
 # ===========================================================================
 
+
 async def _calculate_volatility(code: str, window: int = 20) -> float:
     """计算近 window 日收益率标准差（波动率）。
 
@@ -449,9 +446,7 @@ async def _calculate_volatility(code: str, window: int = 20) -> float:
     return score
 
 
-async def _calculate_volatility_meta(
-    code: str, window: int = 20
-) -> tuple[float, str]:
+async def _calculate_volatility_meta(code: str, window: int = 20) -> tuple[float, str]:
     """波动率 + data_status（S129 R1.1，对齐 _calculate_concentration_risk_meta 范式）。
 
     返回 (volatility, data_status)：
@@ -469,17 +464,12 @@ async def _calculate_volatility_meta(
         closes = [b.close for b in bars[-window:] if b.close is not None]
         if len(closes) < 2:
             return 0.0, "degraded"
-        returns = [
-            (closes[i] - closes[i - 1]) / closes[i - 1]
-            for i in range(1, len(closes))
-        ]
+        returns = [(closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes))]
         mean = sum(returns) / len(returns)
         variance = sum((r - mean) ** 2 for r in returns) / len(returns)
-        return round(variance ** 0.5 * 100, 2), "ok"  # 百分比
+        return round(variance**0.5 * 100, 2), "ok"  # 百分比
     except (KeyError, ValueError, TypeError, AttributeError) as e:
-        logging.getLogger("risk_models").warning(
-            "_calculate_volatility(%s) 取数失败: %s", code, e
-        )
+        logging.getLogger("risk_models").warning("_calculate_volatility(%s) 取数失败: %s", code, e)
         return 0.0, "missing"
 
 
@@ -493,9 +483,7 @@ async def _calculate_max_drawdown(code: str, window: int = 60) -> float:
     return score
 
 
-async def _calculate_max_drawdown_meta(
-    code: str, window: int = 60
-) -> tuple[float, str]:
+async def _calculate_max_drawdown_meta(code: str, window: int = 60) -> tuple[float, str]:
     """最大回撤 + data_status（S129 R1.2，对齐 _calculate_concentration_risk_meta 范式）。
 
     返回 (max_drawdown, data_status)：
@@ -519,9 +507,7 @@ async def _calculate_max_drawdown_meta(
                 max_dd = dd
         return round(max_dd * 100, 2), "ok"
     except (KeyError, ValueError, TypeError, AttributeError) as e:
-        logging.getLogger("risk_models").warning(
-            "_calculate_max_drawdown(%s) 取数失败: %s", code, e
-        )
+        logging.getLogger("risk_models").warning("_calculate_max_drawdown(%s) 取数失败: %s", code, e)
         return 0.0, "missing"
 
 
@@ -556,9 +542,7 @@ async def _calculate_liquidity_risk_meta(code: str) -> tuple[float, str]:
             return round(100 - avg_amount / 50000000 * 100, 2), "ok"
         return 0.0, "ok"
     except (KeyError, ValueError, TypeError, AttributeError) as e:
-        logging.getLogger("risk_models").warning(
-            "_calculate_liquidity_risk(%s) 取数失败: %s", code, e
-        )
+        logging.getLogger("risk_models").warning("_calculate_liquidity_risk(%s) 取数失败: %s", code, e)
         return 0.0, "missing"
 
 
@@ -589,6 +573,7 @@ async def _calculate_concentration_risk_meta(code: str) -> tuple[float, str]:
     """
     try:
         from fallback import get_with_fallback_meta
+
         cache_key = f"concentration_dt:{code}"
         payload, meta = await asyncio.to_thread(
             get_with_fallback_meta,
@@ -631,6 +616,7 @@ async def _calculate_concentration_risk_meta(code: str) -> tuple[float, str]:
 # ===========================================================================
 # 风险因素与建议生成
 # ===========================================================================
+
 
 def _build_risk_factors(
     dynamic_score: float,
@@ -756,6 +742,7 @@ def _get_realtime_capital_flow(code: str) -> dict:
     """
     try:
         from fallback import get_with_fallback_meta
+
         cache_key = f"capital_flow:{code}"
         history, meta = get_with_fallback_meta(
             cache_key,
@@ -811,7 +798,11 @@ def _get_realtime_capital_flow(code: str) -> dict:
         logging.getLogger("risk_models").warning(
             "_get_realtime_capital_flow(%s) stale：末条 date=%s, current_td=%s, "
             "carry_forward=%s, is_nontrading=%s → degraded+data_time=bar date（不戳 now）",
-            code, latest_date, current_td, carry_forward, is_nontrading,
+            code,
+            latest_date,
+            current_td,
+            carry_forward,
+            is_nontrading,
         )
 
     main_net = float(latest.get("main_net", 0) or 0)
@@ -846,8 +837,7 @@ def _get_realtime_capital_flow(code: str) -> dict:
 
     # 转换为资金流历史格式（供趋势判断使用）
     fund_flow_history = [
-        {"capital_flow_signal": max(-1.0, min(1.0, float(h.get("main_net", 0) or 0) / max_abs))}
-        for h in history[-5:]
+        {"capital_flow_signal": max(-1.0, min(1.0, float(h.get("main_net", 0) or 0) / max_abs))} for h in history[-5:]
     ]
 
     return {

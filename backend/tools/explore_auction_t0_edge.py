@@ -11,6 +11,7 @@
 
 跑法：cd backend && .venv/bin/python tools/explore_auction_t0_edge.py
 """
+
 import json
 import sqlite3
 import statistics
@@ -95,15 +96,19 @@ def main() -> dict:
         # next vs close 涨跌幅 >9.5% 近似一字
         next_gap_pct = (next_open - close_p) / close_p * 100
         is_next_locked = abs(next_gap_pct) >= 9.5
-        obs.append({
-            "date": date, "code": code,
-            "auction_pct": float(auction_pct) if auction_pct is not None else 0.0,
-            "vol_ratio": float(vol_ratio) if vol_ratio is not None else None,
-            "unmatched": float(unmatched) if unmatched is not None else None,
-            "turnover": float(turnover) if turnover is not None else None,
-            "edge": edge, "win": 1 if edge > 0 else 0,
-            "next_locked": is_next_locked,
-        })
+        obs.append(
+            {
+                "date": date,
+                "code": code,
+                "auction_pct": float(auction_pct) if auction_pct is not None else 0.0,
+                "vol_ratio": float(vol_ratio) if vol_ratio is not None else None,
+                "unmatched": float(unmatched) if unmatched is not None else None,
+                "turnover": float(turnover) if turnover is not None else None,
+                "edge": edge,
+                "win": 1 if edge > 0 else 0,
+                "next_locked": is_next_locked,
+            }
+        )
     n = len(obs)
     days = len(set(o["date"] for o in obs))
     print(f"obs={n} days={days} (join kline 后)", flush=True)
@@ -115,7 +120,7 @@ def main() -> dict:
     wr = sum(o["win"] for o in obs) / n
     net_mean = statistics.mean(rets)
     print(f"\n=== 全样本 T+0 edge ===")
-    print(f"n={n} days={days} net_mean={net_mean*100:.2f}% WR={wr*100:.2f}%")
+    print(f"n={n} days={days} net_mean={net_mean * 100:.2f}% WR={wr * 100:.2f}%")
 
     # 分组 by auction_pct 分位（高竞价涨 vs 低）
     obs_sorted = sorted(obs, key=lambda x: x["auction_pct"])
@@ -139,7 +144,7 @@ def main() -> dict:
         g_wr = sum(o["win"] for o in group) / len(group)
         g_mean = statistics.mean(g_rets)
         g_days = len(set(o["date"] for o in group))
-        print(f"  {name}: n={len(group)} days={g_days} net_mean={g_mean*100:.2f}% WR={g_wr*100:.2f}%")
+        print(f"  {name}: n={len(group)} days={g_days} net_mean={g_mean * 100:.2f}% WR={g_wr * 100:.2f}%")
 
     # §44 v3 R1: entry 一字跌停 filter（auction_pct>-9.5%，open 买不到）
     # §44 v3 R3: exit 次日一字涨停/跌停 filter（next_locked——卖不掉/买不回）
@@ -154,6 +159,7 @@ def main() -> dict:
     # §44 stats（day_clustered t-test，exploratory <60 天）——属性访问非 unpack
     try:
         from s44_verifier.stats import day_clustered_t_test
+
         dts = [o["date"] for o in obs_filtered]
         rets_f = [o["edge"] for o in obs_filtered]
         res = day_clustered_t_test(rets_f, dts)

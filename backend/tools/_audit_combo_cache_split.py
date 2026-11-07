@@ -15,6 +15,7 @@ code 缺 bar→cross-sectional rank 偏差→top-20 不是真 top-20）+ fwd5 �
 4. 不同覆盖率阈值的 edge 趋势（看 edge 是否随 universe 完整度变化）
 5. 判定 combo 存活是真 edge 还是幸存者偏差
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -93,10 +94,16 @@ def build_by_date_with_skip(code_bars: dict) -> tuple:
                 n_fwd5_skip += 1
                 continue
             today_ret = (c - prev_c) / prev_c
-            by_date[bars[i].get("date", "")].append({
-                "code": code, "gap": (o - prev_c) / prev_c, "tr": today_ret,
-                "amt": amt, "fwd5": (nc - c) / c, "is_zt": today_ret >= thr,
-            })
+            by_date[bars[i].get("date", "")].append(
+                {
+                    "code": code,
+                    "gap": (o - prev_c) / prev_c,
+                    "tr": today_ret,
+                    "amt": amt,
+                    "fwd5": (nc - c) / c,
+                    "is_zt": today_ret >= thr,
+                }
+            )
     return by_date, n_fwd5_skip, n_total_signals
 
 
@@ -146,7 +153,7 @@ def main() -> None:
     print(f"日期覆盖: {len(date_universe)} 日（{min(date_universe)} ~ {max(date_universe)}）")
 
     by_date, n_skip, n_total_sig = build_by_date_with_skip(code_bars)
-    print(f"\ncombo 信号总数: {n_total_sig}（其中 fwd5 跳过 {n_skip} = {n_skip/n_total_sig*100:.1f}%）")
+    print(f"\ncombo 信号总数: {n_total_sig}（其中 fwd5 跳过 {n_skip} = {n_skip / n_total_sig * 100:.1f}%）")
     print(f"combo test 信号日（>=2023-01-01）: {len([d for d in by_date if d >= SPLIT])} 日")
 
     test_dates = sorted(d for d in by_date if d >= SPLIT)
@@ -159,26 +166,30 @@ def main() -> None:
         coverages.append((d, cov))
     cov_vals = sorted(c for _, c in coverages)
     if cov_vals:
-        print(f"  覆盖率: mean {statistics.mean(cov_vals)*100:.1f}% median {statistics.median(cov_vals)*100:.1f}%")
-        print(f"  p10 {cov_vals[len(cov_vals)//10]*100:.1f}% p25 {cov_vals[len(cov_vals)//4]*100:.1f}% "
-              f"p75 {cov_vals[3*len(cov_vals)//4]*100:.1f}% p90 {cov_vals[9*len(cov_vals)//10]*100:.1f}%")
+        print(f"  覆盖率: mean {statistics.mean(cov_vals) * 100:.1f}% median {statistics.median(cov_vals) * 100:.1f}%")
+        print(
+            f"  p10 {cov_vals[len(cov_vals) // 10] * 100:.1f}% p25 {cov_vals[len(cov_vals) // 4] * 100:.1f}% "
+            f"p75 {cov_vals[3 * len(cov_vals) // 4] * 100:.1f}% p90 {cov_vals[9 * len(cov_vals) // 10] * 100:.1f}%"
+        )
         low_cov = sum(1 for c in cov_vals if c < 0.8)
-        print(f"  覆盖率<80% 的日数: {low_cov} / {len(cov_vals)} ({low_cov/len(cov_vals)*100:.1f}%)")
+        print(f"  覆盖率<80% 的日数: {low_cov} / {len(cov_vals)} ({low_cov / len(cov_vals) * 100:.1f}%)")
 
     # 2. correct-period（universe>=80%）vs wrong-period（<80%）edge 对比
     print("\n【2】correct-period（universe>=80%）vs wrong-period（<80%）edge 对比")
     correct_dates = [d for d, c in coverages if c >= 0.8]
     wrong_dates = [d for d, c in coverages if c < 0.8]
-    print(f"  correct（>=80%）: {len(correct_dates)} 日 ({len(correct_dates)/len(test_dates)*100:.1f}%)")
-    print(f"  wrong（<80%）: {len(wrong_dates)} 日 ({len(wrong_dates)/len(test_dates)*100:.1f}%)")
+    print(f"  correct（>=80%）: {len(correct_dates)} 日 ({len(correct_dates) / len(test_dates) * 100:.1f}%)")
+    print(f"  wrong（<80%）: {len(wrong_dates)} 日 ({len(wrong_dates) / len(test_dates) * 100:.1f}%)")
 
     for label, dates in [("correct-period", correct_dates), ("wrong-period", wrong_dates), ("ALL", test_dates)]:
         dm = combo_top_fwd(dates, by_date, exclude_zt=True)
         s = stats(dm)
         if s:
             sig = "✅" if s["p"] < 0.05 else "❌"
-            print(f"  {label}: n={s['n']} mean {s['mean']*100:+.4f}% net {s['net']*100:+.4f}% "
-                  f"t={s['t']:.2f} p={s['p']:.4f} {sig}")
+            print(
+                f"  {label}: n={s['n']} mean {s['mean'] * 100:+.4f}% net {s['net'] * 100:+.4f}% "
+                f"t={s['t']:.2f} p={s['p']:.4f} {sig}"
+            )
         else:
             print(f"  {label}: 无数据")
 
@@ -189,7 +200,7 @@ def main() -> None:
         dm = combo_top_fwd(dates, by_date, exclude_zt=True)
         s = stats(dm)
         if s:
-            print(f"  覆盖率>={thr*100:.0f}%: n={s['n']} mean {s['mean']*100:+.4f}% t={s['t']:.2f} p={s['p']:.4f}")
+            print(f"  覆盖率>={thr * 100:.0f}%: n={s['n']} mean {s['mean'] * 100:+.4f}% t={s['t']:.2f} p={s['p']:.4f}")
 
     # 4. 判定
     print("\n【4】判定")
@@ -200,7 +211,9 @@ def main() -> None:
     all_dm = combo_top_fwd(test_dates, by_date, exclude_zt=True)
     all_s = stats(all_dm)
 
-    print(f"  ALL test: n={all_s['n'] if all_s else 0} t={all_s['t']:.2f if all_s else 0}（vs memory 去涨停 net t10.29）")
+    print(
+        f"  ALL test: n={all_s['n'] if all_s else 0} t={all_s['t']:.2f if all_s else 0}（vs memory 去涨停 net t10.29）"
+    )
     if correct_s:
         print(f"  correct-period（universe 完整）: t={correct_s['t']:.2f} p={correct_s['p']:.4f}")
     if wrong_s:

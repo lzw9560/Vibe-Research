@@ -145,17 +145,19 @@ def run_strategy_backtest(lookback_days: int = 60, as_of: str | None = None) -> 
                 if res is None:
                     skipped += 1
                     continue
-                trades.append({
-                    "date": d,
-                    "code": gene.code,
-                    "name": getattr(gene, "name", gene.code),
-                    "strategy_code": sig.strategy_code,
-                    "strategy_name": sig.strategy_name,
-                    "won": res["won"],
-                    "return_pct": res["return_pct"],
-                    "data_source": getattr(gene, "data_source", "eastmoney_live"),
-                    "missing_factors": getattr(gene, "missing_factors", []),
-                })
+                trades.append(
+                    {
+                        "date": d,
+                        "code": gene.code,
+                        "name": getattr(gene, "name", gene.code),
+                        "strategy_code": sig.strategy_code,
+                        "strategy_name": sig.strategy_name,
+                        "won": res["won"],
+                        "return_pct": res["return_pct"],
+                        "data_source": getattr(gene, "data_source", "eastmoney_live"),
+                        "missing_factors": getattr(gene, "missing_factors", []),
+                    }
+                )
 
     # 按战法聚合
     by_strat: dict[str, list[dict[str, Any]]] = {}
@@ -168,15 +170,17 @@ def run_strategy_backtest(lookback_days: int = 60, as_of: str | None = None) -> 
         total = len(items)
         wins = sum(1 for t in items if t["won"])
         avg_ret = sum(t["return_pct"] for t in items) / total if total else 0.0
-        results.append(StrategyBacktestResult(
-            strategy_code=s["code"],
-            strategy_name=s["name"],
-            win_rate=round(wins / total, 4) if total else 0.0,
-            avg_return=round(avg_ret, 2),
-            sample_size=total,
-            available_days=available_days,
-            skipped=skipped,
-        ))
+        results.append(
+            StrategyBacktestResult(
+                strategy_code=s["code"],
+                strategy_name=s["name"],
+                win_rate=round(wins / total, 4) if total else 0.0,
+                avg_return=round(avg_ret, 2),
+                sample_size=total,
+                available_days=available_days,
+                skipped=skipped,
+            )
+        )
 
     _CACHE[cache_key] = results
     _CACHE_TS[cache_key] = now
@@ -226,17 +230,23 @@ def list_trades(strategy_code: str, lookback_days: int = 60, as_of: str | None =
                 if sig.strategy_code != strategy_code:
                     continue
                 res = _backtest_single(
-                    bars, d,
+                    bars,
+                    d,
                     int(params.get("max_hold_days", 3)),
                     float(params.get("stop_loss_pct", -7)),
                     float(params.get("take_profit_pct", 15)),
                 )
                 if res is None:
                     continue
-                trades.append({
-                    "date": d, "code": gene.code, "name": getattr(gene, "name", gene.code),
-                    "won": res["won"], "return_pct": res["return_pct"],
-                })
+                trades.append(
+                    {
+                        "date": d,
+                        "code": gene.code,
+                        "name": getattr(gene, "name", gene.code),
+                        "won": res["won"],
+                        "return_pct": res["return_pct"],
+                    }
+                )
     return {
         "strategy_code": strategy_code,
         "trades": trades,

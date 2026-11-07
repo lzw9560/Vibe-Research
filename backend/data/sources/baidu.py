@@ -19,6 +19,7 @@
 
 NO-LOOK-AHEAD：日K线是已实现的历史收盘，``date`` 为交易日；不涉及未来数据。
 """
+
 from __future__ import annotations
 
 import json
@@ -34,8 +35,8 @@ _BAIDU_KLINE_URL = "https://finance.pae.baidu.com/selfselect/getstockquotation"
 # 实测百度 schema：keys 含 ``timestamp``（unix 秒 CST）与 ``time``（YYYY-MM-DD 日期串），
 # 无 ``date`` key。``time`` 实为日期串，``timestamp`` 是其秒数表示。
 _KEY_MAP = {
-    "timestamp": "time",     # unix 秒（CST）— date 缺失时的回退源
-    "time": "date",          # YYYY-MM-DD 日期串（百度 time 字段实为日期）
+    "timestamp": "time",  # unix 秒（CST）— date 缺失时的回退源
+    "time": "date",  # YYYY-MM-DD 日期串（百度 time 字段实为日期）
     "date": "date",
     "open": "open",
     "close": "close",
@@ -54,12 +55,21 @@ _CST = timezone(timedelta(hours=8))
 def _fetch_json(code: str, start_time: str = "") -> dict:
     """百度股市通日K线原始 JSON。urllib 不封 IP；timeout 30s（公司代理预热 ~12s 留余量）。"""
     params = {
-        "all": "1", "isIndex": "false", "isBk": "false", "isBlock": "false",
-        "isFutures": "false", "isStock": "true", "newFormat": "1",
-        "group": "quotation_kline_ab", "finClientType": "pc",
-        "code": code, "start_time": start_time, "ktype": "1",
+        "all": "1",
+        "isIndex": "false",
+        "isBk": "false",
+        "isBlock": "false",
+        "isFutures": "false",
+        "isStock": "true",
+        "newFormat": "1",
+        "group": "quotation_kline_ab",
+        "finClientType": "pc",
+        "code": code,
+        "start_time": start_time,
+        "ktype": "1",
     }
     from urllib.parse import urlencode
+
     url = _BAIDU_KLINE_URL + "?" + urlencode(params)
     headers = {
         "User-Agent": UA,

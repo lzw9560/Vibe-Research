@@ -1,6 +1,7 @@
 """
 LimitUp seats router.
 """
+
 from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime
 from typing import Any, Dict
@@ -13,6 +14,7 @@ async def get_seat_profiles() -> Dict[str, Any]:
     """获取所有席位画像"""
     try:
         import seat_engine as se
+
         engine = se.get_engine()
         raw = engine.get_all_seat_profiles()
         # Convert {name: profile} dict to {profiles: [...]} list format
@@ -27,6 +29,7 @@ async def get_seat_profile(seat_name: str) -> Dict[str, Any]:
     """获取单个席位画像"""
     try:
         import seat_engine as se
+
         engine = se.get_engine()
         profile = engine.get_seat_profile(seat_name)
         if profile is None:
@@ -46,6 +49,7 @@ async def get_consensus_signal(
     """获取某只股票的席位共识/分歧信号"""
     try:
         import seat_engine as se
+
         engine = se.get_engine()
         td = trade_date or datetime.now(se.BEIJING_TZ).strftime("%Y-%m-%d")
         signal = engine.compute_consensus_signal(td, stock_code)
@@ -61,6 +65,7 @@ async def trigger_build_profiles(lookback_days: int = Query(180, ge=30, le=365))
     """触发席位画像冷启动构建"""
     try:
         import seat_engine as se
+
         engine = se.get_engine()
         result = engine.build_seat_profiles(lookback_days)
         return {"status": "ok", "profiles": len(result)}

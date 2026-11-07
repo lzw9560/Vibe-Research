@@ -1,6 +1,7 @@
 """
 Review router.
 """
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 import os
@@ -37,11 +38,12 @@ def _save_review_params(params: Dict[str, Any]) -> None:
 
 # ---- Routes ----
 
+
 @router.get("/api/review/daily")
 async def get_daily_review(date: str = Query(None, description="交易日期 YYYY-MM-DD")) -> Dict[str, Any]:
     """
     获取指定日期的每日复盘报告。
-    
+
     包含：市场情绪总结、板块热度排名、涨停股统计、昨日涨停表现、竞价回顾。
     """
     if date is None:

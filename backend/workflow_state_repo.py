@@ -29,6 +29,7 @@ from workflow_state_machine import WorkflowStateMachine, WorkflowStatus
 logger = logging.getLogger("vibe-research")
 
 from vr_paths import resolve_data_dir  # S184 统一 DB 到 .vibe-research/
+
 _DB_PATH = str(resolve_data_dir() / "market_data.db")
 
 
@@ -112,9 +113,7 @@ def _migrate_legacy_tables(conn: sqlite3.Connection) -> bool:
     返回 True = 可按新 schema 建表；False = 旧表非空保留不动（绝不毁数据，
     届时需人工迁移）。旧表无任何在仓代码引用（rg 验证），属历史实验残留。
     """
-    row = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='workflow_state'"
-    ).fetchone()
+    row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='workflow_state'").fetchone()
     if row is None:
         return True
     cols = {r[1] for r in conn.execute("PRAGMA table_info(workflow_state)").fetchall()}
@@ -124,10 +123,7 @@ def _migrate_legacy_tables(conn: sqlite3.Connection) -> bool:
     has_history = conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='workflow_state_history'"
     ).fetchone()
-    history_n = (
-        conn.execute("SELECT COUNT(*) FROM workflow_state_history").fetchone()[0]
-        if has_history else 0
-    )
+    history_n = conn.execute("SELECT COUNT(*) FROM workflow_state_history").fetchone()[0] if has_history else 0
     if state_n == 0 and history_n == 0:
         logger.info("[workflow_state] 检测到空旧 schema 表，DROP 重建（S032 迁移）")
         conn.execute("DROP TABLE workflow_state")
@@ -137,7 +133,9 @@ def _migrate_legacy_tables(conn: sqlite3.Connection) -> bool:
         return True
     logger.warning(
         "[workflow_state] 旧 schema 表非空（state=%d history=%d），保留不动；"
-        "S032 新表未建，状态端点将不可用，请人工迁移", state_n, history_n,
+        "S032 新表未建，状态端点将不可用，请人工迁移",
+        state_n,
+        history_n,
     )
     return False
 
@@ -223,9 +221,7 @@ def get_history(code: str, trade_date: Optional[str] = None) -> List[Dict[str, A
 # ============================================================================
 
 
-def _insert_initial(
-    code: str, name: str, trade_date: str, target: WorkflowStatus, reason: str
-) -> bool:
+def _insert_initial(code: str, name: str, trade_date: str, target: WorkflowStatus, reason: str) -> bool:
     """insert-if-absent：行不存在才写（初始态 pending→target），已存在跳过。
 
     语义（D3）：盘前重跑不得把用户已推进的状态（watching/holding/…）回退，
@@ -319,8 +315,7 @@ def transition(
             allowed_targets = [s.value for s in machine.allowed_targets()]
             return (
                 False,
-                f"当前状态 {current_status.value} 不允许流转到 {target}"
-                f"（允许: {', '.join(allowed_targets) or '无'}）",
+                f"当前状态 {current_status.value} 不允许流转到 {target}（允许: {', '.join(allowed_targets) or '无'}）",
             )
 
         now = _now_iso()
@@ -336,9 +331,16 @@ def transition(
             WHERE code = ? AND trade_date = ? AND status = ?
             """,
             (
-                target_status.value, reason, now,
-                entry_price, exit_price, strategy, attention_mode,
-                code, trade_date, current_status.value,
+                target_status.value,
+                reason,
+                now,
+                entry_price,
+                exit_price,
+                strategy,
+                attention_mode,
+                code,
+                trade_date,
+                current_status.value,
             ),
         )
         if cur.rowcount == 0:

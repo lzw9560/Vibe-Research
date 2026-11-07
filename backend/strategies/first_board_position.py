@@ -23,6 +23,7 @@
 合规：本模块按用户传入的确认候选 + 市场判定返回客观建仓/卖出建议，
 仓位映射是 spec 2.4 明确的灯位规则（非主观建议），T+1 必卖是 spec 2.5 硬规则。
 """
+
 from __future__ import annotations
 
 import logging
@@ -43,21 +44,22 @@ _logger = logging.getLogger(__name__)
 # 所有阈值集中在此常量，顶部统一管理。当前值为 spec 2.4 骨架占位，**待回测校准**。
 # T+1 必卖不破例（spec 2.5）：即使 T 日收盘涨停也不持有。
 POSITION_PARAMS: dict = {
-    "max_holdings": 5,           # 最大持仓 5 只
-    "green_light_max": 5,        # 绿灯最多 5 只
-    "yellow_light_max": 3,       # 黄灯最多 3 只
-    "red_light_max": 0,          # 红灯 0 只（暴风暴风雨 0 仓位硬约束）
-    "green_weight": 0.25,        # 绿灯单股仓位（3-5 只等权≈20-33%）
-    "yellow_weight": 0.15,       # 黄灯单股仓位
-    "stop_loss_pct": -0.03,      # 止损 -3%
-    "take_profit_pct": 0.05,     # 止盈 +5%
-    "max_hold_days": 1,          # T+1 必卖
+    "max_holdings": 5,  # 最大持仓 5 只
+    "green_light_max": 5,  # 绿灯最多 5 只
+    "yellow_light_max": 3,  # 黄灯最多 3 只
+    "red_light_max": 0,  # 红灯 0 只（暴风暴风雨 0 仓位硬约束）
+    "green_weight": 0.25,  # 绿灯单股仓位（3-5 只等权≈20-33%）
+    "yellow_weight": 0.15,  # 黄灯单股仓位
+    "stop_loss_pct": -0.03,  # 止损 -3%
+    "take_profit_pct": 0.05,  # 止盈 +5%
+    "max_hold_days": 1,  # T+1 必卖
 }
 
 
 # ===========================================================================
 # 043-045 建仓选股 + 记录 + 通知
 # ===========================================================================
+
 
 def select_for_entry(open_confirmed: list[dict], market_light: str) -> list[dict]:
     """建仓选股——按确认时间序取前 N 只（§44 合规，不按 score auto-rank；绿灯5/黄灯3/红灯0 等权分配仓位）。
@@ -113,16 +115,18 @@ def select_for_entry(open_confirmed: list[dict], market_light: str) -> list[dict
     for rank, cand in enumerate(ordered[:max_n], start=1):
         code = cand.get("code", "")
         ep = entry_prices.get(code)
-        out.append({
-            "code": code,
-            "name": cand.get("name", ""),
-            "total_score": cand.get("total"),
-            "entry_price": ep,
-            "position_pct": weight,
-            "stop_loss": round(ep * (1 + stop_pct), 2) if ep else None,
-            "take_profit": round(ep * (1 + tp_pct), 2) if ep else None,
-            "entry_rank": rank,
-        })
+        out.append(
+            {
+                "code": code,
+                "name": cand.get("name", ""),
+                "total_score": cand.get("total"),
+                "entry_price": ep,
+                "position_pct": weight,
+                "stop_loss": round(ep * (1 + stop_pct), 2) if ep else None,
+                "take_profit": round(ep * (1 + tp_pct), 2) if ep else None,
+                "entry_rank": rank,
+            }
+        )
     return out
 
 
@@ -142,11 +146,13 @@ def execute_entry(selected: list[dict], entry_price: float | None = None) -> lis
     out: list[dict] = []
     for s in selected:
         ep_actual = entry_price if entry_price is not None else s.get("entry_price")
-        out.append({
-            **s,
-            "entry_time": now,
-            "entry_price_actual": ep_actual,
-        })
+        out.append(
+            {
+                **s,
+                "entry_time": now,
+                "entry_price_actual": ep_actual,
+            }
+        )
     return out
 
 
@@ -195,6 +201,7 @@ def notify_entry_ready(selected: list[dict]) -> bool:
 
     try:
         from notification.notification_service import NotificationService
+
         ns = NotificationService()
     except Exception as e:
         _logger.warning("[notify_entry_ready] NotificationService 初始化失败 err=%s", e)
@@ -218,6 +225,7 @@ def notify_entry_ready(selected: list[dict]) -> bool:
 # 048-050 T+1 卖出
 # ===========================================================================
 
+
 def notify_sell_reminder(holdings: list[dict]) -> bool:
     """T+1 开盘前推送"今日卖出提醒：N 只持仓"。
 
@@ -232,13 +240,12 @@ def notify_sell_reminder(holdings: list[dict]) -> bool:
 
     codes = ", ".join(f"{h.get('code', '')}" for h in holdings)
     content = (
-        f"【首板流卖出提醒】今日 T+1 必卖 {len(holdings)} 只持仓\n"
-        f"T+1 必卖不破例（即使涨停也不持有）\n"
-        f"持仓：{codes}"
+        f"【首板流卖出提醒】今日 T+1 必卖 {len(holdings)} 只持仓\nT+1 必卖不破例（即使涨停也不持有）\n持仓：{codes}"
     )
 
     try:
         from notification.notification_service import NotificationService
+
         ns = NotificationService()
     except Exception as e:
         _logger.warning("[notify_sell_reminder] NotificationService 初始化失败 err=%s", e)
@@ -297,7 +304,7 @@ def check_exit_signals(holding: dict, current_price: float) -> dict:
             "code": code,
             "action": "take_profit",
             "exit_price": current_price,
-            "reason": f"盘中冲高>{POSITION_PARAMS['take_profit_pct']*100:.0f}%止盈",
+            "reason": f"盘中冲高>{POSITION_PARAMS['take_profit_pct'] * 100:.0f}%止盈",
         }
 
     # 止损：current_price <= stop_loss 线
@@ -306,7 +313,7 @@ def check_exit_signals(holding: dict, current_price: float) -> dict:
             "code": code,
             "action": "stop_loss",
             "exit_price": current_price,
-            "reason": f"跌破{POSITION_PARAMS['stop_loss_pct']*100:.0f}%止损",
+            "reason": f"跌破{POSITION_PARAMS['stop_loss_pct'] * 100:.0f}%止损",
         }
 
     # 未触及止盈止损线 → hold（继续持有至 9:25/9:30 默认卖）
@@ -351,6 +358,7 @@ def execute_exit(holding: dict, exit_price: float, action: str) -> dict:
 # ===========================================================================
 # 主入口
 # ===========================================================================
+
 
 def run_first_board_position(
     open_confirmed: list[dict],
@@ -407,6 +415,7 @@ def run_first_board_position(
 # 辅助函数
 # ===========================================================================
 
+
 def _to_float(v) -> float | None:
     """raw 字段归一 float 或 None。"""
     if v is None:
@@ -436,17 +445,19 @@ if __name__ == "__main__":
     print(f"选股: {len(r['selected'])}")
     print(f"建仓: {len(r['entered'])}")
     for e in r["entered"]:
-        print(f"  {e['code']} entry={e['entry_price_actual']} "
-              f"stop={e['stop_loss']} tp={e['take_profit']} "
-              f"pct={e['position_pct']*100:.0f}%")
+        print(
+            f"  {e['code']} entry={e['entry_price_actual']} "
+            f"stop={e['stop_loss']} tp={e['take_profit']} "
+            f"pct={e['position_pct'] * 100:.0f}%"
+        )
     print(f"持仓: {len(r['holdings'])}")
 
     # 测试止盈止损
     hold = r["holdings"][0]
     ep = hold["entry_price_actual"]
-    print(f"\n止盈测试 (price={ep*1.06}):", check_exit_signals(hold, ep * 1.06))
-    print(f"止损测试 (price={ep*0.96}):", check_exit_signals(hold, ep * 0.96))
-    print(f"默认卖测试 (price={ep*1.01}):", check_exit_signals(hold, ep * 1.01))
+    print(f"\n止盈测试 (price={ep * 1.06}):", check_exit_signals(hold, ep * 1.06))
+    print(f"止损测试 (price={ep * 0.96}):", check_exit_signals(hold, ep * 0.96))
+    print(f"默认卖测试 (price={ep * 1.01}):", check_exit_signals(hold, ep * 1.01))
 
     # 测试卖出记录
     exit_r = execute_exit(hold, ep * 1.06, "take_profit")

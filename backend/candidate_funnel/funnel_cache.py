@@ -5,6 +5,7 @@
 读缓存秒开，"重新跑"按钮走 POST 实跑 + 写缓存。表存 `VR_DATA_DIR/funnel_cache.db`
 （私有数据，不进 git）。缓存拿不到 → 调用方 fallback 实跑（R10 兜底）。
 """
+
 from __future__ import annotations
 
 import json
@@ -55,8 +56,7 @@ def save_funnel_result(date: str, stage: str, result: "FunnelResult") -> None:
             conn = _get_db()
             try:
                 conn.execute(
-                    "INSERT OR REPLACE INTO funnel_results "
-                    "(date, stage, result_json, updated_at) VALUES (?, ?, ?, ?)",
+                    "INSERT OR REPLACE INTO funnel_results (date, stage, result_json, updated_at) VALUES (?, ?, ?, ?)",
                     (date, stage, js, now),
                 )
                 conn.commit()
@@ -93,9 +93,7 @@ def list_cached_dates() -> list[str]:
     with _LOCK:
         conn = _get_db()
         try:
-            rows = conn.execute(
-                "SELECT DISTINCT date FROM funnel_results ORDER BY date DESC LIMIT 60"
-            ).fetchall()
+            rows = conn.execute("SELECT DISTINCT date FROM funnel_results ORDER BY date DESC LIMIT 60").fetchall()
         finally:
             conn.close()
     return [r["date"] for r in rows]

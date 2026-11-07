@@ -34,6 +34,7 @@
   cd /Users/lizhiwei/project/code/stock/Vibe-Research/backend
   .venv/bin/python tools/explore_standalone_gap_lbc_stop.py
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -98,21 +99,34 @@ def run_standalone(name: str, factor: str, blanket: list[dict], k: int = 5) -> d
     factor_picks = [p for p in blanket if p.get(factor) is not None]
     topk = select_topk_by_factor(factor_picks, factor, k)
 
-    print(f"\n  {name}: universe={len(factor_picks)} picks → top-{k}={len(topk)} "
-          f"({len(set(p['zt_date'] for p in topk))} days)")
+    print(
+        f"\n  {name}: universe={len(factor_picks)} picks → top-{k}={len(topk)} "
+        f"({len(set(p['zt_date'] for p in topk))} days)"
+    )
 
     if not topk:
         print(f"  → no-data: 无 pick 有 {factor}")
-        return {"name": name, "factor": factor, "n_picks": 0, "basic_ev": 0.0,
-                "n_days": 0, "stop_bonf": 1.0, "stop_day_t": 0.0,
-                "stop_ev_gross": 0.0, "stop_ev_net": 0.0, "verdict": "underpowered",
-                "walk_forward_test_ev": 0.0, "walk_forward_test_p": 1.0,
-                "walk_forward_train_ev": 0.0, "wf_status": "no_picks",
-                "stop_p_raw": 1.0}
+        return {
+            "name": name,
+            "factor": factor,
+            "n_picks": 0,
+            "basic_ev": 0.0,
+            "n_days": 0,
+            "stop_bonf": 1.0,
+            "stop_day_t": 0.0,
+            "stop_ev_gross": 0.0,
+            "stop_ev_net": 0.0,
+            "verdict": "underpowered",
+            "walk_forward_test_ev": 0.0,
+            "walk_forward_test_p": 1.0,
+            "walk_forward_train_ev": 0.0,
+            "wf_status": "no_picks",
+            "stop_p_raw": 1.0,
+        }
 
-    r = analyze_subset(f"{name} (top-{k})", topk,
-                       ret_fn_basic=close_ev_basic, ret_fn_stop=close_ev_stop,
-                       ret_fn_label="close_ev")
+    r = analyze_subset(
+        f"{name} (top-{k})", topk, ret_fn_basic=close_ev_basic, ret_fn_stop=close_ev_stop, ret_fn_label="close_ev"
+    )
     wf_stop = walk_forward(topk, _stop_ret_fn)
 
     stop_s = r.get("stop_ev", {})
@@ -129,24 +143,41 @@ def run_standalone(name: str, factor: str, blanket: list[dict], k: int = 5) -> d
     wf_status = wf_stop.get("status", "no_picks")
     wf_train_ev = wf_stop.get("train_ev", {}).get("ev", 0.0) if wf_status == "ok" else 0.0
     wf_test_ev = wf_stop.get("test_ev", {}).get("ev", 0.0) if wf_status == "ok" else 0.0
-    wf_test_p = (wf_stop.get("test_day_t", {}).get("p_one_sided", 1.0)
-                 if wf_status == "ok" else 1.0)
+    wf_test_p = wf_stop.get("test_day_t", {}).get("p_one_sided", 1.0) if wf_status == "ok" else 1.0
 
     stop_bonf = bonferroni_p(stop_p_raw, N_TESTS)
 
     v = verdict_for(
-        stop_ev_gross, stop_t_day, stop_p_raw, wf_status, wf_train_ev,
-        wf_test_ev, wf_test_p, stop_n_days, stop_ev_net,
-        f"{name} (stop variant)", n_cross_factor=N_CROSS_FACTOR,
+        stop_ev_gross,
+        stop_t_day,
+        stop_p_raw,
+        wf_status,
+        wf_train_ev,
+        wf_test_ev,
+        wf_test_p,
+        stop_n_days,
+        stop_ev_net,
+        f"{name} (stop variant)",
+        n_cross_factor=N_CROSS_FACTOR,
     )
 
-    return {"name": name, "factor": factor, "n_picks": len(topk),
-            "basic_ev": basic_ev, "n_days": stop_n_days, "stop_bonf": stop_bonf,
-            "stop_day_t": stop_t_day, "stop_ev_gross": stop_ev_gross,
-            "stop_ev_net": stop_ev_net, "verdict": v,
-            "walk_forward_test_ev": wf_test_ev, "walk_forward_test_p": wf_test_p,
-            "walk_forward_train_ev": wf_train_ev, "wf_status": wf_status,
-            "stop_p_raw": stop_p_raw}
+    return {
+        "name": name,
+        "factor": factor,
+        "n_picks": len(topk),
+        "basic_ev": basic_ev,
+        "n_days": stop_n_days,
+        "stop_bonf": stop_bonf,
+        "stop_day_t": stop_t_day,
+        "stop_ev_gross": stop_ev_gross,
+        "stop_ev_net": stop_ev_net,
+        "verdict": v,
+        "walk_forward_test_ev": wf_test_ev,
+        "walk_forward_test_p": wf_test_p,
+        "walk_forward_train_ev": wf_train_ev,
+        "wf_status": wf_status,
+        "stop_p_raw": stop_p_raw,
+    }
 
 
 def main() -> None:
@@ -161,8 +192,7 @@ def main() -> None:
     code_map, all_dates = load_kline_db()
     calendar = sorted(all_dates)
     zt_rows = load_zt()
-    print(f"  kline codes={len(code_map)} calendar days={len(calendar)} "
-          f"zt_rows={len(zt_rows)}")
+    print(f"  kline codes={len(code_map)} calendar days={len(calendar)} zt_rows={len(zt_rows)}")
 
     print("\n[2] 构建 blanket picks (entry=T+1 open, exit=T+2 close, 一字涨停跳过)...")
     blanket = build_picks_generic(code_map, calendar, zt_rows, filter_fn=None)
@@ -198,10 +228,8 @@ def main() -> None:
         print(f"  walk_forward_train_ev={r['walk_forward_train_ev']}")
         print(f"  wf_status={r['wf_status']}")
 
-    both_falsified = (res_gap["verdict"] == "falsified"
-                      and res_lbc["verdict"] == "falsified")
-    print(f"\nOVERALL (standalone gap+lbc with stop): "
-          f"{'both falsified' if both_falsified else 'NOT both falsified'}")
+    both_falsified = res_gap["verdict"] == "falsified" and res_lbc["verdict"] == "falsified"
+    print(f"\nOVERALL (standalone gap+lbc with stop): {'both falsified' if both_falsified else 'NOT both falsified'}")
 
 
 if __name__ == "__main__":

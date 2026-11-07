@@ -244,7 +244,7 @@ def _check_price_position(ind: IndicatorSet, market_ctx: dict) -> EightStandardI
     # 低位首板：consec_boards == 1
     low_first = cb == 1
     # 平台突破：price > ma20（近似）
-    breakout = (price is not None and ma20 is not None and price > ma20)
+    breakout = price is not None and ma20 is not None and price > ma20
     ok = low_first or breakout
     actual_parts = []
     if cb is not None:

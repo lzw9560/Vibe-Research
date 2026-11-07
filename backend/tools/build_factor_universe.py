@@ -14,6 +14,7 @@ bottom decile, 零投资组合). 本脚本只构建**因子数据** (step 1-5), 
 再平衡: 每周 (每 5 交易日). 标准 Fama-French 为月度, 周度已属高频.
 流动性过滤: 20 日均成交额 >= 50,000,000 元 + formation 日 volume>0.
 """
+
 from __future__ import annotations
 import json
 import math
@@ -35,8 +36,8 @@ KLINE_DB = DATA / "baostock_kline_cache.db"
 INDEX_CACHE = DATA / "index_ohlc_cache.json"
 OUT = DATA / "factor_zoo_data.json"
 
-LIQ_AMT_FLOOR = 50_000_000.0   # 20d 均成交额 >= 5000 万元
-REBAL_EVERY = 5                # 每 5 交易日再平衡
+LIQ_AMT_FLOOR = 50_000_000.0  # 20d 均成交额 >= 5000 万元
+REBAL_EVERY = 5  # 每 5 交易日再平衡
 MOM_DAYS = 15
 REV_DAYS = 5
 VOL_DAYS = 20
@@ -111,8 +112,7 @@ def main() -> int:
     n_codes_total = len(kmap)
     calendar = sorted(all_dates)
     n_dates = len(calendar)
-    print(f"    codes={n_codes_total} dates={n_dates} "
-          f"range={calendar[0]}~{calendar[-1]}", flush=True)
+    print(f"    codes={n_codes_total} dates={n_dates} range={calendar[0]}~{calendar[-1]}", flush=True)
 
     # ---- rebalance dates: 每 5 交易日, 从 index>=20 起 (需 20 日 warmup) ----
     cal_idx = {d: i for i, d in enumerate(calendar)}
@@ -185,7 +185,7 @@ def main() -> int:
             var = sum((r - mean_r) ** 2 for r in rets) / (len(rets) - 1)
             vol = math.sqrt(var)
             # size: log(20d 均成交额)
-            amt_win = amts[i - SIZE_DAYS + 1: i + 1]
+            amt_win = amts[i - SIZE_DAYS + 1 : i + 1]
             mean_amt = sum(amt_win) / len(amt_win)
             if mean_amt <= 0:
                 continue
@@ -194,9 +194,7 @@ def main() -> int:
             if mean_amt < LIQ_AMT_FLOOR or vols[i] <= 0:
                 skipped_illiquid += 1
                 continue
-            factor_snaps.setdefault(d, {})[code] = [
-                round(mom, 6), round(rev, 6), round(size, 6), round(vol, 6)
-            ]
+            factor_snaps.setdefault(d, {})[code] = [round(mom, 6), round(rev, 6), round(size, 6), round(vol, 6)]
             total_snap += 1
 
     # ---- VW universe market proxy ----
@@ -227,30 +225,28 @@ def main() -> int:
     # cross-section 规模诊断 (rebal 日期)
     rebal_counts = [len(factor_snaps.get(d, {})) for d in rebal_dates]
     rebal_counts_present = [c for c in rebal_counts if c > 0]
-    avg_codes = (sum(rebal_counts_present) / len(rebal_counts_present)
-                 if rebal_counts_present else 0.0)
+    avg_codes = sum(rebal_counts_present) / len(rebal_counts_present) if rebal_counts_present else 0.0
     min_codes = min(rebal_counts_present) if rebal_counts_present else 0
     max_codes = max(rebal_counts_present) if rebal_counts_present else 0
 
     metadata = {
         "methodology": "Fama-French cross-sectional factor (long-short decile, zero-investment). "
-                       "This script builds the factor DATA only; regression done downstream.",
+        "This script builds the factor DATA only; regression done downstream.",
         "n_stocks_total": n_codes_total,
         "n_stocks_balanced_full_hist": balanced,
         "n_stocks_missing_backfill_oldboard": missing_backfill,
         "n_stocks_newly_listed_chuangye": newly_listed,
         "n_dates": n_dates,
         "date_range": f"{calendar[0]}~{calendar[-1]}",
-        "market_benchmark":
-            "sh.000001 (上证综指) — real published index, full history (2119 dates in calendar), "
-            "correct returns (mean 0.0135%/day, +17.6% cumulative 2018-2026, consistent with roughly-flat 上证综指). "
-            "sh.000300 (沪深300) was the REQUESTED benchmark but is UNAVAILABLE: not in kline cache, not in "
-            "index_ohlc_cache.json, and baostock fetch hangs on network (login() succeeds but row retrieval times out). "
-            "sh.000001 is a valid broad A-share market factor (covers all Shanghai A-shares; broader than 沪深300's 300 "
-            "large caps, though Shanghai-only). "
-            "NOTE: an amount-weighted (turnover-proxy) universe return was investigated as a market-cap proxy but "
-            "DROPPED — without shares-outstanding data, amount-weighting ≠ cap-weighting and introduces a systematic "
-            "+0.55%/day upward drift (over-weights high-turnover speculative stocks). Use sh.000001 for CAPM/Fama-French MKT.",
+        "market_benchmark": "sh.000001 (上证综指) — real published index, full history (2119 dates in calendar), "
+        "correct returns (mean 0.0135%/day, +17.6% cumulative 2018-2026, consistent with roughly-flat 上证综指). "
+        "sh.000300 (沪深300) was the REQUESTED benchmark but is UNAVAILABLE: not in kline cache, not in "
+        "index_ohlc_cache.json, and baostock fetch hangs on network (login() succeeds but row retrieval times out). "
+        "sh.000001 is a valid broad A-share market factor (covers all Shanghai A-shares; broader than 沪深300's 300 "
+        "large caps, though Shanghai-only). "
+        "NOTE: an amount-weighted (turnover-proxy) universe return was investigated as a market-cap proxy but "
+        "DROPPED — without shares-outstanding data, amount-weighting ≠ cap-weighting and introduces a systematic "
+        "+0.55%/day upward drift (over-weights high-turnover speculative stocks). Use sh.000001 for CAPM/Fama-French MKT.",
         "factors": {
             "momentum_15d": "cumulative return over past 15 trading days (~3wk), Jegadeesh-Titman short-horizon",
             "reversal_5d": "cumulative return over past 5 trading days (~1wk), Jegadeesh-Lehmann short-term reversal",
@@ -306,12 +302,20 @@ def main() -> int:
     OUT.write_text(json.dumps(out, ensure_ascii=False))
     sz_mb = OUT.stat().st_size / 1048576
     print(f"    written {sz_mb:.1f} MB", flush=True)
-    print(f"==> total snapshots={total_snap} rebal_dates={len(rebal_dates)} "
-          f"avg_codes/rebal={avg_codes:.0f} (min={min_codes} max={max_codes})", flush=True)
-    print(f"==> survivorship: balanced={balanced} missing_backfill_oldboard={missing_backfill} "
-          f"newly_listed={newly_listed}", flush=True)
-    print(f"==> skipped: illiquid={skipped_illiquid} short_hist={skipped_short} "
-          f"event_contaminated={skipped_event}", flush=True)
+    print(
+        f"==> total snapshots={total_snap} rebal_dates={len(rebal_dates)} "
+        f"avg_codes/rebal={avg_codes:.0f} (min={min_codes} max={max_codes})",
+        flush=True,
+    )
+    print(
+        f"==> survivorship: balanced={balanced} missing_backfill_oldboard={missing_backfill} "
+        f"newly_listed={newly_listed}",
+        flush=True,
+    )
+    print(
+        f"==> skipped: illiquid={skipped_illiquid} short_hist={skipped_short} event_contaminated={skipped_event}",
+        flush=True,
+    )
     return 0
 
 

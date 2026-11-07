@@ -10,6 +10,7 @@ from post_market_workflow import SettlementResult
 @dataclass
 class SettlementInput:
     """结算输入"""
+
     code: str
     name: str
     strategy: str

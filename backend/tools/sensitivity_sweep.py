@@ -11,6 +11,7 @@ overfit 检测（registry §5）：
 K 冻结 pre-registration（§44v2 rule③）：sweep 总次数 = Σ(len(values) per param per 战法)
 计入 Bonferroni K（split_into_subphases G2 T6 split，K>8 拆≤8）。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -71,8 +72,7 @@ def sweep_param(
     no_edge：0 个 v 出 edge → 无 selection edge 不进融合。
     """
     results = tuple(
-        SweepResult(param=param, value=v, verdict=verdict_fn(v)[0],
-                    lift=verdict_fn(v)[1], n=verdict_fn(v)[2])
+        SweepResult(param=param, value=v, verdict=verdict_fn(v)[0], lift=verdict_fn(v)[1], n=verdict_fn(v)[2])
         for v in values
     )
     edge_count = _edge_count(results)
@@ -80,8 +80,12 @@ def sweep_param(
     robust = edge_count >= 2  # 多邻近 v 有 edge
     no_edge = edge_count == 0  # 无 v 出 edge
     return SweepReport(
-        战法=战法, param=param, results=results,
-        overfit_flag=overfit, robust_flag=robust, no_edge_flag=no_edge,
+        战法=战法,
+        param=param,
+        results=results,
+        overfit_flag=overfit,
+        robust_flag=robust,
+        no_edge_flag=no_edge,
     )
 
 

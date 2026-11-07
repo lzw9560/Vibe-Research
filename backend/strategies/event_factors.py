@@ -14,6 +14,7 @@ spec §8/P2-4 数据需求：
 数据源：akshare（免费，包东财 HTTP API，不走 RSS）。
 akshare 不可达 → 返空列表（不崩，标注"事件数据未取得"）。
 """
+
 from __future__ import annotations
 
 import json
@@ -30,19 +31,22 @@ _EX_DIVIDEND_CACHE: dict | None = None
 # 数据结构
 # ===========================================================================
 
+
 @dataclass(frozen=True)
 class EventFactor:
     """事件类因子（spec §8/P2-4）。"""
-    event_type: str          # 业绩预告 / 增持 / 减持 / 解禁 / 除权除息
-    event_date: str          # 事件日期
-    event_label: str         # 利好 / 利空 / 风险提示 / 中性
-    detail: str             # 事件详情
-    impact_score: float     # 影响分（-1.0 ~ +1.0，正=利好，负=利空）
+
+    event_type: str  # 业绩预告 / 增持 / 减持 / 解禁 / 除权除息
+    event_date: str  # 事件日期
+    event_label: str  # 利好 / 利空 / 风险提示 / 中性
+    detail: str  # 事件详情
+    impact_score: float  # 影响分（-1.0 ~ +1.0，正=利好，负=利空）
 
 
 @dataclass(frozen=True)
 class EventContext:
     """个股事件类上下文。"""
+
     code: str
     events: list[EventFactor]
     has_upcoming_ex_dividend: bool
@@ -56,6 +60,7 @@ class EventContext:
 # 业绩预告（spec §8 stock_yjyg_em）
 # ===========================================================================
 
+
 def fetch_earnings_forecast(code: str) -> list[EventFactor]:
     """业绩预告（akshare stock_yjyg_em）。
 
@@ -64,6 +69,7 @@ def fetch_earnings_forecast(code: str) -> list[EventFactor]:
     """
     try:
         import akshare as ak
+
         df = ak.stock_yjyg_em(date="20261231")  # 最新报告期
         if df is None or df.empty:
             return []
@@ -89,13 +95,15 @@ def fetch_earnings_forecast(code: str) -> list[EventFactor]:
         impact, label = impact_map.get(forecast_type, (0.0, "中性"))
 
         announce_date = str(r.get("公告日期", ""))[:10]
-        return [EventFactor(
-            event_type="业绩预告",
-            event_date=announce_date,
-            event_label=label,
-            detail=detail,
-            impact_score=impact,
-        )]
+        return [
+            EventFactor(
+                event_type="业绩预告",
+                event_date=announce_date,
+                event_label=label,
+                detail=detail,
+                impact_score=impact,
+            )
+        ]
     except Exception:
         return []
 
@@ -103,6 +111,7 @@ def fetch_earnings_forecast(code: str) -> list[EventFactor]:
 # ===========================================================================
 # 大股东增减持（spec §8）
 # ===========================================================================
+
 
 def fetch_shareholder_change(code: str) -> list[EventFactor]:
     """大股东增减持（akshare stock_shareholder_change_ths）。
@@ -112,6 +121,7 @@ def fetch_shareholder_change(code: str) -> list[EventFactor]:
     """
     try:
         import akshare as ak
+
         df = ak.stock_shareholder_change_ths(symbol=code)
         if df is None or df.empty:
             return []
@@ -131,13 +141,15 @@ def fetch_shareholder_change(code: str) -> list[EventFactor]:
                 label = "中性"
                 impact = 0.0
 
-            events.append(EventFactor(
-                event_type="增减持",
-                event_date=change_date,
-                event_label=label,
-                detail=f"{change_type}，变动 {change_shares} 股",
-                impact_score=impact,
-            ))
+            events.append(
+                EventFactor(
+                    event_type="增减持",
+                    event_date=change_date,
+                    event_label=label,
+                    detail=f"{change_type}，变动 {change_shares} 股",
+                    impact_score=impact,
+                )
+            )
         return events
     except Exception:
         return []
@@ -146,6 +158,7 @@ def fetch_shareholder_change(code: str) -> list[EventFactor]:
 # ===========================================================================
 # 解禁数据（spec §8）
 # ===========================================================================
+
 
 def fetch_share_unlock(code: str) -> list[EventFactor]:
     """限售解禁（spec §8）——向后兼容入口，返回事件列表（无 data_status）。
@@ -179,8 +192,10 @@ def _fetch_share_unlock_impl(code: str) -> tuple[list[EventFactor], str]:
     """解禁取数实现：lockup_expiry(raise_on_failure=True) + try/except 兜底返 ([], missing)。"""
     try:
         import sys
+
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         from astock import lockup_expiry
+
         data = lockup_expiry(code, forward_days=90, raise_on_failure=True)
         events: list[EventFactor] = []
         for item in data.get("upcoming", []):
@@ -198,13 +213,15 @@ def _fetch_share_unlock_impl(code: str) -> tuple[list[EventFactor], str]:
                 label = "中性"
                 impact = -0.1
 
-            events.append(EventFactor(
-                event_type="解禁",
-                event_date=unlock_date,
-                event_label=label,
-                detail=f"解禁 {shares} 股（占比 {ratio}%）",
-                impact_score=impact,
-            ))
+            events.append(
+                EventFactor(
+                    event_type="解禁",
+                    event_date=unlock_date,
+                    event_label=label,
+                    detail=f"解禁 {shares} 股（占比 {ratio}%）",
+                    impact_score=impact,
+                )
+            )
         return events, "ok"
     except Exception:
         # S131 R10：lockup_expiry(raise_on_failure=True) 源断 → catch 返 ([], "missing")
@@ -215,6 +232,7 @@ def _fetch_share_unlock_impl(code: str) -> tuple[list[EventFactor], str]:
 # ===========================================================================
 # 除权除息日历（spec §8/P2-4）
 # ===========================================================================
+
 
 def _load_ex_dividend_calendar() -> dict:
     """加载除权除息日历。文件不存在返空 dict。"""
@@ -265,6 +283,7 @@ def check_ex_dividend(code: str, trade_date: str, forward_days: int = 30) -> tup
 # 事件上下文聚合
 # ===========================================================================
 
+
 def build_event_context(code: str, trade_date: str | None = None) -> EventContext:
     """聚合个股事件类上下文（spec §8/P2-4）。
 
@@ -301,6 +320,7 @@ def build_event_context(code: str, trade_date: str | None = None) -> EventContex
 # 公告分类（LLM 辅助，spec §10.5）
 # ===========================================================================
 
+
 def classify_announcement_llm(announcement_text: str, chat_fn: Any | None = None) -> str:
     """公告分类（利好/利空/风险提示）——LLM 辅助。
 
@@ -312,6 +332,7 @@ def classify_announcement_llm(announcement_text: str, chat_fn: Any | None = None
     if chat_fn is None:
         # 降级到关键词粗筛
         from strategies.news_radar_context import classify_announcement
+
         return classify_announcement(announcement_text)
 
     try:
@@ -324,4 +345,5 @@ def classify_announcement_llm(announcement_text: str, chat_fn: Any | None = None
     except Exception:
         # LLM 调用失败 → 降级关键词粗筛
         from strategies.news_radar_context import classify_announcement
+
         return classify_announcement(announcement_text)

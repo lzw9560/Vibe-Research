@@ -10,6 +10,7 @@
 纯函数：接受 all_stocks 列表（调用方用 get_market_snapshot_all 取数），返回 thscode 列表。
    不直接调 CLI，便于 fixture 测试。
 """
+
 from __future__ import annotations
 
 # 候选池跌幅门槛（spec §2.2：前日跌 > 5%）

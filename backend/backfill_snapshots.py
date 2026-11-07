@@ -6,6 +6,7 @@
 - backfill_backtest_snapshots：串行逐日调 _execute_daily_backtest_run，单日失败不阻断
 - 启动缺口补跑：lifespan 调 _startup_backfill_gap_check
 """
+
 from __future__ import annotations
 
 import logging
@@ -20,11 +21,10 @@ def _get_snapshot_max_date() -> str | None:
     try:
         import sqlite3
         from scheduled_tasks import _DB_PATH
+
         conn = sqlite3.connect(_DB_PATH)
         conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            "SELECT MAX(snapshot_date) as mx FROM backtest_daily_snapshots"
-        ).fetchone()
+        row = conn.execute("SELECT MAX(snapshot_date) as mx FROM backtest_daily_snapshots").fetchone()
         conn.close()
         return row["mx"] if row and row["mx"] else None
     except Exception:
@@ -35,11 +35,11 @@ def _get_gene_scores_dates_since(since: str | None, limit_days: int = 60) -> Lis
     """查 gene_scores 已有日（date > since 时取后续，否则取最近 limit_days 日）。降序。"""
     try:
         from limitup_screener.data import get_db
+
         conn = get_db()
         if since is not None:
             rows = conn.execute(
-                "SELECT DISTINCT date FROM gene_scores WHERE date > ? "
-                "ORDER BY date DESC LIMIT ?",
+                "SELECT DISTINCT date FROM gene_scores WHERE date > ? ORDER BY date DESC LIMIT ?",
                 (since, limit_days),
             ).fetchall()
         else:
@@ -77,10 +77,9 @@ def _get_existing_snapshot_dates() -> set[str]:
     try:
         import sqlite3
         from scheduled_tasks import _DB_PATH
+
         conn = sqlite3.connect(_DB_PATH)
-        rows = conn.execute(
-            "SELECT DISTINCT snapshot_date FROM backtest_daily_snapshots"
-        ).fetchall()
+        rows = conn.execute("SELECT DISTINCT snapshot_date FROM backtest_daily_snapshots").fetchall()
         conn.close()
         return {r[0] for r in rows}
     except Exception:
@@ -151,6 +150,7 @@ async def startup_backfill_gap_check() -> None:
         logger.info("[startup_backfill] 检测到 %d 日缺口，后台排队回填: %s", len(gap), gap)
         # 后台线程跑（不阻塞 lifespan）
         import threading
+
         t = threading.Thread(target=backfill_backtest_snapshots, args=(60,), daemon=True)
         t.start()
     except Exception as exc:  # noqa: BLE001 — 启动补跑失败不影响主服务

@@ -17,6 +17,7 @@
 
 caveat：6 因子多重检验，显著的须 walk-forward 复验（§44）。关联 _audit_precursor_*
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -51,7 +52,7 @@ def main() -> None:
             continue
         vols = [float(b.get("volume", 0) or 0) for b in bars]
         for i in range(5, len(bars) - 1):
-            prev_c = float(bars[i-1].get("close", 0) or 0)
+            prev_c = float(bars[i - 1].get("close", 0) or 0)
             o = float(bars[i].get("open", 0) or 0)
             h = float(bars[i].get("high", 0) or 0)
             lo = float(bars[i].get("low", 0) or 0)
@@ -60,28 +61,35 @@ def main() -> None:
             if not prev_c or not c or not o:
                 continue
             today_ret = (c - prev_c) / prev_c
-            ma20 = statistics.mean(vols[max(0, i-20):i]) if i >= 1 else 0
+            ma20 = statistics.mean(vols[max(0, i - 20) : i]) if i >= 1 else 0
             vol_ratio = (vols[i] / ma20) if ma20 else 0
             rng = (h - lo) / c if c else 0
             # prior 5d ret: bars[i-5].close -> bars[i].close? 用 i-1 close 到 i close 的前5天
-            p5c = float(bars[i-5].get("close", 0) or 0)
+            p5c = float(bars[i - 5].get("close", 0) or 0)
             prior5d = (c - p5c) / p5c if p5c else 0
             gap = (o - prev_c) / prev_c
-            nxt_c = float(bars[i+1].get("close", 0) or 0)
+            nxt_c = float(bars[i + 1].get("close", 0) or 0)
             if not nxt_c:
                 continue
             nxt_ret = (nxt_c - c) / c
-            by_date[bars[i].get("date", "")].append({
-                "today_ret": today_ret, "vol_ratio": vol_ratio, "range": rng,
-                "prior5d": prior5d, "gap": gap, "amount": amt, "nxt_ret": nxt_ret,
-            })
+            by_date[bars[i].get("date", "")].append(
+                {
+                    "today_ret": today_ret,
+                    "vol_ratio": vol_ratio,
+                    "range": rng,
+                    "prior5d": prior5d,
+                    "gap": gap,
+                    "amount": amt,
+                    "nxt_ret": nxt_ret,
+                }
+            )
 
     # base: 全样本次日 mean（按日平均，再平均）
     all_daily_means = [statistics.mean(d["nxt_ret"] for d in lst) for lst in by_date.values() if lst]
     base_mean = statistics.mean(all_daily_means) if all_daily_means else 0
 
     print(f"=== 多因子横截面归因（{len(by_date)} 日, 每日 top decile）===")
-    print(f"base 次日 mean（全样本日均）= {base_mean*100:+.4f}%\n")
+    print(f"base 次日 mean（全样本日均）= {base_mean * 100:+.4f}%\n")
     print(f"{'因子':<18}{'top-decile 次日mean':>20}{'vs base':>10}{'显著?':>8}")
     print("-" * 58)
 
@@ -111,7 +119,7 @@ def main() -> None:
         se = std / (len(daily_top) ** 0.5) if len(daily_top) else 0
         t = diff / se if se > 0 else 0
         sig = "✅" if (t > 2 and diff > 0) else ("❌" if t < -2 else "≈")
-        print(f"{label:<18}{m*100:>+17.4f}%{diff*100:>+9.4f}%{sig:>6} (t={t:.1f})")
+        print(f"{label:<18}{m * 100:>+17.4f}%{diff * 100:>+9.4f}%{sig:>6} (t={t:.1f})")
 
     print()
     print("读法：top-decile 次日 mean > base 且 t>2 = 该因子 top 表现次日真赚钱（候选 edge）")

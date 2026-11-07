@@ -27,6 +27,7 @@ subprocess 冷启动 ~1.0s，直连 ~0.1s（快 10 倍），数据一致。
 **§44 口径**：PS/PCF 是东财零供给的唯一源，无需 cross_validate 仲裁；
 PE/PB 两源一致但不在本 spec 接仲裁（等 cross_validate 接线，第 3 层孤儿）。
 """
+
 from __future__ import annotations
 
 import json
@@ -74,6 +75,7 @@ _VALUATION_CACHE_TTL = 300.0
 
 # ── Key 解析 + envelope 转译 + 有界重试 ────────────────────────────────────────
 
+
 def _resolve_api_key() -> str:
     """解析 hithink API Key：优先 env HITHINK_FINANCE_API_KEY，fallback macOS keychain。
 
@@ -88,15 +90,15 @@ def _resolve_api_key() -> str:
     try:
         r = subprocess.run(
             ["security", "find-generic-password", "-s", "hithink-finance", "-a", "profile:default", "-w"],
-            capture_output=True, text=True, timeout=3,
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         if r.returncode == 0 and r.stdout.strip():
             return r.stdout.strip()
     except (subprocess.SubprocessError, OSError) as e:
         logger.warning("hithink subprocess 失败（降级，不阻塞）: %s", e)
-    raise DependencyMissing(
-        "hithink API Key 未配置：设 HITHINK_FINANCE_API_KEY（.env）或 hithink-finance auth login"
-    )
+    raise DependencyMissing("hithink API Key 未配置：设 HITHINK_FINANCE_API_KEY（.env）或 hithink-finance auth login")
 
 
 def _retry_delay(attempt: int, retry_after: str | None = None) -> float:
@@ -109,7 +111,7 @@ def _retry_delay(attempt: int, retry_after: str | None = None) -> float:
             return min(float(retry_after), _MAX_RETRY_AFTER_S)
         except (TypeError, ValueError) as e:
             logger.debug("hithink parse 失败（降级，不阻塞）: %s", e)
-    base = min(1000 * (2 ** attempt), 8000) / 1000.0  # 秒
+    base = min(1000 * (2**attempt), 8000) / 1000.0  # 秒
     return base + base * 0.2 * random.random()
 
 
@@ -137,9 +139,7 @@ def _http_get(path: str, query: dict[str, Any], timeout: int = _TIMEOUT_DEFAULT)
     last_err = ""
     for attempt in range(_MAX_ATTEMPTS):
         try:
-            req = urllib.request.Request(
-                url, headers={"X-api-key": key, "accept": "application/json"}
-            )
+            req = urllib.request.Request(url, headers={"X-api-key": key, "accept": "application/json"})
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 body = json.loads(resp.read())
             code = body.get("code")
@@ -180,6 +180,7 @@ def _http_get(path: str, query: dict[str, Any], timeout: int = _TIMEOUT_DEFAULT)
 
 # ── thscode 映射（S104 保留，复用 tencent.get_prefix）─────────────────────────
 
+
 def _to_thscode(code: str) -> str:
     """6 位裸 code → hithink thscode（带交易所后缀）。
 
@@ -204,6 +205,7 @@ def _items(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 # ── 5 对外函数（S104 接口不变，S105 改调 _http_get）────────────────────────────
+
 
 def valuation_snapshot(codes: list[str]) -> dict[str, dict]:
     """批量估值快照——补东财结构性缺的 PS_TTM / PCF_TTM。
@@ -315,8 +317,15 @@ def limit_up_pool(date_str: str) -> list[dict]:
             continue
         row: dict[str, Any] = {"code": bare, "name": it.get("name", "")}
         # 连板数 + 打板因子 KG P0（hithink API 返回但 wrapper 前丢弃的 5+ 特征）
-        for f in ("continue_day_cnt", "seal_money", "max_seal_money",
-                  "limit_up_time", "continue_day_text", "limit_up_reason", "is_st"):
+        for f in (
+            "continue_day_cnt",
+            "seal_money",
+            "max_seal_money",
+            "limit_up_time",
+            "continue_day_text",
+            "limit_up_reason",
+            "is_st",
+        ):
             v = it.get(f)
             if v is not None:
                 row[f] = v
@@ -360,7 +369,7 @@ def auction_snapshot(codes: list[str], stage: str = "final") -> list[dict]:
     out: list[dict[str, Any]] = []
     meta: dict[str, Any] = {}  # 顶层 timestamp/auction_phase/data_status（首批取，透传每行）
     for i in range(0, len(codes), 100):
-        batch = codes[i:i + 100]
+        batch = codes[i : i + 100]
         thscodes = ",".join(_to_thscode(c) for c in batch)
         data = _http_get(
             _EP_AUCTION_SNAPSHOT,
@@ -370,38 +379,38 @@ def auction_snapshot(codes: list[str], stage: str = "final") -> list[dict]:
         if data is None:
             continue  # 本批失败，下批继续（部分降级，不整体抛）
         if not meta:
-            meta = {k: data.get(k) for k in ("timestamp", "auction_phase", "data_status")
-                    if k in data}
+            meta = {k: data.get(k) for k in ("timestamp", "auction_phase", "data_status") if k in data}
         for it in _items(data):
             ths = it.get("thscode") or it.get("ticker") or ""
             bare = _strip_thscode(ths) if "." in str(ths) else str(ths)
             if not bare:
                 continue
-            out.append({
-                "code": bare,
-                "name": it.get("name", ""),
-                "stage": stage,
-                "auction_price": it.get("auction_price"),
-                "auction_pct": it.get("auction_pct"),
-                "auction_volume": it.get("auction_volume"),
-                "auction_amount": it.get("auction_amount"),
-                "auction_unmatched": it.get("auction_unmatched"),
-                "auction_turnover_pct": it.get("auction_turnover_pct"),
-                "auction_yesterday_ratio_pct": it.get("auction_yesterday_ratio_pct"),
-                "auction_volume_ratio": it.get("auction_volume_ratio"),
-                "pre_close_price": it.get("pre_close_price"),
-                "open_price": it.get("open_price"),
-                "last_price": it.get("last_price"),
-                "float_market_cap": it.get("float_market_cap"),
-                "source_timestamp": meta.get("timestamp"),
-                "auction_phase": it.get("auction_phase") or meta.get("auction_phase"),
-                "data_status": it.get("data_status") or meta.get("data_status"),
-            })
+            out.append(
+                {
+                    "code": bare,
+                    "name": it.get("name", ""),
+                    "stage": stage,
+                    "auction_price": it.get("auction_price"),
+                    "auction_pct": it.get("auction_pct"),
+                    "auction_volume": it.get("auction_volume"),
+                    "auction_amount": it.get("auction_amount"),
+                    "auction_unmatched": it.get("auction_unmatched"),
+                    "auction_turnover_pct": it.get("auction_turnover_pct"),
+                    "auction_yesterday_ratio_pct": it.get("auction_yesterday_ratio_pct"),
+                    "auction_volume_ratio": it.get("auction_volume_ratio"),
+                    "pre_close_price": it.get("pre_close_price"),
+                    "open_price": it.get("open_price"),
+                    "last_price": it.get("last_price"),
+                    "float_market_cap": it.get("float_market_cap"),
+                    "source_timestamp": meta.get("timestamp"),
+                    "auction_phase": it.get("auction_phase") or meta.get("auction_phase"),
+                    "data_status": it.get("data_status") or meta.get("data_status"),
+                }
+            )
     return out
 
 
-def fetch_kline(code: str, start_ms: int, end_ms: int,
-                adjust: str = "forward") -> list[dict]:
+def fetch_kline(code: str, start_ms: int, end_ms: int, adjust: str = "forward") -> list[dict]:
     """历史日K线——kline_resolver 第三源 fallback（baostock→东财→hithink）。
 
     直连 fuyao HTTP（_http_get），复用 envelope 转译 + 有界重试 + 熔断。
@@ -420,13 +429,17 @@ def fetch_kline(code: str, start_ms: int, end_ms: int,
     from datetime import datetime, timedelta, timezone  # noqa: PLC0415
 
     thscode = _to_thscode(code)
-    data = _http_get(_EP_MARKET_HISTORY, {
-        "thscode": thscode,
-        "start": start_ms,
-        "end": end_ms,
-        "adjust": adjust,
-        "interval": "1d",  # 日K线（CLI market history 默认 1d，HTTP 端点必传）
-    }, _TIMEOUT_DEFAULT)
+    data = _http_get(
+        _EP_MARKET_HISTORY,
+        {
+            "thscode": thscode,
+            "start": start_ms,
+            "end": end_ms,
+            "adjust": adjust,
+            "interval": "1d",  # 日K线（CLI market history 默认 1d，HTTP 端点必传）
+        },
+        _TIMEOUT_DEFAULT,
+    )
     if data is None:
         return []
 
@@ -456,13 +469,18 @@ def fetch_kline(code: str, start_ms: int, end_ms: int,
         pct: float | None = None
         if prev_close is not None and prev_close != 0:
             pct = round((c - prev_close) / prev_close * 100, 4)
-        bars.append({
-            "date": datetime.fromtimestamp(date_ms / 1000, tz=tz_bj).strftime("%Y-%m-%d"),
-            "open": o, "high": h, "low": lo, "close": c,
-            "volume": int(v) if v else None,
-            "amount": float(amt) if amt else None,
-            "pctChg": pct,
-        })
+        bars.append(
+            {
+                "date": datetime.fromtimestamp(date_ms / 1000, tz=tz_bj).strftime("%Y-%m-%d"),
+                "open": o,
+                "high": h,
+                "low": lo,
+                "close": c,
+                "volume": int(v) if v else None,
+                "amount": float(amt) if amt else None,
+                "pctChg": pct,
+            }
+        )
         prev_close = c
     return bars
 
@@ -475,14 +493,16 @@ def _normalize_rank_items(items: list[dict[str, Any]]) -> list[dict]:
         bare = _strip_thscode(ths)
         if not bare:
             continue
-        out.append({
-            "code": bare,
-            "name": it.get("name", ""),
-            "rank": it.get("rank"),
-            "heat": it.get("heat"),
-            "rank_change": it.get("rank_change"),
-            "rank_trend": it.get("rank_trend"),
-        })
+        out.append(
+            {
+                "code": bare,
+                "name": it.get("name", ""),
+                "rank": it.get("rank"),
+                "heat": it.get("heat"),
+                "rank_change": it.get("rank_change"),
+                "rank_trend": it.get("rank_trend"),
+            }
+        )
     return out
 
 

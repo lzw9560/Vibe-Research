@@ -13,6 +13,7 @@
     cd backend && ../.venv/bin/python -m scripts.cleanup_weekend_gene_scores          # dry-run
     cd backend && ../.venv/bin/python -m scripts.cleanup_weekend_gene_scores --apply  # 实删
 """
+
 from __future__ import annotations
 
 import argparse
@@ -36,9 +37,7 @@ def _is_weekend(date_str: str) -> bool:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="清理 gene_scores 表周末污染行（dry-run 默认）"
-    )
+    parser = argparse.ArgumentParser(description="清理 gene_scores 表周末污染行（dry-run 默认）")
     parser.add_argument(
         "--apply",
         action="store_true",
@@ -94,9 +93,7 @@ def main() -> None:
         return
 
     # 备份
-    bak_path = db_path.with_name(
-        f"{db_path.name}.bak-fix-weekend-{date.today().isoformat()}"
-    )
+    bak_path = db_path.with_name(f"{db_path.name}.bak-fix-weekend-{date.today().isoformat()}")
     if bak_path.exists():
         # 同日重复跑，覆盖最新备份
         bak_path.unlink()
@@ -130,9 +127,7 @@ def main() -> None:
         print(f"  {d} ({wd_name}) cnt={r['cnt']}{flag}")
 
     # 残留周末行（应为 0）
-    remain = conn.execute(
-        "SELECT COUNT(*) FROM gene_scores WHERE strftime('%w', date) IN ('0', '6')"
-    ).fetchone()[0]
+    remain = conn.execute("SELECT COUNT(*) FROM gene_scores WHERE strftime('%w', date) IN ('0', '6')").fetchone()[0]
     print()
     if remain == 0:
         print("[OK] 残留周末行 = 0，清理成功")

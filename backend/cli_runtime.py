@@ -28,9 +28,23 @@ _CLI_DEFS: dict[str, dict] = {
         "bins": ["claude", "openclaude"],
         "delivery": "system-file",
         "build_args": lambda sys_file: [
-            "-p", "--output-format", "text", "--system-prompt-file", sys_file,
-            "--disallowedTools", "Read", "Write", "Edit", "Glob", "Grep", "Bash",
-            "NotebookEdit", "WebFetch", "WebSearch", "TodoWrite", "Task",
+            "-p",
+            "--output-format",
+            "text",
+            "--system-prompt-file",
+            sys_file,
+            "--disallowedTools",
+            "Read",
+            "Write",
+            "Edit",
+            "Glob",
+            "Grep",
+            "Bash",
+            "NotebookEdit",
+            "WebFetch",
+            "WebSearch",
+            "TodoWrite",
+            "Task",
         ],
         "env": {},
     },
@@ -38,9 +52,23 @@ _CLI_DEFS: dict[str, dict] = {
         "bins": ["opencode"],
         "delivery": "system-file",
         "build_args": lambda sys_file: [
-            "-p", "--output-format", "text", "--system-prompt-file", sys_file,
-            "--disallowedTools", "Read", "Write", "Edit", "Glob", "Grep", "Bash",
-            "NotebookEdit", "WebFetch", "WebSearch", "TodoWrite", "Task",
+            "-p",
+            "--output-format",
+            "text",
+            "--system-prompt-file",
+            sys_file,
+            "--disallowedTools",
+            "Read",
+            "Write",
+            "Edit",
+            "Glob",
+            "Grep",
+            "Bash",
+            "NotebookEdit",
+            "WebFetch",
+            "WebSearch",
+            "TodoWrite",
+            "Task",
         ],
         "env": {},
     },
@@ -74,11 +102,15 @@ _CLI_DEFS: dict[str, dict] = {
 }
 
 _EXTRA_PATH_DIRS = [
-    "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin",
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "/usr/bin",
     # Codex 桌面版把 CLI 装在 app bundle 里，不进 PATH（issue #16 / PR #11）
     "/Applications/Codex.app/Contents/Resources",
-    str(Path.home() / ".local/bin"), str(Path.home() / ".npm-global/bin"),
-    str(Path.home() / ".bun/bin"), str(Path.home() / ".deno/bin"),
+    str(Path.home() / ".local/bin"),
+    str(Path.home() / ".npm-global/bin"),
+    str(Path.home() / ".bun/bin"),
+    str(Path.home() / ".deno/bin"),
     str(Path.home() / ".yarn/bin"),
 ]
 
@@ -122,9 +154,7 @@ def run_cli(kind: str, system_prompt: str, user_prompt: str) -> str:
     d = _CLI_DEFS.get(kind)
     bin_path = detect_cli(kind)
     if not d or not bin_path:
-        raise CliUnavailable(
-            f"未检测到「{kind}」对应的本机命令。请先安装并登录该 CLI，或改用「API 接入」。"
-        )
+        raise CliUnavailable(f"未检测到「{kind}」对应的本机命令。请先安装并登录该 CLI，或改用「API 接入」。")
 
     combined = f"{system_prompt}\n\n{user_prompt}"
     env = {**os.environ, **d.get("env", {})}
@@ -178,9 +208,7 @@ def run_cli_stream(kind: str, system_prompt: str, user_prompt: str):
     d = _CLI_DEFS.get(kind)
     bin_path = detect_cli(kind)
     if not d or not bin_path:
-        raise CliUnavailable(
-            f"未检测到「{kind}」对应的本机命令。请先安装并登录该 CLI，或改用「API 接入」。"
-        )
+        raise CliUnavailable(f"未检测到「{kind}」对应的本机命令。请先安装并登录该 CLI，或改用「API 接入」。")
 
     combined = f"{system_prompt}\n\n{user_prompt}"
     env = {**os.environ, **d.get("env", {})}
@@ -202,13 +230,20 @@ def run_cli_stream(kind: str, system_prompt: str, user_prompt: str):
             stdin_payload = None
 
         proc = subprocess.Popen(
-            [bin_path, *args], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            [bin_path, *args],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
             # stderr 不能丢：CLI 的失败原因只在这里，丢了用户就只看到光秃秃的
             # 「退出码 1」（issue #16）。但必须持续排空，否则管道写满会死锁。
-            stderr=subprocess.PIPE, cwd=tmpdir, env=env, text=True, bufsize=1,
-            encoding="utf-8", errors="replace",
+            stderr=subprocess.PIPE,
+            cwd=tmpdir,
+            env=env,
+            text=True,
+            bufsize=1,
+            encoding="utf-8",
+            errors="replace",
         )
-        err_tail: deque = deque(maxlen=40)   # 只留尾部若干行，避免长进度日志占内存
+        err_tail: deque = deque(maxlen=40)  # 只留尾部若干行，避免长进度日志占内存
 
         def _drain_err(stderr=proc.stderr):
             try:

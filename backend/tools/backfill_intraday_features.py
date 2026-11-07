@@ -8,6 +8,7 @@ intraday_features 0 行（trajectory 死）。代码已修（scheduled_tasks:877
 
 用法：cd backend && .venv/bin/python tools/backfill_intraday_features.py
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -20,8 +21,10 @@ sys.path.insert(0, str(ROOT))
 
 from risk.seal_intraday_collector import _get_conn, get_latest_snapshots, get_snapshots_by_code  # noqa: E402
 from strategies.intraday_features import (  # noqa: E402
-    compute_trajectory, persist_trajectory,
-    compute_derived_features, persist_derived_features,
+    compute_trajectory,
+    persist_trajectory,
+    compute_derived_features,
+    persist_derived_features,
 )
 
 
@@ -69,7 +72,9 @@ if __name__ == "__main__":
     t0 = datetime.now()
     stats = backfill(dates)
     elapsed = (datetime.now() - t0).total_seconds()
-    print(f"\n[backfill] done: {stats['traj_written']} traj + {stats['derived_written']} derived, "
-          f"{stats['skipped']} skipped, {len(stats['errors'])} errors, {elapsed:.0f}s")
+    print(
+        f"\n[backfill] done: {stats['traj_written']} traj + {stats['derived_written']} derived, "
+        f"{stats['skipped']} skipped, {len(stats['errors'])} errors, {elapsed:.0f}s"
+    )
     if stats["errors"]:
         print("errors:", stats["errors"][:3])

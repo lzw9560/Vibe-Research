@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """策略分计算——compute_strategy_score / _cand_to_gene / _build_market_scan_factors。"""
+
 from __future__ import annotations
 
 import logging
@@ -57,15 +58,21 @@ def compute_strategy_score(
     # proxy 映射 gene composite rho≈0 → 推断无方向性 → lift_to_multiplier 得降权（days<60 → provisional ×0.5）
     # 非 gene 因子（相对强度/均线多头/量能信号/板块强度）×1.0
     _GENE_BASED_FACTORS = {
-        "factor_seal_rate", "factor_red_rate", "factor_rebound_rate",
-        "factor_freq_score", "factor_premium",
+        "factor_seal_rate",
+        "factor_red_rate",
+        "factor_rebound_rate",
+        "factor_freq_score",
+        "factor_premium",
     }
     try:
         from candidate_funnel.evaluation import lift_to_multiplier
         from candidate_funnel.lift_override import get_effective_dimension
+
         _gene_dim = get_effective_dimension("gene_score")
         gene_multiplier = lift_to_multiplier(
-            _gene_dim.lift, _gene_dim.n, days_robust=_gene_dim.days_robust,
+            _gene_dim.lift,
+            _gene_dim.n,
+            days_robust=_gene_dim.days_robust,
         )[1]  # §44v2 P0：override 优先（revalidation 写回生效），fallback frozen days=38<60 → ×0.5
     except Exception:  # noqa: BLE001 — import 失败降级默认（gene rho≈0, days<60 → ×0.5 provisional）
         gene_multiplier = 0.5
@@ -126,9 +133,12 @@ def _build_market_scan_factors(pattern, cand: dict, strat_code: str) -> dict:
     pattern None → 各因子降级 50（不臆造 0）。
     """
     from strategies.non_limitup_funnel import (  # 懒 import 防 circular
-        compute_relative_strength_score, compute_ma_bullish_score,
-        compute_volume_signal_score, compute_sector_strength_score,
+        compute_relative_strength_score,
+        compute_ma_bullish_score,
+        compute_volume_signal_score,
+        compute_sector_strength_score,
     )
+
     sector_rank = cand.get("sector_rank")
     return {
         "相对强度": compute_relative_strength_score(pattern) if pattern is not None else 50.0,

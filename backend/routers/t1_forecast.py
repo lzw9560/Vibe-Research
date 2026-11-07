@@ -3,6 +3,7 @@
 
 观察池工具非交易信号。5.28x lift 真但 EV -0.87% 负。
 """
+
 from __future__ import annotations
 
 import json
@@ -112,12 +113,14 @@ def get_history() -> dict[str, Any]:
             continue  # 跳过未回填的
         hit = sum(1 for s in backfilled if s.get("t1_zt"))
         total = len(backfilled)
-        daily.append({
-            "date": date,
-            "total": total,
-            "hit": hit,
-            "rate": round(hit / total, 4) if total else 0.0,
-        })
+        daily.append(
+            {
+                "date": date,
+                "total": total,
+                "hit": hit,
+                "rate": round(hit / total, 4) if total else 0.0,
+            }
+        )
 
     cum_h = sum(d["hit"] for d in daily)
     cum_s = sum(d["total"] for d in daily)

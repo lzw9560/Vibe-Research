@@ -43,6 +43,7 @@
   cd /Users/lizhiwei/project/code/stock/Vibe-Research/backend
   .venv/bin/python tools/explore_factor_composite-score.py
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -84,6 +85,7 @@ FACTORS = ["turn", "vr5", "gap", "lbc", "gene_score"]
 
 # ---------- data: gene_scores ----------
 
+
 def load_gene_scores() -> tuple[dict[str, dict[str, float]], int]:
     """读 gene_scores.db → {date: {code: total_score}}.
 
@@ -93,9 +95,7 @@ def load_gene_scores() -> tuple[dict[str, dict[str, float]], int]:
     conn = sqlite3.connect(str(GENE_DB))
     by_date: dict[str, dict[str, float]] = defaultdict(dict)
     n = 0
-    for d, code, score in conn.execute(
-        "SELECT date, code, total_score FROM gene_scores"
-    ):
+    for d, code, score in conn.execute("SELECT date, code, total_score FROM gene_scores"):
         if score is None:
             continue
         by_date[d][code] = float(score)
@@ -106,8 +106,10 @@ def load_gene_scores() -> tuple[dict[str, dict[str, float]], int]:
 
 # ---------- factor attachment ----------
 
-def _vr5(code_map: dict[str, dict[str, dict]], code: str, zt_date: str,
-         sorted_dates_cache: dict[str, list[str]]) -> float | None:
+
+def _vr5(
+    code_map: dict[str, dict[str, dict]], code: str, zt_date: str, sorted_dates_cache: dict[str, list[str]]
+) -> float | None:
     """vr5 = (t_close / close[-5] - 1) * 100, 5 交易日收益 (code 自身历史).
 
     用 code 的 sorted date list 找 zt_date 位置, 回看 5 个 bar.
@@ -122,6 +124,7 @@ def _vr5(code_map: dict[str, dict[str, dict]], code: str, zt_date: str,
     idx = -1
     # 找 zt_date 在 code 自身日期序列的位置 (二分查找)
     import bisect
+
     idx = bisect.bisect_left(sdates, zt_date)
     if idx >= len(sdates) or sdates[idx] != zt_date:
         return None
@@ -198,6 +201,7 @@ def attach_factors(
 
 # ---------- percentile rank per date ----------
 
+
 def _percentile_rank(values: list[tuple[int, float]]) -> list[float]:
     """给定 [(pick_idx, value)] 返回每个 idx 的百分位排名 [0,1].
 
@@ -240,8 +244,7 @@ def compute_composite(
         weights = {f: 1.0 / len(FACTORS) for f in FACTORS}
     else:
         s = sum(weights.values())
-        weights = {f: w / s for f, w in weights.items()} if s > 0 else \
-            {f: 1.0 / len(FACTORS) for f in FACTORS}
+        weights = {f: w / s for f, w in weights.items()} if s > 0 else {f: 1.0 / len(FACTORS) for f in FACTORS}
 
     # 分组 by zt_date, 只排 5 因子全有的
     by_date: dict[str, list[dict]] = defaultdict(list)
@@ -280,14 +283,15 @@ def select_topk_by_composite(picks: list[dict], k: int) -> list[dict]:
 # ---------- weight schemes (predefined, hypothesis-driven 非 data-fit) ----------
 
 WEIGHT_SCHEMES: dict[str, dict[str, float]] = {
-    "equal":       {"turn": 0.20, "vr5": 0.20, "gap": 0.20, "lbc": 0.20, "gene_score": 0.20},
-    "gene_heavy":  {"turn": 0.15, "vr5": 0.15, "gap": 0.15, "lbc": 0.15, "gene_score": 0.40},
-    "turn_lbc":    {"turn": 0.30, "vr5": 0.133, "gap": 0.133, "lbc": 0.30, "gene_score": 0.134},
-    "momentum":    {"turn": 0.134, "vr5": 0.30, "gap": 0.30, "lbc": 0.133, "gene_score": 0.133},
+    "equal": {"turn": 0.20, "vr5": 0.20, "gap": 0.20, "lbc": 0.20, "gene_score": 0.20},
+    "gene_heavy": {"turn": 0.15, "vr5": 0.15, "gap": 0.15, "lbc": 0.15, "gene_score": 0.40},
+    "turn_lbc": {"turn": 0.30, "vr5": 0.133, "gap": 0.133, "lbc": 0.30, "gene_score": 0.134},
+    "momentum": {"turn": 0.134, "vr5": 0.30, "gap": 0.30, "lbc": 0.133, "gene_score": 0.133},
 }
 
 
 # ---------- main ----------
+
 
 def main() -> None:
     print("=" * 70)
@@ -301,12 +305,9 @@ def main() -> None:
     zt_rows = load_zt()
     gene, n_gene = load_gene_scores()
     calendar = sorted(all_dates)
-    print(f"  kline codes={len(code_map)} calendar days={len(calendar)} "
-          f"zt_rows={len(zt_rows)}")
-    print(f"  zt date range: {min(d for d,_,_ in zt_rows)} ~ "
-          f"{max(d for d,_,_ in zt_rows)}")
-    print(f"  gene_scores: {n_gene} rows, {len(gene)} dates "
-          f"({min(gene)} ~ {max(gene)})")
+    print(f"  kline codes={len(code_map)} calendar days={len(calendar)} zt_rows={len(zt_rows)}")
+    print(f"  zt date range: {min(d for d, _, _ in zt_rows)} ~ {max(d for d, _, _ in zt_rows)}")
+    print(f"  gene_scores: {n_gene} rows, {len(gene)} dates ({min(gene)} ~ {max(gene)})")
 
     # ---- build blanket picks ----
     print("\n[2] 构建 blanket picks (entry=T+1 open, exit=T+2 close, 一字涨停跳过)…")
@@ -316,12 +317,13 @@ def main() -> None:
     # ---- attach 5 factors ----
     print("\n[3] 附 5 因子 (turn/vr5/gap/lbc/gene_score) ...")
     blanket, n_complete, counts = attach_factors(blanket, code_map, gene)
-    print(f"  5 因子全有 (composite universe): {n_complete} "
-          f"({n_complete/max(len(blanket),1)*100:.1f}% of blanket)")
+    print(
+        f"  5 因子全有 (composite universe): {n_complete} ({n_complete / max(len(blanket), 1) * 100:.1f}% of blanket)"
+    )
     print(f"  各因子覆盖:")
     for f in FACTORS:
         c = counts[f]
-        print(f"    {f:<12}: {c:>5} ({c/max(len(blanket),1)*100:.1f}%)")
+        print(f"    {f:<12}: {c:>5} ({c / max(len(blanket), 1) * 100:.1f}%)")
 
     if n_complete == 0:
         print("\n  → no-data: 无 pick 5 因子全有, 无法排 composite")
@@ -329,10 +331,8 @@ def main() -> None:
         return
 
     # 日期域: composite-universe 的 zt_date
-    comp_dates = sorted({p["zt_date"] for p in blanket
-                         if all(p.get(f) is not None for f in FACTORS)})
-    print(f"  composite-universe 日期数: {len(comp_dates)} "
-          f"({comp_dates[0]} ~ {comp_dates[-1]})")
+    comp_dates = sorted({p["zt_date"] for p in blanket if all(p.get(f) is not None for f in FACTORS)})
+    print(f"  composite-universe 日期数: {len(comp_dates)} ({comp_dates[0]} ~ {comp_dates[-1]})")
 
     # ---- compute composite (equal weight primary) ----
     print("\n[4] 算 composite (per-date 百分位排名等权加和) ...")
@@ -340,8 +340,7 @@ def main() -> None:
 
     # ---- subsets ----
     blanket_comp_dates = [p for p in blanket if p["zt_date"] in set(comp_dates)]
-    all_composite = [p for p in blanket
-                     if all(p.get(f) is not None for f in FACTORS)]
+    all_composite = [p for p in blanket if all(p.get(f) is not None for f in FACTORS)]
     top1 = select_topk_by_composite(blanket, 1)
     top3 = select_topk_by_composite(blanket, 3)
     top5 = select_topk_by_composite(blanket, 5)
@@ -359,10 +358,10 @@ def main() -> None:
         cs_top1 = [p["composite"] for p in top1]
         cs_all = [p["composite"] for p in all_composite]
         print(f"\n  composite score 诊断 (equal-weight, [0,1]):")
-        print(f"    all_composite: mean={sum(cs_all)/len(cs_all):.3f} "
-              f"min={min(cs_all):.3f} max={max(cs_all):.3f}")
-        print(f"    top-1:         mean={sum(cs_top1)/len(cs_top1):.3f} "
-              f"min={min(cs_top1):.3f} max={max(cs_top1):.3f}")
+        print(f"    all_composite: mean={sum(cs_all) / len(cs_all):.3f} min={min(cs_all):.3f} max={max(cs_all):.3f}")
+        print(
+            f"    top-1:         mean={sum(cs_top1) / len(cs_top1):.3f} min={min(cs_top1):.3f} max={max(cs_top1):.3f}"
+        )
 
     # ---- analyze subsets ----
     subsets = [
@@ -376,7 +375,8 @@ def main() -> None:
     results: list[tuple[str, list[dict], dict]] = []
     for name, picks in subsets:
         r = analyze_subset(
-            name, picks,
+            name,
+            picks,
             ret_fn_basic=close_ev_basic,
             ret_fn_stop=close_ev_stop,
             ret_fn_label="close_ev",
@@ -400,16 +400,21 @@ def main() -> None:
             dt = r.get("basic_day_t", {})
             wf = r.get("wf_basic", {})
             wfs = wf.get("status", "no_picks")
-            summary_rows.append({
-                "name": name, "n_picks": len(picks),
-                "n_days": dt.get("n_days", 0), "ev_gross": ev,
-                "t_day": dt.get("t", 0.0), "p_raw": dt.get("p_one_sided", 1.0),
-                "wf_train_ev": wf.get("train_ev", {}).get("ev", 0.0) if wfs == "ok" else 0.0,
-                "wf_test_ev": wf.get("test_ev", {}).get("ev", 0.0) if wfs == "ok" else 0.0,
-                "wf_test_t": wf.get("test_day_t", {}).get("t", 0.0) if wfs == "ok" else 0.0,
-                "wf_test_p": wf.get("test_day_t", {}).get("p_one_sided", 1.0) if wfs == "ok" else 1.0,
-                "verdict": "(baseline)",
-            })
+            summary_rows.append(
+                {
+                    "name": name,
+                    "n_picks": len(picks),
+                    "n_days": dt.get("n_days", 0),
+                    "ev_gross": ev,
+                    "t_day": dt.get("t", 0.0),
+                    "p_raw": dt.get("p_one_sided", 1.0),
+                    "wf_train_ev": wf.get("train_ev", {}).get("ev", 0.0) if wfs == "ok" else 0.0,
+                    "wf_test_ev": wf.get("test_ev", {}).get("ev", 0.0) if wfs == "ok" else 0.0,
+                    "wf_test_t": wf.get("test_day_t", {}).get("t", 0.0) if wfs == "ok" else 0.0,
+                    "wf_test_p": wf.get("test_day_t", {}).get("p_one_sided", 1.0) if wfs == "ok" else 1.0,
+                    "verdict": "(baseline)",
+                }
+            )
             continue
         if not picks or r.get("n_picks", 0) == 0:
             print(f"\n  {name}: 无 picks → no-data")
@@ -429,25 +434,44 @@ def main() -> None:
         wf_test_t = wf.get("test_day_t", {}).get("t", 0.0) if wf_status == "ok" else 0.0
         wf_test_p = wf.get("test_day_t", {}).get("p_one_sided", 1.0) if wf_status == "ok" else 1.0
         v = verdict_for(
-            ev_gross, t_day, p_raw, wf_status, wf_train_ev,
-            wf_test_ev, wf_test_p, n_days, net_ev, name,
+            ev_gross,
+            t_day,
+            p_raw,
+            wf_status,
+            wf_train_ev,
+            wf_test_ev,
+            wf_test_p,
+            n_days,
+            net_ev,
+            name,
             n_cross_factor=N_CROSS_FACTOR,  # ×12
         )
         verdicts.append(v)
-        summary_rows.append({
-            "name": name, "n_picks": len(picks), "n_days": n_days,
-            "ev_gross": ev_gross, "net_ev": round(net_ev, 3),
-            "t_day": t_day, "p_raw": p_raw,
-            "bonf_x12": bonferroni_p(p_raw, 12),
-            "wf_status": wf_status, "wf_train_ev": wf_train_ev,
-            "wf_test_ev": wf_test_ev, "wf_test_t": wf_test_t,
-            "wf_test_p": wf_test_p, "verdict": v,
-        })
+        summary_rows.append(
+            {
+                "name": name,
+                "n_picks": len(picks),
+                "n_days": n_days,
+                "ev_gross": ev_gross,
+                "net_ev": round(net_ev, 3),
+                "t_day": t_day,
+                "p_raw": p_raw,
+                "bonf_x12": bonferroni_p(p_raw, 12),
+                "wf_status": wf_status,
+                "wf_train_ev": wf_train_ev,
+                "wf_test_ev": wf_test_ev,
+                "wf_test_t": wf_test_t,
+                "wf_test_p": wf_test_p,
+                "verdict": v,
+            }
+        )
 
     # ---- weight-search robustness (4 schemes, ×4 correction → ×48 total) ----
     print(f"\n{'=' * 70}")
-    print(f"[6] 权重搜索 robustness ({N_WEIGHT_SCHEMES} 预设方案, "
-          f"Bonferroni ×{N_WEIGHT_SCHEMES} → 总 ×{12 * N_WEIGHT_SCHEMES})")
+    print(
+        f"[6] 权重搜索 robustness ({N_WEIGHT_SCHEMES} 预设方案, "
+        f"Bonferroni ×{N_WEIGHT_SCHEMES} → 总 ×{12 * N_WEIGHT_SCHEMES})"
+    )
     print(f"  方案是 hypothesis-driven 预设 (非 data-fit), 仍校正搜索次数.")
     print(f"  用 top-3 子集 (中等集中度) 跑每方案, 取 best EV, 报 ×48 校正.")
     print(f"{'=' * 70}")
@@ -457,8 +481,10 @@ def main() -> None:
         compute_composite(blanket, weights=w)  # 重算 composite 用新权重
         tk = select_topk_by_composite(blanket, 3)
         r = analyze_subset(
-            f"top-3/{sname}", tk,
-            ret_fn_basic=close_ev_basic, ret_fn_stop=close_ev_stop,
+            f"top-3/{sname}",
+            tk,
+            ret_fn_basic=close_ev_basic,
+            ret_fn_stop=close_ev_stop,
             ret_fn_label="close_ev",
         )
         scheme_results.append((sname, tk, r))
@@ -471,23 +497,28 @@ def main() -> None:
     b_wf = b_r.get("wf_basic", {})
     b_wfs = b_wf.get("status", "no_picks")
     print(f"\n  各方案 top-3 close_ev:")
-    print(f"  {'scheme':<14} {'n':>5} {'days':>5} {'gross%':>8} {'day_t':>7} "
-          f"{'p_raw':>9}")
+    print(f"  {'scheme':<14} {'n':>5} {'days':>5} {'gross%':>8} {'day_t':>7} {'p_raw':>9}")
     for sname, _, r in scheme_results:
         e = r.get("basic_ev", {}).get("ev", 0.0)
         d = r.get("basic_day_t", {})
-        print(f"  {sname:<14} {r.get('n_picks',0):>5} {d.get('n_days',0):>5} "
-              f"{e:>+8.3f} {d.get('t',0):>7.2f} {d.get('p_one_sided',1):>9.4f}")
+        print(
+            f"  {sname:<14} {r.get('n_picks', 0):>5} {d.get('n_days', 0):>5} "
+            f"{e:>+8.3f} {d.get('t', 0):>7.2f} {d.get('p_one_sided', 1):>9.4f}"
+        )
     print(f"\n  best scheme: {b_name} (gross EV={b_ev:+.3f}%)")
     print(f"  → weight-search-corrected verdict (×{12 * N_WEIGHT_SCHEMES}):")
     v_ws = verdict_for(
-        b_ev, b_dt.get("t", 0.0), b_dt.get("p_one_sided", 1.0),
+        b_ev,
+        b_dt.get("t", 0.0),
+        b_dt.get("p_one_sided", 1.0),
         b_wfs,
         b_wf.get("train_ev", {}).get("ev", 0.0) if b_wfs == "ok" else 0.0,
         b_wf.get("test_ev", {}).get("ev", 0.0) if b_wfs == "ok" else 0.0,
         b_wf.get("test_day_t", {}).get("p_one_sided", 1.0) if b_wfs == "ok" else 1.0,
-        b_dt.get("n_days", 0), b_ev - COST * 100,
-        f"top-3/{b_name} (weight-search)", n_cross_factor=24,  # ×48
+        b_dt.get("n_days", 0),
+        b_ev - COST * 100,
+        f"top-3/{b_name} (weight-search)",
+        n_cross_factor=24,  # ×48
     )
     verdicts.append(v_ws)
 
@@ -495,37 +526,44 @@ def main() -> None:
     print(f"\n{'=' * 70}")
     print("[7] 汇总 (close_ev %, per-day-mean t, R6 gap-through fill)")
     print(f"{'=' * 70}")
-    print(f"  {'subset':<24} {'n':>6} {'days':>5} {'gross%':>8} "
-          f"{'net%':>7} {'day_t':>6} {'p_raw':>8} {'Bonf':>6} "
-          f"{'wf_tr%':>7} {'wf_te%':>7} {'wf_te_p':>7} {'verdict':<16}")
+    print(
+        f"  {'subset':<24} {'n':>6} {'days':>5} {'gross%':>8} "
+        f"{'net%':>7} {'day_t':>6} {'p_raw':>8} {'Bonf':>6} "
+        f"{'wf_tr%':>7} {'wf_te%':>7} {'wf_te_p':>7} {'verdict':<16}"
+    )
     for s in summary_rows:
         if s.get("verdict") == "no-data":
-            print(f"  {s['name']:<24} {'-':>6} {'-':>5} {'-':>8} "
-                  f"{'-':>7} {'-':>6} {'-':>8} {'-':>6} {'-':>7} {'-':>7} "
-                  f"{'-':>7} no-data")
+            print(
+                f"  {s['name']:<24} {'-':>6} {'-':>5} {'-':>8} "
+                f"{'-':>7} {'-':>6} {'-':>8} {'-':>6} {'-':>7} {'-':>7} "
+                f"{'-':>7} no-data"
+            )
             continue
         v = s.get("verdict", "")
         bonf = s.get("bonf_x12", "-")
         if v == "(baseline)":
             bonf = "-"
-        print(f"  {s['name']:<24} {s.get('n_picks','-'):>6} {s.get('n_days','-'):>5} "
-              f"{s.get('ev_gross','-'):>+8.3f} {s.get('ev_gross',0)-0.3 if s.get('ev_gross','-')!='-' else '-':>+7.3f} "
-              f"{s.get('t_day','-'):>6.2f} {s.get('p_raw','-'):>8.4f} "
-              f"{bonf if bonf!='-' else '-':>6} "
-              f"{s.get('wf_train_ev','-'):>+7.3f} {s.get('wf_test_ev','-'):>+7.3f} "
-              f"{s.get('wf_test_p','-'):>7.4f} {v:<16}")
+        print(
+            f"  {s['name']:<24} {s.get('n_picks', '-'):>6} {s.get('n_days', '-'):>5} "
+            f"{s.get('ev_gross', '-'):>+8.3f} {s.get('ev_gross', 0) - 0.3 if s.get('ev_gross', '-') != '-' else '-':>+7.3f} "
+            f"{s.get('t_day', '-'):>6.2f} {s.get('p_raw', '-'):>8.4f} "
+            f"{bonf if bonf != '-' else '-':>6} "
+            f"{s.get('wf_train_ev', '-'):>+7.3f} {s.get('wf_test_ev', '-'):>+7.3f} "
+            f"{s.get('wf_test_p', '-'):>7.4f} {v:<16}"
+        )
 
     # ---- concentration delta (top-K vs same-universe baseline) ----
     print(f"\n{'=' * 70}")
     print("集中度增量: top-K EV − all_composite EV (同 universe, 正=集中提 EV)")
     print(f"{'=' * 70}")
-    base_ev = next((s.get("ev_gross", 0.0) for s in summary_rows
-                    if s["name"] == "all_composite"), 0.0)
+    base_ev = next((s.get("ev_gross", 0.0) for s in summary_rows if s["name"] == "all_composite"), 0.0)
     for s in summary_rows:
         if s["name"] in ("top-1", "top-3", "top-5"):
             delta = s.get("ev_gross", 0.0) - base_ev
-            print(f"  {s['name']:<10}: EV={s.get('ev_gross',0.0):+.3f}%  "
-                  f"Δ vs all_composite({base_ev:+.3f}%) = {delta:+.3f}%")
+            print(
+                f"  {s['name']:<10}: EV={s.get('ev_gross', 0.0):+.3f}%  "
+                f"Δ vs all_composite({base_ev:+.3f}%) = {delta:+.3f}%"
+            )
 
     # ---- overall ----
     if "edge-confirmed" in verdicts:
@@ -551,8 +589,7 @@ def _report_no_data() -> None:
     print("  可能原因: gene_score 仅覆盖 2026-01-05+, 与 zt picks 日期/code 不重叠.")
 
 
-def _print_honest_notes(overall: str, summary_rows: list[dict],
-                        scheme_results: list, b_name: str, v_ws: str) -> None:
+def _print_honest_notes(overall: str, summary_rows: list[dict], scheme_results: list, b_name: str, v_ws: str) -> None:
     print(f"\n{'=' * 70}")
     print("诚实注解")
     print(f"{'=' * 70}")
@@ -577,8 +614,10 @@ def _print_honest_notes(overall: str, summary_rows: list[dict],
     print("   basic 无 stop R6 N/A。realistic entry: T+1 open, 一字涨停跳过")
     print("   (limit_for_code FIXED 2026-10-06, 禁 sz30/sh68 旧 bug)。")
     print("8. Bonferroni: primary cross-factor ×12 (6 factors × 2 subsets);")
-    print(f"   weight-search robustness ×{12 * N_WEIGHT_SCHEMES} "
-          f"(×12 × {N_WEIGHT_SCHEMES} 方案). best 方案={b_name}, verdict={v_ws}.")
+    print(
+        f"   weight-search robustness ×{12 * N_WEIGHT_SCHEMES} "
+        f"(×12 × {N_WEIGHT_SCHEMES} 方案). best 方案={b_name}, verdict={v_ws}."
+    )
     print("9. 权重方案 hypothesis-driven 预设 (equal/gene_heavy/turn_lbc/momentum),")
     print("   非 data-fit; 仍校正搜索次数 (诚实: 预设也占搜索自由度)。")
     print(f"\nOVERALL: {overall}")

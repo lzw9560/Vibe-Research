@@ -10,6 +10,7 @@
   本 repo 切换为后端 SQLite 落盘，笔记全局可见、跨设备同步。
 - id 格式 ``{timestamp_ms}-{random5}``，ts 毫秒时间戳，与前端 Note.ts 格式一致。
 """
+
 from __future__ import annotations
 
 import logging
@@ -21,6 +22,7 @@ from typing import Any, Dict, List
 logger = logging.getLogger("vibe-research")
 
 from vr_paths import resolve_data_dir  # S184 统一 DB 到 .vibe-research/
+
 _DB_PATH = str(resolve_data_dir() / "market_data.db")
 
 
@@ -74,10 +76,7 @@ def list_notes(limit: int = 200) -> List[Dict[str, Any]]:
         ).fetchall()
     finally:
         conn.close()
-    return [
-        {"id": r[0], "kind": r[1], "title": r[2], "content": r[3], "ts": r[4]}
-        for r in rows
-    ]
+    return [{"id": r[0], "kind": r[1], "title": r[2], "content": r[3], "ts": r[4]} for r in rows]
 
 
 def add_note(kind: str, title: str, content: str) -> Dict[str, Any]:

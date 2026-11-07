@@ -49,6 +49,7 @@ factor-return, or CAPM-alpha methods (other agents), nor to ETF-level or
 short-term strategies. Retail-feasible: long-only top-3 (buyable via ETF or
 stock basket); benchmark = all-equal-weight (buyable).
 """
+
 from __future__ import annotations
 import json
 import sys
@@ -60,7 +61,12 @@ from math import sqrt
 # ---------- shared helpers (DRY: stat functions from _factor_helpers) ----------
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _factor_helpers import (  # type: ignore[import-not-found]
-    ev_stats, day_paired_t, bonferroni_p, norm_sf_positive, ALPHA, COST,
+    ev_stats,
+    day_paired_t,
+    bonferroni_p,
+    norm_sf_positive,
+    ALPHA,
+    COST,
 )
 
 # ---------- paths + constants ----------
@@ -72,21 +78,22 @@ ROOT = Path(__file__).resolve().parents[2]
 DATA = resolve_data_dir()
 SECTOR_JSON = DATA / "sector_rotation_data.json"
 
-TOP_K = 3                       # long top-3 momentum industries
-HOLDING_DAYS = 10               # 2-week holding (10 trading days)
-FORMATION_DAYS_LIST = [10, 15, 20]   # 2 / 3 / 4 week formation
-MIN_STOCKS_PER_DATE = 5          # per-date eligibility floor for an industry
-MIN_MEDIAN_STOCKS = 10           # candidate industry: median membership over window
-COVERAGE_JUMP_THRESHOLD = 1500   # recent-wave onset (2024-06-04)
-N_BONF_METHODS = 4               # 4 parallel alpha-isolated methods
-N_BONF_FORMATIONS = 3            # 2/3/4 week formation search
-N_BONF = N_BONF_METHODS * N_BONF_FORMATIONS   # = 12
-REBALANCES_PER_YEAR = 26         # biweekly -> 26 rebalances/yr
+TOP_K = 3  # long top-3 momentum industries
+HOLDING_DAYS = 10  # 2-week holding (10 trading days)
+FORMATION_DAYS_LIST = [10, 15, 20]  # 2 / 3 / 4 week formation
+MIN_STOCKS_PER_DATE = 5  # per-date eligibility floor for an industry
+MIN_MEDIAN_STOCKS = 10  # candidate industry: median membership over window
+COVERAGE_JUMP_THRESHOLD = 1500  # recent-wave onset (2024-06-04)
+N_BONF_METHODS = 4  # 4 parallel alpha-isolated methods
+N_BONF_FORMATIONS = 3  # 2/3/4 week formation search
+N_BONF = N_BONF_METHODS * N_BONF_FORMATIONS  # = 12
+REBALANCES_PER_YEAR = 26  # biweekly -> 26 rebalances/yr
 
 
 # =====================================================================
 # 1. DATA LOADING + WINDOW SELECTION
 # =====================================================================
+
 
 def load_window() -> tuple:
     """Load sector_rotation_data.json, cut to the stable long-history-core
@@ -131,8 +138,8 @@ def load_window() -> tuple:
 # 2. CUMULATIVE RETURN (close-to-close, no look-ahead)
 # =====================================================================
 
-def cum_return(series: list, start_idx: int, end_idx: int,
-               min_frac: float = 1.0) -> float | None:
+
+def cum_return(series: list, start_idx: int, end_idx: int, min_frac: float = 1.0) -> float | None:
     """prod(1+r) for r in series[start_idx+1 .. end_idx] => close[start] ->
     close[end]. Returns decimal or None if valid fraction < min_frac.
 
@@ -142,7 +149,7 @@ def cum_return(series: list, start_idx: int, end_idx: int,
     """
     if start_idx < 0 or end_idx >= len(series) or start_idx >= end_idx:
         return None
-    vals = series[start_idx + 1:end_idx + 1]
+    vals = series[start_idx + 1 : end_idx + 1]
     if not vals:
         return None
     n_valid = sum(1 for v in vals if v is not None)
@@ -151,7 +158,7 @@ def cum_return(series: list, start_idx: int, end_idx: int,
     prod = 1.0
     for v in vals:
         if v is not None:
-            prod *= (1 + v)
+            prod *= 1 + v
     return prod - 1.0
 
 
@@ -159,9 +166,16 @@ def cum_return(series: list, start_idx: int, end_idx: int,
 # 3. BACKTEST (one formation period)
 # =====================================================================
 
-def backtest(win_dates: list, win_sec_rets: dict, win_sec_memb: dict,
-             win_bench: list, formation_days: int, holding_days: int,
-             top_k: int) -> list[dict]:
+
+def backtest(
+    win_dates: list,
+    win_sec_rets: dict,
+    win_sec_memb: dict,
+    win_bench: list,
+    formation_days: int,
+    holding_days: int,
+    top_k: int,
+) -> list[dict]:
     """Run sector-rotation backtest for one (formation, holding, top_k) combo.
 
     At each rebalance date t (spaced `holding_days` apart):
@@ -176,8 +190,8 @@ def backtest(win_dates: list, win_sec_rets: dict, win_sec_memb: dict,
     """
     results: list[dict] = []
     n = len(win_dates)
-    t = formation_days                  # first rebalance needs formation lookback
-    end_t = n - holding_days - 1        # need holding window forward
+    t = formation_days  # first rebalance needs formation lookback
+    end_t = n - holding_days - 1  # need holding window forward
     prev_top: list[str] | None = None
 
     while t <= end_t:
@@ -190,7 +204,7 @@ def backtest(win_dates: list, win_sec_rets: dict, win_sec_memb: dict,
             if f_ret is None:
                 continue
             eligible.append((ind, f_ret))
-        if len(eligible) < top_k + 1:   # need top_k + benchmark breadth
+        if len(eligible) < top_k + 1:  # need top_k + benchmark breadth
             t += holding_days
             continue
 
@@ -200,10 +214,8 @@ def backtest(win_dates: list, win_sec_rets: dict, win_sec_memb: dict,
         all_inds = [x[0] for x in eligible]
 
         # 3. holding returns (close[t] -> close[t+H])
-        strat_rs = [cum_return(win_sec_rets[ind], t, t + holding_days)
-                    for ind in top_inds]
-        bench_rs = [cum_return(win_sec_rets[ind], t, t + holding_days)
-                    for ind in all_inds]
+        strat_rs = [cum_return(win_sec_rets[ind], t, t + holding_days) for ind in top_inds]
+        bench_rs = [cum_return(win_sec_rets[ind], t, t + holding_days) for ind in all_inds]
         strat_rs = [r for r in strat_rs if r is not None]
         bench_rs = [r for r in bench_rs if r is not None]
         if len(strat_rs) < top_k or len(bench_rs) < 2:
@@ -217,29 +229,31 @@ def backtest(win_dates: list, win_sec_rets: dict, win_sec_memb: dict,
         # 4. turnover + cost
         if prev_top is not None:
             n_enter = len(set(top_inds) - set(prev_top))
-            traded_frac = n_enter / top_k      # one-way traded fraction
+            traded_frac = n_enter / top_k  # one-way traded fraction
         else:
-            traded_frac = 1.0                   # initial buy
-        cost = traded_frac * COST               # decimal round-trip cost on traded frac
+            traded_frac = 1.0  # initial buy
+        cost = traded_frac * COST  # decimal round-trip cost on traded frac
         active_net = active_gross - cost
 
         mkt_ret = cum_return(win_bench, t, t + holding_days)
 
-        results.append({
-            "rebalance_date": win_dates[t],
-            "rebalance_idx": t,
-            "formation_days": formation_days,
-            "holding_days": holding_days,
-            "top_k": top_k,
-            "strat_ret": strat_ret,
-            "bench_ret": bench_ret,
-            "active_gross": active_gross,
-            "active_net": active_net,
-            "mkt_ret": mkt_ret if mkt_ret is not None else 0.0,
-            "top_inds": top_inds,
-            "n_eligible": len(all_inds),
-            "traded_frac": traded_frac,
-        })
+        results.append(
+            {
+                "rebalance_date": win_dates[t],
+                "rebalance_idx": t,
+                "formation_days": formation_days,
+                "holding_days": holding_days,
+                "top_k": top_k,
+                "strat_ret": strat_ret,
+                "bench_ret": bench_ret,
+                "active_gross": active_gross,
+                "active_net": active_net,
+                "mkt_ret": mkt_ret if mkt_ret is not None else 0.0,
+                "top_inds": top_inds,
+                "n_eligible": len(all_inds),
+                "traded_frac": traded_frac,
+            }
+        )
         prev_top = top_inds
         t += holding_days
 
@@ -249,6 +263,7 @@ def backtest(win_dates: list, win_sec_rets: dict, win_sec_memb: dict,
 # =====================================================================
 # 4. STATISTICS (per-rebalance-block t + Bonferroni + walk-forward)
 # =====================================================================
+
 
 def _cov(x: list[float], y: list[float]) -> float:
     n = min(len(x), len(y))
@@ -285,14 +300,14 @@ def analyze(results: list[dict], formation_label: str) -> dict:
     bench_pct = [r["bench_ret"] * 100 for r in results]
 
     # --- descriptive stats (reuse helper ev_stats) ---
-    gs = ev_stats(active_gross_pct)        # mean/std/t/ci/wr of active gross
-    ns = ev_stats(active_net_pct)          # active net
+    gs = ev_stats(active_gross_pct)  # mean/std/t/ci/wr of active gross
+    ns = ev_stats(active_net_pct)  # active net
     strat_s = ev_stats(strat_pct)
     bench_s = ev_stats(bench_pct)
 
     # --- per-rebalance-block t (reuse helper day_paired_t; one obs/date) ---
     by_date = {r["rebalance_date"]: [r["active_gross"] * 100] for r in results}
-    gdt = day_paired_t(by_date)             # {n_days, mean, std, t, p_one_sided}
+    gdt = day_paired_t(by_date)  # {n_days, mean, std, t, p_one_sided}
     p_gross = gdt["p_one_sided"]
     t_gross = gdt["t"]
 
@@ -301,20 +316,20 @@ def analyze(results: list[dict], formation_label: str) -> dict:
     p_net = ndt["p_one_sided"]
 
     print(f"\n--- active gross (strategy - equal-weight benchmark, pre-cost) ---")
-    print(f"  n_rebalances={n} mean={gs['ev']:.4f}% std={gs['std']:.4f}% "
-          f"WR={gs['wr']:.1f}% t={t_gross:.2f} p_one_sided={p_gross:.6f}")
+    print(
+        f"  n_rebalances={n} mean={gs['ev']:.4f}% std={gs['std']:.4f}% "
+        f"WR={gs['wr']:.1f}% t={t_gross:.2f} p_one_sided={p_gross:.6f}"
+    )
     print(f"  CI[{gs['ci_lo']:.4f}, {gs['ci_hi']:.4f}]")
     print(f"  strategy avg={strat_s['ev']:.4f}%  benchmark avg={bench_s['ev']:.4f}%")
 
     print(f"\n--- active net (after turnover cost) ---")
-    print(f"  mean={ns['ev']:.4f}% std={ns['std']:.4f}% WR={ns['wr']:.1f}% "
-          f"t={ndt['t']:.2f} p_one_sided={p_net:.6f}")
+    print(f"  mean={ns['ev']:.4f}% std={ns['std']:.4f}% WR={ns['wr']:.1f}% t={ndt['t']:.2f} p_one_sided={p_net:.6f}")
 
     # --- Sharpe (annualized, biweekly) ---
     sharpe_per = gs["ev"] / gs["std"] if gs["std"] > 0 else 0.0
     sharpe_ann = sharpe_per * sqrt(REBALANCES_PER_YEAR)
-    strat_sharpe_ann = (strat_s["ev"] / strat_s["std"]
-                        if strat_s["std"] > 0 else 0.0) * sqrt(REBALANCES_PER_YEAR)
+    strat_sharpe_ann = (strat_s["ev"] / strat_s["std"] if strat_s["std"] > 0 else 0.0) * sqrt(REBALANCES_PER_YEAR)
     print(f"\n--- Sharpe (annualized, ×sqrt(26)) ---")
     print(f"  active Sharpe={sharpe_ann:.3f}  strategy Sharpe={strat_sharpe_ann:.3f}")
 
@@ -326,15 +341,13 @@ def analyze(results: list[dict], formation_label: str) -> dict:
     beta_strat = _cov(strat_dec, mkt_dec) / var_mkt if var_mkt > 0 else 0.0
     beta_active = _cov(active_dec, mkt_dec) / var_mkt if var_mkt > 0 else 0.0
     print(f"\n--- beta vs 上证 (alpha-isolation check) ---")
-    print(f"  strategy beta={beta_strat:.3f}  active beta={beta_active:.3f} "
-          f"(active~0 => market beta cancelled)")
+    print(f"  strategy beta={beta_strat:.3f}  active beta={beta_active:.3f} (active~0 => market beta cancelled)")
 
     # --- turnover / cost ---
     avg_turnover = sum(r["traded_frac"] for r in results) / n
     avg_cost_pct = avg_turnover * COST * 100
     print(f"\n--- turnover + cost ---")
-    print(f"  avg one-way traded fraction={avg_turnover:.3f} "
-          f"=> avg cost={avg_cost_pct:.4f}%/rebalance")
+    print(f"  avg one-way traded fraction={avg_turnover:.3f} => avg cost={avg_cost_pct:.4f}%/rebalance")
 
     # --- walk-forward OOS (chrono split) ---
     reb_dates = sorted(set(r["rebalance_date"] for r in results))
@@ -358,19 +371,14 @@ def analyze(results: list[dict], formation_label: str) -> dict:
         test_g = [r["active_gross"] * 100 for r in test]
         wf_train_ev = sum(train_g) / len(train_g)
         wf_test_ev = sum(test_g) / len(test_g)
-        tr_se = (statistics.pstdev(train_g) / sqrt(len(train_g))
-                 if len(train_g) > 1 else 0.0)
-        te_se = (statistics.pstdev(test_g) / sqrt(len(test_g))
-                 if len(test_g) > 1 else 0.0)
+        tr_se = statistics.pstdev(train_g) / sqrt(len(train_g)) if len(train_g) > 1 else 0.0
+        te_se = statistics.pstdev(test_g) / sqrt(len(test_g)) if len(test_g) > 1 else 0.0
         wf_train_t = wf_train_ev / tr_se if tr_se > 0 else 0.0
         wf_test_t = wf_test_ev / te_se if te_se > 0 else 0.0
         wf_test_p = norm_sf_positive(wf_test_t)
-        decay = ((wf_train_ev - wf_test_ev) / abs(wf_train_ev) * 100
-                 if wf_train_ev != 0 else 0)
-        print(f"  train: n={len(train)} active_gross_EV={wf_train_ev:.4f}% "
-              f"t={wf_train_t:.2f}")
-        print(f"  test:  n={len(test)} active_gross_EV={wf_test_ev:.4f}% "
-              f"t={wf_test_t:.2f} p={wf_test_p:.6f}")
+        decay = (wf_train_ev - wf_test_ev) / abs(wf_train_ev) * 100 if wf_train_ev != 0 else 0
+        print(f"  train: n={len(train)} active_gross_EV={wf_train_ev:.4f}% t={wf_train_t:.2f}")
+        print(f"  test:  n={len(test)} active_gross_EV={wf_test_ev:.4f}% t={wf_test_t:.2f} p={wf_test_p:.6f}")
         print(f"  decay: {decay:.0f}% (train->test)")
 
     return {
@@ -408,6 +416,7 @@ def analyze(results: list[dict], formation_label: str) -> dict:
 # 5. VERDICT (alpha-isolated, active-return)
 # =====================================================================
 
+
 def verdict_for(a: dict, n_bonf: int) -> str:
     """Honest verdict for one formation period.
 
@@ -425,13 +434,17 @@ def verdict_for(a: dict, n_bonf: int) -> str:
     wf_test_p_bonf = bonferroni_p(a["wf_test_p"], n_bonf)
 
     print(f"\n  {a['label']}:")
-    print(f"    active_gross_EV={a['active_gross_ev']}% net_EV={a['active_net_ev']}% "
-          f"t={a['active_gross_t']} Bonf_p(×{n_bonf})={p_bonf:.6f} "
-          f"n_rebal={a['n_rebalances']}")
+    print(
+        f"    active_gross_EV={a['active_gross_ev']}% net_EV={a['active_net_ev']}% "
+        f"t={a['active_gross_t']} Bonf_p(×{n_bonf})={p_bonf:.6f} "
+        f"n_rebal={a['n_rebalances']}"
+    )
     print(f"    beta_active={a['beta_active']} (vs 上证; ~0 => beta isolated)")
     if a["wf_status"] == "ok":
-        print(f"    walk-forward: train={a['wf_train_ev']}% test={a['wf_test_ev']}% "
-              f"test_p={a['wf_test_p']} Bonf_test_p(×{n_bonf})={wf_test_p_bonf:.6f}")
+        print(
+            f"    walk-forward: train={a['wf_train_ev']}% test={a['wf_test_ev']}% "
+            f"test_p={a['wf_test_p']} Bonf_test_p(×{n_bonf})={wf_test_p_bonf:.6f}"
+        )
 
     if a["active_gross_ev"] < 0:
         print(f"    -> FALSIFIED: active gross < 0 (worse than equal-weight benchmark)")
@@ -440,30 +453,35 @@ def verdict_for(a: dict, n_bonf: int) -> str:
         print(f"    -> UNDERPOWERED: n_rebalances={a['n_rebalances']} < 60")
         return "underpowered"
     if p_bonf >= ALPHA:
-        print(f"    -> FALSIFIED: Bonferroni p={p_bonf:.6f} >= {ALPHA} "
-              f"(alpha not significant after ×{n_bonf} correction)")
+        print(
+            f"    -> FALSIFIED: Bonferroni p={p_bonf:.6f} >= {ALPHA} (alpha not significant after ×{n_bonf} correction)"
+        )
         return "falsified"
     if a["active_net_ev"] <= 0:
-        print(f"    -> FALSIFIED: active_net={a['active_net_ev']}% <= 0 "
-              f"(alpha eaten by turnover cost, not tradeable)")
+        print(f"    -> FALSIFIED: active_net={a['active_net_ev']}% <= 0 (alpha eaten by turnover cost, not tradeable)")
         return "falsified"
     if a["wf_status"] == "ok":
         if a["wf_train_ev"] <= 0:
-            print(f"    -> EXPLORATORY: train_EV={a['wf_train_ev']}% <= 0 "
-                  f"(no alpha in train half; test alpha may be regime overfit)")
+            print(
+                f"    -> EXPLORATORY: train_EV={a['wf_train_ev']}% <= 0 "
+                f"(no alpha in train half; test alpha may be regime overfit)"
+            )
             return "exploratory"
         if a["wf_test_ev"] <= 0:
-            print(f"    -> FALSIFIED: walk-forward test_EV={a['wf_test_ev']}% <= 0 "
-                  f"(no alpha OOS)")
+            print(f"    -> FALSIFIED: walk-forward test_EV={a['wf_test_ev']}% <= 0 (no alpha OOS)")
             return "falsified"
         if wf_test_p_bonf >= ALPHA:
-            print(f"    -> EXPLORATORY: OOS test EV={a['wf_test_ev']}% > 0 but "
-                  f"test_p={a['wf_test_p']} Bonf×{n_bonf}={wf_test_p_bonf:.6f} "
-                  f">= {ALPHA} (OOS not significant)")
+            print(
+                f"    -> EXPLORATORY: OOS test EV={a['wf_test_ev']}% > 0 but "
+                f"test_p={a['wf_test_p']} Bonf×{n_bonf}={wf_test_p_bonf:.6f} "
+                f">= {ALPHA} (OOS not significant)"
+            )
             return "exploratory"
-        print(f"    -> EDGE-CONFIRMED: active gross+net > 0, Bonferroni PASS, "
-              f"OOS test EV={a['wf_test_ev']}% significant "
-              f"(test_p={a['wf_test_p']}, Bonf={wf_test_p_bonf:.6f})")
+        print(
+            f"    -> EDGE-CONFIRMED: active gross+net > 0, Bonferroni PASS, "
+            f"OOS test EV={a['wf_test_ev']}% significant "
+            f"(test_p={a['wf_test_p']}, Bonf={wf_test_p_bonf:.6f})"
+        )
         return "edge-confirmed"
     print(f"    -> EXPLORATORY: walk-forward not available")
     return "exploratory"
@@ -472,6 +490,7 @@ def verdict_for(a: dict, n_bonf: int) -> str:
 # =====================================================================
 # 6. MAIN
 # =====================================================================
+
 
 def main():
     print("=" * 70)
@@ -483,21 +502,16 @@ def main():
     print("\n[1] 加载数据 + 窗口选择")
     win_dates, win_bench, win_sec_rets, win_sec_memb, candidates = load_window()
     print(f"  window: {win_dates[0]} ~ {win_dates[-1]} ({len(win_dates)} days)")
-    print(f"  candidate industries (median membership >= {MIN_MEDIAN_STOCKS}): "
-          f"{len(candidates)}")
-    print(f"  benchmark: 上证指数 (SSE), {sum(1 for r in win_bench if r is not None)} "
-          f"non-null returns")
-    print(f"  Bonferroni: ×{N_BONF} ({N_BONF_METHODS} methods × {N_BONF_FORMATIONS} "
-          f"formations)")
+    print(f"  candidate industries (median membership >= {MIN_MEDIAN_STOCKS}): {len(candidates)}")
+    print(f"  benchmark: 上证指数 (SSE), {sum(1 for r in win_bench if r is not None)} non-null returns")
+    print(f"  Bonferroni: ×{N_BONF} ({N_BONF_METHODS} methods × {N_BONF_FORMATIONS} formations)")
 
     # ---- Step 2: backtest all formation periods ----
-    print(f"\n[2] 回测 {len(FORMATION_DAYS_LIST)} formation periods "
-          f"(holding={HOLDING_DAYS}d, top_k={TOP_K})")
+    print(f"\n[2] 回测 {len(FORMATION_DAYS_LIST)} formation periods (holding={HOLDING_DAYS}d, top_k={TOP_K})")
     all_analyses: list[dict] = []
     for fd in FORMATION_DAYS_LIST:
-        label = f"{fd}d ({fd//5}wk)"
-        results = backtest(win_dates, win_sec_rets, win_sec_memb, win_bench,
-                           fd, HOLDING_DAYS, TOP_K)
+        label = f"{fd}d ({fd // 5}wk)"
+        results = backtest(win_dates, win_sec_rets, win_sec_memb, win_bench, fd, HOLDING_DAYS, TOP_K)
         a = analyze(results, label)
         all_analyses.append(a)
 
@@ -511,24 +525,26 @@ def main():
         verdicts[a["label"]] = v
 
     # ---- Step 4: best formation (lowest p) ----
-    best = max(all_analyses, key=lambda x: x["active_gross_ev"]
-               if x["n_rebalances"] > 0 else -999)
+    best = max(all_analyses, key=lambda x: x["active_gross_ev"] if x["n_rebalances"] > 0 else -999)
     print(f"\n{'=' * 70}")
     print(f"[4] Best formation (by active_gross_EV)")
     print(f"{'=' * 70}")
-    print(f"  best: {best['label']}  active_gross_EV={best['active_gross_ev']}% "
-          f"t={best['active_gross_t']} p={best['active_gross_p']}")
-    print(f"  Bonferroni p (×{N_BONF}) = "
-          f"{bonferroni_p(best['active_gross_p'], N_BONF):.6f}")
-    print(f"  active_net_EV={best['active_net_ev']}%  "
-          f"beta_active={best['beta_active']}  "
-          f"sharpe_active_ann={best['sharpe_active_ann']}")
-    print(f"  walk-forward: train={best['wf_train_ev']}% "
-          f"test={best['wf_test_ev']}% test_p={best['wf_test_p']}")
+    print(
+        f"  best: {best['label']}  active_gross_EV={best['active_gross_ev']}% "
+        f"t={best['active_gross_t']} p={best['active_gross_p']}"
+    )
+    print(f"  Bonferroni p (×{N_BONF}) = {bonferroni_p(best['active_gross_p'], N_BONF):.6f}")
+    print(
+        f"  active_net_EV={best['active_net_ev']}%  "
+        f"beta_active={best['beta_active']}  "
+        f"sharpe_active_ann={best['sharpe_active_ann']}"
+    )
+    print(f"  walk-forward: train={best['wf_train_ev']}% test={best['wf_test_ev']}% test_p={best['wf_test_p']}")
     print(f"  verdict: {verdicts[best['label']]}")
 
     # ---- Step 5: verdict tally + overall ----
     from collections import Counter
+
     vc = Counter(verdicts.values())
     print(f"\n{'=' * 70}")
     print(f"[5] Summary")
@@ -558,7 +574,7 @@ def main():
         "strategy": "sector-rotation-active-return",
         "method": "active-return (strategy - equal-weight benchmark)",
         "alpha_isolation": "active return removes market beta by construction "
-                           "(both long market); beta_active reported (~0 = isolated)",
+        "(both long market); beta_active reported (~0 = isolated)",
         "window": f"{win_dates[0]} ~ {win_dates[-1]} ({len(win_dates)} days)",
         "n_candidate_industries": len(candidates),
         "top_k": TOP_K,

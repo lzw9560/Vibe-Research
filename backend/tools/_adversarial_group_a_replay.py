@@ -15,6 +15,7 @@ playbook A组 = LHB日 + 涨幅-3%~+10%(非涨停) + 净买为正且<0.5亿 + �
 未测维度: 热度>100 不在 dragon_tiger DB (hithink字段) → 测 WITHOUT 热度 filter,
   若无热度仍 ~59% 则 edge 更强; 若 <59% 则 ambiguous (或 edge 假 或 需热度).
 """
+
 import json
 import sqlite3
 import statistics
@@ -25,6 +26,7 @@ from pathlib import Path
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vr_paths import resolve_data_dir
+
 ROOT = Path(__file__).resolve().parents[2]
 DT_DB = resolve_data_dir() / "dragon_tiger_history.db"
 KL_DB = resolve_data_dir() / "baostock_kline_cache.db"
@@ -63,8 +65,7 @@ def aggregate_lhb() -> list:
         "dept_name, net FROM dragon_tiger_rows WHERE security_code IS NOT NULL "
         "AND length(security_code)=6"
     ).fetchall()
-    agg = defaultdict(lambda: {"net": 0.0, "inst_net": 0.0, "seats": set(),
-                                "cr": None, "close": None, "amount": None})
+    agg = defaultdict(lambda: {"net": 0.0, "inst_net": 0.0, "seats": set(), "cr": None, "close": None, "amount": None})
     for r in rows:
         key = (r["trade_date"], r["security_code"])
         a = agg[key]
@@ -80,9 +81,18 @@ def aggregate_lhb() -> list:
     conn.close()
     out = []
     for (d, c), a in agg.items():
-        out.append({"date": d, "code": c, "cr": a["cr"], "net": a["net"],
-                    "inst_net": a["inst_net"], "n_seats": len(a["seats"]),
-                    "close": a["close"], "amount": a["amount"]})
+        out.append(
+            {
+                "date": d,
+                "code": c,
+                "cr": a["cr"],
+                "net": a["net"],
+                "inst_net": a["inst_net"],
+                "n_seats": len(a["seats"]),
+                "close": a["close"],
+                "amount": a["amount"],
+            }
+        )
     return out
 
 
@@ -137,7 +147,7 @@ def pos20_and_turn(kl, row):
     t_idx = next((i for i, b in enumerate(bars) if str(b.get("date", ""))[:10] == row["date"]), None)
     if t_idx is None or t_idx < 20:
         return None, None, False
-    window = bars[t_idx - 20: t_idx + 1]  # 20 days up to & incl T
+    window = bars[t_idx - 20 : t_idx + 1]  # 20 days up to & incl T
     hi = max(float(b.get("high", 0)) for b in window)
     lo = min(float(b.get("low", 0)) for b in window)
     c = float(bars[t_idx].get("close", 0))
@@ -192,9 +202,17 @@ def compute_trade(kl, row, max_hold=15):
         return None
     gross = (exit_price - entry_price) / entry_price
     net = gross - cost_dec
-    return {"net": net, "gross": gross, "win": 1 if net > 0 else 0,
-            "reason": exit_reason, "cost": cost_dec, "date": tdate, "code": code,
-            "cr": row["cr"], "net_buy": row["net"]}
+    return {
+        "net": net,
+        "gross": gross,
+        "win": 1 if net > 0 else 0,
+        "reason": exit_reason,
+        "cost": cost_dec,
+        "date": tdate,
+        "code": code,
+        "cr": row["cr"],
+        "net_buy": row["net"],
+    }
 
 
 def day_paired_t(rets, dates):
@@ -229,9 +247,11 @@ def summarize(trades, label):
     reasons = defaultdict(int)
     for t in trades:
         reasons[t["reason"]] += 1
-    print(f"  [{label}] n={n} days={ndays} WR={wr*100:.1f}% "
-          f"mean_gross={mean_gross:+.3f}% mean_net={mean_net:+.3f}% "
-          f"median={med:+.3f}% day_t={t_val:+.2f}")
+    print(
+        f"  [{label}] n={n} days={ndays} WR={wr * 100:.1f}% "
+        f"mean_gross={mean_gross:+.3f}% mean_net={mean_net:+.3f}% "
+        f"median={med:+.3f}% day_t={t_val:+.2f}"
+    )
     print(f"           exits: {dict(reasons)}")
     return {"n": n, "wr": wr, "mean_net": mean_net, "median": med, "day_t": t_val}
 
@@ -243,8 +263,9 @@ def main():
     kl = load_klinebars()
     print(f"[kline] codes={len(kl)}")
     rows = aggregate_lhb()
-    print(f"[lhb] aggregated code-days={len(rows)} "
-          f"dates={min(r['date'] for r in rows)}..{max(r['date'] for r in rows)}")
+    print(
+        f"[lhb] aggregated code-days={len(rows)} dates={min(r['date'] for r in rows)}..{max(r['date'] for r in rows)}"
+    )
     # classify
     groups = defaultdict(list)
     for r in rows:
@@ -252,7 +273,7 @@ def main():
     print(f"[classify] A={len(groups['A'])} B={len(groups['B'])} other={len(groups['other'])}")
     # A组 sub: by net bucket
     a_rows = groups["A"]
-    a_low = [r for r in a_rows if 0 < r["net"] < 0.2e8]   # 净买<0.2亿(playbook⭐⭐⭐最佳)
+    a_low = [r for r in a_rows if 0 < r["net"] < 0.2e8]  # 净买<0.2亿(playbook⭐⭐⭐最佳)
     a_mid = [r for r in a_rows if 0.2e8 <= r["net"] < 0.4e8]  # 0.2-0.4亿
     a_hi = [r for r in a_rows if 0.4e8 <= r["net"] < 0.5e8]
     print(f"[A net-bucket] <0.2亿={len(a_low)} 0.2-0.4亿={len(a_mid)} 0.4-0.5亿={len(a_hi)}")
@@ -271,7 +292,7 @@ def main():
     summarize([t for r in a_hi if (t := compute_trade(kl, r)) is not None], "A-净买0.4-0.5亿")
 
     print("\n--- A组涨幅分桶 (chasing bias 检测) ---")
-    a_neg = [r for r in a_rows if r["cr"] < 0]      # 跌(低吸)
+    a_neg = [r for r in a_rows if r["cr"] < 0]  # 跌(低吸)
     a_lowpos = [r for r in a_rows if 0 <= r["cr"] < 3]
     a_midpos = [r for r in a_rows if 3 <= r["cr"] < 6]
     a_highpos = [r for r in a_rows if 6 <= r["cr"] <= 9.5]
@@ -292,7 +313,7 @@ def main():
     if a_trades:
         wr = sum(t["win"] for t in a_trades) / len(a_trades)
         mn = statistics.mean(t["net"] for t in a_trades) * 100
-        print(f"A组 WR={wr*100:.1f}% mean_net={mn:+.3f}% | playbook claim: 59% / +5.3%")
+        print(f"A组 WR={wr * 100:.1f}% mean_net={mn:+.3f}% | playbook claim: 59% / +5.3%")
         if wr >= 0.50 and mn > 0:
             print("→ A组 edge 可能存在 (WR>=50% & mean>0) — 未测维度浮现")
         else:

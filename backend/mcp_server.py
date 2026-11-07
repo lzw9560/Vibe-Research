@@ -79,11 +79,14 @@ def _handle(msg: dict) -> None:
     if method == "initialize":
         params = msg.get("params") or {}
         proto = params.get("protocolVersion", DEFAULT_PROTOCOL)
-        _result(rid, {
-            "protocolVersion": proto,
-            "capabilities": {"tools": {}},
-            "serverInfo": SERVER_INFO,
-        })
+        _result(
+            rid,
+            {
+                "protocolVersion": proto,
+                "capabilities": {"tools": {}},
+                "serverInfo": SERVER_INFO,
+            },
+        )
         return
 
     if method == "ping":
@@ -102,10 +105,13 @@ def _handle(msg: dict) -> None:
         # L2 修复：不再用 "error" in data 判定（业务正常返回可能含 error 键如"未找到该代码"）
         # 改为：只有 registry.execute 返回的 {"error": "未知工具..."} 才是真错误
         is_error = isinstance(data, dict) and data.get("error", "").startswith(("未知工具", "执行失败"))
-        _result(rid, {
-            "content": [{"type": "text", "text": json.dumps(data, ensure_ascii=False)}],
-            "isError": is_error,
-        })
+        _result(
+            rid,
+            {
+                "content": [{"type": "text", "text": json.dumps(data, ensure_ascii=False)}],
+                "isError": is_error,
+            },
+        )
         return
 
     if rid is not None:

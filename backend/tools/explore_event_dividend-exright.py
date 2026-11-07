@@ -29,6 +29,7 @@ Regime 假设: strong regime → 填权 (正 EV), weak regime → 贴权 (负 EV
 - survivorship: 除权股全市场非选股 winner, 但除权本身是公司决策须审
 - 禁止外推: 除权除息单事件策略 ≠ 事件驱动有/无 edge ≠ 短线有/无 edge
 """
+
 from __future__ import annotations
 import json
 import sys
@@ -40,7 +41,12 @@ from math import erf, sqrt
 # import shared helpers (DRY) — reuse statistical functions
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tools._factor_helpers import (  # noqa: E402
-    ev_stats, day_paired_t, bonferroni_p, norm_sf_positive, ALPHA, COST,
+    ev_stats,
+    day_paired_t,
+    bonferroni_p,
+    norm_sf_positive,
+    ALPHA,
+    COST,
     verdict_for,
 )
 
@@ -59,17 +65,18 @@ REGIME_FILE = DATA / "index_ma20_regime.json"
 
 # Event windows: (name, exit_offset) — entry always T+1 open, exit T+n close
 WINDOWS = [
-    ("t3", 3),   # T+1 open → T+3 close (2 trading days holding)
-    ("t5", 5),   # T+1 open → T+5 close (4 trading days holding)
+    ("t3", 3),  # T+1 open → T+3 close (2 trading days holding)
+    ("t5", 5),  # T+1 open → T+5 close (4 trading days holding)
 ]
 
 # Bonferroni: 2 strategies × 2 variants (basic + regime) = ×4 (task spec)
 # Additional ×2 for 2 windows (t3, t5) → ×8 total reported
-N_CROSS_STRATEGY = 4   # task: 2 策略 × 2 变体
+N_CROSS_STRATEGY = 4  # task: 2 策略 × 2 变体
 N_WINDOWS = 2
 
 
 # ---------- data loading ----------
+
 
 def load_dividend_events() -> list[dict]:
     """Load cached dividend events. Returns list of {code, ex_date, cash, stocks, ...}."""
@@ -86,6 +93,7 @@ def load_dividend_events() -> list[dict]:
 def load_kline_db() -> tuple[dict[str, dict[str, dict]], set[str]]:
     """Load kline cache. Returns (code -> {date: bar}, all_dates set)."""
     import sqlite3
+
     conn = sqlite3.connect(str(KLINE_DB))
     code_map: dict[str, dict[str, dict]] = {}
     all_dates: set[str] = set()
@@ -140,13 +148,13 @@ def build_date_index(
         for d, bar in dmap.items():
             if d in needed_dates:
                 date_index[d][code] = bar
-    print(f"[data] date_index built: {len(date_index)} dates "
-          f"(R12 equal-weight market benchmark)")
+    print(f"[data] date_index built: {len(date_index)} dates (R12 equal-weight market benchmark)")
     return dict(date_index)
 
 
 def ew_market_return(
-    t1_date: str, exit_date: str,
+    t1_date: str,
+    exit_date: str,
     date_index: dict[str, dict[str, dict]],
 ) -> float | None:
     """Equal-weight market return from t1 open to exit close (open-to-close).
@@ -178,6 +186,7 @@ def ew_market_return(
 
 
 # ---------- pick construction ----------
+
 
 def is_locked_bar(bar: dict) -> bool:
     """Check if bar is 一字 (locked at single price, can't buy).
@@ -249,23 +258,25 @@ def build_dividend_picks(
         if t3_close <= 0 or t5_close <= 0 or t1_close <= 0:
             continue
 
-        picks.append({
-            "code": code,
-            "ex_date": ex_date,
-            "t1_date": t1_date,
-            "t3_date": t3_date,
-            "t5_date": t5_date,
-            "entry": entry,
-            "t1_close": t1_close,
-            "t3_close": t3_close,
-            "t5_close": t5_close,
-            "t1_bar": t1_bar,
-            "t3_bar": t3_bar,
-            "t5_bar": t5_bar,
-            "cash": ev.get("cash_before_tax", 0),
-            "stocks": ev.get("stocks_ps", 0),
-            "div_type": _div_type(ev),
-        })
+        picks.append(
+            {
+                "code": code,
+                "ex_date": ex_date,
+                "t1_date": t1_date,
+                "t3_date": t3_date,
+                "t5_date": t5_date,
+                "entry": entry,
+                "t1_close": t1_close,
+                "t3_close": t3_close,
+                "t5_close": t5_close,
+                "t1_bar": t1_bar,
+                "t3_bar": t3_bar,
+                "t5_bar": t5_bar,
+                "cash": ev.get("cash_before_tax", 0),
+                "stocks": ev.get("stocks_ps", 0),
+                "div_type": _div_type(ev),
+            }
+        )
     return picks
 
 
@@ -284,6 +295,7 @@ def _div_type(ev: dict) -> str:
 
 
 # ---------- return functions ----------
+
 
 def ev_t3(p: dict) -> float | None:
     """T+1 open → T+3 close. Raw EV (realistic entry, close_ev not open_ev)."""
@@ -327,6 +339,7 @@ def bhar_t5(p: dict, date_index: dict[str, dict[str, dict]]) -> float | None:
 
 # ---------- walk-forward (event-study adapted) ----------
 
+
 def walk_forward_event(
     picks: list[dict],
     ret_fn,
@@ -360,8 +373,10 @@ def walk_forward_event(
     te_rets, te_by_date = _rets(test_dates)
     return {
         "status": "ok",
-        "n_train": len(tr_rets), "n_test": len(te_rets),
-        "n_train_dates": len(train_dates), "n_test_dates": len(test_dates),
+        "n_train": len(tr_rets),
+        "n_test": len(te_rets),
+        "n_train_dates": len(train_dates),
+        "n_test_dates": len(test_dates),
         "train_ev": ev_stats(tr_rets),
         "test_ev": ev_stats(te_rets),
         "train_day_t": day_paired_t(tr_by_date),
@@ -371,9 +386,8 @@ def walk_forward_event(
 
 # ---------- regime stratification ----------
 
-def stratify_by_regime(
-    picks: list[dict], regime_bars: dict[str, dict]
-) -> dict[str, list[dict]]:
+
+def stratify_by_regime(picks: list[dict], regime_bars: dict[str, dict]) -> dict[str, list[dict]]:
     """Split picks by regime on ex_date. Returns {regime_name: [picks]}."""
     buckets: dict[str, list[dict]] = defaultdict(list)
     for p in picks:
@@ -385,8 +399,8 @@ def stratify_by_regime(
 
 # ---------- DSR estimation ----------
 
-def estimate_dsr(ev_mean: float, ev_std: float, n_events: int,
-                 n_trials: int) -> dict:
+
+def estimate_dsr(ev_mean: float, ev_std: float, n_events: int, n_trials: int) -> dict:
     """Deflated Sharpe Ratio (Bailey & Lopez de Prado 2014) + MinTRL.
 
     Multiple-testing haircut: if annualized Sharpe exceeds the expected max
@@ -398,13 +412,20 @@ def estimate_dsr(ev_mean: float, ev_std: float, n_events: int,
     MinTRL = (1 + (1-γ)*ln(N)) / SR_hat^2
     """
     import math
+
     EULER_GAMMA = 0.5772  # Euler-Mascheroni constant
 
     if ev_std <= 0 or n_events <= 0 or ev_mean <= 0:
-        return {"event_sharpe": 0, "ann_sharpe": 0, "dsr": 0,
-                "expected_max_sr": 0, "min_trl_years": 0,
-                "actual_years": 0, "n_trials": n_trials,
-                "survives": False}
+        return {
+            "event_sharpe": 0,
+            "ann_sharpe": 0,
+            "dsr": 0,
+            "expected_max_sr": 0,
+            "min_trl_years": 0,
+            "actual_years": 0,
+            "n_trials": n_trials,
+            "survives": False,
+        }
 
     # per-event Sharpe (signal-to-noise, not annualized)
     event_sharpe = ev_mean / ev_std
@@ -431,8 +452,7 @@ def estimate_dsr(ev_mean: float, ev_std: float, n_events: int,
         dsr = 0
 
     # Minimum Track Record Length (years needed for significance)
-    min_trl = ((1 + (1 - EULER_GAMMA) * math.log(n_trials)) / (ann_sharpe ** 2)
-               if ann_sharpe > 0 and n_trials > 1 else 0)
+    min_trl = (1 + (1 - EULER_GAMMA) * math.log(n_trials)) / (ann_sharpe**2) if ann_sharpe > 0 and n_trials > 1 else 0
 
     survives = ann_sharpe > expected_max_sr and dsr > 0.95
 
@@ -450,6 +470,7 @@ def estimate_dsr(ev_mean: float, ev_std: float, n_events: int,
 
 
 # ---------- main analysis ----------
+
 
 def analyze_window(
     name: str,
@@ -486,12 +507,13 @@ def analyze_window(
     dt = day_paired_t(by_date)
 
     print(f"\n--- {ret_label} stats ---")
-    print(f"  n={s['n']} n_dates={dt['n_days']} gross_{ret_label}={s['ev']}% "
-          f"median={med:.3f}% WR={s['wr']}% std={s['std']}% "
-          f"t={s['t']} CI[{s['ci_lo']},{s['ci_hi']}]")
-    print(f"  net_{ret_label} (after {COST*100:.1f}% cost): {net:.3f}%")
-    print(f"  day-paired t: n_days={dt['n_days']} mean={dt['mean']}% "
-          f"t={dt['t']} p_one_sided={dt['p_one_sided']}")
+    print(
+        f"  n={s['n']} n_dates={dt['n_days']} gross_{ret_label}={s['ev']}% "
+        f"median={med:.3f}% WR={s['wr']}% std={s['std']}% "
+        f"t={s['t']} CI[{s['ci_lo']},{s['ci_hi']}]"
+    )
+    print(f"  net_{ret_label} (after {COST * 100:.1f}% cost): {net:.3f}%")
+    print(f"  day-paired t: n_days={dt['n_days']} mean={dt['mean']}% t={dt['t']} p_one_sided={dt['p_one_sided']}")
 
     # ---- walk-forward ----
     print(f"\n--- walk-forward OOS (前半 train → 后半 test) ---")
@@ -501,13 +523,13 @@ def analyze_window(
         te = wf["test_ev"]
         tr_dt = wf["train_day_t"]
         te_dt = wf["test_day_t"]
-        print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} "
-              f"EV={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
-        print(f"  test:  n={te['n']} n_dates={wf['n_test_dates']} "
-              f"EV={te['ev']}% t={te['t']} day_t={te_dt['t']} "
-              f"p={te_dt['p_one_sided']}")
-        decay = ((tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100
-                 if tr["ev"] != 0 else 0)
+        print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} EV={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
+        print(
+            f"  test:  n={te['n']} n_dates={wf['n_test_dates']} "
+            f"EV={te['ev']}% t={te['t']} day_t={te_dt['t']} "
+            f"p={te_dt['p_one_sided']}"
+        )
+        decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
         print(f"  decay: {decay:.0f}% (train→test)")
     else:
         print(f"  {wf['status']} (n_dates={wf.get('n_dates', 0)})")
@@ -544,8 +566,9 @@ def main() -> None:
     print(f"[build] picks: {len(picks)} events across {n_ex_dates} ex-dates")
     if not picks:
         print("[verdict] no picks → no-data")
-        _print_summary("dividend-exright", "no-data", 0, 0, 0, 0,
-                       "No valid picks after matching dividends to kline cache")
+        _print_summary(
+            "dividend-exright", "no-data", 0, 0, 0, 0, "No valid picks after matching dividends to kline cache"
+        )
         return
 
     # dividend type breakdown
@@ -587,8 +610,7 @@ def main() -> None:
     bhar_results: list[dict] = []
     for wname, exit_n in WINDOWS:
         ret_fn = bhar_t3 if exit_n == 3 else bhar_t5
-        r = analyze_window(f"bhar_{wname}", picks, ret_fn,
-                           index_bars=date_index, ret_label="BHAR")
+        r = analyze_window(f"bhar_{wname}", picks, ret_fn, index_bars=date_index, ret_label="BHAR")
         bhar_results.append(r)
 
     # ---- regime stratification ----
@@ -603,8 +625,7 @@ def main() -> None:
         rr: list[dict] = []
         for wname, exit_n in WINDOWS:
             ret_fn = ev_t3 if exit_n == 3 else ev_t5
-            r = analyze_window(f"regime_{rname}_{wname}", rpicks, ret_fn,
-                               ret_label="EV")
+            r = analyze_window(f"regime_{rname}_{wname}", rpicks, ret_fn, ret_label="EV")
             rr.append(r)
         regime_results[rname] = rr
 
@@ -635,8 +656,10 @@ def main() -> None:
     if best_basic and best_basic.get("ev_std", 0) > 0:
         n_trials = N_CROSS_STRATEGY * N_WINDOWS  # ×4 strategies-variants ×2 windows
         dsr = estimate_dsr(
-            best_basic["gross_ev"], best_basic["ev_std"],
-            best_basic["n_events"], n_trials,
+            best_basic["gross_ev"],
+            best_basic["ev_std"],
+            best_basic["n_events"],
+            n_trials,
         )
         print(f"  best window: {best_basic['name']}")
         print(f"  event Sharpe (per-event): {dsr['event_sharpe']}")
@@ -660,8 +683,10 @@ def main() -> None:
         )
         if best_bhar_for_dsr and best_bhar_for_dsr.get("ev_std", 0) > 0:
             dsr_bhar = estimate_dsr(
-                best_bhar_for_dsr["gross_ev"], best_bhar_for_dsr["ev_std"],
-                best_bhar_for_dsr["n_events"], n_trials,
+                best_bhar_for_dsr["gross_ev"],
+                best_bhar_for_dsr["ev_std"],
+                best_bhar_for_dsr["n_events"],
+                n_trials,
             )
             print(f"\n  BHAR DSR (market-adjusted): best={best_bhar_for_dsr['name']}")
             print(f"  event Sharpe: {dsr_bhar['event_sharpe']}")
@@ -689,8 +714,7 @@ def main() -> None:
     )
     if not best:
         print("\n  No results with data → no-data")
-        _print_summary("dividend-exright", "no-data", 0, 0, 0, 0,
-                       "No valid results")
+        _print_summary("dividend-exright", "no-data", 0, 0, 0, 0, "No valid results")
         return
 
     # Also check best regime-stratified result (strong regime hypothesis)
@@ -715,15 +739,15 @@ def main() -> None:
 
     print(f"\n  === Raw EV verdict ===")
     print(f"  best window: {best['name']}")
-    print(f"    n_events={best['n_events']} n_dates={best['n_dates']} "
-          f"gross_EV={best['gross_ev']}% median={best.get('median_ev',0)}% "
-          f"WR={best['wr']}% net_EV={best['net_ev']:.3f}%")
+    print(
+        f"    n_events={best['n_events']} n_dates={best['n_dates']} "
+        f"gross_EV={best['gross_ev']}% median={best.get('median_ev', 0)}% "
+        f"WR={best['wr']}% net_EV={best['net_ev']:.3f}%"
+    )
     print(f"    day_t={best['day_t']} raw_p={p_raw}")
-    print(f"    Bonf×{N_CROSS_STRATEGY}: p={p_bonf4:.6f} | "
-          f"Bonf×{N_CROSS_STRATEGY * N_WINDOWS}: p={p_bonf8:.6f}")
+    print(f"    Bonf×{N_CROSS_STRATEGY}: p={p_bonf4:.6f} | Bonf×{N_CROSS_STRATEGY * N_WINDOWS}: p={p_bonf8:.6f}")
     if wf_status == "ok":
-        print(f"    walk-forward: train_EV={wf_train_ev}% test_EV={wf_test_ev}% "
-              f"test_p={wf_test_p}")
+        print(f"    walk-forward: train_EV={wf_train_ev}% test_EV={wf_test_ev}% test_p={wf_test_p}")
 
     verdict_ev = verdict_for(
         ev_gross=best["gross_ev"],
@@ -746,7 +770,7 @@ def main() -> None:
         r_wf_test = r_wf.get("test_ev", {}).get("ev", 0) if r_wf_status == "ok" else 0
         r_wf_test_p = r_wf.get("test_day_t", {}).get("p_one_sided", 1.0) if r_wf_status == "ok" else 1.0
         rp_raw = best_regime.get("day_p", 1.0)
-        print(f"\n  === Regime variant: {best_regime.get('regime_name','?')} ===")
+        print(f"\n  === Regime variant: {best_regime.get('regime_name', '?')} ===")
         verdict_regime = verdict_for(
             ev_gross=best_regime["gross_ev"],
             t_day=best_regime["day_t"],
@@ -757,7 +781,7 @@ def main() -> None:
             wf_test_p=r_wf_test_p,
             n_days=best_regime["n_dates"],
             net_ev=best_regime["net_ev"],
-            subset_name=f"regime {best_regime.get('regime_name','?')}",
+            subset_name=f"regime {best_regime.get('regime_name', '?')}",
             n_cross_factor=2,
         )
 
@@ -780,17 +804,17 @@ def main() -> None:
 
         print(f"\n  === BHAR verdict (FIXED open-to-close, EW market) ===")
         print(f"  best BHAR window: {best_bhar['name']}")
-        print(f"    n_events={best_bhar['n_events']} n_dates={best_bhar['n_dates']} "
-              f"gross_BHAR={best_bhar['gross_ev']}% "
-              f"median={best_bhar.get('median_ev',0)}% "
-              f"WR={best_bhar['wr']}% "
-              f"net_BHAR={best_bhar['net_ev']:.3f}%")
+        print(
+            f"    n_events={best_bhar['n_events']} n_dates={best_bhar['n_dates']} "
+            f"gross_BHAR={best_bhar['gross_ev']}% "
+            f"median={best_bhar.get('median_ev', 0)}% "
+            f"WR={best_bhar['wr']}% "
+            f"net_BHAR={best_bhar['net_ev']:.3f}%"
+        )
         print(f"    day_t={best_bhar['day_t']} raw_p={bp_raw}")
-        print(f"    Bonf×{N_CROSS_STRATEGY}: p={bp_bonf4:.6f} | "
-              f"Bonf×{N_CROSS_STRATEGY * N_WINDOWS}: p={bp_bonf8:.6f}")
+        print(f"    Bonf×{N_CROSS_STRATEGY}: p={bp_bonf4:.6f} | Bonf×{N_CROSS_STRATEGY * N_WINDOWS}: p={bp_bonf8:.6f}")
         if bwf_status == "ok":
-            print(f"    walk-forward: train_BHAR={bwf_train}% test_BHAR={bwf_test}% "
-                  f"test_p={bwf_test_p}")
+            print(f"    walk-forward: train_BHAR={bwf_train}% test_BHAR={bwf_test}% test_p={bwf_test_p}")
 
         verdict_bhar = verdict_for(
             ev_gross=best_bhar["gross_ev"],
@@ -836,7 +860,7 @@ def main() -> None:
         best.get("gross_ev", 0),
         p_bonf4,
         f"raw_EV={best['name']}: gross={best['gross_ev']}% "
-        f"median={best.get('median_ev',0)}% WR={best['wr']}% "
+        f"median={best.get('median_ev', 0)}% WR={best['wr']}% "
         f"net={best['net_ev']:.3f}% day_t={best['day_t']} "
         f"Bonf×{N_CROSS_STRATEGY}={p_bonf4:.4f} "
         f"wf_test_EV={wf_test_ev}% "
@@ -855,8 +879,13 @@ def main() -> None:
 
 
 def _print_summary(
-    strategy: str, verdict: str, n_events: int, n_dates: int,
-    ev: float, bonf_p: float, key_finding: str,
+    strategy: str,
+    verdict: str,
+    n_events: int,
+    n_dates: int,
+    ev: float,
+    bonf_p: float,
+    key_finding: str,
 ) -> None:
     print(f"策略: 除权除息填权/贴权 (dividend-exright)")
     print(f"数据: {n_events} events across {n_dates} ex-dates")

@@ -9,6 +9,7 @@
 
 CLI runner 可注入（测试 fake，Phase B 用真实 CLI；T14 实测字段）。
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -33,10 +34,17 @@ def _default_limit_down_runner() -> dict:
     try:
         out = subprocess.run(
             [
-                "hithink-finance", "special", "limit-down-pool",
-                "--size", "200", "--format", "json",
+                "hithink-finance",
+                "special",
+                "limit-down-pool",
+                "--size",
+                "200",
+                "--format",
+                "json",
             ],
-            capture_output=True, text=True, timeout=_CLI_TIMEOUT,
+            capture_output=True,
+            text=True,
+            timeout=_CLI_TIMEOUT,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return {}
@@ -65,8 +73,7 @@ class IcePointDetector:
     def _ensure_tables(self) -> None:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                "CREATE TABLE IF NOT EXISTS ice_point_history ("
-                "date TEXT PRIMARY KEY, limit_down_count INTEGER)"
+                "CREATE TABLE IF NOT EXISTS ice_point_history (date TEXT PRIMARY KEY, limit_down_count INTEGER)"
             )
 
     def count_limit_down(self) -> int:
@@ -82,8 +89,7 @@ class IcePointDetector:
         date_str = today or date.today().isoformat()
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO ice_point_history (date, limit_down_count) "
-                "VALUES (?, ?)",
+                "INSERT OR REPLACE INTO ice_point_history (date, limit_down_count) VALUES (?, ?)",
                 (date_str, count),
             )
         return count
@@ -91,10 +97,7 @@ class IcePointDetector:
     def is_ice_point(self) -> bool:
         """连续 2 日跌停 > 50 家。首日无历史 → False。"""
         with sqlite3.connect(self.db_path) as conn:
-            rows = conn.execute(
-                "SELECT limit_down_count FROM ice_point_history "
-                "ORDER BY date DESC LIMIT 2"
-            ).fetchall()
+            rows = conn.execute("SELECT limit_down_count FROM ice_point_history ORDER BY date DESC LIMIT 2").fetchall()
         if len(rows) < 2:
             return False  # 首日无历史，不臆造
         return all(r[0] is not None and r[0] > ICE_THRESHOLD for r in rows)

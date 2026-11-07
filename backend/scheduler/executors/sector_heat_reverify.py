@@ -23,6 +23,7 @@ backtest.py:265 event-edge 守卫）。canonical arm = zt>=3（匹配 registry f
 - 不碰 signal_report.py（#2）/ s203（#6）/ evaluation.py（#7）/ fund_accum.py（#11）边界
 - 私有 DB 在 .vibe-research/gene_scores.db（compute() 内部 _connect 路径，不落 home）
 """
+
 from __future__ import annotations
 
 import logging
@@ -58,18 +59,22 @@ def sector_heat_reverify(payload: Dict[str, Any]) -> Dict[str, Any]:
         data = compute()
     except Exception as e:  # noqa: BLE001 — compute 崩不阻断 scheduled task，降级 error run
         logger.warning("[sector_heat_reverify] compute() 失败: %s", e)
-        return {"status": "error", "error": repr(e)[:200], "heat_def": canonical_arm,
-                "threshold_days": threshold_days}
+        return {"status": "error", "error": repr(e)[:200], "heat_def": canonical_arm, "threshold_days": threshold_days}
 
     days = int(data.get("days", 0))
     defs = {d["name"]: d for d in data.get("heat_defs", [])}
     arm = defs.get(canonical_arm)
     if arm is None:
-        logger.warning("[sector_heat_reverify] heat_def %s 未在 compute() 结果中（可用: %s）",
-                       canonical_arm, list(defs.keys()))
-        return {"status": "error", "days_robust": days, "heat_def": canonical_arm,
-                "error": f"heat_def {canonical_arm} not found in compute() results",
-                "available": list(defs.keys())}
+        logger.warning(
+            "[sector_heat_reverify] heat_def %s 未在 compute() 结果中（可用: %s）", canonical_arm, list(defs.keys())
+        )
+        return {
+            "status": "error",
+            "days_robust": days,
+            "heat_def": canonical_arm,
+            "error": f"heat_def {canonical_arm} not found in compute() results",
+            "available": list(defs.keys()),
+        }
 
     lift = float(arm["lift"])
     n = int(arm["hot_n"]) + int(arm["cold_n"])
@@ -77,38 +82,73 @@ def sector_heat_reverify(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     # §44v2 规约④：days<60 标 underpowered 不判（保持 ×0.5 skip，不臆造 enforce）
     if days < threshold_days:
-        logger.info("[sector_heat_reverify] days=%d<%d underpowered，skip（保持 ×0.5）lift=%.3f",
-                    days, threshold_days, lift)
-        return {"status": "skip_underpowered", "days_robust": days, "lift": lift, "n": n,
-                "heat_def": canonical_arm, "threshold": threshold_days,
-                "verdict": f"underpowered (days<{threshold_days}) keep ×0.5", "n_updated": 0}
+        logger.info(
+            "[sector_heat_reverify] days=%d<%d underpowered，skip（保持 ×0.5）lift=%.3f", days, threshold_days, lift
+        )
+        return {
+            "status": "skip_underpowered",
+            "days_robust": days,
+            "lift": lift,
+            "n": n,
+            "heat_def": canonical_arm,
+            "threshold": threshold_days,
+            "verdict": f"underpowered (days<{threshold_days}) keep ×0.5",
+            "n_updated": 0,
+        }
 
     # days≥60: decision gate
     if lift >= 2.0:
         # 升 ×1.0（lift_to_multiplier: lift≥2+CI不重叠+robust→validated ×1.0 /
         # CI重叠→待复验 ×1.0，均 ×1.0；write_override 内部算 status/mult）
-        wb = write_override("sector_heat", lift, n, days, phase="r3_reverify",
-                            source_script=src, ci_overlap=ci_overlap, robust=True)
-        logger.warning("[sector_heat_reverify] 升级 days=%d lift=%.3f≥2.0 → ×%.2f (phase=r3_reverify)",
-                       days, lift, wb.get("weight_multiplier", 1.0))
-        return {"status": "upgraded", "days_robust": days, "lift": lift, "n": n,
-                "heat_def": canonical_arm,
-                "verdict": "validated (lift≥2.0 days≥60) → ×1.0",
-                "n_updated": 1, "override": wb}
+        wb = write_override(
+            "sector_heat", lift, n, days, phase="r3_reverify", source_script=src, ci_overlap=ci_overlap, robust=True
+        )
+        logger.warning(
+            "[sector_heat_reverify] 升级 days=%d lift=%.3f≥2.0 → ×%.2f (phase=r3_reverify)",
+            days,
+            lift,
+            wb.get("weight_multiplier", 1.0),
+        )
+        return {
+            "status": "upgraded",
+            "days_robust": days,
+            "lift": lift,
+            "n": n,
+            "heat_def": canonical_arm,
+            "verdict": "validated (lift≥2.0 days≥60) → ×1.0",
+            "n_updated": 1,
+            "override": wb,
+        }
     if lift < 1.0:
         # 降 ×0.1（劣于随机 robust；write_override 内 lift_to_multiplier: lift<1+robust→×0.1）
-        wb = write_override("sector_heat", lift, n, days, phase="r3_reverify",
-                            source_script=src, ci_overlap=ci_overlap, robust=True)
-        logger.warning("[sector_heat_reverify] 降级 days=%d lift=%.3f<1.0 → ×%.2f (phase=r3_reverify)",
-                       days, lift, wb.get("weight_multiplier", 0.1))
-        return {"status": "downgraded", "days_robust": days, "lift": lift, "n": n,
-                "heat_def": canonical_arm,
-                "verdict": "劣于随机 (lift<1.0 days≥60) → ×0.1",
-                "n_updated": 1, "override": wb}
+        wb = write_override(
+            "sector_heat", lift, n, days, phase="r3_reverify", source_script=src, ci_overlap=ci_overlap, robust=True
+        )
+        logger.warning(
+            "[sector_heat_reverify] 降级 days=%d lift=%.3f<1.0 → ×%.2f (phase=r3_reverify)",
+            days,
+            lift,
+            wb.get("weight_multiplier", 0.1),
+        )
+        return {
+            "status": "downgraded",
+            "days_robust": days,
+            "lift": lift,
+            "n": n,
+            "heat_def": canonical_arm,
+            "verdict": "劣于随机 (lift<1.0 days≥60) → ×0.1",
+            "n_updated": 1,
+            "override": wb,
+        }
 
     # 1≤lift<2 → skip（保持 ×0.5，无变化不写 override 避免无意义 write）
-    logger.info("[sector_heat_reverify] days=%d lift=%.3f（1≤lift<2）skip（保持 ×0.5）",
-                days, lift)
-    return {"status": "skip_no_change", "days_robust": days, "lift": lift, "n": n,
-            "heat_def": canonical_arm,
-            "verdict": "未validated (1≤lift<2 days≥60) keep ×0.5", "n_updated": 0}
+    logger.info("[sector_heat_reverify] days=%d lift=%.3f（1≤lift<2）skip（保持 ×0.5）", days, lift)
+    return {
+        "status": "skip_no_change",
+        "days_robust": days,
+        "lift": lift,
+        "n": n,
+        "heat_def": canonical_arm,
+        "verdict": "未validated (1≤lift<2 days≥60) keep ×0.5",
+        "n_updated": 0,
+    }

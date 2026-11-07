@@ -24,6 +24,7 @@ from ._common import DependencyMissing
 def _akshare():
     try:
         import akshare as ak
+
         return ak
     except ImportError as e:
         raise DependencyMissing("akshare 未安装：pip install akshare") from e
@@ -62,9 +63,12 @@ def stock_news(code: str, limit: int = 20) -> list[dict]:
         "clientVersion": "curr",
         "param": {
             "cmsArticleWebOld": {
-                "searchScope": "default", "sort": "default",
-                "pageIndex": 1, "pageSize": 10,
-                "preTag": "<em>", "postTag": "</em>",
+                "searchScope": "default",
+                "sort": "default",
+                "pageIndex": 1,
+                "pageSize": 10,
+                "preTag": "<em>",
+                "postTag": "</em>",
             }
         },
     }
@@ -77,7 +81,7 @@ def stock_news(code: str, limit: int = 20) -> list[dict]:
     try:
         r = em_get(url, params=params, headers=headers, timeout=10)
         text = r.text
-        data = _json.loads(text[text.index("(") + 1: text.rindex(")")])
+        data = _json.loads(text[text.index("(") + 1 : text.rindex(")")])
         items = (data.get("result") or {}).get("cmsArticleWebOld") or []
     except Exception as e:
         logging.getLogger("astock").warning("stock_news(%s) 取数失败（em_get）: %s", code, e)
@@ -92,14 +96,16 @@ def stock_news(code: str, limit: int = 20) -> list[dict]:
         c = str(it.get("code") or "")
         content = _clean_em(str(it.get("content") or ""))
         content = content.replace("　", "").replace("\r\n", " ")
-        out.append({
-            "关键词": code,
-            "新闻标题": _clean_em(str(it.get("title") or "")),
-            "新闻内容": content,
-            "发布时间": str(it.get("date") or ""),
-            "文章来源": str(it.get("mediaName") or ""),
-            "新闻链接": f"http://finance.eastmoney.com/a/{c}.html",
-        })
+        out.append(
+            {
+                "关键词": code,
+                "新闻标题": _clean_em(str(it.get("title") or "")),
+                "新闻内容": content,
+                "发布时间": str(it.get("date") or ""),
+                "文章来源": str(it.get("mediaName") or ""),
+                "新闻链接": f"http://finance.eastmoney.com/a/{c}.html",
+            }
+        )
     return out[:limit]
 
 
@@ -108,8 +114,15 @@ def stock_news(code: str, limit: int = 20) -> list[dict]:
 _EM_PUSH2_UT = "fa5fd1943c7b386f172d6893dbbd1"
 _INDIV_FIELDS = "f57,f58,f84,f85,f127,f116,f117,f189,f43"
 _INDIV_CODE_NAME_MAP = {
-    "f57": "股票代码", "f58": "股票简称", "f84": "总股本", "f85": "流通股",
-    "f127": "行业", "f116": "总市值", "f117": "流通市值", "f189": "上市时间", "f43": "最新",
+    "f57": "股票代码",
+    "f58": "股票简称",
+    "f84": "总股本",
+    "f85": "流通股",
+    "f127": "行业",
+    "f116": "总市值",
+    "f117": "流通市值",
+    "f189": "上市时间",
+    "f43": "最新",
 }
 
 
@@ -146,8 +159,7 @@ def individual_info(code: str) -> dict:
         r = em_get(url, params=params, headers=headers, timeout=8)
         data = r.json().get("data")
     except Exception as e:
-        logging.getLogger("astock").warning(
-            "individual_info(%s) 取数失败（em_get）: %s", code, e)
+        logging.getLogger("astock").warning("individual_info(%s) 取数失败（em_get）: %s", code, e)
         return {}
     if not isinstance(data, dict):
         return {}
@@ -184,10 +196,15 @@ def financials(code: str) -> dict:
 
     return {
         "period": g("报告期"),
-        "revenue": g("营业总收入"), "revenue_yoy": g("营业总收入同比增长率"),
-        "net_profit": g("净利润"), "net_profit_yoy": g("净利润同比增长率"),
-        "eps": g("基本每股收益"), "bvps": g("每股净资产"),
-        "roe": g("净资产收益率"), "gross_margin": g("销售毛利率"), "net_margin": g("销售净利率"),
+        "revenue": g("营业总收入"),
+        "revenue_yoy": g("营业总收入同比增长率"),
+        "net_profit": g("净利润"),
+        "net_profit_yoy": g("净利润同比增长率"),
+        "eps": g("基本每股收益"),
+        "bvps": g("每股净资产"),
+        "roe": g("净资产收益率"),
+        "gross_margin": g("销售毛利率"),
+        "net_margin": g("销售净利率"),
         "op_cf_ps": g("每股经营现金流"),
     }
 
@@ -222,8 +239,11 @@ def valuation_percentile(code: str, period: str = "近五年") -> dict:
             metrics[key] = {
                 "current": round(cur, 2),
                 "percentile": round(below / max(len(s) - 1, 1) * 100, 1),
-                "min": round(s[0], 2), "max": round(s[-1], 2),
-                "p20": round(_q(s, 0.2), 2), "p50": round(_q(s, 0.5), 2), "p80": round(_q(s, 0.8), 2),
+                "min": round(s[0], 2),
+                "max": round(s[-1], 2),
+                "p20": round(_q(s, 0.2), 2),
+                "p50": round(_q(s, 0.5), 2),
+                "p80": round(_q(s, 0.8), 2),
                 "n": len(s),
             }
         except Exception:
@@ -259,13 +279,11 @@ def _fetch_cyq_klines(code: str) -> list[dict] | None:
     }
     headers = {"Referer": "https://quote.eastmoney.com/"}
     try:
-        r = em_get("https://push2his.eastmoney.com/api/qt/stock/kline/get",
-                   params=params, headers=headers, timeout=8)
+        r = em_get("https://push2his.eastmoney.com/api/qt/stock/kline/get", params=params, headers=headers, timeout=8)
         data = r.json()
     except Exception as e:
         # em_get 熔断 OPEN raise RuntimeError / 请求异常 / JSON 解析失败 → None
-        logging.getLogger("astock").warning(
-            "chip_distribution(%s) 取数失败（em_get）: %s", code, e)
+        logging.getLogger("astock").warning("chip_distribution(%s) 取数失败（em_get）: %s", code, e)
         return None
 
     klines = (data.get("data") or {}).get("klines")
@@ -285,8 +303,10 @@ def _fetch_cyq_klines(code: str) -> list[dict] | None:
             continue
         # f51-f61: date,open,close,high,low,volume,amount,振幅,涨跌幅,涨跌额,hsl
         rec = {
-            "open": _to_float(parts[1]), "close": _to_float(parts[2]),
-            "high": _to_float(parts[3]), "low": _to_float(parts[4]),
+            "open": _to_float(parts[1]),
+            "close": _to_float(parts[2]),
+            "high": _to_float(parts[3]),
+            "low": _to_float(parts[4]),
             "hsl": _to_float(parts[10]),
         }
         # CYQCalculator 依赖 open/close/high/low/hsl 均为数值（akshare pd.to_numeric 对齐），
@@ -320,6 +340,7 @@ def _run_cyq(klines: list) -> dict:
         if _CYQ_RACER is None:
             import py_mini_racer  # noqa: PLC0415 — V8 计算依赖（akshare 已带，不新增）
             from .cyq_js import CYQ_JS  # noqa: PLC0415 — 东财原 JS（逐字搬，R5 保真）
+
             _CYQ_RACER = py_mini_racer.MiniRacer()
             _CYQ_RACER.eval(CYQ_JS)
         # 筗最后一条 = 最新交易日筹码分布（index 0-based，klinedata 全量）
@@ -350,8 +371,7 @@ def chip_distribution(code: str) -> dict:
     try:
         mcode = _run_cyq(klines)  # singleton V8 + lock 串行 call（防 mini_racer 地址池重复 init 崩）
     except Exception as e:
-        logging.getLogger("astock").warning(
-            "chip_distribution(%s) CYQCalculator 计算失败: %s", code, e)
+        logging.getLogger("astock").warning("chip_distribution(%s) CYQCalculator 计算失败: %s", code, e)
         return {}
 
     def g(v):

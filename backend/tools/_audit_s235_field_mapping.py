@@ -5,6 +5,7 @@
 1. 构造 hithink-style auction_final → 断言 vol_ratio/amount_ratio/gap_pct 用 hithink 值
 2. 构造 inline-style auction_final（无 hithink 字段）→ 断言回退 calc 不破坏
 """
+
 from __future__ import annotations
 import sys
 import os
@@ -30,9 +31,9 @@ def main() -> None:
     print("=" * 70)
     # 构造 hithink auction-snapshot 风格的 auction_final
     auction_hithink = {
-        "auction_volume_ratio": 4.69,       # hithink 量比
-        "auction_yesterday_ratio_pct": 2.66, # hithink 额占比（百分点）
-        "auction_pct": 1.25,                 # hithink 高开（百分点）
+        "auction_volume_ratio": 4.69,  # hithink 量比
+        "auction_yesterday_ratio_pct": 2.66,  # hithink 额占比（百分点）
+        "auction_pct": 1.25,  # hithink 高开（百分点）
         "open_price": 8.13,
         "volume": 9155,
         "amount": 74_500,
@@ -63,7 +64,7 @@ def main() -> None:
     print("2. 回退 calc（inline 测试口径，无 hithink 字段）")
     print("=" * 70)
     auction_inline = {
-        "open_price": 9.729,   # gap = (9.729-9.4)/9.4*100 = 3.5%
+        "open_price": 9.729,  # gap = (9.729-9.4)/9.4*100 = 3.5%
         "volume": 4500,
         "amount": 43_780,
     }
@@ -87,9 +88,9 @@ def main() -> None:
     print("3. 混合：hithink 部分字段 + calc 补（实战常见）")
     print("=" * 70)
     auction_mixed = {
-        "auction_volume_ratio": 5.2,   # hithink 量比有
+        "auction_volume_ratio": 5.2,  # hithink 量比有
         # auction_yesterday_ratio_pct 缺 → 回退 calc amount_ratio
-        "auction_pct": 3.0,             # hithink 高开有
+        "auction_pct": 3.0,  # hithink 高开有
         "open_price": 9.682,
         "volume": 5000,
         "amount": 48_000,

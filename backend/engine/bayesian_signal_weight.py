@@ -19,6 +19,7 @@ n_total<30 → insufficient（先验主导不出权重结论）/ n_days<60 → u
 复刻 §44v1 假阴性纠错）/ ≥60 → robust。R3 给权重时同款 tier gating——小样本标 underpowered 不判
 reliability 高低，R5 F1 消融同款（spec §3 R5 + §6 风险）。
 """
+
 from __future__ import annotations
 
 # ── 默认专家先验（spec T3.2）─────────────────────────────────────────────────

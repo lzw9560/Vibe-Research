@@ -18,6 +18,7 @@ spec §13.0/§0e：
 每日盘后调用 record_daily_recommendations → 次日 record_actual_returns（picks）+ record_universe_returns（universe）回填。
 诚实边界：无 next_bar 收益的标 missing，不臆造；无 universe_returns → passed=False + note（不能伪造 lift）。
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -30,8 +31,8 @@ _DB = GENE_SCORES_DB_PATH
 
 # §44 / §13.0 通过门槛（绝对，非 benchmark×0.8 弱 degradation）
 # 注：forward_test 内部 passed 判定逻辑不变；60日复验窗口口径下 passed=False 不阻断接入跑通。
-PASS_WINRATE_FLOOR: float = 60.0   # §13.0：alpha>60% 才加复杂度
-PASS_LIFT_FLOOR: float = 2.0       # §44 60日复验窗口：lift<2 标未 validated（前向测试仍跑，60日后复验定权重）
+PASS_WINRATE_FLOOR: float = 60.0  # §13.0：alpha>60% 才加复杂度
+PASS_LIFT_FLOOR: float = 2.0  # §44 60日复验窗口：lift<2 标未 validated（前向测试仍跑，60日后复验定权重）
 PASS_LIFT_HARD_FLOOR: float = 1.0  # §44 硬底线：lift<1 劣于随机 → 移除/权重0，不保留跑通
 
 
@@ -108,8 +109,7 @@ def _ensure_table() -> None:
         _ensure_column(conn, "forward_test_records", "is_unbuyable", "INTEGER DEFAULT 0")
         _ensure_column(conn, "universe_returns", "is_unbuyable", "INTEGER DEFAULT 0")
         # S145：path-dependent 列（return_path/is_win_path/exit_reason）两表同加
-        for col, defn in (("return_path", "REAL"), ("is_win_path", "INTEGER"),
-                          ("exit_reason", "TEXT")):
+        for col, defn in (("return_path", "REAL"), ("is_win_path", "INTEGER"), ("exit_reason", "TEXT")):
             _ensure_column(conn, "forward_test_records", col, defn)
             _ensure_column(conn, "universe_returns", col, defn)
         conn.commit()
@@ -133,9 +133,11 @@ def _wilson(wins: int, n: int, z: float = 1.96) -> tuple[float, float]:
 # 数据结构
 # ===========================================================================
 
+
 @dataclass(frozen=True)
 class DailyRecommendation:
     """单条每日推荐记录。"""
+
     signal_date: str
     code: str
     name: str
@@ -149,46 +151,48 @@ class DailyRecommendation:
 @dataclass(frozen=True)
 class ForwardTestResult:
     """前向测试汇总结果（§44 60日复验窗口：含随机基准 + lift + Wilson CI，诚实标注非阻断）。"""
+
     total_days: int
     total_recommendations: int
-    settled_count: int            # picks 有 next_bar 收益的记录数
-    win_count: int               # picks wins
-    win_rate: float               # picks 胜率 0-100
-    avg_return: float             # picks 平均 open2close %
+    settled_count: int  # picks 有 next_bar 收益的记录数
+    win_count: int  # picks wins
+    win_rate: float  # picks 胜率 0-100
+    avg_return: float  # picks 平均 open2close %
     # §44 随机基准 + lift（60日复验窗口：作为诚实标注，非接入阻断）
-    random_settled: int = 0        # universe 有收益的记录数
+    random_settled: int = 0  # universe 有收益的记录数
     random_win_count: int = 0
     random_baseline_win_rate: float = 0.0  # universe winrate %（零选股基准率）
-    lift: float = 0.0             # strategy / random（<2x 标未 validated，不阻断接入跑通，60日后复验）
-    strategy_ci: tuple[float, float] = (0.0, 0.0)   # Wilson [lo,hi] %
+    lift: float = 0.0  # strategy / random（<2x 标未 validated，不阻断接入跑通，60日后复验）
+    strategy_ci: tuple[float, float] = (0.0, 0.0)  # Wilson [lo,hi] %
     random_ci: tuple[float, float] = (0.0, 0.0)
     is_exploratory: bool = False  # §44(2)：n<30 探索性非定论
     universe_coverage: tuple[int, int] = (0, 0)  # (已回填收益, 已记录 codes)
-    benchmark_win_rate: float = 0.0     # Phase 0b benchmark_A（信息字段，非门）
+    benchmark_win_rate: float = 0.0  # Phase 0b benchmark_A（信息字段，非门）
     pass_threshold: float = PASS_WINRATE_FLOOR  # §13.0 绝对 60（非 benchmark×0.8）
     passed: bool = False
     consecutive_loss: int = 0
     note: str = ""
     validation_status: str = "未 validated"  # §44 60日复验窗口三态：validated | 未 validated | 探索性
     # S144 R2/R3/R5 双报 + 诚实标注
-    unbuyable_count: int = 0       # 一字板排除 picks 数（buyable-only 口径剔了多少）
-    o2nc_settled: int = 0         # return_open2next_close 有值的 buyable picks 数
-    o2nc_wins: int = 0            # open2next_close>0 的 buyable picks 数
+    unbuyable_count: int = 0  # 一字板排除 picks 数（buyable-only 口径剔了多少）
+    o2nc_settled: int = 0  # return_open2next_close 有值的 buyable picks 数
+    o2nc_wins: int = 0  # open2next_close>0 的 buyable picks 数
     win_rate_open2next_close: float = 0.0  # T+1 可实现口径胜率 %（双报；escape hatch：不改 verdict）
     lift_unfiltered: float = 0.0  # S144 A3：原口径 lift（含 unbuyable 污染）——与 buyable-only lift 双报
     # S145 R3/R4：path-dependent（SL/TP/max_hold 模拟）口径——§44 真·gate，双报
-    path_settled: int = 0         # return_path 有值的 buyable picks 数
-    path_wins: int = 0            # is_win_path=1 的 buyable picks 数
-    win_rate_path: float = 0.0    # path-dependent 胜率 %（SL/TP/max_hold 模拟口径）
+    path_settled: int = 0  # return_path 有值的 buyable picks 数
+    path_wins: int = 0  # is_win_path=1 的 buyable picks 数
+    win_rate_path: float = 0.0  # path-dependent 胜率 %（SL/TP/max_hold 模拟口径）
     random_path_settled: int = 0  # universe path 有值数
     random_path_wins: int = 0
     random_win_rate_path: float = 0.0  # universe path 胜率 %（默认 -3%/+8%/3）
-    path_lift: float = 0.0        # path-dependent lift（strategy path / universe path）——§44 真·gate
+    path_lift: float = 0.0  # path-dependent lift（strategy path / universe path）——§44 真·gate
 
 
 # ===========================================================================
 # 写入：每日推荐（信号日）
 # ===========================================================================
+
 
 def record_daily_recommendations(
     signal_date: str,
@@ -210,9 +214,19 @@ def record_daily_recommendations(
             (signal_date, code, name, strategy_code, strategy_score,
              weather_state, position_multiplier, recommended_position)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            [(rec.signal_date, rec.code, rec.name, rec.strategy_code,
-              rec.strategy_score, rec.weather_state, rec.position_multiplier,
-              rec.recommended_position) for rec in recommendations],
+            [
+                (
+                    rec.signal_date,
+                    rec.code,
+                    rec.name,
+                    rec.strategy_code,
+                    rec.strategy_score,
+                    rec.weather_state,
+                    rec.position_multiplier,
+                    rec.recommended_position,
+                )
+                for rec in recommendations
+            ],
         )
         conn.commit()
         inserted = conn.total_changes - before
@@ -224,6 +238,7 @@ def record_daily_recommendations(
 # ===========================================================================
 # 回填：次日实际收益（T+1 盘后）
 # ===========================================================================
+
 
 def record_actual_returns(
     signal_date: str,
@@ -274,8 +289,19 @@ def record_actual_returns(
                         return_path = ?, is_win_path = ?, exit_reason = ?,
                         is_unbuyable = ?, is_win = ?
                     WHERE signal_date = ? AND code = ?""",
-                    (o2c, c2c, pct, o2nc, path_ret, path_won, path_reason,
-                     1 if is_unbuyable else 0, is_win, signal_date, code),
+                    (
+                        o2c,
+                        c2c,
+                        pct,
+                        o2nc,
+                        path_ret,
+                        path_won,
+                        path_reason,
+                        1 if is_unbuyable else 0,
+                        is_win,
+                        signal_date,
+                        code,
+                    ),
                 )
                 if cur.rowcount > 0:
                     updated += 1
@@ -325,8 +351,18 @@ def record_universe_returns(
                     (signal_date, code, return_open2close, return_close2close,
                      next_pctChg, is_unbuyable, return_path, is_win_path, exit_reason, is_win)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (signal_date, code, o2c, c2c, pct, 1 if is_unbuyable else 0,
-                     path_ret, path_won, path_reason, is_win),
+                    (
+                        signal_date,
+                        code,
+                        o2c,
+                        c2c,
+                        pct,
+                        1 if is_unbuyable else 0,
+                        path_ret,
+                        path_won,
+                        path_reason,
+                        is_win,
+                    ),
                 )
                 upserted += 1
             except Exception:
@@ -340,6 +376,7 @@ def record_universe_returns(
 # ===========================================================================
 # 汇总：前向测试结果（§44 60日复验窗口口径，forward_test 内部 passed 判定逻辑不变）
 # ===========================================================================
+
 
 def get_forward_test_summary(
     benchmark_win_rate: float = 60.0,  # Phase 0b benchmark_A（信息字段，非门）
@@ -363,9 +400,7 @@ def get_forward_test_summary(
     try:
         # —— 策略 picks（forward_test_records）—— S144 buyable-only 口径（剔 is_unbuyable=1 一字板）
         total = conn.execute("SELECT COUNT(*) FROM forward_test_records").fetchone()[0]
-        s_unbuyable = conn.execute(
-            "SELECT COUNT(*) FROM forward_test_records WHERE is_unbuyable = 1"
-        ).fetchone()[0]
+        s_unbuyable = conn.execute("SELECT COUNT(*) FROM forward_test_records WHERE is_unbuyable = 1").fetchone()[0]
         s_settled = conn.execute(
             "SELECT COUNT(*) FROM forward_test_records WHERE return_open2close IS NOT NULL AND is_unbuyable = 0"
         ).fetchone()[0]
@@ -379,9 +414,7 @@ def get_forward_test_summary(
         o2nc_wins = conn.execute(
             "SELECT COUNT(*) FROM forward_test_records WHERE return_open2next_close > 0 AND is_unbuyable = 0"
         ).fetchone()[0]
-        days = conn.execute(
-            "SELECT COUNT(DISTINCT signal_date) FROM forward_test_records"
-        ).fetchone()[0]
+        days = conn.execute("SELECT COUNT(DISTINCT signal_date) FROM forward_test_records").fetchone()[0]
         avg_row = conn.execute(
             "SELECT AVG(return_open2close) FROM forward_test_records "
             "WHERE return_open2close IS NOT NULL AND is_unbuyable = 0"
@@ -404,9 +437,9 @@ def get_forward_test_summary(
         u_settled = conn.execute(
             "SELECT COUNT(*) FROM universe_returns WHERE return_open2close IS NOT NULL AND is_unbuyable = 0"
         ).fetchone()[0]
-        u_wins = conn.execute(
-            "SELECT COUNT(*) FROM universe_returns WHERE is_win = 1 AND is_unbuyable = 0"
-        ).fetchone()[0]
+        u_wins = conn.execute("SELECT COUNT(*) FROM universe_returns WHERE is_win = 1 AND is_unbuyable = 0").fetchone()[
+            0
+        ]
         # S144 A3：原口径（unfiltered，含 unbuyable）lift 双报——量化一字板污染对 lift 的影响
         # is_win=1 自然排除 unbuyable（NULL），故 s_wins/u_wins 同；差异在 settled 分母（含/剔 unbuyable）
         s_settled_unfilt = conn.execute(
@@ -466,14 +499,20 @@ def get_forward_test_summary(
         note_parts.append("无已结算 picks（需次日回填收益）")
     elif total > 0 and s_settled < 0.8 * total:
         # 116 诚实层：picks 收益覆盖低（如 live 日 backtest_samples 未含收益）→ verdict 基于部分样本
-        note_parts.append(f"picks 收益覆盖低（{s_settled}/{total} settled）→ verdict 基于部分样本（待 live 日收益回填）")
+        note_parts.append(
+            f"picks 收益覆盖低（{s_settled}/{total} settled）→ verdict 基于部分样本（待 live 日收益回填）"
+        )
     if u_settled == 0:
         note_parts.append("无随机基准（universe_returns 未回填 → 无法 §44 验证 lift）")
     if u_settled > 0 and s_settled > 0:
         if lift < PASS_LIFT_HARD_FLOOR:
-            note_parts.append(f"lift {lift}x < {PASS_LIFT_HARD_FLOOR}x → §44 硬底线（劣于随机，移除/权重0，不保留跑通）")
+            note_parts.append(
+                f"lift {lift}x < {PASS_LIFT_HARD_FLOOR}x → §44 硬底线（劣于随机，移除/权重0，不保留跑通）"
+            )
         elif lift < PASS_LIFT_FLOOR:
-            note_parts.append(f"lift {lift}x < {PASS_LIFT_FLOOR}x → §44 噪声（未 validated，不阻断接入跑通，60日后复验）")
+            note_parts.append(
+                f"lift {lift}x < {PASS_LIFT_FLOOR}x → §44 噪声（未 validated，不阻断接入跑通，60日后复验）"
+            )
         if s_lo <= u_hi:  # 策略 CI 与随机 CI 重叠 = 不显著优于随机
             note_parts.append("策略 CI 与随机 CI 重叠（不显著优于随机）")
     if s_settled > 0 and s_winrate < PASS_WINRATE_FLOOR:
@@ -484,7 +523,9 @@ def get_forward_test_summary(
         note_parts.append(f"连续亏损 {consecutive_loss} 笔（kill criteria 触发）")
     # S144 R2/R3：buyable-only 口径诚实标注——剔了多少一字板（picks 侧）
     if s_unbuyable > 0:
-        note_parts.append(f"buyable-only 口径剔 picks 中 {s_unbuyable} 个一字板（T+1 涨停封死不可买，is_win=NULL 排除）")
+        note_parts.append(
+            f"buyable-only 口径剔 picks 中 {s_unbuyable} 个一字板（T+1 涨停封死不可买，is_win=NULL 排除）"
+        )
     # S144 A3：原口径 lift（含 unbuyable 污染）vs buyable-only lift 双报——量化污染影响（方向非预设）
     # 差异非零 = picks 或 universe 含 unbuyable（任一侧污染）
     if s_settled > 0 and u_settled > 0 and lift_unfiltered != lift:
@@ -558,6 +599,7 @@ def get_forward_test_summary(
 # 查询：单日推荐明细
 # ===========================================================================
 
+
 def get_daily_recommendations(signal_date: str) -> list[dict]:
     """取某信号日的全部推荐记录。"""
     _ensure_table()
@@ -577,6 +619,7 @@ def get_daily_recommendations(signal_date: str) -> list[dict]:
 # ===========================================================================
 # 运行入口（盘后调度调用）
 # ===========================================================================
+
 
 def run_daily_forward_test(signal_date: str, weather_state: str | None = None) -> dict:
     """每日盘后前向测试入口。
@@ -623,13 +666,16 @@ def run_daily_forward_test(signal_date: str, weather_state: str | None = None) -
     pool_item_map: dict[str, dict] = {}
     try:
         from strategies.first_board.universe import fetch_zt_pool  # noqa: PLC0415
+
         for p in fetch_zt_pool(signal_date) or []:
             code = str(p.get("c", "") or "").strip()
             if code:
                 pool_item_map[code] = p
     except Exception as exc:  # noqa: BLE001 — 取池失败降级空 map，不阻断前向测试
         logging.getLogger("vibe-research").warning(
-            "forward_test 取涨停池建 pool_item_map 失败 %s: %s", signal_date, exc,
+            "forward_test 取涨停池建 pool_item_map 失败 %s: %s",
+            signal_date,
+            exc,
         )
     scored = score_candidates(candidates, weather_state, "limitup", signal_date, pool_item_map)
     mult, _ = calendar_factor(signal_date)

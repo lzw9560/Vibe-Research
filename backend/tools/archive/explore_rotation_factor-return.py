@@ -40,6 +40,7 @@ cross-sectional 行业动量因子（Fama-French 风格）。
   - 禁止 trust 未验证数字
   - 禁止外推（行业轮动因子 ≠ 轮动有/无 edge ≠ 短线有/无 edge）
 """
+
 from __future__ import annotations
 import json
 import math
@@ -64,14 +65,14 @@ SRC = DATA / "sector_rotation_data.json"
 
 # ---------- 参数 ----------
 WINDOW_START = "2018-01-01"
-WINDOW_END = "2026-09-19"          # through 2026-09-18 (drop degenerate tail)
-MIN_MEDIAN_MEMBERSHIP = 10         # universe floor
-K_LONG_SHORT = 5                   # top-5 / bottom-5 industries (decile-ish tail)
-HOLDING_WEEKS = 2                  # 2-week holding (10 trading days)
-FORMATION_WEEKS_LIST = [2, 3, 4]   # search formation N (Bonferroni ×3 within-method)
+WINDOW_END = "2026-09-19"  # through 2026-09-18 (drop degenerate tail)
+MIN_MEDIAN_MEMBERSHIP = 10  # universe floor
+K_LONG_SHORT = 5  # top-5 / bottom-5 industries (decile-ish tail)
+HOLDING_WEEKS = 2  # 2-week holding (10 trading days)
+FORMATION_WEEKS_LIST = [2, 3, 4]  # search formation N (Bonferroni ×3 within-method)
 TRADING_DAYS_PER_WEEK = 5
-ROUND_TRIP_COST = 0.003            # 0.3% per round-trip (matches helpers COST)
-N_METHODS_PARALLEL = 4             # cross-method Bonferroni ×4
+ROUND_TRIP_COST = 0.003  # 0.3% per round-trip (matches helpers COST)
+N_METHODS_PARALLEL = 4  # cross-method Bonferroni ×4
 ALPHA_LEVEL = 0.05
 
 
@@ -83,15 +84,14 @@ def load_data() -> dict:
     sr: dict[str, list[float | None]] = d["sector_returns"]
     sm: dict[str, list[int]] = d["sector_membership"]
     import bisect
+
     i_start = bisect.bisect_left(dates, WINDOW_START)
     i_end = bisect.bisect_left(dates, WINDOW_END)
     return {
         "dates": dates[i_start:i_end],
         "bench": bench[i_start:i_end],
-        "sector_returns": {ind: sr[ind][i_start:i_end]
-                           for ind in sr},
-        "sector_membership": {ind: sm[ind][i_start:i_end]
-                              for ind in sm},
+        "sector_returns": {ind: sr[ind][i_start:i_end] for ind in sr},
+        "sector_membership": {ind: sm[ind][i_start:i_end] for ind in sm},
         "i_start": i_start,
     }
 
@@ -115,7 +115,7 @@ def compound_window(rets: list[float | None], lo: int, hi: int) -> float | None:
         r = rets[i]
         if r is None:
             return None
-        acc *= (1.0 + r)
+        acc *= 1.0 + r
     return acc - 1.0
 
 
@@ -140,12 +140,12 @@ def build_factor_blocks(
     H = holding_weeks * TRADING_DAYS_PER_WEEK
     n_days = len(dates)
 
-    block_factor: list[float] = []          # decimal
-    block_bench: list[float] = []           # decimal, aligned for CAPM audit
-    block_dates: list[tuple[str, str]] = [] # (hold_start_date, hold_end_date)
+    block_factor: list[float] = []  # decimal
+    block_bench: list[float] = []  # decimal, aligned for CAPM audit
+    block_dates: list[tuple[str, str]] = []  # (hold_start_date, hold_end_date)
     long_sets: list[list[str]] = []
     short_sets: list[list[str]] = []
-    daily_ls_all: list[float | None] = []   # per-day LS return (for diagnostics)
+    daily_ls_all: list[float | None] = []  # per-day LS return (for diagnostics)
 
     b = 0
     while True:
@@ -182,11 +182,11 @@ def build_factor_blocks(
             if br is None:
                 bench_ok = False
             else:
-                block_bench_comp *= (1.0 + br)
+                block_bench_comp *= 1.0 + br
         # compound daily LS -> block factor return
         acc = 1.0
         for x in block_daily_ls:
-            acc *= (1.0 + x)
+            acc *= 1.0 + x
         block_factor.append(acc - 1.0)
         block_bench.append((block_bench_comp - 1.0) if bench_ok else None)
         block_dates.append((dates[hold_lo], dates[hold_hi]))
@@ -199,7 +199,7 @@ def build_factor_blocks(
         "formation_weeks": formation_weeks,
         "holding_weeks": holding_weeks,
         "n_rebalances": len(block_factor),
-        "block_factor": block_factor,        # decimal
+        "block_factor": block_factor,  # decimal
         "block_bench": block_bench,
         "block_dates": block_dates,
         "long_sets": long_sets,
@@ -213,8 +213,7 @@ def block_stats(block_returns: list[float]) -> dict:
     Uses SAMPLE std (n-1) for t. Returns percent + t + p."""
     n = len(block_returns)
     if n == 0:
-        return {"n": 0, "mean_pct": 0.0, "std_pct": 0.0, "se_pct": 0.0,
-                "t": 0.0, "p_one_sided": 1.0, "wr_pct": 0.0}
+        return {"n": 0, "mean_pct": 0.0, "std_pct": 0.0, "se_pct": 0.0, "t": 0.0, "p_one_sided": 1.0, "wr_pct": 0.0}
     m = sum(block_returns) / n
     # sample std (n-1)
     if n > 1:
@@ -237,8 +236,7 @@ def block_stats(block_returns: list[float]) -> dict:
     }
 
 
-def estimate_turnover(long_sets: list[list[str]],
-                      short_sets: list[list[str]], k: int) -> float:
+def estimate_turnover(long_sets: list[list[str]], short_sets: list[list[str]], k: int) -> float:
     """平均换手率：相邻 block 间多头/空头集合变更名字比例 (0~1 per leg)."""
     if len(long_sets) < 2:
         return 0.0
@@ -289,8 +287,7 @@ def ols_regression(y: list[float], x: list[float]) -> dict:
     }
 
 
-def walk_forward_blocks(block_returns: list[float],
-                        block_dates: list[tuple[str, str]]) -> dict:
+def walk_forward_blocks(block_returns: list[float], block_dates: list[tuple[str, str]]) -> dict:
     """前半 train → 后半 test. 非重叠 block 已按时间排序."""
     n = len(block_returns)
     if n < 8:
@@ -321,17 +318,20 @@ def verdict_for_factor(
     wf: dict,
     iso_beta: float,
 ) -> str:
-    print(f"\n  [formation={formation_weeks}w] "
-          f"gross={gross_mean_pct}% net={net_mean_pct}% t={t_stat} "
-          f"p={p_raw} Bonf(×{N_METHODS_PARALLEL * len(FORMATION_WEEKS_LIST)})"
-          f"={bonf_p} n_blocks={n_blocks}")
-    print(f"    isolation audit: LS-benchmark beta={iso_beta} "
-          f"({'CLEAN' if abs(iso_beta) < 0.20 else 'CONTAMINATED'})")
+    print(
+        f"\n  [formation={formation_weeks}w] "
+        f"gross={gross_mean_pct}% net={net_mean_pct}% t={t_stat} "
+        f"p={p_raw} Bonf(×{N_METHODS_PARALLEL * len(FORMATION_WEEKS_LIST)})"
+        f"={bonf_p} n_blocks={n_blocks}"
+    )
+    print(f"    isolation audit: LS-benchmark beta={iso_beta} ({'CLEAN' if abs(iso_beta) < 0.20 else 'CONTAMINATED'})")
     if wf["status"] == "ok":
         tr = wf["train"]
         te = wf["test"]
-        print(f"    walk-forward: train mean={tr['mean_pct']}% (t={tr['t']}) "
-              f"| test mean={te['mean_pct']}% (t={te['t']} p={te['p_one_sided']})")
+        print(
+            f"    walk-forward: train mean={tr['mean_pct']}% (t={tr['t']}) "
+            f"| test mean={te['mean_pct']}% (t={te['t']} p={te['p_one_sided']})"
+        )
 
     if gross_mean_pct <= 0:
         print("    -> FALSIFIED: gross factor mean <= 0 (no positive alpha)")
@@ -340,41 +340,46 @@ def verdict_for_factor(
         print(f"    -> UNDERPOWERED: n_blocks={n_blocks} < 60")
         return "underpowered"
     if bonf_p >= ALPHA_LEVEL:
-        print(f"    -> FALSIFIED: Bonferroni p={bonf_p} >= {ALPHA_LEVEL} "
-              f"(not significant after ×{N_METHODS_PARALLEL * len(FORMATION_WEEKS_LIST)} correction)")
+        print(
+            f"    -> FALSIFIED: Bonferroni p={bonf_p} >= {ALPHA_LEVEL} "
+            f"(not significant after ×{N_METHODS_PARALLEL * len(FORMATION_WEEKS_LIST)} correction)"
+        )
         return "falsified"
     if net_mean_pct <= 0:
-        print(f"    -> FALSIFIED: net factor mean={net_mean_pct}% <= 0 "
-              f"(alpha eaten by transaction cost)")
+        print(f"    -> FALSIFIED: net factor mean={net_mean_pct}% <= 0 (alpha eaten by transaction cost)")
         return "falsified"
     if wf["status"] == "ok":
         if wf["train"]["mean_pct"] <= 0:
-            print(f"    -> EXPLORATORY: train mean={wf['train']['mean_pct']}% <= 0 "
-                  f"(alpha absent in train half — test may be regime overfit)")
+            print(
+                f"    -> EXPLORATORY: train mean={wf['train']['mean_pct']}% <= 0 "
+                f"(alpha absent in train half — test may be regime overfit)"
+            )
             return "exploratory"
         if wf["test"]["mean_pct"] <= 0:
             print(f"    -> FALSIFIED: walk-forward test mean={wf['test']['mean_pct']}% <= 0")
             return "falsified"
-        wf_test_bonf = bonferroni_p(wf["test"]["p_one_sided"],
-                                     N_METHODS_PARALLEL * len(FORMATION_WEEKS_LIST))
+        wf_test_bonf = bonferroni_p(wf["test"]["p_one_sided"], N_METHODS_PARALLEL * len(FORMATION_WEEKS_LIST))
         if wf_test_bonf >= ALPHA_LEVEL:
-            print(f"    -> EXPLORATORY: OOS test mean={wf['test']['mean_pct']}% > 0 but "
-                  f"test p={wf['test']['p_one_sided']} Bonf={wf_test_bonf} >= {ALPHA_LEVEL}")
+            print(
+                f"    -> EXPLORATORY: OOS test mean={wf['test']['mean_pct']}% > 0 but "
+                f"test p={wf['test']['p_one_sided']} Bonf={wf_test_bonf} >= {ALPHA_LEVEL}"
+            )
             return "exploratory"
-        print(f"    -> EDGE-CONFIRMED: gross+net alpha > 0, Bonferroni PASS, "
-              f"OOS test mean={wf['test']['mean_pct']}% significant")
+        print(
+            f"    -> EDGE-CONFIRMED: gross+net alpha > 0, Bonferroni PASS, "
+            f"OOS test mean={wf['test']['mean_pct']}% significant"
+        )
         return "edge-confirmed"
     print("    -> EXPLORATORY: walk-forward unavailable")
     return "exploratory"
 
 
 # ---------- 主流程 ----------
-def run_one_formation(data: dict, universe: list[str],
-                      fw: int) -> dict:
+def run_one_formation(data: dict, universe: list[str], fw: int) -> dict:
     fb = build_factor_blocks(data, universe, fw)
     bs = block_stats(fb["block_factor"])
     turnover = estimate_turnover(fb["long_sets"], fb["short_sets"], K_LONG_SHORT)
-    cost_per_block = turnover * 2 * ROUND_TRIP_COST   # both legs
+    cost_per_block = turnover * 2 * ROUND_TRIP_COST  # both legs
     gross_mean_pct = bs["mean_pct"]
     net_mean_pct = round(gross_mean_pct - cost_per_block * 100, 4)
     n_tests = N_METHODS_PARALLEL * len(FORMATION_WEEKS_LIST)
@@ -382,11 +387,12 @@ def run_one_formation(data: dict, universe: list[str],
     bonf_p_methodonly = bonferroni_p(bs["p_one_sided"], N_METHODS_PARALLEL)
 
     # isolation audit: regress LS factor on benchmark block returns
-    paired = [(f, b) for f, b in zip(fb["block_factor"], fb["block_bench"])
-              if b is not None]
-    iso = (ols_regression([p[0] for p in paired], [p[1] for p in paired])
-           if len(paired) >= 5 else {"alpha_pct": 0, "beta": 0, "alpha_t": 0,
-                                     "beta_t": 0, "r2": 0})
+    paired = [(f, b) for f, b in zip(fb["block_factor"], fb["block_bench"]) if b is not None]
+    iso = (
+        ols_regression([p[0] for p in paired], [p[1] for p in paired])
+        if len(paired) >= 5
+        else {"alpha_pct": 0, "beta": 0, "alpha_t": 0, "beta_t": 0, "r2": 0}
+    )
 
     # long-only Jensen alpha (散户可行性交叉验证: top-K only regressed on benchmark)
     # long-only block return = mean(top-K daily) compounded
@@ -418,24 +424,25 @@ def run_one_formation(data: dict, universe: list[str],
             tl = [sr[lg][d] for lg in longs if sr[lg][d] is not None]
             ts = [sr[sh][d] for sh in shorts if sr[sh][d] is not None]
             if tl:
-                acc_l *= (1 + mean(tl))
+                acc_l *= 1 + mean(tl)
             if ts:
-                acc_s *= (1 + mean(ts))
+                acc_s *= 1 + mean(ts)
         long_only_blocks.append(acc_l - 1.0)
         short_only_blocks.append(acc_s - 1.0)
         b += 1
     long_bench = [bb for bb in fb["block_bench"] if bb is not None]
-    jensen = (ols_regression(long_only_blocks[:len(long_bench)], long_bench)
-              if len(long_bench) >= 5 else {"alpha_pct": 0, "beta": 0,
-                                            "alpha_t": 0, "beta_t": 0, "r2": 0})
+    jensen = (
+        ols_regression(long_only_blocks[: len(long_bench)], long_bench)
+        if len(long_bench) >= 5
+        else {"alpha_pct": 0, "beta": 0, "alpha_t": 0, "beta_t": 0, "r2": 0}
+    )
 
     wf = walk_forward_blocks(fb["block_factor"], fb["block_dates"])
-    sharpe = (bs["mean_pct"] / bs["std_pct"] * math.sqrt(26)
-              if bs["std_pct"] > 0 else 0.0)
+    sharpe = bs["mean_pct"] / bs["std_pct"] * math.sqrt(26) if bs["std_pct"] > 0 else 0.0
 
-    vd = verdict_for_factor(fw, gross_mean_pct, net_mean_pct,
-                            bs["t"], bs["p_one_sided"],
-                            bs["n"], bonf_p, wf, iso["beta"])
+    vd = verdict_for_factor(
+        fw, gross_mean_pct, net_mean_pct, bs["t"], bs["p_one_sided"], bs["n"], bonf_p, wf, iso["beta"]
+    )
     return {
         "formation_weeks": fw,
         "n_rebalances": bs["n"],
@@ -457,10 +464,8 @@ def run_one_formation(data: dict, universe: list[str],
         "jensen_long_alpha_pct": jensen["alpha_pct"],
         "jensen_long_beta": jensen["beta"],
         "jensen_long_alpha_t": jensen["alpha_t"],
-        "long_only_mean_pct": round(mean(long_only_blocks) * 100, 4)
-                               if long_only_blocks else 0.0,
-        "benchmark_mean_pct": round(mean(long_bench) * 100, 4)
-                              if long_bench else 0.0,
+        "long_only_mean_pct": round(mean(long_only_blocks) * 100, 4) if long_only_blocks else 0.0,
+        "benchmark_mean_pct": round(mean(long_bench) * 100, 4) if long_bench else 0.0,
         "walk_forward": wf,
         "verdict": vd,
         "block_factor_pct": [round(x * 100, 3) for x in fb["block_factor"]],
@@ -478,32 +483,38 @@ def main() -> None:
     bench = [x for x in data["bench"] if x is not None]
     print(f"window: {dates[0]} .. {dates[-1]} ({len(dates)} days)")
     print(f"universe: {len(universe)} industries (median membership >= {MIN_MEDIAN_MEMBERSHIP})")
-    print(f"benchmark: 上证指数 mean daily = {mean(bench)*100:.4f}% "
-          f"-> annualized ~{(1+mean(bench))**250-1:.1%}")
-    print(f"K (long/short): {K_LONG_SHORT} each "
-          f"({K_LONG_SHORT/len(universe)*100:.0f}% tail)")
-    print(f"holding: {HOLDING_WEEKS}w ({HOLDING_WEEKS*5}d non-overlapping blocks)")
-    print(f"formation search: {FORMATION_WEEKS_LIST} weeks "
-          f"(Bonferroni ×{N_METHODS_PARALLEL} methods ×{len(FORMATION_WEEKS_LIST)} formations "
-          f"= ×{N_METHODS_PARALLEL*len(FORMATION_WEEKS_LIST)})")
+    print(
+        f"benchmark: 上证指数 mean daily = {mean(bench) * 100:.4f}% -> annualized ~{(1 + mean(bench)) ** 250 - 1:.1%}"
+    )
+    print(f"K (long/short): {K_LONG_SHORT} each ({K_LONG_SHORT / len(universe) * 100:.0f}% tail)")
+    print(f"holding: {HOLDING_WEEKS}w ({HOLDING_WEEKS * 5}d non-overlapping blocks)")
+    print(
+        f"formation search: {FORMATION_WEEKS_LIST} weeks "
+        f"(Bonferroni ×{N_METHODS_PARALLEL} methods ×{len(FORMATION_WEEKS_LIST)} formations "
+        f"= ×{N_METHODS_PARALLEL * len(FORMATION_WEEKS_LIST)})"
+    )
 
     results = []
     for fw in FORMATION_WEEKS_LIST:
-        print(f"\n{'#' * 74}\n# formation = {fw} weeks ({fw*5}d signal window)\n{'#' * 74}")
+        print(f"\n{'#' * 74}\n# formation = {fw} weeks ({fw * 5}d signal window)\n{'#' * 74}")
         r = run_one_formation(data, universe, fw)
         results.append(r)
 
     # summary table
     print(f"\n\n{'=' * 74}\nSUMMARY (factor-return, alpha-isolated)\n{'=' * 74}")
-    print(f"{'form':>5} {'n':>5} {'gross%':>8} {'net%':>8} {'t':>7} "
-          f"{'p':>9} {'Bonf×12':>9} {'Sharpe':>7} {'isoβ':>6} {'verdict':>14}")
+    print(
+        f"{'form':>5} {'n':>5} {'gross%':>8} {'net%':>8} {'t':>7} "
+        f"{'p':>9} {'Bonf×12':>9} {'Sharpe':>7} {'isoβ':>6} {'verdict':>14}"
+    )
     best = None
     for r in results:
-        print(f"{r['formation_weeks']:>4}w {r['n_rebalances']:>5} "
-              f"{r['gross_alpha_pct']:>8.3f} {r['net_alpha_pct']:>8.3f} "
-              f"{r['t']:>7.2f} {r['p_one_sided']:>9.5f} {r['bonf_p_x12']:>9.5f} "
-              f"{r['sharpe_annualized']:>7.2f} {r['isolation_beta']:>6.3f} "
-              f"{r['verdict']:>14}")
+        print(
+            f"{r['formation_weeks']:>4}w {r['n_rebalances']:>5} "
+            f"{r['gross_alpha_pct']:>8.3f} {r['net_alpha_pct']:>8.3f} "
+            f"{r['t']:>7.2f} {r['p_one_sided']:>9.5f} {r['bonf_p_x12']:>9.5f} "
+            f"{r['sharpe_annualized']:>7.2f} {r['isolation_beta']:>6.3f} "
+            f"{r['verdict']:>14}"
+        )
         # pick best by gross alpha (the search winner)
         if best is None or r["gross_alpha_pct"] > best["gross_alpha_pct"]:
             best = r
@@ -512,22 +523,29 @@ def main() -> None:
     b = best
     print(f"  formation={b['formation_weeks']}w  n_rebalances={b['n_rebalances']}")
     print(f"  gross factor alpha = {b['gross_alpha_pct']}% per 2-week block")
-    print(f"  net factor alpha   = {b['net_alpha_pct']}% (after est. cost "
-          f"{b['cost_per_block_pct']}%/block, turnover {b['turnover']})")
-    print(f"  t={b['t']}  p_one_sided={b['p_one_sided']}  "
-          f"Bonf×12={b['bonf_p_x12']}  Bonf×4={b['bonf_p_x4']}")
+    print(
+        f"  net factor alpha   = {b['net_alpha_pct']}% (after est. cost "
+        f"{b['cost_per_block_pct']}%/block, turnover {b['turnover']})"
+    )
+    print(f"  t={b['t']}  p_one_sided={b['p_one_sided']}  Bonf×12={b['bonf_p_x12']}  Bonf×4={b['bonf_p_x4']}")
     print(f"  annualized Sharpe={b['sharpe_annualized']}  win_rate={b['wr_pct']}%")
-    print(f"  isolation audit: reg(LS,benchmark) beta={b['isolation_beta']} "
-          f"alpha={b['isolation_alpha_pct']}% alpha_t={b['isolation_alpha_t']} "
-          f"r2={b['isolation_r2']}")
-    print(f"  long-only Jensen: alpha={b['jensen_long_alpha_pct']}% "
-          f"beta={b['jensen_long_beta']} alpha_t={b['jensen_long_alpha_t']} "
-          f"(散户可行性: long-only 可交易, long-short 需融券)")
+    print(
+        f"  isolation audit: reg(LS,benchmark) beta={b['isolation_beta']} "
+        f"alpha={b['isolation_alpha_pct']}% alpha_t={b['isolation_alpha_t']} "
+        f"r2={b['isolation_r2']}"
+    )
+    print(
+        f"  long-only Jensen: alpha={b['jensen_long_alpha_pct']}% "
+        f"beta={b['jensen_long_beta']} alpha_t={b['jensen_long_alpha_t']} "
+        f"(散户可行性: long-only 可交易, long-short 需融券)"
+    )
     print(f"  long-only mean={b['long_only_mean_pct']}% vs benchmark={b['benchmark_mean_pct']}% per block")
     if b["walk_forward"]["status"] == "ok":
         wf = b["walk_forward"]
         print(f"  walk-forward: train({wf['train_dates']}) mean={wf['train']['mean_pct']}% t={wf['train']['t']}")
-        print(f"                test ({wf['test_dates']})  mean={wf['test']['mean_pct']}% t={wf['test']['t']} p={wf['test']['p_one_sided']}")
+        print(
+            f"                test ({wf['test_dates']})  mean={wf['test']['mean_pct']}% t={wf['test']['t']} p={wf['test']['p_one_sided']}"
+        )
     print(f"  VERDICT: {b['verdict']}")
 
     # 散户可行性 + 诚实总结
@@ -535,17 +553,22 @@ def main() -> None:
     print(f"  方法: factor-return (cross-sectional 动量因子, alpha-isolated via long-short)")
     print(f"  alpha 是否从 beta 隔离: ", end="")
     if abs(b["isolation_beta"]) < 0.20:
-        print(f"是 — LS-benchmark beta={b['isolation_beta']} (|β|<0.20), "
-              f"市场 beta 在多空对冲中抵消, 因子收益是纯 cross-sectional alpha")
+        print(
+            f"是 — LS-benchmark beta={b['isolation_beta']} (|β|<0.20), "
+            f"市场 beta 在多空对冲中抵消, 因子收益是纯 cross-sectional alpha"
+        )
     else:
-        print(f"否/部分 — LS-benchmark beta={b['isolation_beta']} (|β|>=0.20), "
-              f"alpha 含残留市场 beta, 隔离不彻底")
-    print(f"  散户可行性: long-short 需融券做空行业 (A 股散户融券难/成本高); "
-          f"long-only top-K 可交易但 Jensen alpha={b['jensen_long_alpha_pct']}% "
-          f"(t={b['jensen_long_alpha_t']}) {'含市场 beta 非纯 alpha' if b['jensen_long_beta']>0.5 else ''}")
-    print(f"  禁止外推: 行业轮动 factor-return ≠ 轮动整体有/无 edge ≠ 短线有/无 edge. "
-          f"仅测了 3 个 formation (2/3/4w) × 1 holding (2w) × K=5 × 27 industries × "
-          f"2018-2026 窗口.")
+        print(f"否/部分 — LS-benchmark beta={b['isolation_beta']} (|β|>=0.20), alpha 含残留市场 beta, 隔离不彻底")
+    print(
+        f"  散户可行性: long-short 需融券做空行业 (A 股散户融券难/成本高); "
+        f"long-only top-K 可交易但 Jensen alpha={b['jensen_long_alpha_pct']}% "
+        f"(t={b['jensen_long_alpha_t']}) {'含市场 beta 非纯 alpha' if b['jensen_long_beta'] > 0.5 else ''}"
+    )
+    print(
+        f"  禁止外推: 行业轮动 factor-return ≠ 轮动整体有/无 edge ≠ 短线有/无 edge. "
+        f"仅测了 3 个 formation (2/3/4w) × 1 holding (2w) × K=5 × 27 industries × "
+        f"2018-2026 窗口."
+    )
 
     # dump JSON for record
     out = {

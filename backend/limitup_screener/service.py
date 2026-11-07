@@ -130,13 +130,17 @@ def _cross_check_zt_history(target_date: str, zt_pool_len: int) -> bool:
     if max_final == 1 and count != zt_pool_len:
         _logger.error(
             "[s095] 交叉校验拒绝写入 date=%s：zt_history final 快照行数=%d 与请求 zt_pool 行数=%d 不一致",
-            d_iso, count, zt_pool_len,
+            d_iso,
+            count,
+            zt_pool_len,
         )
         return False
     if max_final != 1:
         _logger.warning(
             "[s095] 交叉校验告警 date=%s：zt_history 非 final 快照（行数=%d，pool=%d，盘中收缩合法）",
-            d_iso, count, zt_pool_len,
+            d_iso,
+            count,
+            zt_pool_len,
         )
     return True
 
@@ -145,14 +149,14 @@ async def _resolve_date(date: str | None) -> str:
     """解析日期参数，回推到最近交易日（异步，带缓存）。"""
     if date:
         return date.replace("-", "")
-    
+
     # 检查缓存
     now = time.time()
     cache_key = "latest_trading_day"
     cached = _RESOLVED_DATE_CACHE.get(cache_key)
     if cached and now - cached[0] < _RESOLVED_DATE_TTL:
         return cached[1]
-    
+
     today = datetime.now(_BEIJING_TZ).strftime("%Y%m%d")
     for back in range(5):
         d = (datetime.now(_BEIJING_TZ) - timedelta(days=back)).strftime("%Y%m%d")
@@ -163,7 +167,7 @@ async def _resolve_date(date: str | None) -> str:
                 return d
         except Exception:
             continue
-    
+
     _RESOLVED_DATE_CACHE[cache_key] = (now, today)
     return today
 
@@ -173,7 +177,9 @@ async def _fetch_zt_pool(date: str):
     try:
         zt, yzt, zb = await asyncio.gather(
             asyncio.to_thread(astock.em_zt_topic_pool, "getTopicZTPool", date, "fbt:asc"),
-            asyncio.to_thread(astock.em_zt_topic_pool, "getYesterdayZTPool", date, "zs:desc"),  # S053 R1：fbt:asc→zs:desc（fbt 对该端点返空）
+            asyncio.to_thread(
+                astock.em_zt_topic_pool, "getYesterdayZTPool", date, "zs:desc"
+            ),  # S053 R1：fbt:asc→zs:desc（fbt 对该端点返空）
             asyncio.to_thread(astock.em_zt_topic_pool, "getTopicZBPool", date, "fbt:asc"),
         )
         return (
@@ -208,6 +214,7 @@ def _compute_rebound_rate(zb_pool: list, zt_next_pool: list | None) -> tuple[flo
 def _fetch_zt_next_pool(target_date: str) -> list:
     """S053 R2：拉 T+1 日涨停池（用于算 zb 次日回封率）。失败返空。"""
     from datetime import datetime as _dt, timedelta as _td
+
     try:
         base = _dt.strptime(target_date, "%Y%m%d").date()
     except ValueError:
@@ -218,7 +225,10 @@ def _fetch_zt_next_pool(target_date: str) -> list:
         d_str = next_d.strftime("%Y%m%d")
         try:
             pool = astock.em_zt_topic_pool(
-                "getTopicZTPool", d_str, "fbt:asc", raise_on_failure=True,
+                "getTopicZTPool",
+                d_str,
+                "fbt:asc",
+                raise_on_failure=True,
             )
             if pool:
                 return [zt_pool_item_from_dict(it) for it in pool]
@@ -241,11 +251,8 @@ async def _collect_zt_history_batch(codes: set[str], date: str, lookback: int = 
     BATCH_SIZE = 20
     SLEEP_BETWEEN_BATCHES = 0.02
     for i in range(0, len(all_dates), BATCH_SIZE):
-        batch = all_dates[i:i + BATCH_SIZE]
-        tasks = [
-            asyncio.to_thread(astock.em_zt_topic_pool, "getTopicZTPool", d, "fbt:asc")
-            for d in batch
-        ]
+        batch = all_dates[i : i + BATCH_SIZE]
+        tasks = [asyncio.to_thread(astock.em_zt_topic_pool, "getTopicZTPool", d, "fbt:asc") for d in batch]
         pools = await asyncio.gather(*tasks, return_exceptions=True)
 
         for d, pool in zip(batch, pools):
@@ -270,7 +277,8 @@ async def _compute_and_cache_async(target_date: str, cache_key: str) -> Screener
     if not _assert_not_future_date(target_date):
         _logger.warning(
             "[s095] 未来日期拒绝写入 target_date=%s > last_trading_date=%s",
-            target_date, last_trading_date_str(),
+            target_date,
+            last_trading_date_str(),
         )
         return _empty_screener_result(target_date, reason="未来日期拒绝写入")
 
@@ -294,8 +302,13 @@ async def _compute_and_cache_async(target_date: str, cache_key: str) -> Screener
     if rebound_missing:
         _logger.info("[screener] %s 炸板后溢价 missing（zt_next 拉取失败/空）", display_date)
     else:
-        _logger.info("[screener] %s 炸板后溢价=%.2f（zb=%d zt_next=%d）",
-                     display_date, rebound_rate, len(zb_pool), len(zt_next_pool or []))
+        _logger.info(
+            "[screener] %s 炸板后溢价=%.2f（zb=%d zt_next=%d）",
+            display_date,
+            rebound_rate,
+            len(zb_pool),
+            len(zt_next_pool or []),
+        )
 
     seen: dict[str, ZTPoolItem] = {}
     for item in zt_pool:
@@ -326,6 +339,7 @@ async def _compute_and_cache_async(target_date: str, cache_key: str) -> Screener
     # S053 R2 路径 C：service 层回填炸板后溢价因子（重定义 = zb 次日回封率）
     # compute_factors 算的旧值（yzt 公式错）在这里覆盖；缺数据时标 missing 不臆造
     from limitup_screener.models import calc_total_score
+
     for g in gene_scores:
         g.factors["炸板后溢价"] = rebound_rate
         if rebound_missing:
@@ -372,10 +386,12 @@ async def get_screener_result(date: str | None = None) -> ScreenerResult:
     if hit and now - hit[0] < _CACHE_TTL:
         age = now - hit[0]
         freshness = _assess_freshness(age)
-        result = hit[1].model_copy(update={
-            "data_freshness": freshness,
-            "data_age_seconds": round(age, 1),
-        })
+        result = hit[1].model_copy(
+            update={
+                "data_freshness": freshness,
+                "data_age_seconds": round(age, 1),
+            }
+        )
         return result
 
     db_scores = load_gene_scores(target_date[:4] + "-" + target_date[4:6] + "-" + target_date[6:])
@@ -404,10 +420,12 @@ async def get_screener_result(date: str | None = None) -> ScreenerResult:
         if hit and now - hit[0] < _CACHE_TTL:
             age = now - hit[0]
             freshness = _assess_freshness(age)
-            return hit[1].model_copy(update={
-                "data_freshness": freshness,
-                "data_age_seconds": round(age, 1),
-            })
+            return hit[1].model_copy(
+                update={
+                    "data_freshness": freshness,
+                    "data_age_seconds": round(age, 1),
+                }
+            )
         db_scores = load_gene_scores(target_date[:4] + "-" + target_date[4:6] + "-" + target_date[6:])
         if db_scores is not None:
             qualified = [g for g in db_scores if g.qualify]
@@ -430,6 +448,7 @@ async def get_screener_result(date: str | None = None) -> ScreenerResult:
     error_holder = []
 
     try:
+
         def _compute_with_timeout():
             try:
                 result_holder.append(_compute_and_cache(target_date, cache_key))
@@ -464,6 +483,7 @@ async def get_screener_result(date: str | None = None) -> ScreenerResult:
 
 # ---- 公有接口（供 limitup_strategy 等外部模块调用） ----
 
+
 async def public_resolve_date(date: str | None = None) -> str:
     """公有：解析日期参数，回推到最近交易日。"""
     return await _resolve_date(date)
@@ -492,6 +512,7 @@ def public_get_cache_ttl() -> int:
 def public_load_gene_scores(date: str) -> list | None:
     """公有：从数据库加载基因得分。"""
     from limitup_screener.data import load_gene_scores
+
     return load_gene_scores(date)
 
 
@@ -506,10 +527,9 @@ async def precompute_daily_async(date: str | None = None) -> ScreenerResult:
     # 基因得分预计算会把上一交易日池标成非交易日入库，造成日期错位。
     # 同款模式见 limitup_sti/service.py 的 precompute_daily。
     from datetime import date as _date_cls
+
     try:
-        _parsed = _date_cls.fromisoformat(
-            f"{date_fmt[:4]}-{date_fmt[4:6]}-{date_fmt[6:8]}"
-        )
+        _parsed = _date_cls.fromisoformat(f"{date_fmt[:4]}-{date_fmt[4:6]}-{date_fmt[6:8]}")
         if not is_trading_day(_parsed):
             _logger.warning(
                 "[screener] %s 非交易日，跳过基因得分预计算（防周末污染）",
@@ -524,7 +544,8 @@ async def precompute_daily_async(date: str | None = None) -> ScreenerResult:
     # 比最近交易日还未来"的边界情况（例如今天周五盘中请求下周一）。
     if not _assert_not_future_date(date_fmt):
         _logger.warning(
-            "[s095] %s 未来日期拒绝写入（precompute_daily_async）", date_fmt,
+            "[s095] %s 未来日期拒绝写入（precompute_daily_async）",
+            date_fmt,
         )
         return _empty_screener_result(date_fmt, reason="未来日期拒绝写入")
 
@@ -541,10 +562,9 @@ def precompute_daily(date: str | None = None) -> ScreenerResult:
 
     # Fix A：交易日守卫（同步通道），同 precompute_daily_async。
     from datetime import date as _date_cls
+
     try:
-        _parsed = _date_cls.fromisoformat(
-            f"{date_fmt[:4]}-{date_fmt[4:6]}-{date_fmt[6:8]}"
-        )
+        _parsed = _date_cls.fromisoformat(f"{date_fmt[:4]}-{date_fmt[4:6]}-{date_fmt[6:8]}")
         if not is_trading_day(_parsed):
             _logger.warning(
                 "[screener] %s 非交易日，跳过基因得分预计算（防周末污染）",
@@ -557,7 +577,8 @@ def precompute_daily(date: str | None = None) -> ScreenerResult:
     # S095 R2：未来日期硬闸门（同步通道），同 precompute_daily_async。
     if not _assert_not_future_date(date_fmt):
         _logger.warning(
-            "[s095] %s 未来日期拒绝写入（precompute_daily）", date_fmt,
+            "[s095] %s 未来日期拒绝写入（precompute_daily）",
+            date_fmt,
         )
         return _empty_screener_result(date_fmt, reason="未来日期拒绝写入")
 

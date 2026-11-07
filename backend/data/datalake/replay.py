@@ -8,6 +8,7 @@
   from data.datalake.replay import replay_day
   events = replay_day("2026-09-11", ["000001","600000"])  # 按时间戳排序的盘中事件流
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -45,7 +46,9 @@ def load_stoke(date_str: str, kind: str = "strong") -> list[dict]:
         return []
     conn = sqlite3.connect(str(db))
     conn.row_factory = sqlite3.Row
-    table = {"reports": "research_reports", "news": "news", "strong": "strong_stocks", "pe_pb": "pe_pb"}.get(kind, "strong_stocks")
+    table = {"reports": "research_reports", "news": "news", "strong": "strong_stocks", "pe_pb": "pe_pb"}.get(
+        kind, "strong_stocks"
+    )
     try:
         rows = conn.execute(f"SELECT * FROM {table} WHERE date=?", (date_str,)).fetchall()
         return [dict(r) for r in rows]

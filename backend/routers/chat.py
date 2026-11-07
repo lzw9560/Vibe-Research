@@ -1,6 +1,7 @@
 """
 Chat router.
 """
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -15,11 +16,11 @@ router = APIRouter(tags=["chat"])
 
 
 class LLMConfig(BaseModel):
-    provider: str = ""       # cli-* = 订阅接入（调本机 CLI）；其余 = API 接入
-    baseURL: str = ""        # 订阅接入时留空
-    apiKey: str = ""         # 订阅接入时留空
+    provider: str = ""  # cli-* = 订阅接入（调本机 CLI）；其余 = API 接入
+    baseURL: str = ""  # 订阅接入时留空
+    apiKey: str = ""  # 订阅接入时留空
     model: str
-    presetId: str = ""       # 选了预设时非空，后端按 id 从 env 查 key 补全
+    presetId: str = ""  # 选了预设时非空，后端按 id 从 env 查 key 补全
 
 
 class ChatReq(BaseModel):
@@ -64,7 +65,10 @@ def chat(req: ChatReq) -> StreamingResponse:
     if preset_id:
         resolved = llm_presets.resolve_preset(preset_id)
         if not resolved:
-            raise HTTPException(400, f"预设「{preset_id}」未配置或缺少 API key，请检查后端 .env 的 VR_LLM_PRESET_{preset_id.upper().replace('-', '_')}__API_KEY")
+            raise HTTPException(
+                400,
+                f"预设「{preset_id}」未配置或缺少 API key，请检查后端 .env 的 VR_LLM_PRESET_{preset_id.upper().replace('-', '_')}__API_KEY",
+            )
         # 预设补全：baseURL/apiKey 用预设的，model 允许前端覆盖（默认用预设 defaultModel）
         cfg["baseURL"] = resolved["baseURL"]
         cfg["apiKey"] = resolved["apiKey"]
@@ -79,7 +83,10 @@ def chat(req: ChatReq) -> StreamingResponse:
         if not cfg.get("apiKey") or not cfg.get("baseURL"):
             env_cfg = chat_layer._get_env_llm_config()
             if not env_cfg.get("apiKey") or not env_cfg.get("baseURL"):
-                raise HTTPException(400, "缺少 Base URL 或 API Key，请先在「接入 AI」里填写，或配置后端环境变量 VR_LLM_BASE_URL / VR_LLM_API_KEY")
+                raise HTTPException(
+                    400,
+                    "缺少 Base URL 或 API Key，请先在「接入 AI」里填写，或配置后端环境变量 VR_LLM_BASE_URL / VR_LLM_API_KEY",
+                )
         # L3 修复：环境变量兜底仅在非 CLI 路径执行（CLI 路径不需要 baseURL/apiKey）
         env_cfg = chat_layer._get_env_llm_config()
         for k in ("baseURL", "apiKey", "model"):
@@ -88,7 +95,9 @@ def chat(req: ChatReq) -> StreamingResponse:
 
     def gen():
         try:
-            events = (chat_layer.run_chat_cli_stream if is_cli else chat_layer.run_chat_stream)(cfg, req.messages, req.context)
+            events = (chat_layer.run_chat_cli_stream if is_cli else chat_layer.run_chat_stream)(
+                cfg, req.messages, req.context
+            )
             for ev in events:
                 yield json.dumps(ev, ensure_ascii=False) + "\n"
         except Exception as e:  # noqa: BLE001 — 运行时错误以流内事件上报，不中断连接

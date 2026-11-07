@@ -11,6 +11,7 @@
 纯函数核心 `_classify_gap_from_bars(bars, target_idx)` 无 IO 可单测；
 外壳 `classify_gap(code, date)` 拉 baostock 日 K 调核心。
 """
+
 from __future__ import annotations
 
 import logging
@@ -18,14 +19,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 # 参数（§44 sweep 空间，spec §2 起点）
-VOL_RATIO_BREAKOUT = 2.0      # 突破缺口量比阈值
+VOL_RATIO_BREAKOUT = 2.0  # 突破缺口量比阈值
 VOL_RATIO_CONTINUATION = 1.5  # 持续缺口量比阈值
 VOL_RATIO_EXHAUSTION_HIGH = 3.0  # 衰竭缺口异常放量阈值
-VOL_RATIO_EXHAUSTION_LOW = 1.0   # 衰竭缺口缩量阈值（<此值）
-FILL_WINDOW = 3                # 不回补窗口（A 股 T+1，3 日不回补=有效）
-PRESSURE_LOOKBACK = 20         # 压力位回看天数（20 日前高/前低）
-VOL_MA_WINDOW = 5             # 量比均线窗口（5 日均量）
-GAP_HISTORY_WINDOW = 20       # 衰竭缺口判定：往前看多少日找历史缺口
+VOL_RATIO_EXHAUSTION_LOW = 1.0  # 衰竭缺口缩量阈值（<此值）
+FILL_WINDOW = 3  # 不回补窗口（A 股 T+1，3 日不回补=有效）
+PRESSURE_LOOKBACK = 20  # 压力位回看天数（20 日前高/前低）
+VOL_MA_WINDOW = 5  # 量比均线窗口（5 日均量）
+GAP_HISTORY_WINDOW = 20  # 衰竭缺口判定：往前看多少日找历史缺口
 
 
 def _bar_get(bar: dict, key: str, default: float = 0.0) -> float:
@@ -102,7 +103,7 @@ def _at_pressure_level(bars: list[dict], idx: int, direction: str) -> bool:
     """
     if idx < 1 or idx >= len(bars):
         return False
-    lookback = bars[max(0, idx - PRESSURE_LOOKBACK):idx]
+    lookback = bars[max(0, idx - PRESSURE_LOOKBACK) : idx]
     if len(lookback) < 5:  # 数据不足
         return False
     prev_highs = [_bar_get(b, "high") for b in lookback]
@@ -142,8 +143,12 @@ def _classify_gap_from_bars(bars: list[dict], target_idx: int, mode: str = "cand
     返 {type: 普通/突破/持续/衰竭/无缺口, direction, regime, confidence, params, mode}。
     """
     result = {
-        "type": "无缺口", "direction": "无", "regime": "无",
-        "confidence": 0.0, "params": {}, "mode": mode,
+        "type": "无缺口",
+        "direction": "无",
+        "regime": "无",
+        "confidence": 0.0,
+        "params": {},
+        "mode": mode,
     }
     if target_idx < 0 or target_idx >= len(bars):
         result["params"] = {"error": "target_idx 越界"}
@@ -178,8 +183,8 @@ def _classify_gap_from_bars(bars: list[dict], target_idx: int, mode: str = "cand
 
     # 分类逻辑（spec §2，顺序：突破 → 衰竭 → 持续 → 普通）：
     # S201c: 突破/持续 candidate 不 require not filled（去前视）；confirmed 才 require
-    breakout_cond = (vol_ratio >= VOL_RATIO_BREAKOUT and at_pressure)
-    continuation_cond = (vol_ratio >= VOL_RATIO_CONTINUATION and n_recent >= 1)
+    breakout_cond = vol_ratio >= VOL_RATIO_BREAKOUT and at_pressure
+    continuation_cond = vol_ratio >= VOL_RATIO_CONTINUATION and n_recent >= 1
     if mode == "confirmed":
         breakout_cond = breakout_cond and not filled
         continuation_cond = continuation_cond and not filled
@@ -232,14 +237,24 @@ def classify_gap(code: str, date: str) -> dict:
     try:
         from baostock.util import bs  # noqa: PLC0415
     except ImportError:
-        return {"type": "无缺口", "direction": "无", "regime": "无",
-                "confidence": 0.0, "params": {"error": "baostock 未装"}}
+        return {
+            "type": "无缺口",
+            "direction": "无",
+            "regime": "无",
+            "confidence": 0.0,
+            "params": {"error": "baostock 未装"},
+        }
 
     # baostock 拉日 K（60 日，覆盖所有窗口）
     bars = _fetch_baostock_bars(code, date, count=60)
     if not bars:
-        return {"type": "无缺口", "direction": "无", "regime": "无",
-                "confidence": 0.0, "params": {"error": f"baostock 无数据 {code} {date}"}}
+        return {
+            "type": "无缺口",
+            "direction": "无",
+            "regime": "无",
+            "confidence": 0.0,
+            "params": {"error": f"baostock 无数据 {code} {date}"},
+        }
 
     # 找 target_date 的 idx
     target_idx = -1
@@ -248,8 +263,13 @@ def classify_gap(code: str, date: str) -> dict:
             target_idx = i
             break
     if target_idx < 0:
-        return {"type": "无缺口", "direction": "无", "regime": "无",
-                "confidence": 0.0, "params": {"error": f"target_date {date} 不在 bars"}}
+        return {
+            "type": "无缺口",
+            "direction": "无",
+            "regime": "无",
+            "confidence": 0.0,
+            "params": {"error": f"target_date {date} 不在 bars"},
+        }
 
     return _classify_gap_from_bars(bars, target_idx)
 
@@ -263,6 +283,7 @@ def _fetch_baostock_bars(code: str, end_date: str = "", count: int = 60) -> list
     """
     try:
         from engine.bars_provider import _baostock_a_share_hist  # noqa: PLC0415
+
         # _baostock_a_share_hist(code) 1 参，返最近 400 天 bars（含 pctChg/isST）
         return _baostock_a_share_hist(code) or []
     except Exception as e:  # noqa: BLE001
@@ -271,8 +292,17 @@ def _fetch_baostock_bars(code: str, end_date: str = "", count: int = 60) -> list
 
 
 __all__ = [
-    "classify_gap", "_classify_gap_from_bars", "_detect_gap", "_vol_ratio",
-    "_is_filled", "_at_pressure_level", "_count_recent_gaps",
-    "VOL_RATIO_BREAKOUT", "VOL_RATIO_CONTINUATION", "VOL_RATIO_EXHAUSTION_HIGH",
-    "VOL_RATIO_EXHAUSTION_LOW", "FILL_WINDOW", "PRESSURE_LOOKBACK",
+    "classify_gap",
+    "_classify_gap_from_bars",
+    "_detect_gap",
+    "_vol_ratio",
+    "_is_filled",
+    "_at_pressure_level",
+    "_count_recent_gaps",
+    "VOL_RATIO_BREAKOUT",
+    "VOL_RATIO_CONTINUATION",
+    "VOL_RATIO_EXHAUSTION_HIGH",
+    "VOL_RATIO_EXHAUSTION_LOW",
+    "FILL_WINDOW",
+    "PRESSURE_LOOKBACK",
 ]

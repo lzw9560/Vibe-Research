@@ -27,6 +27,7 @@
 
 跑法: cd backend && .venv/bin/python tools/explore_residual_etf-premium-residual.py
 """
+
 from __future__ import annotations
 import json
 import sys
@@ -56,13 +57,14 @@ FACTOR_JSON = DATA / "factor_baselines.json"
 ETF_CACHE = DATA / "etf_premium_cache.json"
 INDEX_CACHE = DATA / "index_ohlc_cache.json"
 
-N_STRATEGIES_PARALLEL = 4      # Bonferroni ×4 (etf-premium/composite-top5/size/low-vol)
+N_STRATEGIES_PARALLEL = 4  # Bonferroni ×4 (etf-premium/composite-top5/size/low-vol)
 ALPHA = 0.05
-ROLLING_WINDOW = 60            # 60 交易日滚动 alpha
-ETF_COST_PCT = 0.15            # ETF round-trip cost % (sensitivity: net alpha)
+ROLLING_WINDOW = 60  # 60 交易日滚动 alpha
+ETF_COST_PCT = 0.15  # ETF round-trip cost % (sensitivity: net alpha)
 
 
 # ---------- data loading ----------
+
 
 def load_factors() -> tuple[dict[str, dict[str, float]], dict]:
     """Load mkt/smb/umd daily decimal returns + metadata."""
@@ -83,6 +85,7 @@ def load_etf_cache() -> dict[str, dict[str, dict]]:
 
 
 # ---------- strategy return series construction ----------
+
 
 def build_strategy_daily_series(
     etf_data: dict[str, dict[str, dict]],
@@ -122,8 +125,7 @@ def build_strategy_daily_series(
             b1, b2 = days.get(t1), days.get(t2)
             if not b1 or not b2:
                 continue
-            if (b1.get("open", 0) <= 0 or b2.get("close", 0) <= 0
-                    or b1.get("nav", 0) <= 0 or b2.get("nav", 0) <= 0):
+            if b1.get("open", 0) <= 0 or b2.get("close", 0) <= 0 or b1.get("nav", 0) <= 0 or b2.get("nav", 0) <= 0:
                 continue
             raw = (b2["close"] - b1["open"]) / b1["open"] * 100
             bhar = raw - (b2["nav"] - b1["nav"]) / b1["nav"] * 100
@@ -158,18 +160,15 @@ def build_strategy_daily_series(
         "n_cash_days": sum(1 for x in n_trades_per_day if x == 0),
         "n_dates": len(factor_dates),
         "total_trades_on_trade_days": sum(n_trades_per_day),
-        "mean_trades_per_trade_day": (
-            sum(n_trades_per_day) / max(1, sum(1 for x in n_trades_per_day if x > 0))
-        ),
+        "mean_trades_per_trade_day": (sum(n_trades_per_day) / max(1, sum(1 for x in n_trades_per_day if x > 0))),
     }
     return raw_series, bhar_series, meta
 
 
 # ---------- regime classification ----------
 
-def classify_regimes(
-    factor_dates: list[str], index_levels: dict[str, float]
-) -> pd.Series:
+
+def classify_regimes(factor_dates: list[str], index_levels: dict[str, float]) -> pd.Series:
     """Classify each date into bull/bear/range using 60-day SMA + 2% band.
 
     bull: close > 1.02 * SMA(60)
@@ -181,7 +180,7 @@ def classify_regimes(
     regimes = ["range"] * n
     for i in range(n):
         lo = max(0, i - 59)
-        window = closes[lo:i + 1]
+        window = closes[lo : i + 1]
         w = window[~np.isnan(window)]
         if len(w) < 30:
             regimes[i] = "range"
@@ -203,14 +202,13 @@ def classify_regimes(
 
 # ---------- OLS + NW-HAC ----------
 
+
 def nw_lag(n: int) -> int:
     """Newey-West optimal lag: floor(4 * (n/100)^(2/9))."""
     return max(1, int(math.floor(4 * (n / 100.0) ** (2.0 / 9.0))))
 
 
-def run_ols_hac(
-    y: pd.Series, X: pd.DataFrame, label: str = ""
-) -> dict:
+def run_ols_hac(y: pd.Series, X: pd.DataFrame, label: str = "") -> dict:
     """OLS with Newey-West HAC SE. Returns alpha + factor loadings + t + p.
 
     y, X must be aligned (same index). X should NOT have a constant (added here).
@@ -229,6 +227,7 @@ def run_ols_hac(
     t_const = model.tvalues["const"]
     # two-sided p from HAC
     from scipy.stats import norm
+
     p_two = 2 * (1 - norm.cdf(abs(t_const)))
     p_one = norm_sf_positive(t_const)  # one-sided positive-edge p
 
@@ -257,9 +256,8 @@ def run_ols_hac(
 
 # ---------- rolling 60-day alpha ----------
 
-def rolling_alpha(
-    y: pd.Series, X: pd.DataFrame, window: int = ROLLING_WINDOW
-) -> dict:
+
+def rolling_alpha(y: pd.Series, X: pd.DataFrame, window: int = ROLLING_WINDOW) -> dict:
     """Rolling-window OLS (60-day). Report alpha stability: %pos, mean, std, min/max, %sig."""
     Xc = sm.add_constant(X, has_constant="add")
     df = pd.concat([y, Xc], axis=1).dropna()
@@ -270,8 +268,8 @@ def rolling_alpha(
     sig_count = 0
     valid = 0
     for i in range(window, n + 1):
-        yw = yv.iloc[i - window:i]
-        Xw = Xv.iloc[i - window:i]
+        yw = yv.iloc[i - window : i]
+        Xw = Xv.iloc[i - window : i]
         if len(yw) < Xw.shape[1] + 2:
             continue
         try:
@@ -302,9 +300,8 @@ def rolling_alpha(
 
 # ---------- regime breakdown ----------
 
-def regime_breakdown(
-    y: pd.Series, X: pd.DataFrame, regimes: pd.Series
-) -> dict:
+
+def regime_breakdown(y: pd.Series, X: pd.DataFrame, regimes: pd.Series) -> dict:
     """Per-regime: day-mean alpha (descriptive) + OLS alpha (factor-controlled)."""
     out = {}
     for reg in ["bull", "bear", "range"]:
@@ -321,13 +318,21 @@ def regime_breakdown(
         if n_trade > 0:
             day_mean_trade = float(y_r[trade_mask].mean() * 100)
             day_std_trade = float(y_r[trade_mask].std() * 100)
-            t_trade = (day_mean_trade / 100) / (day_std_trade / 100 / math.sqrt(n_trade)) if n_trade > 1 and day_std_trade > 0 else 0
+            t_trade = (
+                (day_mean_trade / 100) / (day_std_trade / 100 / math.sqrt(n_trade))
+                if n_trade > 1 and day_std_trade > 0
+                else 0
+            )
         else:
             day_mean_trade = 0.0
             day_std_trade = 0.0
             t_trade = 0.0
         # OLS (factor-controlled) — only if enough trade days for power
-        ols = run_ols_hac(y_r, X_r, label=f"{reg} (n={n_days})") if n_trade >= 10 else {"status": "too_few_trade_days", "n_trade": n_trade}
+        ols = (
+            run_ols_hac(y_r, X_r, label=f"{reg} (n={n_days})")
+            if n_trade >= 10
+            else {"status": "too_few_trade_days", "n_trade": n_trade}
+        )
         out[reg] = {
             "n_days": n_days,
             "n_trade_days": n_trade,
@@ -341,6 +346,7 @@ def regime_breakdown(
 
 
 # ---------- BH FDR sensitivity ----------
+
 
 def bh_fdr(pvals: list[float], q: float = 0.05) -> dict:
     """Benjamini-Hochberg FDR: which pvals survive at FDR q. (sensitivity to Bonferroni)."""
@@ -364,6 +370,7 @@ def bh_fdr(pvals: list[float], q: float = 0.05) -> dict:
 
 
 # ---------- main ----------
+
 
 def main() -> int:
     print("=" * 76)
@@ -391,41 +398,48 @@ def main() -> int:
 
     # ---- build strategy daily series ----
     print("\n[2] 构建策略日级收益序列 (disc<-0.3%, exit-date 映射, 0=cash)...")
-    raw_series, bhar_series, s_meta = build_strategy_daily_series(
-        etf_data, common, threshold=-0.3
-    )
+    raw_series, bhar_series, s_meta = build_strategy_daily_series(etf_data, common, threshold=-0.3)
     print(f"  n_picks_total (全样本): {s_meta['n_picks_total']}")
-    print(f"  窗口内 trade_days: {s_meta['n_trade_days']} / {s_meta['n_dates']} "
-          f"({s_meta['n_trade_days']/s_meta['n_dates']*100:.1f}%)")
-    print(f"  cash_days: {s_meta['n_cash_days']} "
-          f"({s_meta['n_cash_days']/s_meta['n_dates']*100:.1f}%)")
-    print(f"  窗口内 trades: {s_meta['total_trades_on_trade_days']}, "
-          f"mean/trade_day: {s_meta['mean_trades_per_trade_day']:.2f}")
-    print(f"  raw_series: mean={raw_series.mean()*100:.4f}%/day "
-          f"std={raw_series.std()*100:.4f}%/day")
-    print(f"  bhar_series: mean={bhar_series.mean()*100:.4f}%/day "
-          f"std={bhar_series.std()*100:.4f}%/day")
-    print(f"  trade-day-only raw mean: {raw_series[raw_series!=0].mean()*100:.4f}% "
-          f"(对比 Round1 全样本 0.462%/BHAR 0.379%)")
+    print(
+        f"  窗口内 trade_days: {s_meta['n_trade_days']} / {s_meta['n_dates']} "
+        f"({s_meta['n_trade_days'] / s_meta['n_dates'] * 100:.1f}%)"
+    )
+    print(f"  cash_days: {s_meta['n_cash_days']} ({s_meta['n_cash_days'] / s_meta['n_dates'] * 100:.1f}%)")
+    print(
+        f"  窗口内 trades: {s_meta['total_trades_on_trade_days']}, "
+        f"mean/trade_day: {s_meta['mean_trades_per_trade_day']:.2f}"
+    )
+    print(f"  raw_series: mean={raw_series.mean() * 100:.4f}%/day std={raw_series.std() * 100:.4f}%/day")
+    print(f"  bhar_series: mean={bhar_series.mean() * 100:.4f}%/day std={bhar_series.std() * 100:.4f}%/day")
+    print(
+        f"  trade-day-only raw mean: {raw_series[raw_series != 0].mean() * 100:.4f}% "
+        f"(对比 Round1 全样本 0.462%/BHAR 0.379%)"
+    )
 
     # ---- regime classification ----
     print("\n[3] Regime 分类 (sh.000001 60d SMA + 2% band)...")
     regimes = classify_regimes(common, idx_levels)
     for r in ["bull", "bear", "range"]:
         n = int((regimes == r).sum())
-        print(f"  {r}: {n} days ({n/len(regimes)*100:.1f}%)")
+        print(f"  {r}: {n} days ({n / len(regimes) * 100:.1f}%)")
 
     # ---- primary OLS: full 3-factor ----
-    X_full = pd.DataFrame({"mkt": pd.Series(mkt)[common].values,
-                           "smb": pd.Series(smb)[common].values,
-                           "umd": pd.Series(umd)[common].values},
-                          index=common)
+    X_full = pd.DataFrame(
+        {
+            "mkt": pd.Series(mkt)[common].values,
+            "smb": pd.Series(smb)[common].values,
+            "umd": pd.Series(umd)[common].values,
+        },
+        index=common,
+    )
     print("\n[4] 主回归: 全 3-factor OLS + NW-HAC (策略=raw_ev)...")
     res_full = run_ols_hac(raw_series, X_full, label="3-factor (mkt+smb+umd)")
     print(f"  n={res_full['n']}, NW lag={res_full['nlag']}")
-    print(f"  alpha = {res_full['alpha_pct']:.4f}%/day "
-          f"(t={res_full['alpha_t']:.3f}, p_two={res_full['alpha_p_two']:.4f}, "
-          f"p_one={res_full['alpha_p_one']:.4f})")
+    print(
+        f"  alpha = {res_full['alpha_pct']:.4f}%/day "
+        f"(t={res_full['alpha_t']:.3f}, p_two={res_full['alpha_p_two']:.4f}, "
+        f"p_one={res_full['alpha_p_one']:.4f})"
+    )
     print(f"  R² = {res_full['r_squared']:.4f}, resid_std = {res_full['resid_std_pct']:.4f}%/day")
     print(f"  factor loadings:")
     for k, v in res_full["loadings"].items():
@@ -446,33 +460,42 @@ def main() -> int:
     X_trade = X_full.loc[trade_mask]
     res_trade = run_ols_hac(y_trade, X_trade, label="trade-day-only (3-factor)")
     print(f"  n_trade={res_trade['n']}, NW lag={res_trade['nlag']}")
-    print(f"  alpha = {res_trade['alpha_pct']:.4f}%/trade "
-          f"(t={res_trade['alpha_t']:.3f}, p_one={res_trade['alpha_p_one']:.4f})")
+    print(
+        f"  alpha = {res_trade['alpha_pct']:.4f}%/trade "
+        f"(t={res_trade['alpha_t']:.3f}, p_one={res_trade['alpha_p_one']:.4f})"
+    )
     print(f"  R² = {res_trade['r_squared']:.4f} (>>full-daily 0.06: factors explain more on trade days)")
     for k, v in res_trade["loadings"].items():
         print(f"    beta_{k} = {v['beta']:.4f}  (t={v['t']:.3f})")
-    print(f"  beta_mkt 经济检验: ETF 跟踪指数, 真实 beta 应 ~0.8-1.0; "
-          f"实测 {res_trade['loadings'].get('mkt',{}).get('beta','?'):.4f} "
-          f"({'符合' if 0.5 < res_trade['loadings'].get('mkt',{}).get('beta',0) < 1.3 else '偏离预期'})")
+    print(
+        f"  beta_mkt 经济检验: ETF 跟踪指数, 真实 beta 应 ~0.8-1.0; "
+        f"实测 {res_trade['loadings'].get('mkt', {}).get('beta', '?'):.4f} "
+        f"({'符合' if 0.5 < res_trade['loadings'].get('mkt', {}).get('beta', 0) < 1.3 else '偏离预期'})"
+    )
     # cumulative alpha reconciliation
     cum_full = res_full["alpha_pct"] * res_full["n"]
     cum_trade = res_trade["alpha_pct"] * res_trade["n"]
-    print(f"  累计 alpha 对账: full-daily {res_full['alpha_pct']:.4f}×{res_full['n']}={cum_full:.1f}% "
-          f"vs trade-day {res_trade['alpha_pct']:.4f}×{res_trade['n']}={cum_trade:.1f}% "
-          f"(差 {abs(cum_full-cum_trade)/max(cum_trade,1)*100:.1f}%, 应 <5%)")
+    print(
+        f"  累计 alpha 对账: full-daily {res_full['alpha_pct']:.4f}×{res_full['n']}={cum_full:.1f}% "
+        f"vs trade-day {res_trade['alpha_pct']:.4f}×{res_trade['n']}={cum_trade:.1f}% "
+        f"(差 {abs(cum_full - cum_trade) / max(cum_trade, 1) * 100:.1f}%, 应 <5%)"
+    )
 
     # ---- Bonferroni ×4 + BH FDR ----
     print(f"\n[5] 多重检验校正 (Bonferroni ×{N_STRATEGIES_PARALLEL} 策略并行 + BH FDR)...")
     p_raw = res_full["alpha_p_one"]
     p_bonf = bonferroni_p(p_raw, N_STRATEGIES_PARALLEL)
     print(f"  raw one-sided p = {p_raw:.4f}")
-    print(f"  Bonferroni p (×{N_STRATEGIES_PARALLEL}) = {p_bonf:.4f} "
-          f"({'PASS' if p_bonf < ALPHA else 'FAIL'} @ {ALPHA})")
+    print(
+        f"  Bonferroni p (×{N_STRATEGIES_PARALLEL}) = {p_bonf:.4f} ({'PASS' if p_bonf < ALPHA else 'FAIL'} @ {ALPHA})"
+    )
     # BH FDR across 4 strategies (use this strategy's p + 3 placeholders=conservative
     # since other 3 strategies' p unknown here; report this one's rank-threshold)
     bh = bh_fdr([p_raw, 0.5, 0.5, 0.5], q=0.05)  # conservative: others =0.5 (n.s.)
-    print(f"  BH FDR (q=0.05, conservative others=0.5): n_rej={bh['n_rejected']} "
-          f"(this strategy {'would survive' if p_raw <= bh['max_p_rejected'] and bh['n_rejected']>0 else 'marginal/FAIL'})")
+    print(
+        f"  BH FDR (q=0.05, conservative others=0.5): n_rej={bh['n_rejected']} "
+        f"(this strategy {'would survive' if p_raw <= bh['max_p_rejected'] and bh['n_rejected'] > 0 else 'marginal/FAIL'})"
+    )
 
     # ---- net alpha (after ETF cost) ----
     # strategy only pays cost on trade days. net_alpha_per_trade_day = mean_trade - cost
@@ -494,26 +517,28 @@ def main() -> int:
     fact_map = {"mkt": mkt, "smb": smb, "umd": umd}
     alt_results = {}
     for name, cols in combos:
-        Xc = pd.DataFrame({c: pd.Series(fact_map[c])[common].values for c in cols},
-                          index=common)
+        Xc = pd.DataFrame({c: pd.Series(fact_map[c])[common].values for c in cols}, index=common)
         r = run_ols_hac(raw_series, Xc, label=name)
         alt_results[name] = r
         if r.get("status") == "too_few_obs":
             print(f"  {name}: too few obs")
             continue
-        print(f"  {name}: alpha={r['alpha_pct']:.4f}%/day "
-              f"(t={r['alpha_t']:.3f}, p_one={r['alpha_p_one']:.4f}, "
-              f"R²={r['r_squared']:.4f})")
+        print(
+            f"  {name}: alpha={r['alpha_pct']:.4f}%/day "
+            f"(t={r['alpha_t']:.3f}, p_one={r['alpha_p_one']:.4f}, "
+            f"R²={r['r_squared']:.4f})"
+        )
     # robustness verdict
-    alphas_sig = sum(1 for v in alt_results.values()
-                     if v.get("alpha_p_one", 1) < ALPHA)
+    alphas_sig = sum(1 for v in alt_results.values() if v.get("alpha_p_one", 1) < ALPHA)
     print(f"  -> {alphas_sig}/{len(combos)} combos significant (p_one<{ALPHA})")
 
     # ---- BHAR sensitivity (double-attribution caveat) ----
     print(f"\n[6a] BHAR sensitivity (已 net NAV, 再控因子=双重归因, 仅参考)...")
     res_bhar = run_ols_hac(bhar_series, X_full, label="BHAR 3-factor")
-    print(f"  BHAR alpha = {res_bhar['alpha_pct']:.4f}%/day "
-          f"(t={res_bhar['alpha_t']:.3f}, p_one={res_bhar['alpha_p_one']:.4f})")
+    print(
+        f"  BHAR alpha = {res_bhar['alpha_pct']:.4f}%/day "
+        f"(t={res_bhar['alpha_t']:.3f}, p_one={res_bhar['alpha_p_one']:.4f})"
+    )
     print(f"  (BHAR 已减 NAV≈index, 再控 mkt 是部分双重归因; 仅作 robustness 参考)")
 
     # ---- rolling 60-day alpha ----
@@ -534,14 +559,18 @@ def main() -> int:
     rb = regime_breakdown(raw_series, X_full, regimes)
     for reg in ["bull", "bear", "range"]:
         r = rb[reg]
-        print(f"  {reg}: n_days={r['n_days']} trade_days={r.get('n_trade_days',0)} "
-              f"day_mean_trade={r.get('day_mean_trade_alpha_pct','-')}% "
-              f"t={r.get('t_trade','-')}")
+        print(
+            f"  {reg}: n_days={r['n_days']} trade_days={r.get('n_trade_days', 0)} "
+            f"day_mean_trade={r.get('day_mean_trade_alpha_pct', '-')}% "
+            f"t={r.get('t_trade', '-')}"
+        )
         ols = r.get("ols", {})
         if ols.get("alpha_pct") is not None:
-            print(f"    OLS alpha={ols['alpha_pct']:.4f}%/day "
-                  f"(t={ols['alpha_t']:.3f}, p_one={ols['alpha_p_one']:.4f}, "
-                  f"n={ols['n']})")
+            print(
+                f"    OLS alpha={ols['alpha_pct']:.4f}%/day "
+                f"(t={ols['alpha_t']:.3f}, p_one={ols['alpha_p_one']:.4f}, "
+                f"n={ols['n']})"
+            )
 
     # ---- honest verdict ----
     print(f"\n{'=' * 76}")
@@ -551,20 +580,24 @@ def main() -> int:
     a_t = res_full["alpha_t"]
     a_p_one = res_full["alpha_p_one"]
     p_bonf_final = p_bonf
-    print(f"  full 3-factor residual alpha: {a_pct:.4f}%/day "
-          f"(annualized {a_pct*252:.2f}%/yr)")
+    print(f"  full 3-factor residual alpha: {a_pct:.4f}%/day (annualized {a_pct * 252:.2f}%/yr)")
     print(f"  t (NW-HAC) = {a_t:.3f}, one-sided p = {a_p_one:.4f}")
-    print(f"  Bonferroni ×{N_STRATEGIES_PARALLEL} p = {p_bonf_final:.4f} "
-          f"({'PASS' if p_bonf_final < ALPHA else 'FAIL'} @ {ALPHA})")
-    print(f"  net trade-day alpha (after cost): {net_trade_mean:.4f}% "
-          f"(对比 gross {gross_trade_mean:.4f}%)")
-    print(f"  rolling: mean={roll.get('mean_alpha_pct',0):.4f}%/day "
-          f"%pos={roll.get('pct_positive',0):.1f}% "
-          f"%sig={roll.get('pct_sig_t2',0):.1f}%")
+    print(
+        f"  Bonferroni ×{N_STRATEGIES_PARALLEL} p = {p_bonf_final:.4f} "
+        f"({'PASS' if p_bonf_final < ALPHA else 'FAIL'} @ {ALPHA})"
+    )
+    print(f"  net trade-day alpha (after cost): {net_trade_mean:.4f}% (对比 gross {gross_trade_mean:.4f}%)")
+    print(
+        f"  rolling: mean={roll.get('mean_alpha_pct', 0):.4f}%/day "
+        f"%pos={roll.get('pct_positive', 0):.1f}% "
+        f"%sig={roll.get('pct_sig_t2', 0):.1f}%"
+    )
     print(f"  alt baseline: {alphas_sig}/{len(combos)} combos significant")
-    print(f"  regime: bull={rb['bull'].get('day_mean_trade_alpha_pct','-')}% "
-          f"bear={rb['bear'].get('day_mean_trade_alpha_pct','-')}% "
-          f"range={rb['range'].get('day_mean_trade_alpha_pct','-')}%")
+    print(
+        f"  regime: bull={rb['bull'].get('day_mean_trade_alpha_pct', '-')}% "
+        f"bear={rb['bear'].get('day_mean_trade_alpha_pct', '-')}% "
+        f"range={rb['range'].get('day_mean_trade_alpha_pct', '-')}%"
+    )
 
     # verdict cascade (诚实, 控因子后 formal-pass 是否真成立)
     print(f"\n  判定级联:")
@@ -578,8 +611,9 @@ def main() -> int:
         verdict = "edge-falsified"
     # criterion 2: Bonferroni (full-daily)
     elif p_bonf_final >= ALPHA:
-        print(f"    [2] full-daily Bonf p={p_bonf_final:.4f} >= {ALPHA} "
-              f"-> {'underpowered' if a_t < 1.5 else 'falsified'}")
+        print(
+            f"    [2] full-daily Bonf p={p_bonf_final:.4f} >= {ALPHA} -> {'underpowered' if a_t < 1.5 else 'falsified'}"
+        )
         verdict = "underpowered" if a_t < 1.5 else "edge-falsified"
     # criterion 3: net trade-day alpha (cost)
     elif net_trade_mean <= 0:
@@ -591,35 +625,46 @@ def main() -> int:
         verdict = "exploratory"
     # criterion 5: CRITICAL trade-day-only regression (resolves zero-padding)
     elif t_trade < 2.0 or p_trade_bonf >= ALPHA:
-        print(f"    [5] trade-day-only t={t_trade:.3f} (Bonf={p_trade_bonf:.4f}) "
-              f"-> zero-padding concern NOT resolved -> exploratory")
+        print(
+            f"    [5] trade-day-only t={t_trade:.3f} (Bonf={p_trade_bonf:.4f}) "
+            f"-> zero-padding concern NOT resolved -> exploratory"
+        )
         verdict = "exploratory"
     # criterion 6: rolling stability (% positive, NOT %sig which is power-artifact)
     elif pct_pos < 50:
-        print(f"    [6] rolling alpha unstable: %pos={pct_pos:.1f}% < 50% "
-              f"(sign flips majority of windows)")
+        print(f"    [6] rolling alpha unstable: %pos={pct_pos:.1f}% < 50% (sign flips majority of windows)")
         verdict = "exploratory"
     else:
         print(f"    [all] full-daily t={a_t:.2f} Bonf PASS, net+, alt 4/4 robust,")
-        print(f"          trade-day t={t_trade:.2f} (zero-padding resolved), "
-              f"rolling %pos={pct_pos:.1f}% -> edge-confirmed")
+        print(
+            f"          trade-day t={t_trade:.2f} (zero-padding resolved), "
+            f"rolling %pos={pct_pos:.1f}% -> edge-confirmed"
+        )
     print(f"\n  -> verdict: {verdict}")
     # honest caveat flags (do NOT downgrade verdict, but must be reported)
     print(f"\n  诚实 caveat (不降级 verdict, 但必须标注):")
-    print(f"    - regime 集中: bull day_mean={rb['bull'].get('day_mean_trade_alpha_pct','-')}% "
-          f"(t={rb['bull'].get('t_trade','-')}), bear day_mean={rb['bear'].get('day_mean_trade_alpha_pct','-')}% "
-          f"(t={rb['bear'].get('t_trade','-')} 弱). edge 非全 regime 均匀")
-    print(f"    - rolling %sig(t>1.96)={roll.get('pct_sig_t2',0):.1f}% (低, 但 60d 窗口对 "
-          f"per-day alpha=0.11% 是 power 不足非不稳定; %pos={pct_pos:.1f}% 是真稳定性指标)")
+    print(
+        f"    - regime 集中: bull day_mean={rb['bull'].get('day_mean_trade_alpha_pct', '-')}% "
+        f"(t={rb['bull'].get('t_trade', '-')}), bear day_mean={rb['bear'].get('day_mean_trade_alpha_pct', '-')}% "
+        f"(t={rb['bear'].get('t_trade', '-')} 弱). edge 非全 regime 均匀"
+    )
+    print(
+        f"    - rolling %sig(t>1.96)={roll.get('pct_sig_t2', 0):.1f}% (低, 但 60d 窗口对 "
+        f"per-day alpha=0.11% 是 power 不足非不稳定; %pos={pct_pos:.1f}% 是真稳定性指标)"
+    )
     print(f"    - HML 缺失 (3-factor, 4/4 alt-baseline 缓解)")
     print(f"    - ETF universe 15 只 hand-picked 流动 ETF, 轻度 survivorship")
     print(f"    - 因子窗口 2019-02 起, 全样本 2970 picks 仅 500 在窗内 (2470 早 picks 未控因子)")
 
     print(f"\n禁外推声明:")
-    print(f"  - 仅测 disc<-0.3% 在因子可对齐窗口 ({common[0]}~{common[-1]}, "
-          f"{len(common)} 日, {s_meta['n_trade_days']} trade days)")
-    print(f"  - 全样本 2970 picks 中仅 {s_meta['total_trades_on_trade_days']} 在窗口内 "
-          f"(因子数据 2019-02 起, 早 2005-2018 picks 无法控因子)")
+    print(
+        f"  - 仅测 disc<-0.3% 在因子可对齐窗口 ({common[0]}~{common[-1]}, "
+        f"{len(common)} 日, {s_meta['n_trade_days']} trade days)"
+    )
+    print(
+        f"  - 全样本 2970 picks 中仅 {s_meta['total_trades_on_trade_days']} 在窗口内 "
+        f"(因子数据 2019-02 起, 早 2005-2018 picks 无法控因子)"
+    )
     print(f"  - HML 缺失 (无历史 PB), 3-factor Carhart-minus-HML baseline")
     print(f"  - SMB=log(20d amount) 是流动性代理非真市值, UMD=12-2 动量")
     print(f"  - 单策略 ≠ 机制套利域有/无 edge; 跨境 QDII/LOF/封基未测")

@@ -5,6 +5,7 @@ Discord 发送提醒服务
 职责：
 1. 通过 webhook 或 Discord bot API 发送 Discord 消息
 """
+
 import logging
 import time
 from typing import Optional
@@ -24,7 +25,6 @@ DISCORD_CHUNK_SLEEP_SECONDS = 1
 
 
 class DiscordSender:
-    
     def __init__(self, config: Config):
         """
         初始化 Discord 配置
@@ -33,14 +33,14 @@ class DiscordSender:
             config: 配置对象
         """
         self._discord_config = {
-            'bot_token': getattr(config, 'discord_bot_token', None),
-            'channel_id': getattr(config, 'discord_main_channel_id', None),
-            'webhook_url': getattr(config, 'discord_webhook_url', None),
+            "bot_token": getattr(config, "discord_bot_token", None),
+            "channel_id": getattr(config, "discord_main_channel_id", None),
+            "webhook_url": getattr(config, "discord_webhook_url", None),
         }
         self._discord_max_words = self._normalize_max_words(
-            getattr(config, 'discord_max_words', DISCORD_MAX_CONTENT_LENGTH)
+            getattr(config, "discord_max_words", DISCORD_MAX_CONTENT_LENGTH)
         )
-        self._webhook_verify_ssl = getattr(config, 'webhook_verify_ssl', True)
+        self._webhook_verify_ssl = getattr(config, "webhook_verify_ssl", True)
 
     @staticmethod
     def _normalize_max_words(value) -> int:
@@ -49,21 +49,21 @@ class DiscordSender:
         except (TypeError, ValueError):
             configured = DISCORD_MAX_CONTENT_LENGTH
         return max(MIN_MAX_WORDS, min(configured, DISCORD_MAX_CONTENT_LENGTH))
-    
+
     def _is_discord_configured(self) -> bool:
         """检查 Discord 配置是否完整（支持 Bot 或 Webhook）"""
         # 只要配置了 Webhook 或完整的 Bot Token+Channel，即视为可用
-        bot_ok = bool(self._discord_config['bot_token'] and self._discord_config['channel_id'])
-        webhook_ok = bool(self._discord_config['webhook_url'])
+        bot_ok = bool(self._discord_config["bot_token"] and self._discord_config["channel_id"])
+        webhook_ok = bool(self._discord_config["webhook_url"])
         return bot_ok or webhook_ok
-    
+
     def send_to_discord(self, content: str, *, timeout_seconds: Optional[float] = None) -> bool:
         """
         推送消息到 Discord（支持 Webhook 和 Bot API）
-        
+
         Args:
             content: Markdown 格式的消息内容
-            
+
         Returns:
             是否发送成功
         """
@@ -71,7 +71,7 @@ class DiscordSender:
         chunks = self._split_discord_content(content)
 
         # 优先使用 Webhook（配置简单，权限低）
-        if self._discord_config['webhook_url']:
+        if self._discord_config["webhook_url"]:
             return self._send_discord_chunks(
                 chunks,
                 self._send_discord_webhook,
@@ -80,7 +80,7 @@ class DiscordSender:
             )
 
         # 其次使用 Bot API（权限高，需要 channel_id）
-        if self._discord_config['bot_token'] and self._discord_config['channel_id']:
+        if self._discord_config["bot_token"] and self._discord_config["channel_id"]:
             return self._send_discord_chunks(
                 chunks,
                 self._send_discord_bot,
@@ -138,50 +138,42 @@ class DiscordSender:
 
         return success_count == total_chunks
 
-  
     def _send_discord_webhook(self, content: str, *, timeout_seconds: Optional[float] = None) -> bool:
         """
         使用 Webhook 发送消息到 Discord
-        
+
         Discord Webhook 支持 Markdown 格式
-        
+
         Args:
             content: Markdown 格式的消息内容
-            
+
         Returns:
             是否发送成功
         """
-        payload = {
-            'content': content,
-            'username': 'A股分析机器人',
-            'avatar_url': 'https://picsum.photos/200'
-        }
+        payload = {"content": content, "username": "A股分析机器人", "avatar_url": "https://picsum.photos/200"}
 
         return self._post_discord_message(
-            self._discord_config['webhook_url'],
+            self._discord_config["webhook_url"],
             payload,
             success_statuses=(200, 204),
             verify=self._webhook_verify_ssl,
             timeout_seconds=timeout_seconds,
             channel_name="Webhook",
         )
-    
+
     def _send_discord_bot(self, content: str, *, timeout_seconds: Optional[float] = None) -> bool:
         """
         使用 Bot API 发送消息到 Discord
-        
+
         Args:
             content: Markdown 格式的消息内容
-            
+
         Returns:
             是否发送成功
         """
-        headers = {
-            'Authorization': f'Bot {self._discord_config["bot_token"]}',
-            'Content-Type': 'application/json'
-        }
-        payload = {'content': content}
-        url = f'https://discord.com/api/v10/channels/{self._discord_config["channel_id"]}/messages'
+        headers = {"Authorization": f"Bot {self._discord_config['bot_token']}", "Content-Type": "application/json"}
+        payload = {"content": content}
+        url = f"https://discord.com/api/v10/channels/{self._discord_config['channel_id']}/messages"
 
         return self._post_discord_message(
             url,
@@ -205,20 +197,20 @@ class DiscordSender:
     ) -> bool:
         """发送单条 Discord 消息，并复用 Telegram 的有限重试思路处理 429/5xx。"""
         request_kwargs = {
-            'json': payload,
-            'timeout': timeout_seconds or 10,
+            "json": payload,
+            "timeout": timeout_seconds or 10,
         }
         if headers:
-            request_kwargs['headers'] = headers
+            request_kwargs["headers"] = headers
         if verify is not None:
-            request_kwargs['verify'] = verify
+            request_kwargs["verify"] = verify
 
         for attempt in range(1, DISCORD_MAX_RETRIES + 1):
             try:
                 response = requests.post(url, **request_kwargs)
             except requests.exceptions.RequestException as e:
                 if attempt < DISCORD_MAX_RETRIES:
-                    delay = 2 ** attempt
+                    delay = 2**attempt
                     logger.warning(
                         "Discord %s 请求异常（%d/%d）：%s，%s 秒后重试",
                         channel_name,
@@ -249,7 +241,7 @@ class DiscordSender:
                 continue
 
             if response.status_code >= 500 and attempt < DISCORD_MAX_RETRIES:
-                delay = 2 ** attempt
+                delay = 2**attempt
                 logger.warning(
                     "Discord %s 服务端错误 HTTP %s（%d/%d），%s 秒后重试",
                     channel_name,
@@ -274,17 +266,17 @@ class DiscordSender:
     @staticmethod
     def _get_retry_after_seconds(response, attempt: int) -> float:
         try:
-            retry_after = response.json().get('retry_after')
+            retry_after = response.json().get("retry_after")
             if retry_after is not None:
                 return max(0.0, float(retry_after))
         except (AttributeError, TypeError, ValueError) as e:
             logger.debug("discord sender 解析失败（降级，不阻塞）: %s", e)
 
         try:
-            retry_after = response.headers.get('Retry-After')
+            retry_after = response.headers.get("Retry-After")
             if retry_after is not None:
                 return max(0.0, float(retry_after))
         except AttributeError as e:
             logger.debug("discord sender 属性缺失（降级，不阻塞）: %s", e)
 
-        return float(2 ** attempt)
+        return float(2**attempt)

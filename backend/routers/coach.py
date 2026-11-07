@@ -3,6 +3,7 @@
 4 端点：时刻表 / 教练状态 / attention_mode GET / attention_mode POST。
 纯计算 + 读已有数据，零新外部调用。
 """
+
 from __future__ import annotations
 
 import logging

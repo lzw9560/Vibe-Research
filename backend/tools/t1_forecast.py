@@ -17,6 +17,7 @@
 
 跑法：cd backend && .venv/bin/python -c "from tools.t1_forecast import generate_t1_watchlist; print(generate_t1_watchlist('2026-09-29'))"
 """
+
 from __future__ import annotations
 
 import json
@@ -105,7 +106,7 @@ def _vol_ratio_5(sorted_bars: list[dict], idx: int) -> float | None:
     vol = tbar.get("volume")
     if not vol:
         return None
-    prev = sorted_bars[idx - 5:idx]
+    prev = sorted_bars[idx - 5 : idx]
     pv = [b.get("volume") for b in prev]
     if any(v is None or v == 0 for v in pv):
         return None
@@ -151,22 +152,24 @@ def _generate_from_preloaded(
         if vr5 is None or vr5 <= VR5_THRESHOLD:
             continue
         pct = tbar.get("pctChg")
-        stocks.append({
-            "code": code,
-            "name": code,  # baostock 无 name 字段，用 code（前端可查 basic_info 补）
-            "turn": round(turn, 2),
-            "vr5": round(vr5, 2),
-            "pctChg": round(pct, 2) if pct is not None else None,
-            "close": tbar.get("close"),
-            "high": tbar.get("high"),
-            "low": tbar.get("low"),
-            "amount": tbar.get("amount"),
-            # 二次确认字段（累积 60 天验证，初始 None）
-            "t1_zt": None,  # T+1 是否涨停（T+1 收盘后回填）
-            "t1_auction": None,  # 二次确认：竞价状态（低开/高开/平开）
-            "t1_seal_time": None,  # 二次确认：封单时间
-            "confirmed": None,  # 二次确认是否触发
-        })
+        stocks.append(
+            {
+                "code": code,
+                "name": code,  # baostock 无 name 字段，用 code（前端可查 basic_info 补）
+                "turn": round(turn, 2),
+                "vr5": round(vr5, 2),
+                "pctChg": round(pct, 2) if pct is not None else None,
+                "close": tbar.get("close"),
+                "high": tbar.get("high"),
+                "low": tbar.get("low"),
+                "amount": tbar.get("amount"),
+                # 二次确认字段（累积 60 天验证，初始 None）
+                "t1_zt": None,  # T+1 是否涨停（T+1 收盘后回填）
+                "t1_auction": None,  # 二次确认：竞价状态（低开/高开/平开）
+                "t1_seal_time": None,  # 二次确认：封单时间
+                "confirmed": None,  # 二次确认是否触发
+            }
+        )
 
     return {
         "date": target_date,
@@ -199,11 +202,11 @@ def generate_t1_watchlist(target_date: str) -> dict[str, Any]:
     """
     zt_codes_t = _load_zt_codes(target_date)
     all_bars = _load_kline_bars()
-    _logger.info("[S232] 加载 %d codes kline，T 日涨停池 %d codes",
-                len(all_bars), len(zt_codes_t))
+    _logger.info("[S232] 加载 %d codes kline，T 日涨停池 %d codes", len(all_bars), len(zt_codes_t))
     watchlist = _generate_from_preloaded(target_date, all_bars, zt_codes_t)
-    _logger.info("[S232] T+1 watchlist %s: %d 只（turn>20% & vr5>2，观察池非买入信号）",
-                 target_date, watchlist["count"])
+    _logger.info(
+        "[S232] T+1 watchlist %s: %d 只（turn>20% & vr5>2，观察池非买入信号）", target_date, watchlist["count"]
+    )
     return watchlist
 
 
@@ -273,7 +276,11 @@ def backfill_history(end_date: str, days: int = 60) -> dict[str, Any]:
     overall_rate = th / ts if ts else 0.0
     _logger.info(
         "[S232] backfill_history: %d 天 %d 只信号股，命中 %d，命中率 %.2f%%（预期 %.2f%%）",
-        len(results), ts, th, overall_rate * 100, HIT_RATE * 100,
+        len(results),
+        ts,
+        th,
+        overall_rate * 100,
+        HIT_RATE * 100,
     )
     return {
         "status": "ok",
@@ -293,8 +300,8 @@ def render_watchlist_report(watchlist: dict[str, Any]) -> str:
     lines.append(f"📅 {watchlist['date']} T+1 涨停预测 watchlist（观察池）")
     lines.append(
         f"信号：{watchlist['signal']}（lift {watchlist['signal_lift']}x "
-        f"{watchlist['signal_lift_ci']}，命中率 {watchlist['hit_rate']*100:.2f}% "
-        f"vs base rate {watchlist['base_rate']*100:.3f}%）"
+        f"{watchlist['signal_lift_ci']}，命中率 {watchlist['hit_rate'] * 100:.2f}% "
+        f"vs base rate {watchlist['base_rate'] * 100:.3f}%）"
     )
     lines.append(f"数量：{watchlist['count']} 只")
     lines.append("")
@@ -303,10 +310,7 @@ def render_watchlist_report(watchlist: dict[str, Any]) -> str:
     if watchlist["stocks"]:
         lines.append("观察池（非买入信号，二次确认累积验证中）：")
         for s in watchlist["stocks"][:20]:  # 前 20 只
-            lines.append(
-                f"  {s['code']} turn={s['turn']}% vr5={s['vr5']} "
-                f"pct={s['pctChg']}% close={s['close']}"
-            )
+            lines.append(f"  {s['code']} turn={s['turn']}% vr5={s['vr5']} pct={s['pctChg']}% close={s['close']}")
         if len(watchlist["stocks"]) > 20:
             lines.append(f"  ... 共 {len(watchlist['stocks'])} 只")
     else:
@@ -371,7 +375,12 @@ def backfill_t1_hit(t_date: str, t1_date: str) -> dict[str, Any]:
 
     _logger.info(
         "[S232] backfill T+1 hit: t_date=%s t1_date=%s total=%d hit=%d rate=%.2f%% (预期 %.2f%%)",
-        t_date, t1_date, total, hit_count, hit_rate * 100, expected_rate * 100,
+        t_date,
+        t1_date,
+        total,
+        hit_count,
+        hit_rate * 100,
+        expected_rate * 100,
     )
 
     return {
@@ -408,8 +417,8 @@ def render_hit_report(hit_result: dict[str, Any]) -> str:
     dev = hit_result.get("deviation_pct")
 
     lines.append(f"📊 T+1 hit 回填：{t_date} watchlist → {t1_date} 涨停判定")
-    lines.append(f"总数 {total} 只 · 命中 {hit} 只 · 命中率 {rate*100:.2f}%")
-    lines.append(f"信号预期 {expected*100:.2f}% · 偏差 {dev:+.1f}%")
+    lines.append(f"总数 {total} 只 · 命中 {hit} 只 · 命中率 {rate * 100:.2f}%")
+    lines.append(f"信号预期 {expected * 100:.2f}% · 偏差 {dev:+.1f}%")
     lines.append("")
     if total == 0:
         lines.append("T 日无 watchlist（市场未满足信号条件）")
@@ -497,10 +506,16 @@ def t1_exit_optimization(end_date: str, days: int = 180, gap_lo: float = -5, gap
             t2_close = t2_bar.get("close")
             if None in (t2_open, t2_high, t2_low, t2_close):
                 continue
-            records.append({
-                "code": code, "t1_open": t1_open,
-                "t2_open": t2_open, "t2_high": t2_high, "t2_low": t2_low, "t2_close": t2_close,
-            })
+            records.append(
+                {
+                    "code": code,
+                    "t1_open": t1_open,
+                    "t2_open": t2_open,
+                    "t2_high": t2_high,
+                    "t2_low": t2_low,
+                    "t2_close": t2_close,
+                }
+            )
 
     # 网格 stop/take
     stops = [0.0, -0.03, -0.05, -0.08]  # 0=不止损
@@ -526,21 +541,30 @@ def t1_exit_optimization(end_date: str, days: int = 180, gap_lo: float = -5, gap
                 rets.append(ret)
             n = len(rets)
             ev = sum(rets) / n if n else 0
-            grid.append({
-                "stop": f"{stop*100:+.0f}%", "take": f"{take*100:+.0f}%",
-                "n": n, "ev": round(ev, 2), "positive": ev > 0,
-            })
+            grid.append(
+                {
+                    "stop": f"{stop * 100:+.0f}%",
+                    "take": f"{take * 100:+.0f}%",
+                    "n": n,
+                    "ev": round(ev, 2),
+                    "positive": ev > 0,
+                }
+            )
 
     grid.sort(key=lambda x: x["ev"], reverse=True)
     baseline = next((g for g in grid if g["stop"] == "+0%" and g["take"] == "+0%"), None)
     best = grid[0] if grid else None
-    _logger.info("[S232] t1_exit_optimization: %d 记录, baseline EV=%s, best EV=%s",
-                len(records),
-                f"{baseline['ev']:.2f}%" if baseline else "N/A",
-                f"{best['ev']:.2f}%" if best else "N/A")
+    _logger.info(
+        "[S232] t1_exit_optimization: %d 记录, baseline EV=%s, best EV=%s",
+        len(records),
+        f"{baseline['ev']:.2f}%" if baseline else "N/A",
+        f"{best['ev']:.2f}%" if best else "N/A",
+    )
     return {
-        "status": "ok", "total_records": len(records),
-        "baseline": baseline, "best": best,
+        "status": "ok",
+        "total_records": len(records),
+        "baseline": baseline,
+        "best": best,
         "grid": grid[:10],  # top 10
     }
 
@@ -619,12 +643,19 @@ def t1_gap_analysis(end_date: str, days: int = 180) -> dict[str, Any]:
             # close_ev: T+1 close 买 T+2 open 卖（post-confirmation，隔离 T+1 日内泄漏）
             # T+2 涨停保守按 t2_open 卖（不 over-credit 涨停价，V1 根因 R2 exit 一字 over-credit）
             close_ev = ((t2_open - t1_close) / t1_close * 100) if t1_close else 0.0
-            records.append({
-                "code": code, "t": t, "t1": t1, "t2": t2, "gap": round(gap, 2),
-                "was_zt_t1": was_zt_t1, "was_zt_t2": was_zt_t2,
-                "ret": round(close_ev, 2),  # close_ev 诚实口径（替代旧 open_ev）
-                "close_ev": round(close_ev, 2),
-            })
+            records.append(
+                {
+                    "code": code,
+                    "t": t,
+                    "t1": t1,
+                    "t2": t2,
+                    "gap": round(gap, 2),
+                    "was_zt_t1": was_zt_t1,
+                    "was_zt_t2": was_zt_t2,
+                    "ret": round(close_ev, 2),  # close_ev 诚实口径（替代旧 open_ev）
+                    "close_ev": round(close_ev, 2),
+                }
+            )
 
     # 分组（gap buckets）
     bucket_defs = [
@@ -641,25 +672,33 @@ def t1_gap_analysis(end_date: str, days: int = 180) -> dict[str, Any]:
         hit = sum(1 for r in sub if r["was_zt_t2"])
         rate = hit / n if n else 0.0
         ev = sum(r["ret"] for r in sub) / n if n else 0.0
-        buckets.append({
-            "bucket": name, "n": n, "hit": hit,
-            "rate": round(rate, 4), "ev": round(ev, 2),
-            "positive_ev": ev > 0,
-        })
+        buckets.append(
+            {
+                "bucket": name,
+                "n": n,
+                "hit": hit,
+                "rate": round(rate, 4),
+                "ev": round(ev, 2),
+                "positive_ev": ev > 0,
+            }
+        )
 
     total_n = len(records)
     total_hit = sum(1 for r in records if r["was_zt_t2"])
     total_ev = sum(r["ret"] for r in records) / total_n if total_n else 0.0
     baseline = {
         "bucket": "全样本(T+1 open 买 T+2 卖, 不筛 gap)",
-        "n": total_n, "hit": total_hit,
+        "n": total_n,
+        "hit": total_hit,
         "rate": round(total_hit / total_n, 4) if total_n else 0,
         "ev": round(total_ev, 2),
     }
 
     _logger.info(
         "[S232] t1_gap_analysis: %d 记录，baseline EV=%.2f%%，正 EV 组数=%d",
-        total_n, total_ev, sum(1 for b in buckets if b["ev"] > 0),
+        total_n,
+        total_ev,
+        sum(1 for b in buckets if b["ev"] > 0),
     )
     return {
         "status": "ok",

@@ -18,6 +18,7 @@ from migrations import MigrationManager
 @dataclass
 class WinRateRecord:
     """单笔交易记录。"""
+
     stock_code: str
     stock_name: str
     strategy_used: str
@@ -31,16 +32,17 @@ class WinRateRecord:
     sti_label: str
     sector: str
     # S050 W0：信号归因 5 列（全可空，向前兼容；旧行 NULL → legacy 桶）
-    signal_source: str = ""        # funnel_candidate | strategy_hit | feeling
-    signal_ref: str = ""           # funnel:final / 战法码 / 空
-    edge_family: str = ""          # momentum_premium | mean_reversion | ''
+    signal_source: str = ""  # funnel_candidate | strategy_hit | feeling
+    signal_ref: str = ""  # funnel:final / 战法码 / 空
+    edge_family: str = ""  # momentum_premium | mean_reversion | ''
     target_holding_period: str = ""  # T+1 | 20-60d | ''
-    attention_mode: str = "A"      # A | B | C（用户自填，缺省 A）
+    attention_mode: str = "A"  # A | B | C（用户自填，缺省 A）
 
 
 @dataclass
 class WinRateStats:
     """胜率统计。"""
+
     window_size: int
     total_trades: int
     win_count: int
@@ -64,19 +66,23 @@ class WinRateTracker:
     def _migrate_schema(self) -> None:
         """执行数据库迁移。"""
         import os
+
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         manager = MigrationManager(db_path=self.db_path)
         migration_v1 = (
             Path(__file__).resolve().parent
-            / "migrations" / "win_rate_tracker" / "20250613-001_create_winrate_records.sql"
+            / "migrations"
+            / "win_rate_tracker"
+            / "20250613-001_create_winrate_records.sql"
         ).read_text(encoding="utf-8")
         migration_v2 = (
-            Path(__file__).resolve().parent
-            / "migrations" / "win_rate_tracker" / "20250613-002_add_winrate_indexes.sql"
+            Path(__file__).resolve().parent / "migrations" / "win_rate_tracker" / "20250613-002_add_winrate_indexes.sql"
         ).read_text(encoding="utf-8")
         migration_v3 = (
             Path(__file__).resolve().parent
-            / "migrations" / "win_rate_tracker" / "20260811-003_add_signal_attribution.sql"
+            / "migrations"
+            / "win_rate_tracker"
+            / "20260811-003_add_signal_attribution.sql"
         ).read_text(encoding="utf-8")
         migrations = [
             {
@@ -187,7 +193,7 @@ class WinRateTracker:
         if len(returns) > 1:
             mean = avg_return
             variance = sum((r - mean) ** 2 for r in returns) / len(returns)
-            std = variance ** 0.5
+            std = variance**0.5
             sharpe_ratio = (mean / std) if std > 0 else 0.0
         else:
             sharpe_ratio = 0.0
@@ -266,31 +272,37 @@ def generate_strategy_adjustments(stats: WinRateStats) -> list[dict]:
     adjustments: list[dict] = []
 
     if stats.trend == "declining" and stats.win_rate < 0.4:
-        adjustments.append({
-            "type": "reduce_exposure",
-            "reason": f"胜率下降至{stats.win_rate:.1%}，建议降低仓位",
-            "action": "将HIGH等级仓位从30%降至20%",
-        })
+        adjustments.append(
+            {
+                "type": "reduce_exposure",
+                "reason": f"胜率下降至{stats.win_rate:.1%}，建议降低仓位",
+                "action": "将HIGH等级仓位从30%降至20%",
+            }
+        )
 
     # 板块维度：识别弱势板块
     for sector, data in stats.sector_breakdown.items():
         rate = data["wins"] / data["total"] if data["total"] else 0
         if rate < 0.3 and data["total"] >= 3:
-            adjustments.append({
-                "type": "avoid_sector",
-                "reason": f"{sector}板块胜率仅{rate:.1%}",
-                "action": f"建议暂时回避{sector}板块",
-            })
+            adjustments.append(
+                {
+                    "type": "avoid_sector",
+                    "reason": f"{sector}板块胜率仅{rate:.1%}",
+                    "action": f"建议暂时回避{sector}板块",
+                }
+            )
 
     # 战法维度：识别弱势战法
     for strategy, data in stats.strategy_breakdown.items():
         rate = data["wins"] / data["total"] if data["total"] else 0
         if rate < 0.35 and data["total"] >= 3:
-            adjustments.append({
-                "type": "disable_strategy",
-                "reason": f"{strategy}战法胜率仅{rate:.1%}",
-                "action": f"建议暂停使用{strategy}战法",
-            })
+            adjustments.append(
+                {
+                    "type": "disable_strategy",
+                    "reason": f"{strategy}战法胜率仅{rate:.1%}",
+                    "action": f"建议暂停使用{strategy}战法",
+                }
+            )
 
     return adjustments
 

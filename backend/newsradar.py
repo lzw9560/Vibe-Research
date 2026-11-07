@@ -23,8 +23,7 @@ SOURCES_FILE = os.path.join(HERE, "news_sources.json")
 CACHE_DIR = os.path.join(HERE, ".cache")
 CACHE_FILE = os.path.join(CACHE_DIR, "radar.json")
 
-UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
+UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 BEIJING = timezone(timedelta(hours=8))
 
 
@@ -56,10 +55,13 @@ def _parse_dt(s: str):
 def _fetch_source(src: dict, per: int, cutoff, redline: list[str]):
     """抓单个 RSS 源；返回 items 列表，出错返回 None。"""
     try:
-        req = urllib.request.Request(src["url"], headers={
-            "User-Agent": UA,
-            "Accept": "application/rss+xml,application/atom+xml,application/xml,text/xml,*/*",
-        })
+        req = urllib.request.Request(
+            src["url"],
+            headers={
+                "User-Agent": UA,
+                "Accept": "application/rss+xml,application/atom+xml,application/xml,text/xml,*/*",
+            },
+        )
         with urllib.request.urlopen(req, timeout=14) as r:
             raw = r.read()
         root = ET.fromstring(raw)
@@ -130,7 +132,9 @@ def fetch_radar() -> dict:
     industries, tasks = [], []
     for i, ind in enumerate(cfg["industries"]):
         pool = byhint.get(ind["key"], [])
-        industries.append({"key": ind["key"], "name": ind["name"], "accent": ind["accent"], "total": len(pool), "items": []})
+        industries.append(
+            {"key": ind["key"], "name": ind["name"], "accent": ind["accent"], "total": len(pool), "items": []}
+        )
         for s in pool:
             tasks.append((i, s))
 
@@ -145,10 +149,15 @@ def fetch_radar() -> dict:
         industries[idx]["items"].extend(items)
     # 「全球情报」赛道（worldmonitor，与 12 RSS 赛道同构并列；不可达则缺省）
     global_items = _fetch_global_intel()
-    industries.append({
-        "key": "global_intel", "name": "全球情报", "accent": "#6b7280",
-        "total": len(global_items), "items": global_items,
-    })
+    industries.append(
+        {
+            "key": "global_intel",
+            "name": "全球情报",
+            "accent": "#6b7280",
+            "total": len(global_items),
+            "items": global_items,
+        }
+    )
     for ind in industries:
         ind["items"].sort(key=lambda x: x.get("ts", 0), reverse=True)
 
@@ -213,14 +222,22 @@ def skeleton() -> dict:
     except (FileNotFoundError, json.JSONDecodeError, UnicodeDecodeError, OSError):
         # S112 review fix：SOURCES_FILE 损坏/权限异常退最简骨架而非崩
         # （S112 后 stale 触发 skeleton 路径，加固预存脆弱点）
-        return {"generated_at": None, "recent_days": 7, "industries": [], "stats": {"industries": 0, "total_sources": 0}}
+        return {
+            "generated_at": None,
+            "recent_days": 7,
+            "industries": [],
+            "stats": {"industries": 0, "total_sources": 0},
+        }
     byhint: dict[str, int] = {}
     for s in cfg["sources"]:
         byhint[s["hint"]] = byhint.get(s["hint"], 0) + 1
     return {
         "generated_at": None,
         "recent_days": cfg.get("fetch", {}).get("recent_days", 7),
-        "industries": [{"key": i["key"], "name": i["name"], "accent": i["accent"], "total": byhint.get(i["key"], 0), "items": []} for i in cfg["industries"]],
+        "industries": [
+            {"key": i["key"], "name": i["name"], "accent": i["accent"], "total": byhint.get(i["key"], 0), "items": []}
+            for i in cfg["industries"]
+        ],
         "stats": {"industries": len(cfg["industries"]), "total_sources": len(cfg["sources"])},
     }
 

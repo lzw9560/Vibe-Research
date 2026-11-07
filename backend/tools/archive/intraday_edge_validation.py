@@ -25,6 +25,7 @@ TODO（30 日后补）：
   - 派生数据源: backend/strategies/intraday_features.py::compute_derived_features
   - 持久化: seal_derived_features 表（intraday_features R3 迁移已建）
 """
+
 from __future__ import annotations
 
 

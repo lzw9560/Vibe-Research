@@ -4,6 +4,7 @@
 封装唯一验证过的 edge（consecutive_relay）为结构化日报。
 数字全部来自 §44 验证 / deep_dive，不臆造。
 """
+
 from __future__ import annotations
 
 import concurrent.futures
@@ -31,9 +32,11 @@ _VERIFIED = {
 
 # ── regime cache freshness ──────────────────────────────────────────────
 
+
 def _load_regime_cache() -> dict[str, Any] | None:
     """读 index_ma20_regime.json，返 raw dict 或 None。"""
     from vr_paths import resolve_data_dir
+
     cache_path = resolve_data_dir() / "index_ma20_regime.json"
     if not cache_path.exists():
         return None
@@ -58,6 +61,7 @@ def _regime_freshness() -> dict[str, Any]:
         # C2 fix：用交易日差非日历日——周一盘前用周五 cache（=prev_trading_date）
         # fresh，日历日 days_since>2 误判周一 stale（周末休市 days_since=3）致 hardstop 0 tradable
         from vr_paths import prev_trading_date_str  # noqa: PLC0415
+
         stale = last < prev_trading_date_str()  # cache < 上一交易日 = stale（缺上一交易日数据）
         days_since = (datetime.now() - last_dt).days  # 日历日保留供 debug
     except ValueError:
@@ -73,6 +77,7 @@ def _regime_freshness() -> dict[str, Any]:
 
 # ── hard-stop gates ──────────────────────────────────────────────────────
 
+
 def _check_sentiment_hardstop(target_date: str) -> tuple[bool, str]:
     """sentiment 硬停：天气=暴风雨 → 0 tradable。
 
@@ -81,6 +86,7 @@ def _check_sentiment_hardstop(target_date: str) -> tuple[bool, str]:
     """
     try:
         from routers.sentiment_weather import compute_weather_snapshot  # noqa: PLC0415
+
         snap = compute_weather_snapshot(target_date)
         weather = snap.get("weather_state", "未知")
         if weather == "暴风雨":
@@ -105,6 +111,7 @@ def _check_regime_cache_stale() -> tuple[bool, str]:
 
 
 # ── 3-bucket classification ──────────────────────────────────────────────
+
 
 def _classify_signal(
     is_unbuyable: bool,
@@ -253,25 +260,20 @@ def _compute_consecutive_relay_decay() -> dict[str, Any]:
         decay_pct = 0.0
 
     # decay_stable：test_std < 0.02 (decimal=2.0pct) AND n_test>=30
-    decay_stable = bool(
-        test_std is not None and test_std < 0.02 and n_test_days >= 30
-    )
+    decay_stable = bool(test_std is not None and test_std < 0.02 and n_test_days >= 30)
 
     # bear_days / lbc3_days from trade_journal（已平仓交易 distinct exit_date）
     bear_days = 0
     lbc3_days = 0  # TODO lbc=3 子查询，spec 标占位不实现
     try:
         from engine.trade_journal import TradeJournal  # noqa: PLC0415
+
         tj = TradeJournal()
-        records = tj.query_records(
-            arm="consecutive_relay", is_realized=1, is_dead_arm=None
-        )
+        records = tj.query_records(arm="consecutive_relay", is_realized=1, is_dead_arm=None)
         exit_dates = {r.exit_date for r in records if getattr(r, "exit_date", None)}
         bear_days = len(exit_dates)
     except Exception as e:  # noqa: BLE001
-        logger.warning(
-            "[_compute_consecutive_relay_decay] trade_journal 查询失败: %s", e
-        )
+        logger.warning("[_compute_consecutive_relay_decay] trade_journal 查询失败: %s", e)
 
     return {
         "decay_pct": round(decay_pct, 4),
@@ -286,6 +288,7 @@ def _compute_consecutive_relay_decay() -> dict[str, Any]:
 
 
 # ── pure-fn core: get_consecutive_relay_signals ───────────────────────────
+
 
 def get_consecutive_relay_signals(target_date: str) -> dict[str, Any]:
     """生成 consecutive_relay 臂的每日信号报告。
@@ -333,6 +336,7 @@ def get_consecutive_relay_signals(target_date: str) -> dict[str, Any]:
     if codes:
         try:
             from ai.tools.stock_tools import query_quote
+
             quote_data = query_quote(codes)
             for c in codes:
                 info = quote_data.get(c, {})
@@ -383,22 +387,25 @@ def get_consecutive_relay_signals(target_date: str) -> dict[str, Any]:
             missing_note = "kline cache 无 target_date bar（数据缺失，不判可买）"
         else:
             bucket = _classify_signal(
-                is_unbuyable, current_regime,
+                is_unbuyable,
+                current_regime,
                 hardstop_reason=hardstop_reason,
             )
             missing_note = None
 
-        signals.append({
-            "code": code,
-            "name": names.get(code, code),
-            "lbc": lbc,
-            "entry_price": ref_price,
-            "price_source": price_source,
-            "unbuyable": is_unbuyable,
-            "bucket": bucket,
-            "hardstop_reason": hardstop_reason if hardstop_reason else None,
-            "missing_bar": missing_note,
-        })
+        signals.append(
+            {
+                "code": code,
+                "name": names.get(code, code),
+                "lbc": lbc,
+                "entry_price": ref_price,
+                "price_source": price_source,
+                "unbuyable": is_unbuyable,
+                "bucket": bucket,
+                "hardstop_reason": hardstop_reason if hardstop_reason else None,
+                "missing_bar": missing_note,
+            }
+        )
 
     # 分类统计
     tradable = [s for s in signals if s["bucket"] == "tradable"]
@@ -444,7 +451,9 @@ def get_consecutive_relay_signals(target_date: str) -> dict[str, Any]:
             "avoid": len(avoid),
         },
         "signals": signals,
-        "verified_numbers": {} if cap_mult <= 0.0 else {
+        "verified_numbers": {}
+        if cap_mult <= 0.0
+        else {
             "chrono_train": _VERIFIED["chrono_train_pct"],
             "chrono_test": _VERIFIED["chrono_test_pct"],
             "chrono_decay_pct": _VERIFIED["chrono_decay_pct"],
@@ -485,6 +494,7 @@ def _build_disclaimers(regime: str, cap_mult: float) -> list[str]:
 
 # ── render: human-language report ───────────────────────────────────────
 
+
 def render_daily_report(signals: dict[str, Any]) -> str:
     """将结构化信号渲染为人话报告（非术语堆）。
 
@@ -521,7 +531,9 @@ def render_daily_report(signals: dict[str, Any]) -> str:
     else:
         lines.append("【验证情况】")
         lines.append(f"  回测训练期收益：{verified.get('chrono_train', 'N/A')}%（train）")
-        lines.append(f"  回测测试期收益：{verified.get('chrono_test', 'N/A')}%（test，衰减 {verified.get('chrono_decay_pct', 'N/A')}%）")
+        lines.append(
+            f"  回测测试期收益：{verified.get('chrono_test', 'N/A')}%（test，衰减 {verified.get('chrono_decay_pct', 'N/A')}%）"
+        )
         lines.append(f"  统计显著性：p={verified.get('chrono_p', 'N/A')}（oos_supporting）")
         lines.append(f"  胜率：{verified.get('chrono_wr', 'N/A')}%")
         lines.append("")

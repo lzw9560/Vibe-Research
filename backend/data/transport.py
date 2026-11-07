@@ -42,9 +42,11 @@ def _select_breaker_name(url: str) -> str:
     if "datacenter" in url:
         return "eastmoney_datacenter"
     return "eastmoney"
-_em_last_call = [0.0]           # 上次请求时间戳（可变单元素列表，模块级共享）
+
+
+_em_last_call = [0.0]  # 上次请求时间戳（可变单元素列表，模块级共享）
 _em_last_call_lock = threading.Lock()  # L1 修复：保护 _em_last_call 读写
-_EM_SESSIONS: dict = {}         # {direct(bool): requests.Session}
+_EM_SESSIONS: dict = {}  # {direct(bool): requests.Session}
 _em_mode_lock = threading.Lock()  # L1 修复：保护 _em_mode 读写
 _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
@@ -70,14 +72,23 @@ def _em_session(direct: bool):
         from requests.adapters import HTTPAdapter
         from urllib3.util.retry import Retry
 
-        retry = Retry(total=0) if direct else Retry(
-            total=3, connect=3, backoff_factor=0.6,
-            status_forcelist=[429, 500, 502, 503, 504], allowed_methods=["GET"])
+        retry = (
+            Retry(total=0)
+            if direct
+            else Retry(
+                total=3,
+                connect=3,
+                backoff_factor=0.6,
+                status_forcelist=[429, 500, 502, 503, 504],
+                allowed_methods=["GET"],
+            )
+        )
         adapter = HTTPAdapter(max_retries=retry)
         s.mount("https://", adapter)
         s.mount("http://", adapter)
     except Exception as e:  # noqa: BLE001
         import logging
+
         logging.getLogger(__name__).debug("urllib3 老版本缺参数→降级无重试: %s", e)
     _EM_SESSIONS[direct] = s
     return s
@@ -94,8 +105,15 @@ def _em_request(session, url: str, method: str, params, headers, json, timeout):
     return session.get(url, params=params, headers=headers, timeout=timeout)
 
 
-def eastmoney_get(url: str, params: dict | None = None, headers: dict | None = None,
-                  timeout: int = 15, *, json: dict | None = None, method: str = "GET"):
+def eastmoney_get(
+    url: str,
+    params: dict | None = None,
+    headers: dict | None = None,
+    timeout: int = 15,
+    *,
+    json: dict | None = None,
+    method: str = "GET",
+):
     """东财统一请求入口：串行限流 + 直连优先、失败降级系统代理。
 
     第一次请求探测：先直连（短超时、不重试），成功即固定走直连；失败则降级走系统代理并固定。

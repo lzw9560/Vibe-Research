@@ -4,6 +4,7 @@
 Verifies task claims + computes Kelly / drawdown / position-sizing inputs.
 mode=filtered (exclude limit-up), top-20 equal weight, 5-day hold, COST=0.004.
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -43,46 +44,61 @@ for code, bj in rows:
     if nb < 70:
         continue
     c0 = code.replace("sz.", "").replace("sh.", "").replace("bj.", "")
-    bl = 0.20 if (c0.startswith("30") or c0.startswith("68")) else (0.30 if (c0.startswith("8") or c0.startswith("4")) else 0.10)
-    closes = [0.0]*nb
-    opens = [0.0]*nb
-    amts = [0.0]*nb
-    dates_l = [""]*nb
+    bl = (
+        0.20
+        if (c0.startswith("30") or c0.startswith("68"))
+        else (0.30 if (c0.startswith("8") or c0.startswith("4")) else 0.10)
+    )
+    closes = [0.0] * nb
+    opens = [0.0] * nb
+    amts = [0.0] * nb
+    dates_l = [""] * nb
     for j in range(nb):
         b = bars[j]
         dates_l[j] = b.get("date", "")
         closes[j] = float(b.get("close", 0) or 0)
         opens[j] = float(b.get("open", 0) or 0)
         amts[j] = float(b.get("amount", 0) or 0)
-    cumsum = [0.0]*(nb+1)
+    cumsum = [0.0] * (nb + 1)
     for j in range(nb):
-        cumsum[j+1] = cumsum[j] + closes[j]
+        cumsum[j + 1] = cumsum[j] + closes[j]
     for i in range(60, nb - 5):
-        prev_c = closes[i-1]; o = opens[i]; c = closes[i]; amt = amts[i]
+        prev_c = closes[i - 1]
+        o = opens[i]
+        c = closes[i]
+        amt = amts[i]
         if not prev_c or not c or not o:
             continue
-        ma60 = (cumsum[i] - cumsum[i-60]) / 60.0
+        ma60 = (cumsum[i] - cumsum[i - 60]) / 60.0
         if not ma60:
             continue
         today_ret = (c - prev_c) / prev_c
         gap = (o - prev_c) / prev_c
-        past5_c = closes[i-5] if i >= 5 else prev_c
+        past5_c = closes[i - 5] if i >= 5 else prev_c
         past_5d = (c - past5_c) / past5_c if past5_c else 0.0
-        nc = closes[i+5]
+        nc = closes[i + 5]
         if not nc:
             continue
         fwd5 = (nc - c) / c
-        by_date[dates_l[i]].append({
-            "code": code, "gap": gap, "tr": today_ret, "amt": amt,
-            "fwd5": fwd5, "up": c > ma60, "past5": past_5d,
-            "limit": today_ret >= bl * 0.98,
-        })
+        by_date[dates_l[i]].append(
+            {
+                "code": code,
+                "gap": gap,
+                "tr": today_ret,
+                "amt": amt,
+                "fwd5": fwd5,
+                "up": c > ma60,
+                "past5": past_5d,
+                "limit": today_ret >= bl * 0.98,
+            }
+        )
     n_done += 1
     if n_done % 1000 == 0:
         print(f"  processed {n_done}/{len(rows)} stocks...", flush=True)
 
 all_d = sorted(by_date.keys())
 print(f"dates={len(all_d)} range={all_d[0]}~{all_d[-1]}", flush=True)
+
 
 def rank_top(lst, n=TOP_N):
     """mode=filtered: exclude limit-up stocks, then rank composite."""
@@ -96,21 +112,25 @@ def rank_top(lst, n=TOP_N):
     rg = {o: r / nn for r, o in enumerate(sg)}
     rt = {o: r / nn for r, o in enumerate(st)}
     ra = {o: 1 - r / nn for r, o in enumerate(sa)}
-    top_idx = sorted(range(nn), key=lambda k: rg[k]+rt[k]+ra[k], reverse=True)[:n]
+    top_idx = sorted(range(nn), key=lambda k: rg[k] + rt[k] + ra[k], reverse=True)[:n]
     return [pool[k] for k in top_idx]
+
 
 def gate_on(d):
     lst = by_date[d]
-    if len(lst) < 20: return False
+    if len(lst) < 20:
+        return False
     breadth = sum(1 for x in lst if x["up"]) / len(lst)
     srt = sorted(lst, key=lambda x: x["amt"])
     dec = max(1, len(srt) // 10)
     sm5 = statistics.mean(x["past5"] for x in srt[:dec])
     return breadth > 0.4 and sm5 > 0
 
+
 def nw_t(series, min_lag=5):
     n = len(series)
-    if n < 5: return 0.0
+    if n < 5:
+        return 0.0
     m = statistics.mean(series)
     gamma0 = statistics.pvariance(series)
     lag = max(min_lag, int(4 * (n / 100) ** (2 / 9)))
@@ -120,25 +140,36 @@ def nw_t(series, min_lag=5):
         cov = sum((series[t] - m) * (series[t + l] - m) for t in range(n - l)) / n
         w = 1 - l / (lag + 1)
         s += 2 * w * cov
-    if s <= 0: return 0.0
+    if s <= 0:
+        return 0.0
     se = (s / n) ** 0.5
     return m / se if se > 0 else 0.0
 
+
 def max_drawdown(eq):
-    peak = eq[0]; mdd = 0.0; mdd_len = 0; cur_len = 0
+    peak = eq[0]
+    mdd = 0.0
+    mdd_len = 0
+    cur_len = 0
     for v in eq[1:]:
-        if v > peak: peak = v; cur_len = 0
+        if v > peak:
+            peak = v
+            cur_len = 0
         else:
             cur_len += 1
             dd = v / peak - 1.0
-            if dd < mdd: mdd = dd; mdd_len = cur_len
+            if dd < mdd:
+                mdd = dd
+                mdd_len = cur_len
     return mdd, mdd_len
+
 
 def equity_and_stats(dates, cost=COST):
     daily_rets = []
     for d in dates:
         top = rank_top(by_date[d])
-        if not top: continue
+        if not top:
+            continue
         daily_rets.append(statistics.mean(x["fwd5"] for x in top))
     if not daily_rets:
         return None
@@ -173,15 +204,25 @@ def equity_and_stats(dates, cost=COST):
     best = max(daily_rets)
     n_picks = len(daily_rets) * TOP_N
     return {
-        "n_days": len(daily_rets), "n_picks": n_picks,
-        "gross_mean": gross_m, "net_mean": m - cost,
-        "std": std, "t_naive": t_naive, "t_nw": t_nw,
-        "wr": wr, "max_dd": mdd, "dd_len": mlen,
-        "kelly_cont": kelly_cont, "kelly_disc": kelly_disc,
-        "avg_win": avg_win if wins else 0, "avg_loss": avg_loss if losses else 0,
-        "worst_day": worst, "best_day": best,
+        "n_days": len(daily_rets),
+        "n_picks": n_picks,
+        "gross_mean": gross_m,
+        "net_mean": m - cost,
+        "std": std,
+        "t_naive": t_naive,
+        "t_nw": t_nw,
+        "wr": wr,
+        "max_dd": mdd,
+        "dd_len": mlen,
+        "kelly_cont": kelly_cont,
+        "kelly_disc": kelly_disc,
+        "avg_win": avg_win if wins else 0,
+        "avg_loss": avg_loss if losses else 0,
+        "worst_day": worst,
+        "best_day": best,
         "final_eq": eq[-1],
     }
+
 
 print("\n=== FULL BACKTEST (mode=filtered, top-20, 5d hold, cost=0.4%) ===", flush=True)
 full = equity_and_stats(all_d)
@@ -195,9 +236,9 @@ if full:
 # Break-even cost
 if full:
     print(f"\n=== BREAK-EVEN COST ===")
-    print(f"  gross_mean (no cost): {full['gross_mean']*100:.4f}%")
-    print(f"  break-even cost = gross_mean = {full['gross_mean']*100:.4f}% (= {full['gross_mean']:.6f} decimal)")
-    print(f"  current cost 0.4%: net = {(full['gross_mean']-0.004)*100:.4f}%")
+    print(f"  gross_mean (no cost): {full['gross_mean'] * 100:.4f}%")
+    print(f"  break-even cost = gross_mean = {full['gross_mean'] * 100:.4f}% (= {full['gross_mean']:.6f} decimal)")
+    print(f"  current cost 0.4%: net = {(full['gross_mean'] - 0.004) * 100:.4f}%")
 
 # Bonferroni
 if full:
@@ -205,7 +246,7 @@ if full:
     # More precisely, Bonferroni alpha=0.05/50=0.001, one-sided z~3.09
     print(f"\n=== BONFERRONI x{BONF_N} ===")
     print(f"  t_nw = {full['t_nw']:.4f}")
-    print(f"  Bonf alpha = 0.05/{BONF_N} = {0.05/BONF_N:.6f}")
+    print(f"  Bonf alpha = 0.05/{BONF_N} = {0.05 / BONF_N:.6f}")
     print(f"  z threshold (one-sided) ~ 3.09 | NW-t with n={full['n_days']} critical ~ {3.09:.2f}")
     print(f"  PASS: {full['t_nw'] > 3.09}")
 
@@ -216,16 +257,21 @@ off_d = [d for d in all_d if not gate_on(d)]
 for label, ds in [("gate=ON ", on_d), ("gate=OFF", off_d)]:
     s = equity_and_stats(ds)
     if s:
-        print(f"  {label}: days={s['n_days']} gross={s['gross_mean']*100:.4f}% net={s['net_mean']*100:.4f}% t_nw={s['t_nw']:.2f} WR={s['wr']*100:.1f}% maxDD={s['max_dd']*100:.2f}%(len {s['dd_len']}) kelly_cont={s['kelly_cont']:.4f} kelly_disc={s['kelly_disc']:.4f}")
+        print(
+            f"  {label}: days={s['n_days']} gross={s['gross_mean'] * 100:.4f}% net={s['net_mean'] * 100:.4f}% t_nw={s['t_nw']:.2f} WR={s['wr'] * 100:.1f}% maxDD={s['max_dd'] * 100:.2f}%(len {s['dd_len']}) kelly_cont={s['kelly_cont']:.4f} kelly_disc={s['kelly_disc']:.4f}"
+        )
 
 # Yearly breakdown
 print("\n=== YEARLY ===", flush=True)
-for yr in ["2018","2019","2020","2021","2022","2023","2024","2025","2026"]:
+for yr in ["2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025", "2026"]:
     ds = [d for d in all_d if d.startswith(yr)]
-    if not ds: continue
+    if not ds:
+        continue
     s = equity_and_stats(ds)
     if s:
-        print(f"  {yr}: days={s['n_days']} net={s['net_mean']*100:.4f}% t_nw={s['t_nw']:.2f} WR={s['wr']*100:.1f}% maxDD={s['max_dd']*100:.2f}%")
+        print(
+            f"  {yr}: days={s['n_days']} net={s['net_mean'] * 100:.4f}% t_nw={s['t_nw']:.2f} WR={s['wr'] * 100:.1f}% maxDD={s['max_dd'] * 100:.2f}%"
+        )
 
 # Walk-forward
 print("\n=== WALK-FORWARD (train<2023 / test>=2023) ===", flush=True)
@@ -234,4 +280,6 @@ test_d = [d for d in all_d if d >= "2023-01-01"]
 for label, ds in [("train", train_d), ("test", test_d)]:
     s = equity_and_stats(ds)
     if s:
-        print(f"  {label}: days={s['n_days']} gross={s['gross_mean']*100:.4f}% net={s['net_mean']*100:.4f}% t_nw={s['t_nw']:.2f} maxDD={s['max_dd']*100:.2f}%")
+        print(
+            f"  {label}: days={s['n_days']} gross={s['gross_mean'] * 100:.4f}% net={s['net_mean'] * 100:.4f}% t_nw={s['t_nw']:.2f} maxDD={s['max_dd'] * 100:.2f}%"
+        )

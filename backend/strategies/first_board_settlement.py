@@ -28,6 +28,7 @@
 字段：signal_date/code/name/strategy_code/strategy_score/weather_state/
 position_multiplier/recommended_position（forward_test.py:106-116）。
 """
+
 from __future__ import annotations
 
 import logging
@@ -66,6 +67,7 @@ HOLD_DAYS: int = 1
 # ===========================================================================
 # 4a：结算归因（053-056）
 # ===========================================================================
+
 
 def calc_target_return(t_open: float, t1_close: float) -> float:
     """标的收益（排名用）——T+1 收盘 vs T 日开盘，不含仓位/执行。
@@ -196,21 +198,24 @@ def settle_missed(
         if not t1o or t1o <= 0:
             continue
         ret = round((t1c - t1o) / t1o * 100, 4)
-        out.append({
-            "code": code,
-            "name": c.get("name", ""),
-            "t1_open": round(t1o, 4) if t1o else 0.0,
-            "t1_close": round(t1c, 4) if t1c else 0.0,
-            "return_pct": ret,
-            "missed": True,
-            "total_score": c.get("total", 0.0),
-        })
+        out.append(
+            {
+                "code": code,
+                "name": c.get("name", ""),
+                "t1_open": round(t1o, 4) if t1o else 0.0,
+                "t1_close": round(t1c, 4) if t1c else 0.0,
+                "return_pct": ret,
+                "missed": True,
+                "total_score": c.get("total", 0.0),
+            }
+        )
     return out
 
 
 # ===========================================================================
 # 4b：forward_test 接入（055-057）
 # ===========================================================================
+
 
 def record_first_board_signals(
     signal_date: str,
@@ -330,16 +335,14 @@ def get_first_board_forward_test_summary() -> dict:
         "validation_status": status,
         "passed": result.passed,
         "is_exploratory": result.is_exploratory,
-        "note": (
-            "首板流标的收益口径（T+1 收盘 vs T 日开盘），"
-            "§44 未 validated 不阻断接入跑通"
-        ),
+        "note": ("首板流标的收益口径（T+1 收盘 vs T 日开盘），§44 未 validated 不阻断接入跑通"),
     }
 
 
 # ===========================================================================
 # 4c：主入口（058-062）
 # ===========================================================================
+
 
 def run_first_board_settlement(
     signal_date: str,
@@ -443,6 +446,7 @@ def run_first_board_settlement(
 # ===========================================================================
 # 4d：T+1 溢价评分 + 复盘报告（盘后调度用，tasks.md 060-062 调度）
 # ===========================================================================
+
 
 def _normalize_date_iso(date: str) -> str:
     """YYYYMMDD → YYYY-MM-DD（baostock bar.date 格式）。
@@ -548,23 +552,22 @@ def run_t1_premium_review(signal_date: str) -> dict:
             if t1_open and t1_open > 0 and t1_close is not None:
                 ret = round((t1_close - t1_open) / t1_open * 100, 4)
 
-        t1_returns.append({
-            "code": code,
-            "name": c.get("name", ""),
-            "rank": c.get("rank", 0),
-            "total_score": c.get("total", 0.0),
-            "t0_date": t0_date,
-            "t1_date": t1_date,
-            "t1_close": t1_close,
-            "t1_open": t1_open,
-            "t1_return_pct": ret,
-        })
+        t1_returns.append(
+            {
+                "code": code,
+                "name": c.get("name", ""),
+                "rank": c.get("rank", 0),
+                "total_score": c.get("total", 0.0),
+                "t0_date": t0_date,
+                "t1_date": t1_date,
+                "t1_close": t1_close,
+                "t1_open": t1_open,
+                "t1_return_pct": ret,
+            }
+        )
 
     # 整体统计
-    valid_returns = [
-        r["t1_return_pct"] for r in t1_returns
-        if r["t1_return_pct"] is not None
-    ]
+    valid_returns = [r["t1_return_pct"] for r in t1_returns if r["t1_return_pct"] is not None]
     n = len(valid_returns)
     if n == 0:
         return {
@@ -647,10 +650,7 @@ def build_review_report(t1_review: dict) -> str:
     lines.append(f"选股日：{t1_review.get('signal_date', '')}")
     lines.append(f"候选数：{stats.get('n', 0)} 只")
     lines.append(f"平均收益：{stats.get('mean_return_pct', 0):+.2f}%")
-    lines.append(
-        f"正收益占比：{stats.get('pos_ratio', 0):.0%}"
-        f"（{stats.get('pos_count', 0)}/{stats.get('n', 0)}）"
-    )
+    lines.append(f"正收益占比：{stats.get('pos_ratio', 0):.0%}（{stats.get('pos_count', 0)}/{stats.get('n', 0)}）")
     lines.append(f"最佳收益：{stats.get('best_return', 0):+.2f}%")
     lines.append(f"最差收益：{stats.get('worst_return', 0):+.2f}%")
     lines.append(f"选股质量：{t1_review.get('verdict', '')}")

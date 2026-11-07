@@ -24,6 +24,7 @@
   - 成本按组合换手: avoided 分数 × 0.3% round-trip.
   - 不要求 median>0/WR>55% (high-risk lens 放松, 但报).
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -36,18 +37,19 @@ from math import erf, sqrt
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vr_paths import resolve_data_dir
+
 ROOT = Path(__file__).resolve().parents[2]
 DATA = resolve_data_dir()
 KLINE_DB = DATA / "baostock_kline_cache.db"
 LOCKUP = DATA / "lockup_events_cache.json"
 
-COST_RT = 0.003          # 0.3% round-trip (avoided 分数 × 此)
-HOLD = 20                # 20 交易日持有/避险窗口
-FR_THRESH = 0.20         # free_ratio > 20%
-LM_THRESH = 100000.0     # lift_mkt_cap > 10亿 (万元单位)
-SIZE_LOOKBACK = 20       # trailing amount 窗口
+COST_RT = 0.003  # 0.3% round-trip (avoided 分数 × 此)
+HOLD = 20  # 20 交易日持有/避险窗口
+FR_THRESH = 0.20  # free_ratio > 20%
+LM_THRESH = 100000.0  # lift_mkt_cap > 10亿 (万元单位)
+SIZE_LOOKBACK = 20  # trailing amount 窗口
 ALPHA = 0.05
-N_TESTS_BONF = 6         # 3 并行信号(S1/S2/S4) × 2 方向
+N_TESTS_BONF = 6  # 3 并行信号(S1/S2/S4) × 2 方向
 
 
 def norm_sf(t: float) -> float:
@@ -58,9 +60,12 @@ def norm_sf(t: float) -> float:
 def load_lockup() -> list[dict]:
     d = json.load(open(LOCKUP))
     # filter to big-unlock events only (the avoidance set)
-    big = [e for e in d if
-           (e.get("free_ratio") is not None and e["free_ratio"] > FR_THRESH)
-           or (e.get("lift_mkt_cap") is not None and e["lift_mkt_cap"] > LM_THRESH)]
+    big = [
+        e
+        for e in d
+        if (e.get("free_ratio") is not None and e["free_ratio"] > FR_THRESH)
+        or (e.get("lift_mkt_cap") is not None and e["lift_mkt_cap"] > LM_THRESH)
+    ]
     return big, d
 
 
@@ -102,16 +107,16 @@ def main():
     for e in big_events:
         big_by_date[e["date"]].add(e["code"])
     big_dates_sorted = sorted(big_by_date.keys())
-    print(f"  big-unlock event dates: {len(big_dates_sorted)} "
-          f"({big_dates_sorted[0]} -> {big_dates_sorted[-1]})")
+    print(f"  big-unlock event dates: {len(big_dates_sorted)} ({big_dates_sorted[0]} -> {big_dates_sorted[-1]})")
 
     # load kline restricted to overlap window (need trailing lookback too)
     # lockup starts 2025-12-01; need 20d lookback before -> load from 2025-11-01
     code_map, kline_dates = load_kline_overlap("2025-11-01")
     calendar = sorted(d for d in kline_dates if d >= "2025-11-01")
     cal_idx = {d: i for i, d in enumerate(calendar)}
-    print(f"\nkline overlap window: {calendar[0]} -> {calendar[-1]} "
-          f"({len(calendar)} trading days, codes={len(code_map)})")
+    print(
+        f"\nkline overlap window: {calendar[0]} -> {calendar[-1]} ({len(calendar)} trading days, codes={len(code_map)})"
+    )
 
     # testable window: rebalance t needs t+HOLD within calendar AND lockup events cover (t, t+HOLD]
     # lockup events end 2026-09-30; kline ends 2026-09-23. forward 20d must be <= last kline date.
@@ -208,7 +213,7 @@ def main():
         decile_labels = [min(9, int(i * 10 / n)) for i in range(n)]  # 0..9
         # portfolio returns
         full_rets = [r[1] for r in rows]
-        avoid_rets = [r[1] for r in rows if r[3] == 0]   # non-avoided = avoidance universe
+        avoid_rets = [r[1] for r in rows if r[3] == 0]  # non-avoided = avoidance universe
         avoided_rets = [r[1] for r in rows if r[3] == 1]  # the removed stocks
         full_ret = sum(full_rets) / len(full_rets)
         avoid_ret = sum(avoid_rets) / len(avoid_rets) if avoid_rets else full_ret
@@ -229,15 +234,21 @@ def main():
             decile_spreads.append(da - df)
         size_matched_spread = sum(decile_spreads) / len(decile_spreads) if decile_spreads else None
         frac_avoided = len(avoided_rets) / len(rows) if rows else 0
-        period_results.append({
-            "t": t, "t_end": t_end,
-            "n_universe": len(rows), "n_avoided": len(avoided_rets),
-            "frac_avoided": frac_avoided,
-            "full_ret": full_ret, "avoid_ret": avoid_ret,
-            "avoided_ret": avoided_ret,
-            "spread": spread, "size_matched_spread": size_matched_spread,
-            "n_deciles": len(decile_spreads),
-        })
+        period_results.append(
+            {
+                "t": t,
+                "t_end": t_end,
+                "n_universe": len(rows),
+                "n_avoided": len(avoided_rets),
+                "frac_avoided": frac_avoided,
+                "full_ret": full_ret,
+                "avoid_ret": avoid_ret,
+                "avoided_ret": avoided_ret,
+                "spread": spread,
+                "size_matched_spread": size_matched_spread,
+                "n_deciles": len(decile_spreads),
+            }
+        )
 
     # ---- aggregate headline ----
     print("\n" + "=" * 78)
@@ -246,28 +257,31 @@ def main():
     if not period_results:
         print("  无周期数据")
     else:
-        print(f"\n{'t':<12}{'n_uni':>7}{'n_avd':>7}{'frac':>7}"
-              f"{'full%':>9}{'avoid%':>9}{'avoided%':>10}"
-              f"{'spread%':>9}{'sizeM%':>9}")
+        print(
+            f"\n{'t':<12}{'n_uni':>7}{'n_avd':>7}{'frac':>7}"
+            f"{'full%':>9}{'avoid%':>9}{'avoided%':>10}"
+            f"{'spread%':>9}{'sizeM%':>9}"
+        )
         cum_full = 1.0
         cum_avoid = 1.0
         for p in period_results:
-            cum_full *= (1 + p["full_ret"])
-            cum_avoid *= (1 + p["avoid_ret"])
+            cum_full *= 1 + p["full_ret"]
+            cum_avoid *= 1 + p["avoid_ret"]
             sm = p["size_matched_spread"]
-            print(f"{p['t']:<12}{p['n_universe']:>7}{p['n_avoided']:>7}"
-                  f"{p['frac_avoided']*100:>6.1f}%"
-                  f"{p['full_ret']*100:>8.3f}{p['avoid_ret']*100:>8.3f}"
-                  f"{(p['avoided_ret'] or 0)*100:>9.3f}"
-                  f"{p['spread']*100:>8.3f}"
-                  f"{(sm or 0)*100:>8.3f}")
-        print(f"\n  cumulative full  BHAR = {(cum_full-1)*100:+.3f}%")
-        print(f"  cumulative avoid BHAR = {(cum_avoid-1)*100:+.3f}%")
-        print(f"  cumulative spread    = {(cum_avoid-cum_full)*100:+.3f}%")
+            print(
+                f"{p['t']:<12}{p['n_universe']:>7}{p['n_avoided']:>7}"
+                f"{p['frac_avoided'] * 100:>6.1f}%"
+                f"{p['full_ret'] * 100:>8.3f}{p['avoid_ret'] * 100:>8.3f}"
+                f"{(p['avoided_ret'] or 0) * 100:>9.3f}"
+                f"{p['spread'] * 100:>8.3f}"
+                f"{(sm or 0) * 100:>8.3f}"
+            )
+        print(f"\n  cumulative full  BHAR = {(cum_full - 1) * 100:+.3f}%")
+        print(f"  cumulative avoid BHAR = {(cum_avoid - 1) * 100:+.3f}%")
+        print(f"  cumulative spread    = {(cum_avoid - cum_full) * 100:+.3f}%")
 
         spreads = [p["spread"] for p in period_results]
-        sm_spreads = [p["size_matched_spread"] for p in period_results
-                      if p["size_matched_spread"] is not None]
+        sm_spreads = [p["size_matched_spread"] for p in period_results if p["size_matched_spread"] is not None]
         n_per = len(spreads)
         mean_sp = sum(spreads) / n_per
         std_sp = statistics.pstdev(spreads) if n_per > 1 else 0.0
@@ -291,35 +305,46 @@ def main():
         p_bonf_sp = min(1.0, p_raw_sp * N_TESTS_BONF)
 
         print(f"\n  per-period spread (avoidance - full):")
-        print(f"    n_periods={n_per} mean={mean_sp*100:+.4f}% median={med_sp*100:+.4f}% "
-              f"WR(spread>0)={wr_sp*100:.1f}% std={std_sp*100:.4f}%")
+        print(
+            f"    n_periods={n_per} mean={mean_sp * 100:+.4f}% median={med_sp * 100:+.4f}% "
+            f"WR(spread>0)={wr_sp * 100:.1f}% std={std_sp * 100:.4f}%"
+        )
         print(f"    t={t_sp:.3f} p_two_sided={p_raw_sp:.4f} Bonf(×{N_TESTS_BONF})={p_bonf_sp:.4f}")
-        print(f"    gross spread mean={mean_sp*100:+.4f}% | cost/period={cost_per_period*100:.4f}% "
-              f"(frac_avd={avg_frac_avd*100:.1f}%) | net={net_sp*100:+.4f}%")
+        print(
+            f"    gross spread mean={mean_sp * 100:+.4f}% | cost/period={cost_per_period * 100:.4f}% "
+            f"(frac_avd={avg_frac_avd * 100:.1f}%) | net={net_sp * 100:+.4f}%"
+        )
         print(f"\n  R12 size-matched spread (decile-内, 跨decile等权):")
-        print(f"    n_periods={len(sm_spreads)} mean={mean_sm*100:+.4f}% "
-              f"std={std_sm*100:.4f}% t={t_sm:.3f}")
+        print(f"    n_periods={len(sm_spreads)} mean={mean_sm * 100:+.4f}% std={std_sm * 100:.4f}% t={t_sm:.3f}")
         sm_pos = sum(1 for s in sm_spreads if s > 0)
         print(f"    positive periods: {sm_pos}/{len(sm_spreads)}")
 
         # walk-forward: split periods in half
-        wf_train = spreads[:n_per // 2]
-        wf_test = spreads[n_per // 2:]
+        wf_train = spreads[: n_per // 2]
+        wf_test = spreads[n_per // 2 :]
         wf_train_ev = sum(wf_train) / len(wf_train) if wf_train else 0.0
         wf_test_ev = sum(wf_test) / len(wf_test) if wf_test else 0.0
         print(f"\n  walk-forward (周期分半):")
-        print(f"    train({len(wf_train)}p)={wf_train_ev*100:+.4f}%  "
-              f"test({len(wf_test)}p)={wf_test_ev*100:+.4f}%")
+        print(f"    train({len(wf_train)}p)={wf_train_ev * 100:+.4f}%  test({len(wf_test)}p)={wf_test_ev * 100:+.4f}%")
 
         # save headline for daily-panel section
         headline = {
-            "n_periods": n_per, "mean_spread": mean_sp, "median_spread": med_sp,
-            "wr_spread": wr_sp, "t_spread": t_sp, "p_raw": p_raw_sp,
-            "p_bonf": p_bonf_sp, "net_spread": net_sp, "cost_per_period": cost_per_period,
-            "cum_full": cum_full - 1, "cum_avoid": cum_avoid - 1,
+            "n_periods": n_per,
+            "mean_spread": mean_sp,
+            "median_spread": med_sp,
+            "wr_spread": wr_sp,
+            "t_spread": t_sp,
+            "p_raw": p_raw_sp,
+            "p_bonf": p_bonf_sp,
+            "net_spread": net_sp,
+            "cost_per_period": cost_per_period,
+            "cum_full": cum_full - 1,
+            "cum_avoid": cum_avoid - 1,
             "cum_spread": cum_avoid - cum_full,
-            "size_matched_mean": mean_sm, "size_matched_t": t_sm,
-            "wf_train_ev": wf_train_ev, "wf_test_ev": wf_test_ev,
+            "size_matched_mean": mean_sm,
+            "size_matched_t": t_sm,
+            "wf_train_ev": wf_train_ev,
+            "wf_test_ev": wf_test_ev,
             "n_testable_days": len(testable),
         }
 
@@ -331,6 +356,7 @@ def main():
     # for each testable date t: cross-section regression fwd_ret = a + b*avoid + c*log(size)
     # collect daily b (avoid coefficient). Then NW-HAC t on the b series.
     import math
+
     daily_b: list[tuple[str, float, float, float, int, int]] = []  # (t, b_avoid, b_size, intercept, n, n_avd)
     for t in testable:
         ti = cal_idx[t]
@@ -383,8 +409,7 @@ def main():
         nw_var = var0
         for l in range(1, lag + 1):
             w = 1 - l / (lag + 1)
-            cov_l = sum((bs[i] - mean_b) * (bs[i + l] - mean_b)
-                        for i in range(n_days - l)) / n_days
+            cov_l = sum((bs[i] - mean_b) * (bs[i + l] - mean_b) for i in range(n_days - l)) / n_days
             nw_var += 2 * w * cov_l
         nw_se = sqrt(max(nw_var, 1e-30) / n_days) if n_days > 0 else 0.0
         nw_t = mean_b / nw_se if nw_se > 0 else 0.0
@@ -396,14 +421,15 @@ def main():
         avg_avd = sum(r[5] for r in daily_b) / n_days
 
         print(f"\n  daily Fama-MacBeth avoid coefficient (negative=避险有效):")
-        print(f"    n_days={n_days} mean_b={mean_b*100:+.4f}% median_b={med_b*100:+.4f}%")
-        print(f"    WR(b<0)={wr_b*100:.1f}% std={statistics.pstdev(bs)*100:.4f}%")
-        print(f"    NW-HAC t(lag={lag})={nw_t:.3f} p_two_sided={p_raw_panel:.4f} "
-              f"Bonf(×{N_TESTS_BONF})={p_bonf_panel:.4f}")
+        print(f"    n_days={n_days} mean_b={mean_b * 100:+.4f}% median_b={med_b * 100:+.4f}%")
+        print(f"    WR(b<0)={wr_b * 100:.1f}% std={statistics.pstdev(bs) * 100:.4f}%")
+        print(
+            f"    NW-HAC t(lag={lag})={nw_t:.3f} p_two_sided={p_raw_panel:.4f} Bonf(×{N_TESTS_BONF})={p_bonf_panel:.4f}"
+        )
         print(f"    avg cross-section n={avg_n:.0f} avg avoided={avg_avd:.1f}")
         # size coef summary
         bsz = [r[2] for r in daily_b]
-        print(f"    (size coef mean={sum(bsz)/n_days*100:+.4f}% — size effect present if neg)")
+        print(f"    (size coef mean={sum(bsz) / n_days * 100:+.4f}% — size effect present if neg)")
 
         # walk-forward on daily panel: first/second half
         half = n_days // 2
@@ -411,12 +437,17 @@ def main():
         b_test = bs[half:]
         tr_ev = sum(b_train) / len(b_train) if b_train else 0.0
         te_ev = sum(b_test) / len(b_test) if b_test else 0.0
-        print(f"    walk-forward: train({len(b_train)}d)={tr_ev*100:+.4f}%  "
-              f"test({len(b_test)}d)={te_ev*100:+.4f}%")
+        print(f"    walk-forward: train({len(b_train)}d)={tr_ev * 100:+.4f}%  test({len(b_test)}d)={te_ev * 100:+.4f}%")
         panel = {
-            "n_days": n_days, "mean_b": mean_b, "median_b": med_b, "wr_b_neg": wr_b,
-            "nw_t": nw_t, "p_raw": p_raw_panel, "p_bonf": p_bonf_panel,
-            "wf_train": tr_ev, "wf_test": te_ev,
+            "n_days": n_days,
+            "mean_b": mean_b,
+            "median_b": med_b,
+            "wr_b_neg": wr_b,
+            "nw_t": nw_t,
+            "p_raw": p_raw_panel,
+            "p_bonf": p_bonf_panel,
+            "wf_train": tr_ev,
+            "wf_test": te_ev,
         }
     else:
         panel = None
@@ -439,8 +470,10 @@ def main():
     for dmap in code_map.values():
         cov = sum(1 for d in testable if d in dmap)
         cov_counts.append(cov)
-    print(f"  per-code coverage of {len(testable)} testable days: "
-          f"median={statistics.median(cov_counts):.0f} min={min(cov_counts)} max={max(cov_counts)}")
+    print(
+        f"  per-code coverage of {len(testable)} testable days: "
+        f"median={statistics.median(cov_counts):.0f} min={min(cov_counts)} max={max(cov_counts)}"
+    )
     print(f"  -> kline 多数仅 2025-12 起 (~180 bars), 退市股缺失 (cache 偏现存股).")
     print(f"  -> 退市股缺失方向: big-unlock 后退市的股若不在 cache, full universe 偏高,")
     print(f"     使避险组对比的基准偏高 → 偏向不利信号 (conservative).")
@@ -467,41 +500,53 @@ def main():
         wf_test_ev = -panel["wf_test"] * 100
         n_days_v = panel["n_days"]
         n_picks_v = n_days_v  # daily cross-sections
-        r12 = (f"size-matched (decile内): portfolio mean={headline['size_matched_mean']*100:+.4f}% "
-               f"t={headline['size_matched_t']:.3f}; "
-               f"daily-FM size-controlled NW_t={day_t:.3f} (控 log size). "
-               f"非沪深300大盘. size coef mean={sum(bsz)/n_days*100:+.4f}%")
+        r12 = (
+            f"size-matched (decile内): portfolio mean={headline['size_matched_mean'] * 100:+.4f}% "
+            f"t={headline['size_matched_t']:.3f}; "
+            f"daily-FM size-controlled NW_t={day_t:.3f} (控 log size). "
+            f"非沪深300大盘. size coef mean={sum(bsz) / n_days * 100:+.4f}%"
+        )
 
         print(f"\n  primary (daily Fama-MacBeth, size-controlled, HAC):")
-        print(f"    gross_EV(avoid edge)={gross_ev:+.4f}% net_EV={net_ev:+.4f}% "
-              f"(cost={cost:.4f}%)")
-        print(f"    median={median_ev:+.4f}% WR(avoid_coef<0)={wr:.1f}% "
-              f"n_days={n_days_v} day_t(NW-HAC)={day_t:.3f} Bonf={p_bonf:.4f}")
+        print(f"    gross_EV(avoid edge)={gross_ev:+.4f}% net_EV={net_ev:+.4f}% (cost={cost:.4f}%)")
+        print(
+            f"    median={median_ev:+.4f}% WR(avoid_coef<0)={wr:.1f}% "
+            f"n_days={n_days_v} day_t(NW-HAC)={day_t:.3f} Bonf={p_bonf:.4f}"
+        )
         print(f"    wf test_ev={wf_test_ev:+.4f}%")
-        print(f"  portfolio BHAR headline: n_periods={headline['n_periods']} "
-              f"cum_spread={headline['cum_spread']*100:+.3f}% "
-              f"per-period mean={headline['mean_spread']*100:+.4f}%")
+        print(
+            f"  portfolio BHAR headline: n_periods={headline['n_periods']} "
+            f"cum_spread={headline['cum_spread'] * 100:+.3f}% "
+            f"per-period mean={headline['mean_spread'] * 100:+.4f}%"
+        )
 
         # verdict cascade (high-risk lens)
         v = "edge-confirmed"
         reasons = []
         # mean edge positive?
         if gross_ev <= 0:
-            v = "falsified"; reasons.append(f"gross_EV={gross_ev:.4f}% <= 0 (避险无收益, big-unlock股不跑输)")
+            v = "falsified"
+            reasons.append(f"gross_EV={gross_ev:.4f}% <= 0 (避险无收益, big-unlock股不跑输)")
         if n_days_v < 60:
             if v != "falsified":
-                v = "underpowered"; reasons.append(f"n_days={n_days_v} < 60 (但实际 {n_days_v} 充足)")
+                v = "underpowered"
+                reasons.append(f"n_days={n_days_v} < 60 (但实际 {n_days_v} 充足)")
         if p_bonf >= ALPHA and v != "falsified":
-            v = "falsified"; reasons.append(f"Bonf p={p_bonf:.4f} >= {ALPHA} (不显著)")
+            v = "falsified"
+            reasons.append(f"Bonf p={p_bonf:.4f} >= {ALPHA} (不显著)")
         if net_ev <= 0 and v not in ("falsified",):
-            v = "falsified"; reasons.append(f"net_EV={net_ev:.4f}% <= 0 (cost 吃掉 gross)")
+            v = "falsified"
+            reasons.append(f"net_EV={net_ev:.4f}% <= 0 (cost 吃掉 gross)")
         # walk-forward
         if panel["wf_test"] >= 0 and v not in ("falsified",):
             if panel["wf_train"] < 0:  # train half had avoid<0 (good), test half lost it
-                v = "exploratory"; reasons.append(f"wf: train={-panel['wf_train']*100:+.4f}% "
-                                                  f"test={-panel['wf_test']*100:+.4f}% (test半消失)")
+                v = "exploratory"
+                reasons.append(
+                    f"wf: train={-panel['wf_train'] * 100:+.4f}% test={-panel['wf_test'] * 100:+.4f}% (test半消失)"
+                )
             else:
-                v = "exploratory"; reasons.append(f"wf test_ev={wf_test_ev:+.4f}% <= 0")
+                v = "exploratory"
+                reasons.append(f"wf test_ev={wf_test_ev:+.4f}% <= 0")
         if v == "edge-confirmed":
             reasons.append(f"all gates pass: gross+net>0, Bonf<{ALPHA}, wf test retains edge")
 
@@ -510,9 +555,9 @@ def main():
             print(f"     - {r}")
         verdict = v
         key_finding = (
-            f"解禁避险组合: daily-FM avoid系数 mean={panel['mean_b']*100:+.4f}% "
+            f"解禁避险组合: daily-FM avoid系数 mean={panel['mean_b'] * 100:+.4f}% "
             f"(负=避险有效) NW-HAC t={day_t:.3f} Bonf p={p_bonf:.4f} n_days={n_days_v}; "
-            f"组合级 BHAR cum_spread={headline['cum_spread']*100:+.3f}% over {headline['n_periods']} 非重叠周期; "
+            f"组合级 BHAR cum_spread={headline['cum_spread'] * 100:+.3f}% over {headline['n_periods']} 非重叠周期; "
             f"R12 size-matched portfolio t={headline['size_matched_t']:.3f}; "
             f"verdict={v}. "
             f"窗口=2025-12~2026-09 (~9月, lockup数据仅此期, 非2024-2026)."
@@ -527,13 +572,19 @@ def main():
     print("\n" + "=" * 78)
     print("SUMMARY (machine-readable below)")
     print("=" * 78)
-    print(json.dumps({
-        "verdict": verdict,
-        "headline": headline if 'headline' in dir() else None,
-        "panel": panel,
-        "key_finding": key_finding,
-        "r12": r12 if 'r12' in dir() else None,
-    }, indent=2, default=str))
+    print(
+        json.dumps(
+            {
+                "verdict": verdict,
+                "headline": headline if "headline" in dir() else None,
+                "panel": panel,
+                "key_finding": key_finding,
+                "r12": r12 if "r12" in dir() else None,
+            },
+            indent=2,
+            default=str,
+        )
+    )
 
 
 if __name__ == "__main__":

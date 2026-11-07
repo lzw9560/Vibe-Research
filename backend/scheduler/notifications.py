@@ -3,6 +3,7 @@
 
 S093 R10/R12 + S101 飞书多点通知（9:25 竞价 / 9:35 开盘 / T+1 复盘）。
 """
+
 from __future__ import annotations
 
 import logging
@@ -175,6 +176,7 @@ def _check_premarket_kill_switch() -> dict:
     try:
         from strategies.execution_model import check_market_kill_switch
         import astock  # noqa: PLC0415
+
         ks = check_market_kill_switch(astock.index_quote())
         return {
             "triggered": ks.triggered,
@@ -184,8 +186,12 @@ def _check_premarket_kill_switch() -> dict:
         }
     except Exception as e:  # noqa: BLE001
         logger.warning("[S136] kill_switch 检查失败，降级 not_triggered: %s", e)
-        return {"triggered": False, "reason": f"检查失败（降级不触发）: {e}",
-                "sh_change_pct": None, "gem_change_pct": None}
+        return {
+            "triggered": False,
+            "reason": f"检查失败（降级不触发）: {e}",
+            "sh_change_pct": None,
+            "gem_change_pct": None,
+        }
 
 
 def _prepend_kill_switch_warning(content: str, ks: dict) -> str:
@@ -209,7 +215,9 @@ def _prepend_kill_switch_warning(content: str, ks: dict) -> str:
 
 
 def _build_auction_notify_content(
-    f_date: str, final_cards: list[dict], quotes: dict[str, dict],
+    f_date: str,
+    final_cards: list[dict],
+    quotes: dict[str, dict],
 ) -> str:
     """9:25 竞价确认通知：逐只高开/低开/平开（open vs last_close）。"""
     lines = [f"🔔 9:25 竞价确认 {f_date}", "", f"竞价标的 {len(final_cards)} 只:"]
@@ -231,7 +239,9 @@ def _build_auction_notify_content(
 
 
 def _build_open_notify_content(
-    f_date: str, final_cards: list[dict], quotes: dict[str, dict],
+    f_date: str,
+    final_cards: list[dict],
+    quotes: dict[str, dict],
 ) -> str:
     """9:35 开盘表现通知：逐只现价/涨跌幅/封板状态。"""
     lines = [f"📈 9:35 开盘表现 {f_date}", "", f"开盘标的 {len(final_cards)} 只:"]
@@ -256,7 +266,9 @@ def _build_open_notify_content(
 
 
 def _compute_t1_returns(
-    final_cards: list[dict], f_date: str, t_date: str,
+    final_cards: list[dict],
+    f_date: str,
+    t_date: str,
 ) -> list[dict]:
     """算 final_candidates 在 T 日的 close2close 收益（F close → T close）。
 
@@ -277,11 +289,15 @@ def _compute_t1_returns(
         t_close = _bar_close(bars, t_date)
         if f_close and t_close and f_close > 0:
             ret = (t_close - f_close) / f_close * 100
-            out.append({
-                "code": code, "name": name,
-                "f_close": round(f_close, 2), "t_close": round(t_close, 2),
-                "return_pct": round(ret, 2),
-            })
+            out.append(
+                {
+                    "code": code,
+                    "name": name,
+                    "f_close": round(f_close, 2),
+                    "t_close": round(t_close, 2),
+                    "return_pct": round(ret, 2),
+                }
+            )
     return out
 
 
@@ -298,7 +314,9 @@ def _bar_close(bars: list[dict], target_date: str) -> float | None:
 
 
 def _build_t1_review_content(
-    f_date: str, t_date: str, returns: list[dict],
+    f_date: str,
+    t_date: str,
+    returns: list[dict],
 ) -> str:
     """T+1 复盘通知：均值/胜率/逐只 + §44 诚实口径。"""
     n = len(returns)

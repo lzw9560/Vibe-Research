@@ -10,6 +10,7 @@ def fetch_auction(date: str) -> dict[str, dict]:
     """返回 {code: {name, auction_open_pct}}。取不到返回 {}。"""
     try:
         import auction_screener as asc
+
         result = asc.get_screener().analyze(date)
     except Exception:
         return {}

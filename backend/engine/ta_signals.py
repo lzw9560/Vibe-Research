@@ -19,6 +19,7 @@ RSI（14 日默认）算超买/超卖 + 背离：
 - MACD 震荡市钝化（连续背离假信号）——caveat 标注
 - RSI 涨跌停致钝化（连续涨停长期超买）——涨停状态过滤（close=涨停价）
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,12 +27,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 # 参数（§44 sweep 空间，起点非拍死）
-MACD_FAST = 12          # MACD 快线 EMA 周期
-MACD_SLOW = 26          # MACD 慢线 EMA 周期
-MACD_SIGNAL = 9         # MACD 信号线 EMA 周期
-RSI_PERIOD = 14         # RSI 周期（默认 14 日）
+MACD_FAST = 12  # MACD 快线 EMA 周期
+MACD_SLOW = 26  # MACD 慢线 EMA 周期
+MACD_SIGNAL = 9  # MACD 信号线 EMA 周期
+RSI_PERIOD = 14  # RSI 周期（默认 14 日）
 RSI_OVERBOUGHT = 70.0  # RSI 超买阈值
-RSI_OVERSOLD = 30.0     # RSI 超卖阈值
+RSI_OVERSOLD = 30.0  # RSI 超卖阈值
 DIVERGENCE_WINDOW = 20  # 背离判定窗口（往前看 N 日找前高/前低 + 指标前高/前低）
 LIMIT_UP_RATIO = 0.095  # A 股涨停价比例（主板 10%，ST 5%，创业板/科创板 20%——默认主板）
 
@@ -131,7 +132,9 @@ def _classify_macd_divergence_from_bars(bars: list[dict], target_idx: int) -> di
         params: {dif, dea, macd_hist, price_high, macd_high}}
     """
     result = {
-        "type": "无背离", "regime": "噪声", "confidence": 0.0,
+        "type": "无背离",
+        "regime": "噪声",
+        "confidence": 0.0,
         "params": {},
     }
     if target_idx < 0 or target_idx >= len(bars):
@@ -140,7 +143,9 @@ def _classify_macd_divergence_from_bars(bars: list[dict], target_idx: int) -> di
 
     closes = [_bar_get(b, "close") for b in bars]
     if len(closes) < MACD_SLOW + MACD_SIGNAL + DIVERGENCE_WINDOW:
-        result["params"] = {"error": f"数据不足（需 {MACD_SLOW + MACD_SIGNAL + DIVERGENCE_WINDOW} 日，实际 {len(closes)} 日）"}
+        result["params"] = {
+            "error": f"数据不足（需 {MACD_SLOW + MACD_SIGNAL + DIVERGENCE_WINDOW} 日，实际 {len(closes)} 日）"
+        }
         return result
 
     dif, dea, macd_hist = _compute_macd(closes)
@@ -171,13 +176,17 @@ def _classify_macd_divergence_from_bars(bars: list[dict], target_idx: int) -> di
     # 顶背离：当前价格创新高（> 前高）但 MACD 柱未创新高（< 前高）
     if curr_close > price_prev_high and curr_macd < macd_prev_high:
         return {
-            "type": "顶背离", "regime": "反转", "confidence": 0.7,
+            "type": "顶背离",
+            "regime": "反转",
+            "confidence": 0.7,
             "params": params,
         }
     # 底背离：当前价格创新低（< 前低）但 MACD 柱未创新低（> 前低，即更不低）
     if curr_close < price_prev_low and curr_macd > macd_prev_low:
         return {
-            "type": "底背离", "regime": "反转", "confidence": 0.7,
+            "type": "底背离",
+            "regime": "反转",
+            "confidence": 0.7,
             "params": params,
         }
 
@@ -193,8 +202,12 @@ def _classify_rsi_from_bars(bars: list[dict], target_idx: int, period: int = RSI
         params: {rsi, price_prev_high, rsi_prev_high, ...}}
     """
     result = {
-        "rsi": 50.0, "state": "中性", "divergence": "无背离",
-        "regime": "噪声", "confidence": 0.0, "params": {},
+        "rsi": 50.0,
+        "state": "中性",
+        "divergence": "无背离",
+        "regime": "噪声",
+        "confidence": 0.0,
+        "params": {},
     }
     if target_idx < 0 or target_idx >= len(bars):
         result["params"] = {"error": "target_idx 越界"}
@@ -264,8 +277,12 @@ def _classify_rsi_from_bars(bars: list[dict], target_idx: int, period: int = RSI
     }
 
     return {
-        "rsi": round(curr_rsi, 4), "state": state, "divergence": divergence,
-        "regime": regime, "confidence": round(confidence, 3), "params": params,
+        "rsi": round(curr_rsi, 4),
+        "state": state,
+        "divergence": divergence,
+        "regime": regime,
+        "confidence": round(confidence, 3),
+        "params": params,
     }
 
 
@@ -278,13 +295,16 @@ def classify_macd_divergence(code: str, date: str) -> dict:
     try:
         from baostock.util import bs  # noqa: PLC0415
     except ImportError:
-        return {"type": "无背离", "regime": "噪声", "confidence": 0.0,
-                "params": {"error": "baostock 未装"}}
+        return {"type": "无背离", "regime": "噪声", "confidence": 0.0, "params": {"error": "baostock 未装"}}
 
     bars = _fetch_baostock_bars(code, date, count=60)
     if not bars:
-        return {"type": "无背离", "regime": "噪声", "confidence": 0.0,
-                "params": {"error": f"baostock 无数据 {code} {date}"}}
+        return {
+            "type": "无背离",
+            "regime": "噪声",
+            "confidence": 0.0,
+            "params": {"error": f"baostock 无数据 {code} {date}"},
+        }
 
     target_idx = -1
     for i, b in enumerate(bars):
@@ -292,8 +312,12 @@ def classify_macd_divergence(code: str, date: str) -> dict:
             target_idx = i
             break
     if target_idx < 0:
-        return {"type": "无背离", "regime": "噪声", "confidence": 0.0,
-                "params": {"error": f"target_date {date} 不在 bars"}}
+        return {
+            "type": "无背离",
+            "regime": "噪声",
+            "confidence": 0.0,
+            "params": {"error": f"target_date {date} 不在 bars"},
+        }
 
     return _classify_macd_divergence_from_bars(bars, target_idx)
 
@@ -307,15 +331,25 @@ def classify_rsi(code: str, date: str, period: int = RSI_PERIOD) -> dict:
     try:
         from baostock.util import bs  # noqa: PLC0415
     except ImportError:
-        return {"rsi": 50.0, "state": "中性", "divergence": "无背离",
-                "regime": "噪声", "confidence": 0.0,
-                "params": {"error": "baostock 未装"}}
+        return {
+            "rsi": 50.0,
+            "state": "中性",
+            "divergence": "无背离",
+            "regime": "噪声",
+            "confidence": 0.0,
+            "params": {"error": "baostock 未装"},
+        }
 
     bars = _fetch_baostock_bars(code, date, count=60)
     if not bars:
-        return {"rsi": 50.0, "state": "中性", "divergence": "无背离",
-                "regime": "噪声", "confidence": 0.0,
-                "params": {"error": f"baostock 无数据 {code} {date}"}}
+        return {
+            "rsi": 50.0,
+            "state": "中性",
+            "divergence": "无背离",
+            "regime": "噪声",
+            "confidence": 0.0,
+            "params": {"error": f"baostock 无数据 {code} {date}"},
+        }
 
     target_idx = -1
     for i, b in enumerate(bars):
@@ -323,9 +357,14 @@ def classify_rsi(code: str, date: str, period: int = RSI_PERIOD) -> dict:
             target_idx = i
             break
     if target_idx < 0:
-        return {"rsi": 50.0, "state": "中性", "divergence": "无背离",
-                "regime": "噪声", "confidence": 0.0,
-                "params": {"error": f"target_date {date} 不在 bars"}}
+        return {
+            "rsi": 50.0,
+            "state": "中性",
+            "divergence": "无背离",
+            "regime": "噪声",
+            "confidence": 0.0,
+            "params": {"error": f"target_date {date} 不在 bars"},
+        }
 
     return _classify_rsi_from_bars(bars, target_idx, period)
 
@@ -335,6 +374,7 @@ def _fetch_baostock_bars(code: str, end_date: str, count: int = 60) -> list[dict
     try:
         from engine.bars_provider import _baostock_a_share_hist  # noqa: PLC0415
         from datetime import datetime, timedelta
+
         end = datetime.strptime(end_date, "%Y-%m-%d")
         start = (end - timedelta(days=count * 2)).strftime("%Y-%m-%d")
         bars = _baostock_a_share_hist(code, start, end_date)
@@ -345,9 +385,19 @@ def _fetch_baostock_bars(code: str, end_date: str, count: int = 60) -> list[dict
 
 
 __all__ = [
-    "classify_macd_divergence", "_classify_macd_divergence_from_bars",
-    "classify_rsi", "_classify_rsi_from_bars",
-    "_compute_macd", "_compute_rsi", "_ema", "_is_limit_up",
-    "MACD_FAST", "MACD_SLOW", "MACD_SIGNAL", "RSI_PERIOD",
-    "RSI_OVERBOUGHT", "RSI_OVERSOLD", "DIVERGENCE_WINDOW",
+    "classify_macd_divergence",
+    "_classify_macd_divergence_from_bars",
+    "classify_rsi",
+    "_classify_rsi_from_bars",
+    "_compute_macd",
+    "_compute_rsi",
+    "_ema",
+    "_is_limit_up",
+    "MACD_FAST",
+    "MACD_SLOW",
+    "MACD_SIGNAL",
+    "RSI_PERIOD",
+    "RSI_OVERBOUGHT",
+    "RSI_OVERSOLD",
+    "DIVERGENCE_WINDOW",
 ]

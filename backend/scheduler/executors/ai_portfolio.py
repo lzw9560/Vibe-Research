@@ -4,6 +4,7 @@
 依赖 scheduler.notifications 模块的函数——通过模块对象引用（非直接 import 函数名），
 以便测试 monkeypatch ``scheduler.notifications._compute_*`` 等能生效。
 """
+
 from __future__ import annotations
 
 import logging
@@ -64,10 +65,12 @@ def candidate_funnel_precompute(payload: Dict[str, Any]) -> Dict[str, Any]:
         from candidate_funnel import funnel as funnel_mod
         from candidate_funnel.models import ThresholdConfig
         from vr_paths import last_trading_date_str
+
         target = payload.get("date") or last_trading_date_str()
         # 复用 candidates 路由的 live config（用户调参后一致）
         try:
             from routers.candidates import _store
+
             cfg = _store["config"]
             if not isinstance(cfg, ThresholdConfig):
                 cfg = ThresholdConfig(**cfg) if isinstance(cfg, dict) else ThresholdConfig()
@@ -76,6 +79,7 @@ def candidate_funnel_precompute(payload: Dict[str, Any]) -> Dict[str, Any]:
         result = funnel_mod.run_funnel("all", target, cfg)
         # S087 R10：落库 funnel_cache（前端 tab 读缓存秒开，进程重启不丢）
         from candidate_funnel.funnel_cache import save_funnel_result
+
         save_funnel_result(target, "all", result)
 
         # S093 R10：final_candidates 诊断卡 + 双重确认 + 战法映射
@@ -95,8 +99,12 @@ def candidate_funnel_precompute(payload: Dict[str, Any]) -> Dict[str, Any]:
         if final_cards:
             try:
                 from notification.notification_service import NotificationService
+
                 content = _notif._build_premarket_notification_content(
-                    target, final_cards, dual_count, strategy_map,
+                    target,
+                    final_cards,
+                    dual_count,
+                    strategy_map,
                 )
                 ns = NotificationService()
                 if ns.is_available():
@@ -115,10 +123,12 @@ def candidate_funnel_precompute(payload: Dict[str, Any]) -> Dict[str, Any]:
         # 须 _collect 采集才让选股页显数据（fire-and-forget，主 loop 后台跑，不阻塞 executor）。
         try:
             from routers.workflow import trigger_collect  # noqa: PLC0415
+
             triggered = trigger_collect(target)
             logger.info(
                 "[candidate_funnel_precompute] briefing _collect %s（target=%s；实际采集由 dedup status=running 决定）",
-                "已调度到主 loop" if triggered else "跳过（主 loop 未设/已关）", target,
+                "已调度到主 loop" if triggered else "跳过（主 loop 未设/已关）",
+                target,
             )
         except Exception as exc:  # noqa: BLE001 — briefing 触发失败不阻断 precompute 主流程
             logger.warning("[candidate_funnel_precompute] briefing _collect 触发失败: %s", exc)

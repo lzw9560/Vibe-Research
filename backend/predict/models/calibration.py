@@ -3,6 +3,7 @@
 Uses mapie 1.4.1 SplitConformalClassifier with a RandomForest base estimator.
 Windows-safe: avoids lightgbm (access violation on this platform).
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -28,9 +29,7 @@ class ConformalCalibrator:
         )
         self.conformalizer_: SplitConformalClassifier | None = None
 
-    def fit(
-        self, X: np.ndarray, y: np.ndarray, *, calib_size: float = 0.3
-    ) -> "ConformalCalibrator":
+    def fit(self, X: np.ndarray, y: np.ndarray, *, calib_size: float = 0.3) -> "ConformalCalibrator":
         """Fit base estimator on a train split, then conformalize on a hold-out."""
         X_train, X_calib, y_train, y_calib = train_test_split(
             X,

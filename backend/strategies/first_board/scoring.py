@@ -7,6 +7,7 @@
 - 020 加权总分：score_candidate（权重按市场档位分层）
 - 020 排序：rank_candidates（按板块分组+降序）
 """
+
 from __future__ import annotations
 
 import logging
@@ -35,6 +36,7 @@ _logger = logging.getLogger(__name__)
 #   （不依赖 gene_scores.db 当日回填——盘后未回填导致降级50）
 # 逻辑：同行业涨停≥3 只=联动强，0-100 归一化。
 # em_zt_topic_pool 有 24h TTL 缓存，重复调不慢（fetch_zt_pool 已拉过，命中缓存）。
+
 
 def score_dim1_sector(candidate: dict, date: str) -> tuple[float, dict]:
     """板块评分——用涨停池 industry（hybk）字段聚合同行业涨停数。
@@ -86,6 +88,7 @@ def score_dim1_sector(candidate: dict, date: str) -> tuple[float, dict]:
 #   （不取当日龙虎榜——盘后当日未出→compute_seat_risk_factor "无数据"→50 降级）
 # 逻辑：有上榜记录=游资参与，机构净买入=接力支撑，0-100 归一化。
 
+
 def score_dim2_hot_money(candidate: dict, date: str) -> tuple[float, dict]:
     """游资画像评分——用最近龙虎榜记录（不取当日）。
 
@@ -103,15 +106,20 @@ def score_dim2_hot_money(candidate: dict, date: str) -> tuple[float, dict]:
         数据缺失时对应字段 None。
     """
     raw: dict = {
-        "seat_risk_label": None, "one_day_ratio": None,
-        "billboard_count": None, "inst_net": None,
+        "seat_risk_label": None,
+        "one_day_ratio": None,
+        "billboard_count": None,
+        "inst_net": None,
     }
     try:
         from astock import dragon_tiger_board
+
         code = candidate.get("code", "")
         if not code:
             return 50.0, raw
-        _dt = f"{date[:4]}-{date[4:6]}-{date[6:8]}" if len(date) == 8 else date  # S085 A2d：YYYYMMDD→ISO（dragon_tiger_board strptime %Y-%m-%d，裸传 YYYYMMDD 会 ValueError→静默 50）
+        _dt = (
+            f"{date[:4]}-{date[4:6]}-{date[6:8]}" if len(date) == 8 else date
+        )  # S085 A2d：YYYYMMDD→ISO（dragon_tiger_board strptime %Y-%m-%d，裸传 YYYYMMDD 会 ValueError→静默 50）
         raw_dt = dragon_tiger_board(code, trade_date=_dt) or {}  # S085 A2d 残留：传 date 修 replay 误取今日
         records = raw_dt.get("records") or []
         institution = raw_dt.get("institution") or {}
@@ -148,6 +156,7 @@ def score_dim2_hot_money(candidate: dict, date: str) -> tuple[float, dict]:
 # 数据源：ZTPoolItem 封单/首封/炸板 + breakout_20d（可选）+ 振幅
 # 逻辑：封板越早/封单越大/不炸=越强，0-100 加权。
 
+
 def score_dim3_seal_strength(candidate: dict, date: str) -> tuple[float, dict]:
     """封板强度评分。
 
@@ -165,8 +174,11 @@ def score_dim3_seal_strength(candidate: dict, date: str) -> tuple[float, dict]:
         数据缺失时对应字段 None。
     """
     raw: dict = {
-        "first_seal": None, "seal_amount": None, "float_cap": None,
-        "seal_ratio": None, "break_times": None,
+        "first_seal": None,
+        "seal_amount": None,
+        "float_cap": None,
+        "seal_ratio": None,
+        "break_times": None,
     }
     try:
         # 子项1：首封时间（92500-145000 → 0-100）
@@ -229,6 +241,7 @@ def score_dim3_seal_strength(candidate: dict, date: str) -> tuple[float, dict]:
 # §44 未 validated，待回测校准。
 # 数据源：tencent_quote 换手/量比/成交额/振幅
 # 逻辑：缩量+健康换手=筹码稳定，0-100 加权。
+
 
 def score_dim4_chip(candidate: dict, date: str) -> tuple[float, dict]:
     """筹码结构评分。
@@ -318,6 +331,7 @@ def score_dim4_chip(candidate: dict, date: str) -> tuple[float, dict]:
 # 数据源：T 日 9:25 竞价高开 1-3% + 竞价量≥昨日 5%
 # 逻辑：T 日盘前实时，T-1 盘后预填 0 待 T 日更新。
 
+
 def score_dim5_auction(candidate: dict, date: str) -> tuple[float, dict]:
     """竞价确认评分（废弃——数据缺失返 -1 不参与加权）。
 
@@ -335,6 +349,7 @@ def score_dim5_auction(candidate: dict, date: str) -> tuple[float, dict]:
 # §44 未 validated，待回测校准。
 # 数据源：predict.features.fund_flow.fetch_northbound 个股北向净流入
 # 逻辑：正流入加分（2024-08-19 后停更降级 50 分）
+
 
 def score_dim6_northbound(candidate: dict, date: str) -> tuple[float, dict]:
     """北向资金评分。
@@ -354,6 +369,7 @@ def score_dim6_northbound(candidate: dict, date: str) -> tuple[float, dict]:
     raw: dict = {"northbound_net": None}
     try:
         from predict.features.fund_flow import fetch_northbound
+
         code = candidate.get("code", "")
         if not code:
             return 50.0, raw
@@ -383,6 +399,7 @@ def score_dim6_northbound(candidate: dict, date: str) -> tuple[float, dict]:
 # 数据源：astock.dragon_tiger_board + data.mappers.dragon_tiger_from_dict
 # 逻辑：机构净买入=基本面认可（无龙虎榜降级 50 分）
 
+
 def score_dim7_institution(candidate: dict, date: str) -> tuple[float, dict]:
     """龙虎榜机构评分。
 
@@ -400,10 +417,13 @@ def score_dim7_institution(candidate: dict, date: str) -> tuple[float, dict]:
     try:
         from astock import dragon_tiger_board
         from data.mappers import dragon_tiger_from_dict
+
         code = candidate.get("code", "")
         if not code:
             return 50.0, raw
-        _dt = f"{date[:4]}-{date[4:6]}-{date[6:8]}" if len(date) == 8 else date  # S085 A2d：YYYYMMDD→ISO（dragon_tiger_board strptime %Y-%m-%d，裸传 YYYYMMDD 会 ValueError→静默 50）
+        _dt = (
+            f"{date[:4]}-{date[4:6]}-{date[6:8]}" if len(date) == 8 else date
+        )  # S085 A2d：YYYYMMDD→ISO（dragon_tiger_board strptime %Y-%m-%d，裸传 YYYYMMDD 会 ValueError→静默 50）
         raw_dt = dragon_tiger_board(code, trade_date=_dt) or {}  # S085 A2d 残留：传 date 修 replay 误取今日
         dt = dragon_tiger_from_dict(raw_dt)
         inst_net = dt.institution_net  # 万元
@@ -429,6 +449,7 @@ def score_dim7_institution(candidate: dict, date: str) -> tuple[float, dict]:
 # 数据源：astock.ths_limit_up_pool reason 聚合
 # 逻辑：同题材涨停≥3 只=满热度
 
+
 def score_dim8_theme(candidate: dict, date: str) -> tuple[float, dict]:
     """题材热度评分。
 
@@ -446,6 +467,7 @@ def score_dim8_theme(candidate: dict, date: str) -> tuple[float, dict]:
     raw: dict = {"theme_zt_count": None, "theme_name": None}
     try:
         from astock import ths_limit_up_pool
+
         code = candidate.get("code", "")
         if not code:
             return 50.0, raw
@@ -501,6 +523,7 @@ def score_dim8_theme(candidate: dict, date: str) -> tuple[float, dict]:
 # 数据源：astock.announcements + news_radar_context.classify_announcement
 # 逻辑：#33/#34 利多加分 + #35-39 利空扣分，无公告=50 分中性
 
+
 def score_dim9_event(candidate: dict, date: str) -> tuple[float, dict]:
     """事件评分。
 
@@ -523,6 +546,7 @@ def score_dim9_event(candidate: dict, date: str) -> tuple[float, dict]:
     try:
         from astock import announcements
         from strategies.news_radar_context import classify_announcement
+
         code = candidate.get("code", "")
         if not code:
             return 50.0, raw
@@ -557,6 +581,7 @@ def score_dim9_event(candidate: dict, date: str) -> tuple[float, dict]:
 # ===========================================================================
 # 数据缺失维度返 score=-1，不参与加权（权重重分配到其他有效维度）。
 
+
 def score_dim_seal_time(candidate: dict, date: str) -> tuple[float, dict]:
     """封板时间评分——10:30 前满分，越晚越低。
 
@@ -573,15 +598,15 @@ def score_dim_seal_time(candidate: dict, date: str) -> tuple[float, dict]:
     raw["first_seal"] = fbt
     raw["seal_time_hhmm"] = _fbt_to_hhmm(fbt)
     # fbt 格式 HHMMSS 数字，92500=09:25:00
-    if fbt <= 103000:      # 10:30 前满分
+    if fbt <= 103000:  # 10:30 前满分
         return 100.0, raw
-    elif fbt <= 110000:    # 10:30-11:00
+    elif fbt <= 110000:  # 10:30-11:00
         return 80.0, raw
-    elif fbt <= 130000:    # 11:00-13:00
+    elif fbt <= 130000:  # 11:00-13:00
         return 60.0, raw
-    elif fbt <= 140000:    # 13:00-14:00
+    elif fbt <= 140000:  # 13:00-14:00
         return 40.0, raw
-    else:                  # 14:00 后尾盘
+    else:  # 14:00 后尾盘
         return 20.0, raw
 
 
@@ -660,13 +685,13 @@ def score_dim_seal_ratio(candidate: dict, date: str) -> tuple[float, dict]:
         return -1.0, raw
     ratio = seal / fcap
     raw["seal_ratio"] = round(ratio, 4)
-    if ratio >= 0.02:       # ≥2% 满分
+    if ratio >= 0.02:  # ≥2% 满分
         return 100.0, raw
-    elif ratio >= 0.01:    # 1-2%
+    elif ratio >= 0.01:  # 1-2%
         return 80.0, raw
-    elif ratio >= 0.005:   # 0.5-1%
+    elif ratio >= 0.005:  # 0.5-1%
         return 60.0, raw
-    else:                  # <0.5%（含硬剔除底线 0.1% 以上的）
+    else:  # <0.5%（含硬剔除底线 0.1% 以上的）
         return 30.0, raw
 
 

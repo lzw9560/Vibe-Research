@@ -8,6 +8,7 @@ stoke skill 装在 ~/stoke（symlink ~/.claude/skills/stoke），但当前会话
   STOKE_HOME=~/stoke ~/stoke/.venv/bin/python -c "from stoke.sources.mootdx_source import MootdxSource; ..."
   或本 wrapper：python tools/stoke_wrapper.py --realtime 000001,600000
 """
+
 from __future__ import annotations
 
 import argparse
@@ -23,6 +24,7 @@ os.environ.setdefault("STOKE_HOME", str(Path.home() / "stoke"))
 def _mootdx_realtime(codes: list[str]) -> dict:
     """实时五档盘口（mootdx TCP，交易日盘中有效，盘后/非交易日返空）。"""
     from stoke.sources.mootdx_source import MootdxSource  # noqa: PLC0415
+
     m = MootdxSource()
     if not m.health_check():
         return {"note": "mootdx 连通失败（盘后/非交易日/服务器配置），实时五档需交易日盘中测"}
@@ -33,6 +35,7 @@ def _mootdx_realtime(codes: list[str]) -> dict:
 def _mootdx_kline(code: str) -> dict:
     """日 K 线（800 条）。"""
     from stoke.sources.mootdx_source import MootdxSource  # noqa: PLC0415
+
     m = MootdxSource()
     df = m.get_kline(code)
     return {"code": code, "n_bars": len(df), "data": df.to_dict(orient="records") if len(df) else []}

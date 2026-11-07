@@ -8,6 +8,7 @@
 grill Q2=B 修正：派生盘前取 T-1 昨日 snapshots（非今日）。
 S084 follow-up：预采集表由 derived_results 合并入 seal_derived_features（接口不变）。
 """
+
 from __future__ import annotations
 
 
@@ -26,6 +27,7 @@ def fetch_derived(code: str, yesterday_date: str) -> dict | None:
     # 1. 读预采集表
     try:
         from risk.seal_intraday_collector import get_derived_result
+
         cached = get_derived_result(code, yesterday_date)
     except Exception:
         cached = None
@@ -35,6 +37,7 @@ def fetch_derived(code: str, yesterday_date: str) -> dict | None:
         # S085 B3：并入 intraday_features trajectory 的 seal_delta（修只写不读孤儿）
         try:
             from risk.seal_intraday_collector import get_trajectory_result
+
             traj = get_trajectory_result(code, yesterday_date)
             if traj is not None:
                 cached["seal_delta"] = traj.get("seal_delta")
@@ -48,6 +51,7 @@ def fetch_derived(code: str, yesterday_date: str) -> dict | None:
     try:
         from risk.seal_intraday_collector import get_snapshots_by_code
         from strategies.intraday_features import compute_derived_features
+
         snaps = get_snapshots_by_code(code, yesterday_date)
         if not snaps:
             return None  # 盘前未采集，降级

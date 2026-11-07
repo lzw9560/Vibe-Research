@@ -8,6 +8,7 @@
 Phase 1: backfill 全市场股东户数到 .vibe-research/shareholder_count_cache.json
 Phase 2: §44 v3 严测
 """
+
 from __future__ import annotations
 import json
 import sys
@@ -45,6 +46,7 @@ def fetch_holder_detail(code: str):
     """akshare stock_zh_a_gdhs_detail_em 拿逐股股东户数历史."""
     try:
         import akshare as ak
+
         # akshare 需要 6 位 code，项目 DB 是纯数字，akshare 接受 sh/sz 前缀 or 6 位
         df = ak.stock_zh_a_gdhs_detail_em(symbol=code)
         if df is None or len(df) == 0:
@@ -71,15 +73,17 @@ def backfill(limit: int = 0):
     codes = get_all_codes()
     if limit > 0:
         codes = codes[:limit]
-    print(f"[backfill] {len(codes)} codes, 预计 {len(codes)*0.28/60:.1f} min")
+    print(f"[backfill] {len(codes)} codes, 预计 {len(codes) * 0.28 / 60:.1f} min")
 
     cache: dict[str, list] = {}
     ok = err = empty = 0
     t0 = time.time()
     for i, code in enumerate(codes):
         if i % 100 == 0 and i > 0:
-            print(f"  {i}/{len(codes)} ok={ok} empty={empty} err={err} "
-                  f"elapsed={time.time()-t0:.0f}s rate={i/(time.time()-t0):.1f}/s")
+            print(
+                f"  {i}/{len(codes)} ok={ok} empty={empty} err={err} "
+                f"elapsed={time.time() - t0:.0f}s rate={i / (time.time() - t0):.1f}/s"
+            )
         res = fetch_holder_detail(code)
         if isinstance(res, str):
             err += 1
@@ -93,9 +97,8 @@ def backfill(limit: int = 0):
 
     with open(HOLDER_CACHE, "w") as f:
         json.dump(cache, f, ensure_ascii=False)
-    print(f"\n[done] ok={ok} empty={empty} err={err} "
-          f"total={len(codes)} elapsed={time.time()-t0:.0f}s")
-    print(f"[saved] {HOLDER_CACHE} ({HOLDER_CACHE.stat().st_size/1024:.0f}KB)")
+    print(f"\n[done] ok={ok} empty={empty} err={err} total={len(codes)} elapsed={time.time() - t0:.0f}s")
+    print(f"[saved] {HOLDER_CACHE} ({HOLDER_CACHE.stat().st_size / 1024:.0f}KB)")
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ S235 三战法 → S234 战法映射，过排雷 filter，Block 则信号压制�
 设计：filter_fn 依赖注入（调用方传 filter_stock+to_json 包装）。tactics 包不直接
 import tools/short_term_tactics_filter（避免 path 耦合），便于纯逻辑测试。
 """
+
 from __future__ import annotations
 from typing import Callable
 

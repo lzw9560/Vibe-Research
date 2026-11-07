@@ -14,6 +14,7 @@ pit_store 留给需 pin live 数据的新线路如竞价量比等盘中线，YAG
 R8: 诚实标注——verify() R6 gate 内建（n<200 或 days_robust<60 → underpowered
 不外推），接线方不 override。
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -128,14 +129,13 @@ def wire_verdict(
     input_hashes = {
         "return_series": rs_hash,
         "dates": _sha256(json.dumps(dates or [], default=str).encode("utf-8"))[:12],
-        "params": _sha256(
-            json.dumps(params or {}, default=str, sort_keys=True).encode("utf-8")
-        )[:12],
+        "params": _sha256(json.dumps(params or {}, default=str, sort_keys=True).encode("utf-8"))[:12],
     }
     # S169 grill #5: pin input data files (forecast_reports/kline_cache) so
     # data-revalidation can detect 前复权 mutation. Caller passes {path: name}.
     if input_files:
         import os
+
         for path, name in input_files.items():
             try:
                 if os.path.exists(path):
@@ -143,6 +143,7 @@ def wire_verdict(
                         input_hashes[name] = _sha256(f.read())[:12]
             except Exception as e:  # noqa: BLE001
                 import logging
+
                 logging.getLogger(__name__).warning("_s44_wire 失败（降级，不阻塞）: %s", e)
 
     # ── Recorder.save (R4) ──

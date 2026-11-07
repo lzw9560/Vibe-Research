@@ -72,10 +72,11 @@ class ScreenerResult(BaseModel):
 @dataclass
 class BacktestPoint:
     """单个回测数据点。"""
-    date: str          # 涨停日期
+
+    date: str  # 涨停日期
     gene_score: float  # 当时计算的基因得分
     actual_next_day: float  # 实际次日表现（连板=1, 未连板=0）
-    seal_rate: float   # 封板率因子
+    seal_rate: float  # 封板率因子
     premium_rate: float  # 次日溢价率因子
 
 
@@ -84,9 +85,9 @@ def wilson_lower_bound(successes: int, trials: int, z: float = 1.96) -> float:
     if trials == 0:
         return 0.0
     p = successes / trials
-    denom = 1 + z ** 2 / trials
-    center = (p + z ** 2 / (2 * trials)) / denom
-    margin = (z * math.sqrt(p * (1 - p) / trials + z ** 2 / (4 * trials ** 2))) / denom
+    denom = 1 + z**2 / trials
+    center = (p + z**2 / (2 * trials)) / denom
+    margin = (z * math.sqrt(p * (1 - p) / trials + z**2 / (4 * trials**2))) / denom
     return max(0.0, center - margin)
 
 
@@ -204,9 +205,7 @@ def compute_gene_score(
     total = calc_total_score(factors)
     wilson_adj = round(total * wilson_lower_bound(len(history), max(len(history), 1), z=1.96), 2)
 
-    last_dates = sorted(set(
-        h.pool_date for h in history if h.pool_date
-    ), reverse=True)[:10]
+    last_dates = sorted(set(h.pool_date for h in history if h.pool_date), reverse=True)[:10]
 
     # 封单/流通盘 + 涨跌停价（来自涨停池原始数据）
     seal_amount = 0.0
@@ -233,17 +232,20 @@ def compute_gene_score(
                 bt_factors = compute_factors(history_for_bt, [], [])
                 bt_total = calc_total_score(bt_factors)
                 lbc = h.boards or 0
-                bt_points.append({
-                    "date": h.pool_date or "",
-                    "gene_score": round(bt_total, 2),
-                    "actual_next_day": 1.0 if lbc >= 2 else 0.0,
-                })
+                bt_points.append(
+                    {
+                        "date": h.pool_date or "",
+                        "gene_score": round(bt_total, 2),
+                        "actual_next_day": 1.0 if lbc >= 2 else 0.0,
+                    }
+                )
             history_for_bt.append(h)
         lianban_count = sum(1 for p in bt_points if p["actual_next_day"] >= 1)
         total_samples = len(bt_points) if bt_points else 0
         avg_score_lianban = (
             round(sum(p["gene_score"] for p in bt_points if p["actual_next_day"] >= 1) / lianban_count, 1)
-            if lianban_count > 0 else None
+            if lianban_count > 0
+            else None
         )
         bt_summary = {
             "samples": total_samples,

@@ -31,6 +31,7 @@ from strategies.strategy_funnel_registry import STRATEGY_REGISTRY  # noqa: E402,
 # 0. A股价格校验工具
 # ===========================================================================
 
+
 def _round_to_tick_size(price: float, tick_size: float = 0.01) -> float:
     """A股 tick-size rounding（默认 0.01 元）。"""
     return round(round(price / tick_size) * tick_size, 2)
@@ -73,43 +74,43 @@ class StrategySignal(BaseModel):
 
     code: str
     name: str
-    strategy_name: str = ""          # 战法名称
-    strategy_code: str = ""          # 首板挖掘/连板接力/炸板回封/低吸龙头/反包战法/N字反击/平台突破/尾盘偷袭
+    strategy_name: str = ""  # 战法名称
+    strategy_code: str = ""  # 首板挖掘/连板接力/炸板回封/低吸龙头/反包战法/N字反击/平台突破/尾盘偷袭
     score: float = 0.0
     signal_strength: int = 0
-    confidence: float = 0.0         # 当前信号置信度 (0-1)
+    confidence: float = 0.0  # 当前信号置信度 (0-1)
     matches: list[ConditionMatch] = []
     logic_description: str = ""
     strategy_tags: list[str] = []
     # 入场逻辑
-    entry_price: float = 0.0        # 建议入场价
-    entry_condition: str = ""       # 入场确认条件
-    entry_type: str = ""            # 入场类型（开盘/竞价/尾盘）
+    entry_price: float = 0.0  # 建议入场价
+    entry_condition: str = ""  # 入场确认条件
+    entry_type: str = ""  # 入场类型（开盘/竞价/尾盘）
     # 风控逻辑
-    stop_loss: float = 0.0          # 止损价
-    stop_loss_condition: str = ""   # 止损触发条件
-    take_profit: float = 0.0        # 止盈价
-    take_profit_condition: str = "" # 止盈触发条件
+    stop_loss: float = 0.0  # 止损价
+    stop_loss_condition: str = ""  # 止损触发条件
+    take_profit: float = 0.0  # 止盈价
+    take_profit_condition: str = ""  # 止盈触发条件
     # 持仓管理
-    max_hold_days: int = 0          # 最大持仓天数
-    exit_condition: str = ""        # 主动离场条件
+    max_hold_days: int = 0  # 最大持仓天数
+    exit_condition: str = ""  # 主动离场条件
     # 合成映射（非实测历史；§1.2 诚实命名 S147）
     confidence_mapped_winrate: float = 0.0  # confidence→winrate 合成映射（非实测）；见 winrate_source
-    mapped_avg_return: float = 0.0          # 由 mapped winrate 推算的平均收益（合成，非实测）
+    mapped_avg_return: float = 0.0  # 由 mapped winrate 推算的平均收益（合成，非实测）
     winrate_source: str = "confidence_map_synthetic"  # 胜率来源：confidence_map_synthetic / backtest_90d / none
-    sample_size: int = 0            # 统计样本量
+    sample_size: int = 0  # 统计样本量
     # 综合指标
     risk_reward_ratio: float = 0.0  # 风险收益比
-    conditions: dict = {}           # 战法触发条件详情
+    conditions: dict = {}  # 战法触发条件详情
     # 封单/流通盘风控
-    seal_amount: float = 0.0        # 封单额（元）
-    float_shares: float = 0.0       # 流通盘（股）
+    seal_amount: float = 0.0  # 封单额（元）
+    float_shares: float = 0.0  # 流通盘（股）
     seal_to_float_ratio: float = 0.0  # 封单/流通盘比
     # 教育性说明
-    reasoning: list[str] = []       # 推荐理由（教育性表述）
-    risk_notes: list[str] = []      # 风险提示
+    reasoning: list[str] = []  # 推荐理由（教育性表述）
+    risk_notes: list[str] = []  # 风险提示
     # S063 T6：天气适配度（适配/不适配/中性）——calc_weather_fit 填充
-    weather_fit: str = "中性"       # 默认中性保证向后兼容（未传 weather_state 时行为不变）
+    weather_fit: str = "中性"  # 默认中性保证向后兼容（未传 weather_state 时行为不变）
     # S094 R4：per-strategy volume_signal（量能信号）从 match 层下沉注入。
     # 龙头>10亿/平台突破 volume_breakout_ratio>2/低吸>5亿/反包成交额>15亿。
     # None=未计算（涨停 pipeline 不构造 market_scan_ctx，诚实降级）。
@@ -138,11 +139,11 @@ class LimitUpAnalysis(BaseModel):
     risk_rules: list[RiskRuleKnowledge]
     backtest_points: list[dict] = []  # 简化版回测数据
     disclaimer: str
-    seal_amount: float = 0.0        # 封单额（元）
-    float_shares: float = 0.0       # 流通盘（股）
+    seal_amount: float = 0.0  # 封单额（元）
+    float_shares: float = 0.0  # 流通盘（股）
     seal_to_float_ratio: float = 0.0  # 封单/流通盘比
-    limit_up_price: float = 0.0     # 涨停价
-    limit_down_price: float = 0.0   # 跌停价
+    limit_up_price: float = 0.0  # 涨停价
+    limit_down_price: float = 0.0  # 跌停价
 
 
 # ===========================================================================
@@ -216,90 +217,106 @@ def _build_condition_matches(
     # 条件1：高封单比（封单金额 / 成交额 > 0.1）
     seal_rate = gene.factors.get("封板率", 0)
     if seal_rate > SEAL_RATE_HIGH_THRESHOLD:
-        matches.append(ConditionMatch(
-            condition="高封板率",
-            value=f"封板率 {seal_rate:.1f}%",
-            description=(
-                f"策略逻辑上，{name} 的封板率为 {seal_rate:.1f}%，"
-                f"属于较高封板率水平。策略逻辑上，高封板率意味着该股的涨停较为稳固。"
-            ),
-        ))
+        matches.append(
+            ConditionMatch(
+                condition="高封板率",
+                value=f"封板率 {seal_rate:.1f}%",
+                description=(
+                    f"策略逻辑上，{name} 的封板率为 {seal_rate:.1f}%，"
+                    f"属于较高封板率水平。策略逻辑上，高封板率意味着该股的涨停较为稳固。"
+                ),
+            )
+        )
 
     # 绝对封单额/流通盘风控
     if gene.seal_to_float_ratio >= 0.05:
-        matches.append(ConditionMatch(
-            condition="高封单比",
-            value=f"封单/流通盘 {gene.seal_to_float_ratio:.2%}",
-            description=(
-                f"策略逻辑上，{name} 的封单额占流通盘比例为 {gene.seal_to_float_ratio:.2%}，"
-                f"属于较高水平。历史统计特征显示，高封单比通常意味着市场对该股的看多情绪较强。"
-            ),
-        ))
+        matches.append(
+            ConditionMatch(
+                condition="高封单比",
+                value=f"封单/流通盘 {gene.seal_to_float_ratio:.2%}",
+                description=(
+                    f"策略逻辑上，{name} 的封单额占流通盘比例为 {gene.seal_to_float_ratio:.2%}，"
+                    f"属于较高水平。历史统计特征显示，高封单比通常意味着市场对该股的看多情绪较强。"
+                ),
+            )
+        )
 
     # 条件2：基因高分
     if gene.total_score >= GENE_HIGH_THRESHOLD:
-        matches.append(ConditionMatch(
-            condition="基因高分",
-            value=f"基因得分 {gene.total_score}",
-            description=(
-                f"策略逻辑上，{name} 的基因得分为 {gene.total_score}，"
-                f"属于高基因股票。历史统计特征显示，高基因股票在涨停后次日溢价的概率较高。"
-            ),
-        ))
+        matches.append(
+            ConditionMatch(
+                condition="基因高分",
+                value=f"基因得分 {gene.total_score}",
+                description=(
+                    f"策略逻辑上，{name} 的基因得分为 {gene.total_score}，"
+                    f"属于高基因股票。历史统计特征显示，高基因股票在涨停后次日溢价的概率较高。"
+                ),
+            )
+        )
     elif gene.total_score >= GENE_QUALIFY_THRESHOLD:
-        matches.append(ConditionMatch(
-            condition="基因合格",
-            value=f"基因得分 {gene.total_score}",
-            description=(
-                f"策略逻辑上，{name} 的基因得分为 {gene.total_score}，"
-                f"属于基因合格股票。历史统计特征显示，该类股票具备一定的涨停后溢价能力。"
-            ),
-        ))
+        matches.append(
+            ConditionMatch(
+                condition="基因合格",
+                value=f"基因得分 {gene.total_score}",
+                description=(
+                    f"策略逻辑上，{name} 的基因得分为 {gene.total_score}，"
+                    f"属于基因合格股票。历史统计特征显示，该类股票具备一定的涨停后溢价能力。"
+                ),
+            )
+        )
     else:
-        matches.append(ConditionMatch(
-            condition="基因偏低",
-            value=f"基因得分 {gene.total_score}",
-            description=(
-                f"策略逻辑上，{name} 的基因得分为 {gene.total_score}，"
-                f"低于合格阈值。历史统计特征显示，该类股票的涨停后溢价概率相对较低。"
-            ),
-        ))
+        matches.append(
+            ConditionMatch(
+                condition="基因偏低",
+                value=f"基因得分 {gene.total_score}",
+                description=(
+                    f"策略逻辑上，{name} 的基因得分为 {gene.total_score}，"
+                    f"低于合格阈值。历史统计特征显示，该类股票的涨停后溢价概率相对较低。"
+                ),
+            )
+        )
 
     # 条件3：低封板率
     seal_rate = gene.factors.get("封板率", 0)
     if seal_rate < 50:
-        matches.append(ConditionMatch(
-            condition="低封板率",
-            value=f"封板率 {seal_rate:.1f}%",
-            description=(
-                f"策略逻辑上，{name} 的封板率为 {seal_rate:.1f}%，"
-                f"属于较低封板率水平。策略逻辑上，低封板率意味着涨停的稳固性可能不足。"
-            ),
-        ))
+        matches.append(
+            ConditionMatch(
+                condition="低封板率",
+                value=f"封板率 {seal_rate:.1f}%",
+                description=(
+                    f"策略逻辑上，{name} 的封板率为 {seal_rate:.1f}%，"
+                    f"属于较低封板率水平。策略逻辑上，低封板率意味着涨停的稳固性可能不足。"
+                ),
+            )
+        )
 
     # 条件4：涨停频次
     freq = gene.factors.get("涨停频次", 0)
     if freq > 60:
-        matches.append(ConditionMatch(
-            condition="高频涨停",
-            value=f"涨停频次得分 {freq:.1f}",
-            description=(
-                f"策略逻辑上，{name} 在近 {LOOKBACK_DAYS} 日内涨停 {gene.zt_count_250d} 次，"
-                f"涨停频次较高。历史统计特征显示，高频涨停股通常受资金关注度高。"
-            ),
-        ))
+        matches.append(
+            ConditionMatch(
+                condition="高频涨停",
+                value=f"涨停频次得分 {freq:.1f}",
+                description=(
+                    f"策略逻辑上，{name} 在近 {LOOKBACK_DAYS} 日内涨停 {gene.zt_count_250d} 次，"
+                    f"涨停频次较高。历史统计特征显示，高频涨停股通常受资金关注度高。"
+                ),
+            )
+        )
 
     # 条件5：次日溢价率
     premium = gene.factors.get("次日溢价率", 0)
     if premium > 60:
-        matches.append(ConditionMatch(
-            condition="高次日溢价",
-            value=f"次日溢价率 {premium:.1f}%",
-            description=(
-                f"策略逻辑上，{name} 的次日溢价率为 {premium:.1f}%，"
-                f"属于较高的次日溢价水平。历史统计特征显示，该类股票涨停后次日获得正收益的概率较高。"
-            ),
-        ))
+        matches.append(
+            ConditionMatch(
+                condition="高次日溢价",
+                value=f"次日溢价率 {premium:.1f}%",
+                description=(
+                    f"策略逻辑上，{name} 的次日溢价率为 {premium:.1f}%，"
+                    f"属于较高的次日溢价水平。历史统计特征显示，该类股票涨停后次日获得正收益的概率较高。"
+                ),
+            )
+        )
 
     # 组装逻辑说明
     if matches:
@@ -323,6 +340,7 @@ def _build_condition_matches(
 # ===========================================================================
 # 4. 个股分析主函数
 # ===========================================================================
+
 
 async def get_analysis(code: str, date: str | None = None, risk: OneDayRisk | None = None) -> LimitUpAnalysis:
     """获取个股的基因得分 + 策略逻辑匹配 + 风控规则知识。
@@ -445,10 +463,17 @@ async def _do_rebuild_gene_with_backtest(code: str, date: str | None) -> GeneSco
 
     if stock_item is None:
         return GeneScore(
-            code=code, name="", total_score=0.0,
+            code=code,
+            name="",
+            total_score=0.0,
             factors={"次日溢价率": 0.0, "红盘率": 0.0, "封板率": 0.0, "炸板后溢价": 0.0, "涨停频次": 0.0},
-            wilson_adjusted=0.0, qualify=False, high_gene=False,
-            last_zt_dates=[], zt_count_250d=0, backtest_points=[], backtest_summary={},
+            wilson_adjusted=0.0,
+            qualify=False,
+            high_gene=False,
+            last_zt_dates=[],
+            zt_count_250d=0,
+            backtest_points=[],
+            backtest_summary={},
             date=target_date,
         )
 
@@ -462,9 +487,7 @@ async def _do_rebuild_gene_with_backtest(code: str, date: str | None) -> GeneSco
     total = calc_total_score(factors)
     wilson_adj = round(total * wilson_lower_bound(len(stock_history), max(len(stock_history), 1), z=1.96), 2)
 
-    last_dates = sorted(set(
-        h.pool_date for h in stock_history if h.pool_date
-    ), reverse=True)[:10]
+    last_dates = sorted(set(h.pool_date for h in stock_history if h.pool_date), reverse=True)[:10]
 
     # 计算回测数据
     bt_points: list[dict] = []
@@ -475,11 +498,13 @@ async def _do_rebuild_gene_with_backtest(code: str, date: str | None) -> GeneSco
                 bt_factors = compute_factors(history_for_bt, [], [])
                 bt_total = calc_total_score(bt_factors)
                 lbc = h.boards or 0
-                bt_points.append({
-                    "date": h.pool_date or "",
-                    "gene_score": round(bt_total, 2),
-                    "actual_next_day": 1.0 if lbc >= 2 else 0.0,
-                })
+                bt_points.append(
+                    {
+                        "date": h.pool_date or "",
+                        "gene_score": round(bt_total, 2),
+                        "actual_next_day": 1.0 if lbc >= 2 else 0.0,
+                    }
+                )
             history_for_bt.append(h)
 
     # S203 wiring 修正：拷贝涨停池 raw 的 seal/industry/limit 字段进 GeneScore。
@@ -507,9 +532,6 @@ async def _do_rebuild_gene_with_backtest(code: str, date: str | None) -> GeneSco
     )
 
 
-
-
-
 # S058：天气适配度软过滤——适配/不适配/中性三态
 def calc_weather_fit(strategy_code: str, weather_state: str | None) -> str:
     """战法×天气适配度（软过滤，降权不屏蔽）。
@@ -530,9 +552,6 @@ def calc_weather_fit(strategy_code: str, weather_state: str | None) -> str:
     if weather_state in regimes:
         return "适配"
     return "不适配"
-
-
-
 
 
 async def get_strategy_signals(code: str, date: str | None = None) -> list[StrategySignal]:
@@ -571,6 +590,7 @@ def _get_recent_bars(code: str) -> list[dict] | None:
     """
     try:
         from engine.kline_cache_store import get_bars
+
         bars = get_bars(code)
     except Exception:  # noqa: BLE001 — cache 加载失败降级 None（不崩）
         return None
@@ -599,6 +619,7 @@ async def _get_lbc_for_code(code: str, date: str) -> int | None:
         return cached[1].get(code)
     try:
         from limitup_screener import public_fetch_zt_pool
+
         target = date.replace("-", "")  # YYYY-MM-DD → YYYYMMDD
         zt_pool, _yzt, _zb = await public_fetch_zt_pool(target)
     except Exception:  # noqa: BLE001 — 涨停池拉取失败降级空 map（不崩，不臆造）
@@ -647,6 +668,7 @@ def _build_limitup_msc(gene: GeneScore, date: str, lbc: int | None = None, secto
     if getattr(gene, "industry", ""):
         try:
             from strategies.sector_cycle import _get_zt_count_by_date_industry
+
             zt_count_today = _get_zt_count_by_date_industry(date, gene.industry)
         except Exception:  # noqa: BLE001 — sector_cycle 失败降级 0（不臆造）
             zt_count_today = 0

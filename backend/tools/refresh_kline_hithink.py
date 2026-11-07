@@ -11,6 +11,7 @@ hithink CLI 立即可用。cache 停在 09-18，daily_report 09-23 01:26 fire 21
 
 工程底线：不臆造——CLI 失败标 missing 不编，log warning + 继续。
 """
+
 from __future__ import annotations
 
 import json
@@ -29,10 +30,26 @@ from engine.pctchg_injector import enrich_pctchg  # noqa: E402
 
 # 21 picks codes (09-22 连板股，daily_report 09-23 01:26 fire)
 PICKS: list[str] = [
-    "000607", "000756", "002614", "600743", "600825",
-    "601811", "603636", "001234", "002303", "600664",
-    "000560", "001317", "603020", "002178", "603580",
-    "603068", "002259", "600721", "300110", "000910",
+    "000607",
+    "000756",
+    "002614",
+    "600743",
+    "600825",
+    "601811",
+    "603636",
+    "001234",
+    "002303",
+    "600664",
+    "000560",
+    "001317",
+    "603020",
+    "002178",
+    "603580",
+    "603068",
+    "002259",
+    "600721",
+    "300110",
+    "000910",
     "600503",
 ]
 
@@ -62,11 +79,17 @@ def fetch_hithink_bars(thscode: str) -> list[dict[str, Any]]:
     CLI 失败 raise（调用方 catch + log warning + 继续，不静默吞错）。
     """
     cmd = [
-        "hithink-finance", "market", "history",
-        "--thscode", thscode,
-        "--start-ms", str(START_MS),
-        "--end-ms", str(END_MS),
-        "--adjust", "none",
+        "hithink-finance",
+        "market",
+        "history",
+        "--thscode",
+        thscode,
+        "--start-ms",
+        str(START_MS),
+        "--end-ms",
+        str(END_MS),
+        "--adjust",
+        "none",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     if result.returncode != 0:
@@ -80,21 +103,21 @@ def fetch_hithink_bars(thscode: str) -> list[dict[str, Any]]:
     bars: list[dict[str, Any]] = []
     for item in items:
         dt = datetime.fromtimestamp(item["date_ms"] / 1000, tz=_TZ_CN)
-        bars.append({
-            "date": dt.strftime("%Y-%m-%d"),
-            "open": item["open_price"],
-            "high": item["high_price"],
-            "low": item["low_price"],
-            "close": item["close_price"],
-            "volume": float(item["volume"]),
-            "amount": float(item["turnover"]),
-        })
+        bars.append(
+            {
+                "date": dt.strftime("%Y-%m-%d"),
+                "open": item["open_price"],
+                "high": item["high_price"],
+                "low": item["low_price"],
+                "close": item["close_price"],
+                "volume": float(item["volume"]),
+                "amount": float(item["turnover"]),
+            }
+        )
     return bars
 
 
-def merge_bars(
-    existing: list[dict[str, Any]], new_bars: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
+def merge_bars(existing: list[dict[str, Any]], new_bars: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """merge hithink bars into existing cache bars（immutable，返新 list）。
 
     - Dedup by date: hithink OHLCV overrides existing（fresh data）
@@ -132,8 +155,7 @@ def main() -> None:
             items.append((code, enriched))
             latest = enriched[-1]["date"] if enriched else "?"
             print(
-                f"  [{i + 1}/21] {code} ({ths}): "
-                f"+{len(new_bars)} bars, total={len(enriched)}, latest={latest}",
+                f"  [{i + 1}/21] {code} ({ths}): +{len(new_bars)} bars, total={len(enriched)}, latest={latest}",
                 flush=True,
             )
             time.sleep(0.2)  # gentle rate limit
@@ -146,8 +168,7 @@ def main() -> None:
     n = upsert_many(items)
     invalidate()
     print(
-        f"\n[refresh_kline_hithink] upsert {n} codes, "
-        f"failed={failed or 'none'}",
+        f"\n[refresh_kline_hithink] upsert {n} codes, failed={failed or 'none'}",
         flush=True,
     )
     for code, bars in items:

@@ -20,6 +20,7 @@ per-source 适配器（gap→regime / ofi row→ofi / breakout→score / fund_fl
 trend→strategy_score）在调用方或后续 adapter 模块，本函数只做校验 + 填默认 + 时间戳对齐 +
 5 字段投影，不耦合具体信号源（YAGNI + 开闭原则）。
 """
+
 from __future__ import annotations
 
 # 标准化输出字段（严格 5 字段，extra 字段如 gap params 被丢弃）
@@ -44,11 +45,13 @@ def align_signals(signals: list[dict], target_date: str) -> list[dict]:
         value = s.get("value")
         if not name or value is None:  # 缺 signal_name 或 value=None → 跳过（不臆造）
             continue
-        aligned.append({
-            "signal_name": name,
-            "value": value,
-            "confidence": s.get("confidence", 1.0),
-            "timestamp": target_date,  # 统一锚到 D 日（日级/盘中/T-1 全部 target_date）
-            "source": s.get("source", name),  # 缺省 = signal_name
-        })
+        aligned.append(
+            {
+                "signal_name": name,
+                "value": value,
+                "confidence": s.get("confidence", 1.0),
+                "timestamp": target_date,  # 统一锚到 D 日（日级/盘中/T-1 全部 target_date）
+                "source": s.get("source", name),  # 缺省 = signal_name
+            }
+        )
     return aligned

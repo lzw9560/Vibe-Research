@@ -9,6 +9,7 @@
 5. 非危机期 walk-forward OOS 是否仍显著
 6. 逐 crisis window 拆解：哪个危机窗口贡献最多
 """
+
 from __future__ import annotations
 import json
 import sys
@@ -48,11 +49,13 @@ def load_etf_data():
     with open(ETF_CACHE) as f:
         return json.load(f)
 
+
 def load_index():
     with open(INDEX_CACHE) as f:
         raw = json.load(f)
     bars = raw.get("sh.000001", [])
     return {b["date"]: b for b in bars if "date" in b}
+
 
 def build_calendar(etf_data):
     all_dates = set()
@@ -60,10 +63,12 @@ def build_calendar(etf_data):
         all_dates.update(days.keys())
     return sorted(all_dates)
 
+
 def is_yizi_etf_proxy(t1_open, t_close):
     if t_close <= 0:
         return False
     return t1_open / t_close >= 1.099
+
 
 def build_picks(etf_data, calendar, threshold=-0.3, hold_days=1):
     date_idx = {d: i for i, d in enumerate(calendar)}
@@ -97,27 +102,40 @@ def build_picks(etf_data, calendar, threshold=-0.3, hold_days=1):
                 continue
             if is_yizi_etf_proxy(entry, close_signal):
                 continue
-            picks.append({
-                "code": code, "signal_date": d, "t1_date": t1_date,
-                "exit_date": exit_date, "hold_days": hold_days,
-                "discount_t": disc, "entry": entry, "exit_close": exit_close,
-                "nav_signal": nav_signal, "nav_t1": nav_t1, "nav_exit": nav_exit,
-                "zt_date": d,
-            })
+            picks.append(
+                {
+                    "code": code,
+                    "signal_date": d,
+                    "t1_date": t1_date,
+                    "exit_date": exit_date,
+                    "hold_days": hold_days,
+                    "discount_t": disc,
+                    "entry": entry,
+                    "exit_close": exit_close,
+                    "nav_signal": nav_signal,
+                    "nav_t1": nav_t1,
+                    "nav_exit": nav_exit,
+                    "zt_date": d,
+                }
+            )
     return picks
+
 
 def bhar_corrected(p):
     d_entry = (p["entry"] - p["nav_signal"]) / p["nav_signal"] * 100
     d_exit = (p["exit_close"] - p["nav_exit"]) / p["nav_exit"] * 100
     return d_exit - d_entry
 
+
 def bhar_r1(p):
     price_ret = (p["exit_close"] - p["entry"]) / p["entry"] * 100
     nav_ret = (p["nav_exit"] - p["nav_t1"]) / p["nav_t1"] * 100
     return price_ret - nav_ret
 
+
 def raw_ev(p):
     return (p["exit_close"] - p["entry"]) / p["entry"] * 100
+
 
 def classify_regime(date, index_map, idx_dates_sorted):
     for label, lo, hi in CRISIS_WINDOWS:
@@ -147,13 +165,15 @@ def classify_regime(date, index_map, idx_dates_sorted):
         return "bear"
     return "range"
 
+
 def crisis_window_of(date):
     for label, lo, hi in CRISIS_WINDOWS:
         if lo <= date <= hi:
             return label
     return None
 
-def verdict_subset(name, picks, n_cross=3*5, ret_fn=bhar_corrected):
+
+def verdict_subset(name, picks, n_cross=3 * 5, ret_fn=bhar_corrected):
     """§44 v3 verdict on a subset of picks using corrected BHAR."""
     if not picks:
         print(f"  {name}: 无 picks")
@@ -197,23 +217,40 @@ def verdict_subset(name, picks, n_cross=3*5, ret_fn=bhar_corrected):
         v = f"exploratory (wf {wf_status})"
 
     print(f"\n  {name}: n={len(picks)} n_days={dt['n_days']}")
-    print(f"    修正 BHAR: gross={s['ev']:+.4f}% net={net:+.4f}% day_t={dt['t']} "
-          f"p_raw={dt['p_one_sided']} Bonf(×{n_tests})={p_bonf:.6f} WR={s['wr']}%")
+    print(
+        f"    修正 BHAR: gross={s['ev']:+.4f}% net={net:+.4f}% day_t={dt['t']} "
+        f"p_raw={dt['p_one_sided']} Bonf(×{n_tests})={p_bonf:.6f} WR={s['wr']}%"
+    )
     if wf_status == "ok":
-        print(f"    walk-forward: train={wf_train_ev:+.4f}% test={wf_test_ev:+.4f}% "
-              f"test_p={wf_test_p} test_p_Bonf={wf_test_p_bonf:.6f} "
-              f"n_train_dates={wf['n_train_dates']} n_test_dates={wf['n_test_dates']}")
+        print(
+            f"    walk-forward: train={wf_train_ev:+.4f}% test={wf_test_ev:+.4f}% "
+            f"test_p={wf_test_p} test_p_Bonf={wf_test_p_bonf:.6f} "
+            f"n_train_dates={wf['n_train_dates']} n_test_dates={wf['n_test_dates']}"
+        )
     print(f"    VERDICT: {v}")
-    return {"name": name, "n": len(picks), "n_days": dt["n_days"],
-            "gross": s["ev"], "net": net, "t": dt["t"], "p_raw": dt["p_one_sided"],
-            "p_bonf": p_bonf, "wr": s["wr"], "wf": wf, "verdict": v,
-            "wf_train_ev": wf_train_ev, "wf_test_ev": wf_test_ev,
-            "wf_test_p": wf_test_p, "wf_test_p_bonf": wf_test_p_bonf}
+    return {
+        "name": name,
+        "n": len(picks),
+        "n_days": dt["n_days"],
+        "gross": s["ev"],
+        "net": net,
+        "t": dt["t"],
+        "p_raw": dt["p_one_sided"],
+        "p_bonf": p_bonf,
+        "wr": s["wr"],
+        "wf": wf,
+        "verdict": v,
+        "wf_train_ev": wf_train_ev,
+        "wf_test_ev": wf_test_ev,
+        "wf_test_p": wf_test_p,
+        "wf_test_p_bonf": wf_test_p_bonf,
+    }
+
 
 def main():
-    print("="*78)
+    print("=" * 78)
     print("crisis-concentration lens 审计：去掉危机期 edge 还显著？")
-    print("="*78)
+    print("=" * 78)
 
     etf_data = load_etf_data()
     index_map = load_index()
@@ -232,34 +269,38 @@ def main():
     by_regime = defaultdict(list)
     for p in picks:
         by_regime[p["regime"]].append(p)
-    print(f"[regime] bull={len(by_regime['bull'])} bear={len(by_regime['bear'])} "
-          f"range={len(by_regime['range'])} crisis={len(by_regime['crisis'])}")
+    print(
+        f"[regime] bull={len(by_regime['bull'])} bear={len(by_regime['bear'])} "
+        f"range={len(by_regime['range'])} crisis={len(by_regime['crisis'])}"
+    )
 
     # ============ 1. 复现 regime 分层数字 ============
-    print("\n"+"="*78)
+    print("\n" + "=" * 78)
     print("1. 复现 regime 分层（修正 BHAR，验证报告数字）")
-    print("="*78)
+    print("=" * 78)
     regime_res = {}
     for rname in ("bull", "bear", "range", "crisis"):
         regime_res[rname] = verdict_subset(f"regime={rname}", by_regime[rname])
 
     # ============ 2. 去掉危机期 → 非危机 verdict ============
-    print("\n"+"="*78)
+    print("\n" + "=" * 78)
     print("2. 关键测试：去掉危机期 → 非危机期 verdict（§44 v3 全套）")
-    print("="*78)
+    print("=" * 78)
     non_crisis = [p for p in picks if p["regime"] != "crisis"]
     crisis = by_regime["crisis"]
-    print(f"  非危机 picks n={len(non_crisis)}  危机 picks n={len(crisis)} "
-          f"(危机占比 {len(crisis)/len(picks)*100:.1f}%)")
+    print(
+        f"  非危机 picks n={len(non_crisis)}  危机 picks n={len(crisis)} "
+        f"(危机占比 {len(crisis) / len(picks) * 100:.1f}%)"
+    )
 
     res_full = verdict_subset("全样本(含危机)", picks)
     res_noncrisis = verdict_subset("非危机期(bull+bear+range)", non_crisis)
     res_crisis = verdict_subset("危机期", crisis)
 
     # ============ 3. 危机贡献占比 ============
-    print("\n"+"="*78)
+    print("\n" + "=" * 78)
     print("3. 危机期贡献占比（n_picks / n_days / 总 alpha 贡献）")
-    print("="*78)
+    print("=" * 78)
     full_alpha = sum(bhar_corrected(p) for p in picks)
     crisis_alpha = sum(bhar_corrected(p) for p in crisis)
     noncrisis_alpha = sum(bhar_corrected(p) for p in non_crisis)
@@ -267,81 +308,94 @@ def main():
     noncrisis_days = len(set(p["signal_date"] for p in non_crisis))
     full_days = len(set(p["signal_date"] for p in picks))
     print(f"  总 alpha (sum BHAR): {full_alpha:+.2f}%")
-    print(f"    危机贡献: {crisis_alpha:+.2f}% ({crisis_alpha/full_alpha*100 if full_alpha else 0:.1f}% of total)")
-    print(f"    非危机贡献: {noncrisis_alpha:+.2f}% ({noncrisis_alpha/full_alpha*100 if full_alpha else 0:.1f}% of total)")
-    print(f"  n_picks: 危机 {len(crisis)} ({len(crisis)/len(picks)*100:.1f}%) / "
-          f"非危机 {len(non_crisis)} ({len(non_crisis)/len(picks)*100:.1f}%)")
-    print(f"  n_days: 危机 {crisis_days} ({crisis_days/full_days*100:.1f}%) / "
-          f"非危机 {noncrisis_days} ({noncrisis_days/full_days*100:.1f}%)")
-    print(f"  per-pick alpha: 危机 {crisis_alpha/max(len(crisis),1):+.4f}% / "
-          f"非危机 {noncrisis_alpha/max(len(non_crisis),1):+.4f}%")
+    print(f"    危机贡献: {crisis_alpha:+.2f}% ({crisis_alpha / full_alpha * 100 if full_alpha else 0:.1f}% of total)")
+    print(
+        f"    非危机贡献: {noncrisis_alpha:+.2f}% ({noncrisis_alpha / full_alpha * 100 if full_alpha else 0:.1f}% of total)"
+    )
+    print(
+        f"  n_picks: 危机 {len(crisis)} ({len(crisis) / len(picks) * 100:.1f}%) / "
+        f"非危机 {len(non_crisis)} ({len(non_crisis) / len(picks) * 100:.1f}%)"
+    )
+    print(
+        f"  n_days: 危机 {crisis_days} ({crisis_days / full_days * 100:.1f}%) / "
+        f"非危机 {noncrisis_days} ({noncrisis_days / full_days * 100:.1f}%)"
+    )
+    print(
+        f"  per-pick alpha: 危机 {crisis_alpha / max(len(crisis), 1):+.4f}% / "
+        f"非危机 {noncrisis_alpha / max(len(non_crisis), 1):+.4f}%"
+    )
 
     # ============ 4. 危机是均值回归 vs ETF 收敛 alpha ============
-    print("\n"+"="*78)
+    print("\n" + "=" * 78)
     print("4. 危机期：均值回归（NAV 跳变）vs ETF 收敛 alpha（d_exit - d_entry）")
-    print("="*78)
+    print("=" * 78)
     # 折价是否真的收敛：d_entry vs d_exit
     print("  危机期 d_entry(入场折价) vs d_exit(出场折价)：")
-    d_entries_c = [(p["entry"]-p["nav_signal"])/p["nav_signal"]*100 for p in crisis]
-    d_exits_c = [(p["exit_close"]-p["nav_exit"])/p["nav_exit"]*100 for p in crisis]
-    print(f"    d_entry mean={statistics.mean(d_entries_c):+.4f}% "
-          f"median={statistics.median(d_entries_c):+.4f}%")
-    print(f"    d_exit  mean={statistics.mean(d_exits_c):+.4f}% "
-          f"median={statistics.median(d_exits_c):+.4f}%")
-    print(f"    收敛量 d_exit-d_entry mean={statistics.mean(d_exits_c)-statistics.mean(d_entries_c):+.4f}%")
+    d_entries_c = [(p["entry"] - p["nav_signal"]) / p["nav_signal"] * 100 for p in crisis]
+    d_exits_c = [(p["exit_close"] - p["nav_exit"]) / p["nav_exit"] * 100 for p in crisis]
+    print(f"    d_entry mean={statistics.mean(d_entries_c):+.4f}% median={statistics.median(d_entries_c):+.4f}%")
+    print(f"    d_exit  mean={statistics.mean(d_exits_c):+.4f}% median={statistics.median(d_exits_c):+.4f}%")
+    print(f"    收敛量 d_exit-d_entry mean={statistics.mean(d_exits_c) - statistics.mean(d_entries_c):+.4f}%")
     # raw EV vs BHAR in crisis：raw EV 高 = NAV 本身涨（市场反弹）非收敛
     raw_c = [raw_ev(p) for p in crisis]
     bhar_c = [bhar_corrected(p) for p in crisis]
-    nav_c = [(p["nav_exit"]-p["nav_t1"])/p["nav_t1"]*100 for p in crisis]
+    nav_c = [(p["nav_exit"] - p["nav_t1"]) / p["nav_t1"] * 100 for p in crisis]
     print(f"  危机期 raw EV (散户实际) mean={statistics.mean(raw_c):+.4f}%")
     print(f"  危机期 NAV return mean={statistics.mean(nav_c):+.4f}% (市场反弹成分)")
     print(f"  危机期 修正 BHAR mean={statistics.mean(bhar_c):+.4f}% (收敛 alpha, beta-neutral)")
-    print(f"  → raw EV {statistics.mean(raw_c):+.4f}% vs BHAR {statistics.mean(bhar_c):+.4f}%: "
-          f"{'raw>>BHAR=市场反弹主导非收敛' if statistics.mean(raw_c) > statistics.mean(bhar_c)+0.1 else 'raw≈BHAR=收敛主导'}")
+    print(
+        f"  → raw EV {statistics.mean(raw_c):+.4f}% vs BHAR {statistics.mean(bhar_c):+.4f}%: "
+        f"{'raw>>BHAR=市场反弹主导非收敛' if statistics.mean(raw_c) > statistics.mean(bhar_c) + 0.1 else 'raw≈BHAR=收敛主导'}"
+    )
     # 非危机对比
     raw_nc = [raw_ev(p) for p in non_crisis]
     bhar_nc = [bhar_corrected(p) for p in non_crisis]
-    nav_nc = [(p["nav_exit"]-p["nav_t1"])/p["nav_t1"]*100 for p in non_crisis]
-    print(f"\n  非危机 raw EV mean={statistics.mean(raw_nc):+.4f}% NAV ret={statistics.mean(nav_nc):+.4f}% "
-          f"BHAR={statistics.mean(bhar_nc):+.4f}%")
+    nav_nc = [(p["nav_exit"] - p["nav_t1"]) / p["nav_t1"] * 100 for p in non_crisis]
+    print(
+        f"\n  非危机 raw EV mean={statistics.mean(raw_nc):+.4f}% NAV ret={statistics.mean(nav_nc):+.4f}% "
+        f"BHAR={statistics.mean(bhar_nc):+.4f}%"
+    )
 
     # ============ 5. 非危机 walk-forward ============
-    print("\n"+"="*78)
+    print("\n" + "=" * 78)
     print("5. 非危机期 walk-forward OOS 是否仍显著")
-    print("="*78)
+    print("=" * 78)
     # 已在 res_noncrisis 里算，这里详打
     wf_nc = res_noncrisis["wf"]
     if wf_nc["status"] == "ok":
-        print(f"  非危机 train_ev={res_noncrisis['wf_train_ev']:+.4f}% "
-              f"test_ev={res_noncrisis['wf_test_ev']:+.4f}% "
-              f"test_p={res_noncrisis['wf_test_p']} "
-              f"test_p_Bonf={res_noncrisis['wf_test_p_bonf']:.6f}")
+        print(
+            f"  非危机 train_ev={res_noncrisis['wf_train_ev']:+.4f}% "
+            f"test_ev={res_noncrisis['wf_test_ev']:+.4f}% "
+            f"test_p={res_noncrisis['wf_test_p']} "
+            f"test_p_Bonf={res_noncrisis['wf_test_p_bonf']:.6f}"
+        )
         print(f"  n_train_dates={wf_nc['n_train_dates']} n_test_dates={wf_nc['n_test_dates']}")
     else:
         print(f"  walk-forward status={wf_nc['status']}")
 
     # ============ 6. 逐 crisis window 拆解 ============
-    print("\n"+"="*78)
+    print("\n" + "=" * 78)
     print("6. 逐 crisis window 拆解：哪个危机窗口贡献最多")
-    print("="*78)
+    print("=" * 78)
     by_cw = defaultdict(list)
     for p in crisis:
         by_cw[p["crisis_window"]].append(p)
-    print(f"{'crisis_window':<16} {'n':>6} {'n_days':>7} {'BHAR%':>9} {'net%':>8} "
-          f"{'rawEV%':>8} {'NAVret%':>8}")
+    print(f"{'crisis_window':<16} {'n':>6} {'n_days':>7} {'BHAR%':>9} {'net%':>8} {'rawEV%':>8} {'NAVret%':>8}")
     for cw, cwp in sorted(by_cw.items(), key=lambda x: -len(x[1])):
         bh = [bhar_corrected(p) for p in cwp]
         rv = [raw_ev(p) for p in cwp]
-        nv = [(p["nav_exit"]-p["nav_t1"])/p["nav_t1"]*100 for p in cwp]
+        nv = [(p["nav_exit"] - p["nav_t1"]) / p["nav_t1"] * 100 for p in cwp]
         s = ev_stats(bh)
         nd = len(set(p["signal_date"] for p in cwp))
-        print(f"{cw:<16} {len(cwp):>6} {nd:>7} {s['ev']:>+9} "
-              f"{s['ev']-ETF_COST:>+8} {statistics.mean(rv):>+8} {statistics.mean(nv):>+8}")
+        print(
+            f"{cw:<16} {len(cwp):>6} {nd:>7} {s['ev']:>+9} "
+            f"{s['ev'] - ETF_COST:>+8} {statistics.mean(rv):>+8} {statistics.mean(nv):>+8}"
+        )
 
     # ============ 7. 非危机按 era 再拆（看非危机是否只是早期年代撑） ============
-    print("\n"+"="*78)
+    print("\n" + "=" * 78)
     print("7. 非危机按 era 拆（看非危机 edge 是否被早期年代撑）")
-    print("="*78)
+    print("=" * 78)
     eras = [
         ("2005-2014 (早期)", "2005-01-01", "2014-12-31"),
         ("2015-2019", "2015-01-01", "2019-12-31"),
@@ -359,27 +413,30 @@ def main():
         for p in era_picks:
             by_date[p["signal_date"]].append(bhar_corrected(p))
         dt = day_paired_t(by_date)
-        print(f"  {label}: n={len(era_picks)} n_days={dt['n_days']} "
-              f"BHAR={s['ev']:+.4f}% net={s['ev']-ETF_COST:+.4f}% "
-              f"day_t={dt['t']} p={dt['p_one_sided']}")
+        print(
+            f"  {label}: n={len(era_picks)} n_days={dt['n_days']} "
+            f"BHAR={s['ev']:+.4f}% net={s['ev'] - ETF_COST:+.4f}% "
+            f"day_t={dt['t']} p={dt['p_one_sided']}"
+        )
 
     # ============ 8. 去掉危机 + 去掉早期 (2015+) 看近期非危机 ============
-    print("\n"+"="*78)
+    print("\n" + "=" * 78)
     print("8. 非危机 + 仅 2015+（去掉早期低效市场年代）")
-    print("="*78)
+    print("=" * 78)
     noncrisis_2015 = [p for p in non_crisis if p["signal_date"] >= "2015-01-01"]
     verdict_subset("非危机 2015+", noncrisis_2015)
 
     # ============ 总结 ============
-    print("\n"+"="*78)
+    print("\n" + "=" * 78)
     print("LENS 总结")
-    print("="*78)
+    print("=" * 78)
     print(f"全样本 verdict: {res_full['verdict']}")
     print(f"非危机 verdict: {res_noncrisis['verdict']}")
     print(f"危机 verdict:   {res_crisis['verdict']}")
-    print(f"危机 alpha 贡献占比: {crisis_alpha/full_alpha*100 if full_alpha else 0:.1f}%")
-    print(f"危机 n_picks 占比: {len(crisis)/len(picks)*100:.1f}%")
-    print(f"危机 n_days 占比: {crisis_days/full_days*100:.1f}%")
+    print(f"危机 alpha 贡献占比: {crisis_alpha / full_alpha * 100 if full_alpha else 0:.1f}%")
+    print(f"危机 n_picks 占比: {len(crisis) / len(picks) * 100:.1f}%")
+    print(f"危机 n_days 占比: {crisis_days / full_days * 100:.1f}%")
+
 
 if __name__ == "__main__":
     main()

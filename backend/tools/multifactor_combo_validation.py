@@ -27,6 +27,7 @@ Methodology (§44 v2):
 Usage:
   cd backend && .venv/bin/python tools/multifactor_combo_validation.py
 """
+
 from __future__ import annotations
 
 import json
@@ -184,10 +185,22 @@ def build_feature_matrix() -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str
         lb_lookup[dt_norm] = {it["code"]: it.get("boards", 1) for it in items}
 
     feature_names = [
-        "gene_score", "vol_surge", "volatility", "momentum", "breakout", "ma_align",
-        "boards", "pe", "benefit_part", "chip_concentration",
-        "turnover_t1", "log_amount_t1", "pctchg_t1", "amplitude_t1",
-        "vol_ratio_5_20", "zt_count",
+        "gene_score",
+        "vol_surge",
+        "volatility",
+        "momentum",
+        "breakout",
+        "ma_align",
+        "boards",
+        "pe",
+        "benefit_part",
+        "chip_concentration",
+        "turnover_t1",
+        "log_amount_t1",
+        "pctchg_t1",
+        "amplitude_t1",
+        "vol_ratio_5_20",
+        "zt_count",
     ]
 
     X_rows = []
@@ -235,8 +248,7 @@ def build_feature_matrix() -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str
         # --- extra kline features ---
         extra = _extra_kline_features(bars, t1_idx)
         if extra is None:
-            extra = {"turnover_t1": 0, "log_amount_t1": 0, "pctchg_t1": 0,
-                     "amplitude_t1": 0, "vol_ratio_5_20": 1.0}
+            extra = {"turnover_t1": 0, "log_amount_t1": 0, "pctchg_t1": 0, "amplitude_t1": 0, "vol_ratio_5_20": 1.0}
 
         # --- boards ---
         boards = lb_lookup.get(dt, {}).get(code, 1)
@@ -257,11 +269,22 @@ def build_feature_matrix() -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str
         y_cont_val = cont["return_pct"] if cont else np.nan
 
         row = [
-            gene_score, ta["vol_surge"], ta["volatility"], ta["momentum"],
-            ta["breakout"], ta["ma_align"], boards, pe,
-            cyq["benefit_part"], cyq["chip_concentration"],
-            extra["turnover_t1"], extra["log_amount_t1"], extra["pctchg_t1"],
-            extra["amplitude_t1"], extra["vol_ratio_5_20"], zt_count,
+            gene_score,
+            ta["vol_surge"],
+            ta["volatility"],
+            ta["momentum"],
+            ta["breakout"],
+            ta["ma_align"],
+            boards,
+            pe,
+            cyq["benefit_part"],
+            cyq["chip_concentration"],
+            extra["turnover_t1"],
+            extra["log_amount_t1"],
+            extra["pctchg_t1"],
+            extra["amplitude_t1"],
+            extra["vol_ratio_5_20"],
+            zt_count,
         ]
         X_rows.append(row)
         y_premium.append(premium)
@@ -311,8 +334,11 @@ def _oos_lift(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 
 def walk_forward_cv(
-    X: np.ndarray, y: np.ndarray, dates: list[str],
-    feature_names: list[str], target_name: str,
+    X: np.ndarray,
+    y: np.ndarray,
+    dates: list[str],
+    feature_names: list[str],
+    target_name: str,
 ) -> dict:
     """Leave-one-day-out walk-forward CV. Returns per-model OOS metrics."""
     from sklearn.linear_model import Ridge
@@ -330,17 +356,30 @@ def walk_forward_cv(
     models = {
         "Ridge(Linear)": Ridge(alpha=1.0, random_state=42),
         "LightGBM": lgb.LGBMRegressor(
-            n_estimators=100, max_depth=4, num_leaves=15,
-            learning_rate=0.05, subsample=0.8, colsample_bytree=0.8,
-            reg_alpha=0.1, reg_lambda=1.0, random_state=42, verbose=-1,
+            n_estimators=100,
+            max_depth=4,
+            num_leaves=15,
+            learning_rate=0.05,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            reg_alpha=0.1,
+            reg_lambda=1.0,
+            random_state=42,
+            verbose=-1,
         ),
         "RandomForest": RandomForestRegressor(
-            n_estimators=100, max_depth=5, min_samples_leaf=5,
-            random_state=42, n_jobs=-1,
+            n_estimators=100,
+            max_depth=5,
+            min_samples_leaf=5,
+            random_state=42,
+            n_jobs=-1,
         ),
         "GradientBoosting": GradientBoostingRegressor(
-            n_estimators=100, max_depth=3, learning_rate=0.05,
-            subsample=0.8, random_state=42,
+            n_estimators=100,
+            max_depth=3,
+            learning_rate=0.05,
+            subsample=0.8,
+            random_state=42,
         ),
     }
 
@@ -374,6 +413,7 @@ def walk_forward_cv(
         for mname, model in models.items():
             # Clone model for fresh fit
             from sklearn.base import clone
+
             m = clone(model)
             try:
                 m.fit(X_train_s, y_train)
@@ -409,11 +449,16 @@ def walk_forward_cv(
         lift_mean = np.mean(lifts) if len(lifts) else 1
         lift_std = np.std(lifts) if len(lifts) else 0
         sig = "**" if ic_pval < BONF_ALPHA else ("*" if ic_pval < ALPHA else "")
-        print(f"{mname:<20s} {r2_mean:+.4f}±{r2_std:.4f}   {ic_mean:+.4f}±{ic_std:.4f}   {lift_mean:.3f}±{lift_std:.3f}   {ic_pval:.4f}{sig}")
+        print(
+            f"{mname:<20s} {r2_mean:+.4f}±{r2_std:.4f}   {ic_mean:+.4f}±{ic_std:.4f}   {lift_mean:.3f}±{lift_std:.3f}   {ic_pval:.4f}{sig}"
+        )
         results[mname] = {
-            "r2_mean": r2_mean, "r2_std": r2_std,
-            "ic_mean": ic_mean, "ic_std": ic_std,
-            "lift_mean": lift_mean, "lift_std": lift_std,
+            "r2_mean": r2_mean,
+            "r2_std": r2_std,
+            "ic_mean": ic_mean,
+            "ic_std": ic_std,
+            "lift_mean": lift_mean,
+            "lift_std": lift_std,
             "ic_pval": ic_pval,
             "n_folds": len(r2s),
             "per_fold_r2": r2s.tolist(),
@@ -430,10 +475,12 @@ def walk_forward_cv(
         pooled_ic, _ = spearmanr(preds[valid], y[valid])
         pooled_r2 = _oos_r2(y[valid], preds[valid])
         pooled_lift = _oos_lift(y[valid], preds[valid])
-        top_q = y[valid][np.argsort(preds[valid])[-max(1, valid.sum() // 5):]]
-        bot_q = y[valid][np.argsort(preds[valid])[:max(1, valid.sum() // 5):]]
-        print(f"  {mname}: pooled_IC={pooled_ic:+.4f}, pooled_R²={pooled_r2:+.4f}, "
-              f"pooled_lift={pooled_lift:.3f}, top_q_mean={np.mean(top_q):.3f}%, bot_q_mean={np.mean(bot_q):.3f}%")
+        top_q = y[valid][np.argsort(preds[valid])[-max(1, valid.sum() // 5) :]]
+        bot_q = y[valid][np.argsort(preds[valid])[: max(1, valid.sum() // 5) :]]
+        print(
+            f"  {mname}: pooled_IC={pooled_ic:+.4f}, pooled_R²={pooled_r2:+.4f}, "
+            f"pooled_lift={pooled_lift:.3f}, top_q_mean={np.mean(top_q):.3f}%, bot_q_mean={np.mean(bot_q):.3f}%"
+        )
         results[mname]["pooled_ic"] = pooled_ic
         results[mname]["pooled_r2"] = pooled_r2
         results[mname]["pooled_lift"] = pooled_lift
@@ -460,8 +507,9 @@ def _permutation_pval(ics: np.ndarray, n_perm: int = 10000) -> float:
     return (count + 1) / (n_perm + 1)
 
 
-def feature_importance_lgb(X: np.ndarray, y: np.ndarray, dates: list[str],
-                           feature_names: list[str], target_name: str) -> None:
+def feature_importance_lgb(
+    X: np.ndarray, y: np.ndarray, dates: list[str], feature_names: list[str], target_name: str
+) -> None:
     """LightGBM feature importance (per-fold averaged, no full-sample fit)."""
     import lightgbm as lgb
     from sklearn.preprocessing import StandardScaler
@@ -482,9 +530,16 @@ def feature_importance_lgb(X: np.ndarray, y: np.ndarray, dates: list[str],
         scaler = StandardScaler()
         X_train_s = scaler.fit_transform(X_train_imp)
         m = lgb.LGBMRegressor(
-            n_estimators=100, max_depth=4, num_leaves=15,
-            learning_rate=0.05, subsample=0.8, colsample_bytree=0.8,
-            reg_alpha=0.1, reg_lambda=1.0, random_state=42, verbose=-1,
+            n_estimators=100,
+            max_depth=4,
+            num_leaves=15,
+            learning_rate=0.05,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            reg_alpha=0.1,
+            reg_lambda=1.0,
+            random_state=42,
+            verbose=-1,
         )
         m.fit(X_train_s, y_train)
         importances += m.feature_importances_
@@ -529,8 +584,10 @@ def main() -> int:
     print(f"\nPremium (gap) — best model OOS metrics:")
     for mname, r in results_premium.items():
         verdict = "EDGE" if r["ic_pval"] < BONF_ALPHA else ("suggestive" if r["ic_pval"] < ALPHA else "no_edge")
-        print(f"  {mname}: IC={r['ic_mean']:+.4f} (p={r['ic_pval']:.4f}), R²={r['r2_mean']:+.4f}, "
-              f"lift={r['lift_mean']:.3f}, pooled_IC={r.get('pooled_ic', 0):+.4f} → {verdict}")
+        print(
+            f"  {mname}: IC={r['ic_mean']:+.4f} (p={r['ic_pval']:.4f}), R²={r['r2_mean']:+.4f}, "
+            f"lift={r['lift_mean']:.3f}, pooled_IC={r.get('pooled_ic', 0):+.4f} → {verdict}"
+        )
 
     print(f"\nBonferroni threshold: p < {BONF_ALPHA:.4f} (alpha={ALPHA}/{N_MODELS})")
     print(f"\nHonest verdict:")
@@ -539,7 +596,9 @@ def main() -> int:
     if best_pval < BONF_ALPHA:
         print(f"  MULTI-FACTOR EDGE FOUND: best IC={best_ic:+.4f}, p={best_pval:.4f} < {BONF_ALPHA:.4f}")
     elif best_pval < ALPHA:
-        print(f"  SUGGESTIVE (pre-Bonferroni): best IC={best_ic:+.4f}, p={best_pval:.4f} < {ALPHA} but >= {BONF_ALPHA:.4f}")
+        print(
+            f"  SUGGESTIVE (pre-Bonferroni): best IC={best_ic:+.4f}, p={best_pval:.4f} < {ALPHA} but >= {BONF_ALPHA:.4f}"
+        )
     else:
         print(f"  NO COMBO EDGE: best IC={best_ic:+.4f}, p={best_pval:.4f} >= {ALPHA}")
         print(f"  Multi-factor combination does not find selection power beyond single factors.")

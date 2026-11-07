@@ -16,6 +16,7 @@
 
 状态划分：0-35 冰点 / 36-70 常态 / 71-100 沸点
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -102,7 +103,11 @@ def compute_liquidity(index_bars: list[dict]) -> tuple[int, dict]:
         score = 30
     else:
         score = 15
-    return score, {"today_amt_yi": round(today_amt / 1e8, 0), "ma5_yi": round(ma5_amt / 1e8, 0), "ratio": round(ratio, 3)}
+    return score, {
+        "today_amt_yi": round(today_amt / 1e8, 0),
+        "ma5_yi": round(ma5_amt / 1e8, 0),
+        "ratio": round(ratio, 3),
+    }
 
 
 def compute_profit_effect(index_bars: list[dict], zt: dict) -> tuple[int, dict]:
@@ -136,8 +141,7 @@ def compute_profit_effect(index_bars: list[dict], zt: dict) -> tuple[int, dict]:
     relay_score = int(relay_rate * 100) if relay_rate < 0.5 else 70
 
     profit = int(up_score * 0.5 + zha_score * 0.25 + relay_score * 0.25)
-    return profit, {"n_zt": n_zt, "zha_rate": round(zha_rate, 3),
-                    "relay_rate": round(relay_rate, 3)}
+    return profit, {"n_zt": n_zt, "zha_rate": round(zha_rate, 3), "relay_rate": round(relay_rate, 3)}
 
 
 def compute_ladder(zt: dict) -> tuple[int, dict]:
@@ -200,8 +204,9 @@ def diagnose() -> SentimentResult:
     der_s, der_d = compute_deriv(index_bars)
 
     # 加权（文档化）
-    score = int(liq_s * W1_LIQUIDITY / 100 + prof_s * W2_PROFIT_EFFECT / 100
-                + lad_s * W3_LADDER / 100 + der_s * W4_DERIV / 100)
+    score = int(
+        liq_s * W1_LIQUIDITY / 100 + prof_s * W2_PROFIT_EFFECT / 100 + lad_s * W3_LADDER / 100 + der_s * W4_DERIV / 100
+    )
 
     if score <= 35:
         state = "冰点"
@@ -220,9 +225,12 @@ def diagnose() -> SentimentResult:
 
     return SentimentResult(
         trade_date=index_bars[-1]["date"] if index_bars else "",
-        score=score, state=state,
-        liquidity_score=liq_s, profit_effect_score=prof_s,
-        ladder_score=lad_s, deriv_score=der_s,
+        score=score,
+        state=state,
+        liquidity_score=liq_s,
+        profit_effect_score=prof_s,
+        ladder_score=lad_s,
+        deriv_score=der_s,
         details={**liq_d, **prof_d, **lad_d, **der_d},
         reasons=reasons,
     )

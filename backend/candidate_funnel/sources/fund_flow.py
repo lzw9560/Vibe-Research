@@ -9,7 +9,9 @@ from predict.features.fund_flow import fetch_dt_hot_money_relay, fetch_northboun
 from concurrent.futures import ThreadPoolExecutor
 
 
-def _fetch_single(c: str, as_of: str, sectors: list[dict] | None, industry_map: dict[str, str] | None) -> tuple[str, dict]:
+def _fetch_single(
+    c: str, as_of: str, sectors: list[dict] | None, industry_map: dict[str, str] | None
+) -> tuple[str, dict]:
     """单只股票的资金流采集（线程安全，无共享状态）。"""
     entry: dict = {
         "main_net_inflow": None,
@@ -32,9 +34,7 @@ def _fetch_single(c: str, as_of: str, sectors: list[dict] | None, industry_map: 
             # astock 返回 main_net 单位为"元"，模型口径为"万"，需换算。
             entry["main_net_inflow"] = round((flows[-1].get("main_net") or 0) / 10000.0, 1)
             last5 = flows[-5:]
-            entry["main_net_5d"] = round(
-                sum((f.get("main_net") or 0) for f in last5) / 10000.0, 1
-            )
+            entry["main_net_5d"] = round(sum((f.get("main_net") or 0) for f in last5) / 10000.0, 1)
             if len(flows) < 2:
                 entry["main_net_5d"] = None
                 entry["missing"]["main_net_5d"] = "资金流仅 1 天（降级源），5 日累计暂不可得"
@@ -83,7 +83,9 @@ def _fetch_single(c: str, as_of: str, sectors: list[dict] | None, industry_map: 
     return c, entry
 
 
-def fetch_fund_flow(codes: list[str], as_of: str, sectors: list[dict] | None = None, industry_map: dict[str, str] | None = None) -> dict[str, dict]:
+def fetch_fund_flow(
+    codes: list[str], as_of: str, sectors: list[dict] | None = None, industry_map: dict[str, str] | None = None
+) -> dict[str, dict]:
     """并行采集资金流（max_workers=5，防 em_get 限流）。
 
     原 36 只串行 186s → 并行后预估 ~37s（5 并发 × 36/5 × 2.6s/只）。

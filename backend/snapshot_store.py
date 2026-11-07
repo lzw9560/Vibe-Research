@@ -34,6 +34,7 @@ def _snapshot_path(date: str) -> Path:
 def _is_valid_date(d: str) -> bool:
     try:
         from datetime import datetime
+
         datetime.strptime(d, "%Y-%m-%d")
         return True
     except (ValueError, TypeError):

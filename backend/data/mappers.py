@@ -21,7 +21,15 @@ from models.financials import Announcement, CompanyInfo, ConceptBlock, Financial
 from models.fund_flow import FundFlow
 from models.global_stock import GlobalMetrics, GlobalStock
 from models.kline import KLine, KLineBar
-from models.market_snapshot import Emotion, EmotionResponse, IndustrySector, LianbanStock, MarketSnapshot, Sector, ZTPoolItem
+from models.market_snapshot import (
+    Emotion,
+    EmotionResponse,
+    IndustrySector,
+    LianbanStock,
+    MarketSnapshot,
+    Sector,
+    ZTPoolItem,
+)
 from models.news import News
 from models.normalize import normalize_stock_code
 from models.quote import Quote
@@ -33,11 +41,26 @@ from models.valuation import Valuation
 # S128 契约：0 永不合法字段集合——mappers 对这些字段已 `or None`（防 0 喂 LLM/消费者当真），
 # consumer 不可再 `model.X or 0` 反吞 None→0（S127 抓 bidding_monitor:114-118 反吞 S121 致假交易信号）。
 # scripts/check_or_zero_contract.py 据此集合 grep-lint 全 backend，防未来 consumer 反吞复发。
-NEVER_ZERO: frozenset[str] = frozenset({
-    "market_cap", "price", "pe_ttm", "pb", "limit_up_price", "limit_down_price",
-    "last_close", "open", "high", "low", "pe_static", "ps_ttm", "pcf_ttm",
-    "forward_pe", "mcap_yi", "float_market_cap",
-})
+NEVER_ZERO: frozenset[str] = frozenset(
+    {
+        "market_cap",
+        "price",
+        "pe_ttm",
+        "pb",
+        "limit_up_price",
+        "limit_down_price",
+        "last_close",
+        "open",
+        "high",
+        "low",
+        "pe_static",
+        "ps_ttm",
+        "pcf_ttm",
+        "forward_pe",
+        "mcap_yi",
+        "float_market_cap",
+    }
+)
 
 
 def _numf(v: Any) -> float | None:
@@ -55,6 +78,7 @@ def _numf(v: Any) -> float | None:
 
 
 # ── Quote ────────────────────────────────────────────────────────────────
+
 
 def quote_from_tencent(code: str, raw: dict) -> Quote:
     """astock.tencent_quote 单 code 项 → Quote。
@@ -158,6 +182,7 @@ def _market_from_str(market_str: str, code: str) -> Market:
 
 # ── FundFlow ─────────────────────────────────────────────────────────────
 
+
 def fundflow_from_capital_flow(raw: dict, *, code: str, market: str | Market) -> FundFlow:
     """astock.stock_fund_flow_120d / fallback capital_flow 行 → FundFlow。
 
@@ -181,6 +206,7 @@ def fundflow_from_capital_flow(raw: dict, *, code: str, market: str | Market) ->
 
 # ── MarketSnapshot / Emotion / Sector ─────────────────────────────────────
 
+
 def emotion_from_dict(raw: dict) -> Emotion:
     """market._emotion() 原始 dict → Emotion 模型。
 
@@ -190,9 +216,7 @@ def emotion_from_dict(raw: dict) -> Emotion:
     """
     ladder_raw = raw.get("ladder") or []
     ladder = tuple(
-        {"boards": item.get("boards"), "count": item.get("count")}
-        for item in ladder_raw
-        if isinstance(item, dict)
+        {"boards": item.get("boards"), "count": item.get("count")} for item in ladder_raw if isinstance(item, dict)
     )
     return Emotion(
         max_boards=_numf(raw.get("max_boards")),
@@ -242,6 +266,7 @@ def market_snapshot_from_overview(raw: dict) -> MarketSnapshot:
 
 # ── Valuation（full_valuation raw → Valuation）───────────────────────────
 
+
 def valuation_from_full_valuation(code: str, raw: dict) -> Valuation:
     """astock.full_valuation raw → Valuation。
 
@@ -252,7 +277,9 @@ def valuation_from_full_valuation(code: str, raw: dict) -> Valuation:
         norm_code, market = normalize_stock_code(code)
     except (ValueError, AttributeError):
         norm_code, market = code, Market.A
-    mcap_yi = _numf(raw.get("mcap_yi")) or None  # S125 契约补全：0 永不合法（市值=0 喂 LLM 当真低估），对齐 quote_from_tencent:62
+    mcap_yi = (
+        _numf(raw.get("mcap_yi")) or None
+    )  # S125 契约补全：0 永不合法（市值=0 喂 LLM 当真低估），对齐 quote_from_tencent:62
     return Valuation(
         code=norm_code,
         market=market,
@@ -265,8 +292,12 @@ def valuation_from_full_valuation(code: str, raw: dict) -> Valuation:
         pcf_ttm=_numf(raw.get("pcf_ttm")) or None,  # S106：hithink 补；0 永不合法
         dividend_yield=_numf(raw.get("dividend_yield")),
         discrepancy=raw.get("discrepancy"),  # S106：数据层 cross_validate 仲裁结果透传
-        data_status=raw.get("ps_pcf_status"),  # S131 R3：PS/PCF 源断标（astock full_valuation except 块设 'hithink_unavailable'）
-        forecast_status=raw.get("forecast_status"),  # S132 R2：eps/peg 源断标（astock full_valuation if not rows 设 'empty_or_source_unavailable'）
+        data_status=raw.get(
+            "ps_pcf_status"
+        ),  # S131 R3：PS/PCF 源断标（astock full_valuation except 块设 'hithink_unavailable'）
+        forecast_status=raw.get(
+            "forecast_status"
+        ),  # S132 R2：eps/peg 源断标（astock full_valuation if not rows 设 'empty_or_source_unavailable'）
         forward_pe=_numf(raw.get("pe_26e")) or None,  # S125 契约补全：forward PE 类，0 永不合法
         consensus_eps=_numf(raw.get("eps_26e")),
         cagr_pct=_numf(raw.get("cagr_pct")),
@@ -278,15 +309,22 @@ def valuation_from_full_valuation(code: str, raw: dict) -> Valuation:
 
 # ── Report（eastmoney reportapi row → Report）────────────────────────────
 
+
 def _report_type_from_str(s: str | None) -> ReportType | None:
     """东财 emRatingName → ReportType 枚举。未知值 → None（不抛）。"""
     if not s:
         return None
     table = {
-        "买入": ReportType.BUY, "强买": ReportType.BUY, "推荐": ReportType.BUY,
-        "增持": ReportType.OVERWEIGHT, "强推": ReportType.OVERWEIGHT, "优大于市": ReportType.OVERWEIGHT,
-        "中性": ReportType.NEUTRAL, "同步大市": ReportType.NEUTRAL,
-        "减持": ReportType.UNDERWEIGHT, "弱于大市": ReportType.UNDERWEIGHT,
+        "买入": ReportType.BUY,
+        "强买": ReportType.BUY,
+        "推荐": ReportType.BUY,
+        "增持": ReportType.OVERWEIGHT,
+        "强推": ReportType.OVERWEIGHT,
+        "优大于市": ReportType.OVERWEIGHT,
+        "中性": ReportType.NEUTRAL,
+        "同步大市": ReportType.NEUTRAL,
+        "减持": ReportType.UNDERWEIGHT,
+        "弱于大市": ReportType.UNDERWEIGHT,
         "卖出": ReportType.SELL,
     }
     return table.get(str(s).strip())
@@ -312,6 +350,7 @@ def report_from_eastmoney_row(code: str, raw: dict, market: Market = Market.A) -
 
 # ── News（akshare stock_news_em row → News）─────────────────────────────
 
+
 def news_from_akshare_row(code: str, raw: dict, market: Market = Market.A) -> News:
     """akshare stock_news_em 单行（中文键）→ News。
     rename：新闻标题→title、发布时间→publish_time、文章来源→source。
@@ -328,6 +367,7 @@ def news_from_akshare_row(code: str, raw: dict, market: Market = Market.A) -> Ne
 
 
 # ── LianbanStock / EmotionResponse（market._emotion raw）─────────────────
+
 
 def lianban_stock_from_dict(raw: dict) -> LianbanStock:
     """market._emotion().lianban_stocks 项 → LianbanStock（客观榜单行）。"""
@@ -351,9 +391,7 @@ def emotion_response_from_dict(raw: dict) -> EmotionResponse:
     S049：cross_source/data_source 透传（同花顺交叉验证 / 降级源标识）。
     """
     stocks_raw = raw.get("lianban_stocks") or []
-    stocks = tuple(
-        lianban_stock_from_dict(s) for s in stocks_raw if isinstance(s, dict)
-    )
+    stocks = tuple(lianban_stock_from_dict(s) for s in stocks_raw if isinstance(s, dict))
     return EmotionResponse(
         emotion=emotion_from_dict(raw),
         lianban_stocks=stocks,
@@ -367,6 +405,7 @@ def emotion_response_from_dict(raw: dict) -> EmotionResponse:
 
 
 # ── GlobalMetrics / GlobalStock（gstock.us_hk_stock raw）────────────────
+
 
 def global_metrics_from_gstock(raw_metrics: dict | None) -> GlobalMetrics | None:
     """gstock.us_hk_stock().metrics → GlobalMetrics。None（韩股）→ None。"""
@@ -398,6 +437,7 @@ def global_stock_from_gstock(raw: dict) -> GlobalStock:
 
 
 # ── KLine ───────────────────────────────────────────────────────────────
+
 
 def _bar_date(raw: dict) -> str | None:
     """从 mootdx bar 项归一日期为 YYYY-MM-DD。
@@ -431,16 +471,18 @@ def kline_from_mootdx(code: str, raw_bars: list[dict], market: Market = Market.A
     bars: list[KLineBar] = []
     for raw in raw_bars or []:
         vol = _numf(raw.get("vol"))
-        bars.append(KLineBar(
-            date=_bar_date(raw),
-            open=_numf(raw.get("open")),
-            close=_numf(raw.get("close")),
-            high=_numf(raw.get("high")),
-            low=_numf(raw.get("low")),
-            volume=int(vol) if vol is not None else None,
-            turnover=_numf(raw.get("amount")),
-            amplitude=_numf(raw.get("amplitude")),
-        ))
+        bars.append(
+            KLineBar(
+                date=_bar_date(raw),
+                open=_numf(raw.get("open")),
+                close=_numf(raw.get("close")),
+                high=_numf(raw.get("high")),
+                low=_numf(raw.get("low")),
+                volume=int(vol) if vol is not None else None,
+                turnover=_numf(raw.get("amount")),
+                amplitude=_numf(raw.get("amplitude")),
+            )
+        )
     return KLine(code=norm_code, market=norm_market, bars=tuple(bars))
 
 
@@ -510,9 +552,7 @@ def sina_financials_from_rows(rows: list[dict], report_type: str) -> list[Financ
     return periods
 
 
-def merge_three_statements(
-    lrb_rows: list[dict], fzb_rows: list[dict], llb_rows: list[dict]
-) -> list[dict]:
+def merge_three_statements(lrb_rows: list[dict], fzb_rows: list[dict], llb_rows: list[dict]) -> list[dict]:
     """S108：按「报告期」对齐三表 raw rows，合并成每期一个 dict（含三表科目）。
 
     FinancialPeriod frozen 且 ``sina_financials_from_rows`` 传哪种表的 rows 只填该表字段
@@ -535,6 +575,7 @@ def merge_three_statements(
 
 # ── KLine (百度股市通源) ──────────────────────────────────────────────────
 
+
 def baidu_kline_from_dict(code: str, raw_bars: list[dict], market: Market = Market.A) -> KLine:
     """astock.baidu_kline（百度股市通源）raw bars list[dict] → KLine。
 
@@ -549,22 +590,25 @@ def baidu_kline_from_dict(code: str, raw_bars: list[dict], market: Market = Mark
 
     bars: list[KLineBar] = []
     for raw in raw_bars or []:
-        bars.append(KLineBar(
-            date=raw.get("date"),
-            open=_numf(raw.get("open")),
-            close=_numf(raw.get("close")),
-            high=_numf(raw.get("high")),
-            low=_numf(raw.get("low")),
-            volume=int(v) if (v := _numf(raw.get("volume"))) is not None else None,
-            turnover=_numf(raw.get("amount")),
-            ma5=_numf(raw.get("ma5")),
-            ma10=_numf(raw.get("ma10")),
-            ma20=_numf(raw.get("ma20")),
-        ))
+        bars.append(
+            KLineBar(
+                date=raw.get("date"),
+                open=_numf(raw.get("open")),
+                close=_numf(raw.get("close")),
+                high=_numf(raw.get("high")),
+                low=_numf(raw.get("low")),
+                volume=int(v) if (v := _numf(raw.get("volume"))) is not None else None,
+                turnover=_numf(raw.get("amount")),
+                ma5=_numf(raw.get("ma5")),
+                ma10=_numf(raw.get("ma10")),
+                ma20=_numf(raw.get("ma20")),
+            )
+        )
     return KLine(code=norm_code, market=norm_market, bars=tuple(bars))
 
 
 # ── ZTPoolItem ──────────────────────────────────────────────────────────
+
 
 def zt_pool_item_from_dict(raw: dict, pool_date: str | None = None) -> ZTPoolItem:
     """em_zt_topic_pool 单项 raw dict → ZTPoolItem。
@@ -599,6 +643,7 @@ def zt_pool_item_from_dict(raw: dict, pool_date: str | None = None) -> ZTPoolIte
 
 # ── 公司基本面（T13d）────────────────────────────────────────────────────
 
+
 def financials_from_dict(raw: dict) -> Financials:
     """astock.financials raw → Financials（akshare 口径）。"""
     return Financials(
@@ -631,6 +676,7 @@ def company_info_from_individual_info(raw: dict) -> CompanyInfo:
 
 # ── 龙虎榜 / 席位 / 行业 / 公告 / 概念（T13e）─────────────────────────────
 
+
 def dragon_tiger_from_dict(raw: dict) -> DragonTiger:
     """astock.dragon_tiger_board raw（{records:[{net_buy}], seats:{buy/sell:[{name,buy_amt,sell_amt,net}]}, institution:{net_amt}}）→ DragonTiger。
 
@@ -639,7 +685,7 @@ def dragon_tiger_from_dict(raw: dict) -> DragonTiger:
     raw seats 键为 name/buy_amt/sell_amt/net（eastmoney.py:400-408），与 BillboardDetail（元 + OPERATEDEPT_NAME）口径不同。
     """
     records = []
-    for r in (raw.get("records") or []):
+    for r in raw.get("records") or []:
         records.append(DragonTigerRecord(net_buy=_numf(r.get("net_buy"))))
     inst = raw.get("institution") or {}
 

@@ -6,6 +6,7 @@ honest label「conditioning 数据收集 · 非交易信号」。数据来自 S1
 不写私有数据，不接 AI 工具链（防 signal-creep：conditioning 数据默认不进
 AI prompt 避免被误用为交易信号源——非隐私隔离，OFI 是公开盘口微结构数据）。
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict
@@ -29,6 +30,7 @@ async def intraday_ofi(
     返 {snapshots, count, date, truncated}——用 `snapshots` key 不用 `data`，
     避 client.ts:66 auto-unwrap 吞 `truncated` 元数据。
     """
+
     def _build() -> dict:
         rows = load_ofi(date, date)  # 单日强制（防无界 payload）
         if code:
@@ -42,4 +44,5 @@ async def intraday_ofi(
             "date": date,
             "truncated": truncated,
         }
+
     return await asyncio.to_thread(_build)

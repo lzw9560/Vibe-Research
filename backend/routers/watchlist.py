@@ -1,6 +1,7 @@
 """
 Watchlist router.
 """
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import sqlite3
@@ -69,6 +70,7 @@ def watchlist_add(body: WatchlistCodesIn) -> Dict[str, Any]:
                     added += 1
                 except sqlite3.IntegrityError as e:
                     import logging
+
                     logging.getLogger(__name__).debug("watchlist 已存在，跳过: %s", e)
             db.commit()
             total = db.execute("SELECT COUNT(*) AS cnt FROM watchlist").fetchone()["cnt"]

@@ -15,6 +15,7 @@ R5 gap §44v2 run bypasses engine：gap run（S161 §3）绕过 engine，直接�
 PIT store（R4）已在 backend/pit_store/ 建重桩（commit 01a5807/bcd29ca）。engine 读
 pre-loaded bars（如 simulate_holding 的 bars arg from kline_cache），非 PIT query。
 """
+
 from __future__ import annotations
 
 from engine.decision import Trades, FILL_T_PLUS_1_OPEN, FILL_INTRADAY_CONDITIONAL

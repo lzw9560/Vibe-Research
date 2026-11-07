@@ -38,10 +38,12 @@ def list_databases() -> list[dict]:
     for f in DATA_DIR.rglob("*.db"):
         if f.stat().st_size == 0:
             continue
-        dbs.append({
-            "path": str(f.relative_to(DATA_DIR)),
-            "size_mb": round(f.stat().st_size / 1024 / 1024, 1),
-        })
+        dbs.append(
+            {
+                "path": str(f.relative_to(DATA_DIR)),
+                "size_mb": round(f.stat().st_size / 1024 / 1024, 1),
+            }
+        )
     return sorted(dbs, key=lambda x: -x["size_mb"])
 
 
@@ -52,6 +54,7 @@ def list_tables(db_path: str) -> list[str]:
         return [f"Error: {db_path} not found"]
     try:
         import sqlite3
+
         con = sqlite3.connect(str(full_path))
         result = con.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
         con.close()
@@ -67,11 +70,12 @@ def query_sql(sql: str, db_path: str = None, limit: int = 100) -> str:
     full_path = DATA_DIR / db_path
     if not full_path.exists():
         return json.dumps({"error": f"{db_path} not found"})
-    
+
     # SQLite DB → 用 sqlite3 直查（避免 DuckDB ATTACH 的 schema 前缀/ROWID 问题）
-    if db_path.endswith('.db'):
+    if db_path.endswith(".db"):
         try:
             import sqlite3
+
             con = sqlite3.connect(str(full_path))
             con.row_factory = sqlite3.Row
             if "LIMIT" not in sql.upper():
@@ -80,10 +84,12 @@ def query_sql(sql: str, db_path: str = None, limit: int = 100) -> str:
             columns = [d[0] for d in cursor.description]
             rows = [dict(row) for row in cursor.fetchall()]
             con.close()
-            return json.dumps({"columns": columns, "row_count": len(rows), "rows": rows[:limit]}, ensure_ascii=False, default=str)
+            return json.dumps(
+                {"columns": columns, "row_count": len(rows), "rows": rows[:limit]}, ensure_ascii=False, default=str
+            )
         except Exception as e:
             return json.dumps({"error": str(e), "sql": sql})
-    
+
     # CSV/parquet → 用 DuckDB
     con = duckdb.connect()
     try:
@@ -92,7 +98,11 @@ def query_sql(sql: str, db_path: str = None, limit: int = 100) -> str:
         result = con.execute(sql)
         columns = [d[0] for d in result.description]
         rows = result.fetchall()
-        return json.dumps({"columns": columns, "row_count": len(rows), "rows": [dict(zip(columns, row)) for row in rows[:limit]]}, ensure_ascii=False, default=str)
+        return json.dumps(
+            {"columns": columns, "row_count": len(rows), "rows": [dict(zip(columns, row)) for row in rows[:limit]]},
+            ensure_ascii=False,
+            default=str,
+        )
     except Exception as e:
         return json.dumps({"error": str(e), "sql": sql})
     finally:
@@ -107,7 +117,7 @@ def query_csv(csv_path: str, sql: str = None, limit: int = 100) -> str:
         full_path = Path(csv_path)
         if not full_path.exists():
             return json.dumps({"error": f"{csv_path} not found"})
-    
+
     con = duckdb.connect()
     try:
         if sql:
@@ -115,22 +125,24 @@ def query_csv(csv_path: str, sql: str = None, limit: int = 100) -> str:
             sql = sql.replace("{table}", f"read_csv_auto('{full_path}')")
         else:
             sql = f"SELECT * FROM read_csv_auto('{full_path}') LIMIT {limit}"
-        
+
         result = con.execute(sql)
         columns = [d[0] for d in result.description]
         rows = result.fetchall()
-        
-        return json.dumps({
-            "columns": columns,
-            "row_count": len(rows),
-            "rows": [dict(zip(columns, row)) for row in rows[:limit]],
-        }, ensure_ascii=False, default=str)
+
+        return json.dumps(
+            {
+                "columns": columns,
+                "row_count": len(rows),
+                "rows": [dict(zip(columns, row)) for row in rows[:limit]],
+            },
+            ensure_ascii=False,
+            default=str,
+        )
     except Exception as e:
         return json.dumps({"error": str(e)})
     finally:
         con.close()
-
-
 
 
 def _run_mcp_server():
@@ -142,19 +154,59 @@ def _run_mcp_server():
     import asyncio
 
     async def _on_list_tools(ctx, params=None):
-        return ListToolsResult(tools=[
-            ToolType(name="list_databases", description="List all SQLite databases in .vibe-research/", inputSchema={"type": "object", "properties": {}}),
-            ToolType(name="list_tables", description="List tables in a SQLite database", inputSchema={"type": "object", "properties": {"db_path": {"type": "string"}}, "required": ["db_path"]}),
-            ToolType(name="query_sql", description="Execute SQL on a SQLite DB via DuckDB ATTACH", inputSchema={"type": "object", "properties": {"sql": {"type": "string"}, "db_path": {"type": "string"}, "limit": {"type": "integer", "default": 100}}, "required": ["sql", "db_path"]}),
-            ToolType(name="query_csv", description="Query CSV directly with DuckDB", inputSchema={"type": "object", "properties": {"csv_path": {"type": "string"}, "sql": {"type": "string"}, "limit": {"type": "integer", "default": 100}}, "required": ["csv_path"]}),
-        ])
+        return ListToolsResult(
+            tools=[
+                ToolType(
+                    name="list_databases",
+                    description="List all SQLite databases in .vibe-research/",
+                    inputSchema={"type": "object", "properties": {}},
+                ),
+                ToolType(
+                    name="list_tables",
+                    description="List tables in a SQLite database",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {"db_path": {"type": "string"}},
+                        "required": ["db_path"],
+                    },
+                ),
+                ToolType(
+                    name="query_sql",
+                    description="Execute SQL on a SQLite DB via DuckDB ATTACH",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "sql": {"type": "string"},
+                            "db_path": {"type": "string"},
+                            "limit": {"type": "integer", "default": 100},
+                        },
+                        "required": ["sql", "db_path"],
+                    },
+                ),
+                ToolType(
+                    name="query_csv",
+                    description="Query CSV directly with DuckDB",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "csv_path": {"type": "string"},
+                            "sql": {"type": "string"},
+                            "limit": {"type": "integer", "default": 100},
+                        },
+                        "required": ["csv_path"],
+                    },
+                ),
+            ]
+        )
 
     async def _on_call_tool(ctx, params):
         name = params.name
         args = params.arguments or {}
         if name == "list_databases":
             r = list_databases()
-            return CallToolResult(content=[mt.TextContent(type="text", text=json.dumps(r, ensure_ascii=False, indent=2))])
+            return CallToolResult(
+                content=[mt.TextContent(type="text", text=json.dumps(r, ensure_ascii=False, indent=2))]
+            )
         elif name == "list_tables":
             r = list_tables(args.get("db_path", ""))
             return CallToolResult(content=[mt.TextContent(type="text", text=json.dumps(r, ensure_ascii=False))])
@@ -205,7 +257,7 @@ def _run_test_mode():
 
 
 if __name__ == "__main__":
-    if '--test' in sys.argv:
+    if "--test" in sys.argv:
         _run_test_mode()
     else:
         _run_mcp_server()

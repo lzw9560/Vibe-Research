@@ -9,6 +9,7 @@ fork 探测（2026-09-17）确认 hithink 可回溯 2024-06（em/ths 不可回�
 限流：sleep 0.5s/日期 + 熔断（连续 5 空日期跳过）。
 工程底线：hithink 走 Key env 变量（fuyao.aicubes.cn，不裸调 requests，防封 OK）。
 """
+
 from __future__ import annotations
 
 import argparse
@@ -65,9 +66,7 @@ def backfill(start: str, end: str, sleep_s: float = 0.5, melt_empty: int = 5) ->
     # 验证 zt_history 日期范围
     conn = sqlite3.connect(str(_DB_PATH))
     try:
-        row = conn.execute(
-            "SELECT MIN(date), MAX(date), COUNT(DISTINCT date), COUNT(*) FROM zt_history"
-        ).fetchone()
+        row = conn.execute("SELECT MIN(date), MAX(date), COUNT(DISTINCT date), COUNT(*) FROM zt_history").fetchone()
     finally:
         conn.close()
     print(f"\n[backfill] 完成: ok={n_ok} empty={n_empty}", flush=True)

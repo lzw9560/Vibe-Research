@@ -16,6 +16,7 @@
 win_rate_source 标注来源（backtest_90d / synthetic / none）透明可审计。
 win_rate 来自客观回测统计，不臆造；无回测数据时标 synthetic 不编数值。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -35,6 +36,7 @@ from strategies.strategy_matcher import StrategyMatcher
 # ===========================================================================
 # Part 1: workflow 仓位建议（原 v1）
 # ===========================================================================
+
 
 class PositionSuggestion:
     """单只股票的仓位建议。"""
@@ -100,9 +102,7 @@ class PositionAdvisor:
         self.base_unit = base_unit
         self._matcher = StrategyMatcher()
 
-    def advise(
-        self, signal: StrategySignal, weather_state: str | None = None
-    ) -> PositionSuggestion | None:
+    def advise(self, signal: StrategySignal, weather_state: str | None = None) -> PositionSuggestion | None:
         """
         基于单条策略信号生成仓位建议。
 
@@ -161,9 +161,7 @@ class PositionAdvisor:
             reasons=reasons,
         )
 
-    def advise_batch(
-        self, signals: list[StrategySignal], weather_state: str | None = None
-    ) -> list[PositionSuggestion]:
+    def advise_batch(self, signals: list[StrategySignal], weather_state: str | None = None) -> list[PositionSuggestion]:
         """
         批量生成仓位建议，并按 suggested_pct 降序排列。
         """
@@ -285,11 +283,11 @@ def cap_by_market_phase(
 
 _DISCLAIMER = "历史统计特征，市场有风险，不构成投资建议"
 _LOOKBACK_DAYS = 90
-_DEFAULT_STOP_PCT = -3.0   # 层 1/2 无战法时的默认止损线
-_HARD_STOP_PCT = -5.0      # 层 3 无战法支撑的硬止损
+_DEFAULT_STOP_PCT = -3.0  # 层 1/2 无战法时的默认止损线
+_HARD_STOP_PCT = -5.0  # 层 3 无战法支撑的硬止损
 _ATR_PERIOD = 14
-_ATR_MULT = 2.0            # trailing stop: 最高价 - N×ATR
-_ATR_MULT_TIGHT = 1.5      # 浮盈>15% 时收紧 trailing
+_ATR_MULT = 2.0  # trailing stop: 最高价 - N×ATR
+_ATR_MULT_TIGHT = 1.5  # 浮盈>15% 时收紧 trailing
 _HISTORY_LOOKBACK_DAYS = 30  # 层 2 查历史涨停的天数
 _TIGHT_PROFIT_PCT = 15.0  # 浮盈超此值收紧 trailing
 _kline_cache: dict[str, list[Any]] = {}  # code -> bars（复用 strategy_backtest 模式）
@@ -498,7 +496,9 @@ def _suggested_pct(win_rate: float | None) -> float:
     return 0.05
 
 
-def _atr_trailing_stop(code: str, cost: float, stop_floor_pct: float | None = None) -> tuple[float | None, float | None, bool]:
+def _atr_trailing_stop(
+    code: str, cost: float, stop_floor_pct: float | None = None
+) -> tuple[float | None, float | None, bool]:
     """算 ATR trailing stop 价 + 持仓期最高价。
 
     返回 (trailing_stop_price, high_water_mark, atr_ok)。
@@ -517,6 +517,7 @@ def _atr_trailing_stop(code: str, cost: float, stop_floor_pct: float | None = No
             try:
                 import astock
                 from data.mappers import kline_from_mootdx
+
                 raw = astock.kline(code, category=4, offset=_ATR_PERIOD + 15)
                 _KLINE_CACHE[key] = (raw, now)
             except Exception:  # noqa: BLE001
@@ -560,7 +561,7 @@ def _holding_action_layer1(
     """层 1：当日战法，窗口内——战法固定参数驱动。"""
     if pnl_pct <= stop_pct:
         if win_rate is not None and win_rate >= 0.5:
-            return "hold", f"触及止损 {stop_pct}% 但回测胜率 {win_rate*100:.0f}% 支撑，持有观察"
+            return "hold", f"触及止损 {stop_pct}% 但回测胜率 {win_rate * 100:.0f}% 支撑，持有观察"
         return "close", f"触及战法止损 {stop_pct}%，止损"
     if pnl_pct >= take_profit_pct:
         return "reduce", f"触及战法止盈 {take_profit_pct}%，锁利"
@@ -570,8 +571,7 @@ def _holding_action_layer1(
 
 
 def _holding_action_layer2(
-    pnl_pct: float, win_rate: float | None, stop_pct: float,
-    price: float, cost: float, code: str
+    pnl_pct: float, win_rate: float | None, stop_pct: float, price: float, cost: float, code: str
 ) -> tuple[str, str]:
     """层 2：历史战法已过期——ATR trailing 止盈。"""
     if pnl_pct <= stop_pct:
@@ -581,7 +581,11 @@ def _holding_action_layer2(
         return "reduce", f"ATR trailing 触发（止盈线 {trailing}），锁利"
     if pnl_pct > _TIGHT_PROFIT_PCT and atr_ok and trailing is not None:
         # 浮盈>15%，收紧 trailing
-        tight_trailing = round(high_water - _ATR_MULT_TIGHT * (high_water - trailing) / _ATR_MULT, 2) if trailing and high_water else None
+        tight_trailing = (
+            round(high_water - _ATR_MULT_TIGHT * (high_water - trailing) / _ATR_MULT, 2)
+            if trailing and high_water
+            else None
+        )
         # 直接重算收紧版
         bars = _kline_cache.get(code, [])
         if len(bars) >= _ATR_PERIOD + 1:
@@ -589,7 +593,7 @@ def _holding_action_layer2(
             for i in range(1, len(bars)):
                 h = getattr(bars[i], "high", 0) or 0
                 lo = getattr(bars[i], "low", 0) or 0
-                pc = getattr(bars[i-1], "close", 0) or 0
+                pc = getattr(bars[i - 1], "close", 0) or 0
                 if h and lo and pc:
                     trs.append(max(h - lo, abs(h - pc), abs(lo - pc)))
             if len(trs) >= _ATR_PERIOD:
@@ -604,9 +608,7 @@ def _holding_action_layer2(
     return "hold", "历史战法信号已过期，ATR trailing 守利润"
 
 
-def _holding_action_layer3(
-    pnl_pct: float, price: float, cost: float, code: str
-) -> tuple[str, str]:
+def _holding_action_layer3(pnl_pct: float, price: float, cost: float, code: str) -> tuple[str, str]:
     """层 3：无战法信号——纯盈亏 + ATR trailing 止损纪律。"""
     if pnl_pct <= _HARD_STOP_PCT:
         return "close", f"无战法支撑，浮亏 {pnl_pct:.1f}% 超硬止损 {_HARD_STOP_PCT}%，止损"
@@ -620,7 +622,7 @@ def _holding_action_layer3(
             for i in range(1, len(bars)):
                 h = getattr(bars[i], "high", 0) or 0
                 lo = getattr(bars[i], "low", 0) or 0
-                pc = getattr(bars[i-1], "close", 0) or 0
+                pc = getattr(bars[i - 1], "close", 0) or 0
                 if h and lo and pc:
                     trs.append(max(h - lo, abs(h - pc), abs(lo - pc)))
             if len(trs) >= _ATR_PERIOD:
@@ -769,26 +771,36 @@ def advise_recommendations(limit: int = 20) -> list[AdvisoryItem]:
         stop = params.get("stop_loss_pct", -7)
         take = params.get("take_profit_pct", 15)
         pct = _suggested_pct(wr)
-        wr_disp = f"{wr*100:.0f}%（样本 {ss}）" if wr is not None else "无回测数据"
+        wr_disp = f"{wr * 100:.0f}%（样本 {ss}）" if wr is not None else "无回测数据"
         extra, risk_notes = _with_gene_freshness(
             {
-                "gene_score": g.total_score, "suggested_pct": pct,
-                "stop_loss_pct": stop, "take_profit_pct": take,
+                "gene_score": g.total_score,
+                "suggested_pct": pct,
+                "stop_loss_pct": stop,
+                "take_profit_pct": take,
             },
             [f"止损 {stop}% / 止盈 {take}%", _DISCLAIMER],
-            data_date, data_stale,
+            data_date,
+            data_stale,
         )
-        items.append(AdvisoryItem(
-            code=g.code, name=g.name or g.code, scene="recommendation", action="enter",
-            win_rate=wr, win_rate_source=src, matched_strategy=sn or None,
-            reasons=[
-                f"基因得分 {g.total_score}",
-                f"战法「{sn or '未匹配'}」90 天回测胜率 {wr_disp}",
-                f"建议仓位 {int(pct*100)}%（研究参考，非交易指令）",
-            ],
-            risk_notes=risk_notes,
-            extra=extra,
-        ))
+        items.append(
+            AdvisoryItem(
+                code=g.code,
+                name=g.name or g.code,
+                scene="recommendation",
+                action="enter",
+                win_rate=wr,
+                win_rate_source=src,
+                matched_strategy=sn or None,
+                reasons=[
+                    f"基因得分 {g.total_score}",
+                    f"战法「{sn or '未匹配'}」90 天回测胜率 {wr_disp}",
+                    f"建议仓位 {int(pct * 100)}%（研究参考，非交易指令）",
+                ],
+                risk_notes=risk_notes,
+                extra=extra,
+            )
+        )
     return items
 
 
@@ -810,40 +822,61 @@ def advise_watchlist() -> list[AdvisoryItem]:
         g = gene_map.get(code)
         if g is None:
             extra, risk_notes = _with_gene_freshness(
-                {"status": "no_signal"}, [_DISCLAIMER], data_date, data_stale,
+                {"status": "no_signal"},
+                [_DISCLAIMER],
+                data_date,
+                data_stale,
             )
-            items.append(AdvisoryItem(
-                code=code, name=code, scene="watchlist", action="no_signal",
-                win_rate=None, win_rate_source="none", matched_strategy=None,
-                reasons=["该标的当日不在涨停池，无涨停信号"],
-                risk_notes=risk_notes, extra=extra,
-            ))
+            items.append(
+                AdvisoryItem(
+                    code=code,
+                    name=code,
+                    scene="watchlist",
+                    action="no_signal",
+                    win_rate=None,
+                    win_rate_source="none",
+                    matched_strategy=None,
+                    reasons=["该标的当日不在涨停池，无涨停信号"],
+                    risk_notes=risk_notes,
+                    extra=extra,
+                )
+            )
             continue
         sc, sn, wr, ss, src = _lookup_strategy(code, g, wr_map)
         params = _strat_params(sc)
         stop = params.get("stop_loss_pct", -7)
         take = params.get("take_profit_pct", 15)
         pct = _suggested_pct(wr)
-        wr_disp = f"{wr*100:.0f}%（样本 {ss}）" if wr is not None else "无回测数据"
+        wr_disp = f"{wr * 100:.0f}%（样本 {ss}）" if wr is not None else "无回测数据"
         extra, risk_notes = _with_gene_freshness(
             {
-                "gene_score": g.total_score, "suggested_pct": pct,
-                "stop_loss_pct": stop, "take_profit_pct": take,
+                "gene_score": g.total_score,
+                "suggested_pct": pct,
+                "stop_loss_pct": stop,
+                "take_profit_pct": take,
             },
             [f"止损 {stop}% / 止盈 {take}%", _DISCLAIMER],
-            data_date, data_stale,
+            data_date,
+            data_stale,
         )
-        items.append(AdvisoryItem(
-            code=code, name=g.name or code, scene="watchlist", action="enter",
-            win_rate=wr, win_rate_source=src, matched_strategy=sn or None,
-            reasons=[
-                f"基因得分 {g.total_score}",
-                f"战法「{sn or '未匹配'}」90 天回测胜率 {wr_disp}",
-                f"建议仓位 {int(pct*100)}%",
-            ],
-            risk_notes=risk_notes,
-            extra=extra,
-        ))
+        items.append(
+            AdvisoryItem(
+                code=code,
+                name=g.name or code,
+                scene="watchlist",
+                action="enter",
+                win_rate=wr,
+                win_rate_source=src,
+                matched_strategy=sn or None,
+                reasons=[
+                    f"基因得分 {g.total_score}",
+                    f"战法「{sn or '未匹配'}」90 天回测胜率 {wr_disp}",
+                    f"建议仓位 {int(pct * 100)}%",
+                ],
+                risk_notes=risk_notes,
+                extra=extra,
+            )
+        )
     return items
 
 
@@ -880,14 +913,26 @@ async def advise_holdings() -> list[AdvisoryItem]:
         # price/pnl_pct 诚实化为 None）→ 跳过止损层判定，不喂伪 -100% 给
         # layer1/2/3 触发 false close。对齐 S111 R4 _empty_capital_flow 范式。
         if h.get("data_status") == "degraded":
-            items.append(AdvisoryItem(
-                code=code, name=name, scene="holding", action="hold",
-                win_rate=None, win_rate_source="none", matched_strategy=None,
-                reasons=["行情取数失败，数据缺失不判止损"],
-                risk_notes=[_DISCLAIMER, "行情取数失败，持仓盈亏无法核算"],
-                extra={"data_status": "degraded", "pnl_pct": None,
-                       "cost": h.get("cost"), "price": None, "layer": None},
-            ))
+            items.append(
+                AdvisoryItem(
+                    code=code,
+                    name=name,
+                    scene="holding",
+                    action="hold",
+                    win_rate=None,
+                    win_rate_source="none",
+                    matched_strategy=None,
+                    reasons=["行情取数失败，数据缺失不判止损"],
+                    risk_notes=[_DISCLAIMER, "行情取数失败，持仓盈亏无法核算"],
+                    extra={
+                        "data_status": "degraded",
+                        "pnl_pct": None,
+                        "cost": h.get("cost"),
+                        "price": None,
+                        "layer": None,
+                    },
+                )
+            )
             continue
         pnl_pct = h.get("pnl_pct") or 0.0
         cost = h.get("cost") or 0.0
@@ -908,9 +953,7 @@ async def advise_holdings() -> list[AdvisoryItem]:
         reasons = [f"浮动盈亏 {pnl_pct:+.2f}%"]
         if layer <= 2 and wr is not None:
             tag = "当日" if layer == 1 else "历史"
-            reasons.append(
-                f"{tag}战法「{sn or '未匹配'}」90 天回测胜率 {wr*100:.0f}%（样本 {ss}）"
-            )
+            reasons.append(f"{tag}战法「{sn or '未匹配'}」90 天回测胜率 {wr * 100:.0f}%（样本 {ss}）")
         elif layer == 2:
             reasons.append("历史战法信号已过期，win_rate 仅供参考")
         else:
@@ -921,14 +964,24 @@ async def advise_holdings() -> list[AdvisoryItem]:
             risk_notes.append("历史战法信号已超 max_hold_days 窗口")
         extra, risk_notes = _with_gene_freshness(
             {"pnl_pct": pnl_pct, "cost": cost, "price": price, "layer": layer},
-            risk_notes, data_date, data_stale,
+            risk_notes,
+            data_date,
+            data_stale,
         )
-        items.append(AdvisoryItem(
-            code=code, name=name, scene="holding", action=action,
-            win_rate=wr, win_rate_source=src, matched_strategy=sn or None,
-            reasons=reasons, risk_notes=risk_notes,
-            extra=extra,
-        ))
+        items.append(
+            AdvisoryItem(
+                code=code,
+                name=name,
+                scene="holding",
+                action=action,
+                win_rate=wr,
+                win_rate_source=src,
+                matched_strategy=sn or None,
+                reasons=reasons,
+                risk_notes=risk_notes,
+                extra=extra,
+            )
+        )
     return items
 
 

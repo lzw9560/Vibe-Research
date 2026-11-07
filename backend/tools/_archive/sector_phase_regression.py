@@ -13,6 +13,7 @@
 
 用法：cd backend && ../.venv/bin/python tools/sector_phase_regression.py
 """
+
 from __future__ import annotations
 
 import json
@@ -57,9 +58,7 @@ def load_src_map() -> dict[tuple[str, str], str]:
     """(date, code) -> data_source 映射（mirror factor_regression，samples 无 data_source 字段）。"""
     conn = sqlite3.connect(str(DB_PATH))
     try:
-        return {(r[0], r[1]): r[2] for r in conn.execute(
-            "SELECT date, code, data_source FROM gene_scores"
-        ).fetchall()}
+        return {(r[0], r[1]): r[2] for r in conn.execute("SELECT date, code, data_source FROM gene_scores").fetchall()}
     finally:
         conn.close()
 
@@ -110,28 +109,38 @@ def main() -> int:
             rs = phs.get(ph)
             if rs and len(rs) >= 3:
                 per_date_avg.append(sum(rs) / len(rs))
-        rows.append({
-            "phase": ph, "modifier": MODIFIER[ph], "n": n, "wins": wins,
-            "winrate": round(wins / n, 4) if n else None,
-            "winrate_ci": [round(lo, 4), round(hi, 4)] if n else None,
-            "avg_return_pct": round(sum(rets) / n * 100, 2) if n else None,
-            "within_day_avg_return_pct": round(sum(per_date_avg) / len(per_date_avg) * 100, 2) if per_date_avg else None,
-            "within_day_n_dates": len(per_date_avg),
-        })
+        rows.append(
+            {
+                "phase": ph,
+                "modifier": MODIFIER[ph],
+                "n": n,
+                "wins": wins,
+                "winrate": round(wins / n, 4) if n else None,
+                "winrate_ci": [round(lo, 4), round(hi, 4)] if n else None,
+                "avg_return_pct": round(sum(rets) / n * 100, 2) if n else None,
+                "within_day_avg_return_pct": round(sum(per_date_avg) / len(per_date_avg) * 100, 2)
+                if per_date_avg
+                else None,
+                "within_day_n_dates": len(per_date_avg),
+            }
+        )
 
     # verdict：启动>发酵>高潮>退潮 的 avg_return 单调递减？（修饰系数方向：启动1.1>退潮0.7）
-    seq = [r["avg_return_pct"] for r in rows
-           if r["phase"] in ("启动", "发酵", "高潮", "退潮") and r["n"] > 0]
+    seq = [r["avg_return_pct"] for r in rows if r["phase"] in ("启动", "发酵", "高潮", "退潮") and r["n"] > 0]
     monotonic = all(seq[i] >= seq[i + 1] for i in range(len(seq) - 1)) if len(seq) >= 2 else False
 
     out = {
-        "generated_at": datetime.now().isoformat(), "metric": RETURN_METRIC,
+        "generated_at": datetime.now().isoformat(),
+        "metric": RETURN_METRIC,
         "eastmoney_live_days": len(by_date_phase),
         "phases": rows,
         "verdict": {
             "modifier_direction_monotonic": monotonic,
-            "note": ("启动>发酵>高潮>退潮 avg_return 单调递减——方向有数据支撑，可接 placeholder（A）"
-                     if monotonic else "无单调——方向无数据支撑，修饰保持 label-only（B）"),
+            "note": (
+                "启动>发酵>高潮>退潮 avg_return 单调递减——方向有数据支撑，可接 placeholder（A）"
+                if monotonic
+                else "无单调——方向无数据支撑，修饰保持 label-only（B）"
+            ),
             "caveat": f"{len(by_date_phase)} 天 eastmoney_live（Q17 需 60 天定系数）；此刻只判方向有无信号。",
         },
     }
@@ -141,8 +150,10 @@ def main() -> int:
     print(f"{'phase':<6}{'mod':>5}{'n':>6}{'winrate':>9}{'95%CI':>20}{'avgRet%':>9}{'withinRet%':>12}{'nDates':>7}")
     for r in rows:
         ci = f"[{r['winrate_ci'][0]},{r['winrate_ci'][1]}]" if r["winrate_ci"] else "—"
-        print(f"{r['phase']:<6}{r['modifier']:>5}{r['n']:>6}{str(r['winrate']):>9}{ci:>20}"
-              f"{str(r['avg_return_pct']):>9}{str(r['within_day_avg_return_pct']):>12}{r['within_day_n_dates']:>7}")
+        print(
+            f"{r['phase']:<6}{r['modifier']:>5}{r['n']:>6}{str(r['winrate']):>9}{ci:>20}"
+            f"{str(r['avg_return_pct']):>9}{str(r['within_day_avg_return_pct']):>12}{r['within_day_n_dates']:>7}"
+        )
     print(f"\nverdict: 修饰方向单调={monotonic} | {out['verdict']['note']}")
     print(f"输出: {OUT_PATH}")
     return 0

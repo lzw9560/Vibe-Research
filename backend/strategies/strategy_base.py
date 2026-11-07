@@ -17,6 +17,7 @@
 工程底线（CLAUDE.md §1.2）：阈值/字符串严格按 limitup_strategy.py 既有分支迁移，不改阈值；
 derived fallback 上提到调度器（_prepare_derived），Strategy 类不自己取数。
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -30,6 +31,7 @@ from pydantic import BaseModel
 # ===========================================================================
 # 数据结构
 # ===========================================================================
+
 
 class ConditionMatch(BaseModel):
     """单个条件匹配结果（教育性展示）。
@@ -47,6 +49,7 @@ class ConditionMatch(BaseModel):
 # S097：逐条件因子过滤契约（ConditionEval + StrategyMatchResult）
 # ===========================================================================
 
+
 class ConditionEval(BaseModel):
     """单条件评估（S097 三态：hit/miss/data_unavailable）。
 
@@ -54,10 +57,10 @@ class ConditionEval(BaseModel):
     供批次聚合「条件→输入数→命中数」漏斗 + 候选行命中标记。
     """
 
-    condition_id: str        # "first_plate.c1"（战法内唯一）
-    condition_name: str      # "基因得分合格"
-    factor: str              # "total_score"
-    threshold: str          # ">= 60"
+    condition_id: str  # "first_plate.c1"（战法内唯一）
+    condition_name: str  # "基因得分合格"
+    factor: str  # "total_score"
+    threshold: str  # ">= 60"
     actual_value: str | None
     state: Literal["hit", "miss", "data_unavailable"]
     description: str
@@ -73,13 +76,13 @@ class StrategyMatchResult(BaseModel):
 
     strategy_code: str
     strategy_name: str
-    conditions: list[ConditionEval]   # 全量（命中+未命中+数据降级）
-    hit_count: int                    # state=hit 数
+    conditions: list[ConditionEval]  # 全量（命中+未命中+数据降级）
+    hit_count: int  # state=hit 数
     total_count: int
-    fired: bool                       # 按触发规则（全条件命中 / ≥N/M）
-    fire_rule: str                    # "全条件命中" / "≥4/5 命中"
+    fired: bool  # 按触发规则（全条件命中 / ≥N/M）
+    fire_rule: str  # "全条件命中" / "≥4/5 命中"
     confidence: float | None
-    data_ok: bool                     # 数据前置可用（False=整战法降级不评估）
+    data_ok: bool  # 数据前置可用（False=整战法降级不评估）
 
 
 def make_data_unavailable_result(
@@ -97,16 +100,26 @@ def make_data_unavailable_result(
     """
     conditions = [
         ConditionEval(
-            condition_id=cid, condition_name=cname, factor=factor,
-            threshold=threshold, actual_value=None,
-            state="data_unavailable", description="数据前置缺失，不可评估",
+            condition_id=cid,
+            condition_name=cname,
+            factor=factor,
+            threshold=threshold,
+            actual_value=None,
+            state="data_unavailable",
+            description="数据前置缺失，不可评估",
         )
         for cid, cname, factor, threshold in condition_specs
     ]
     return StrategyMatchResult(
-        strategy_code=strategy_code, strategy_name=strategy_name,
-        conditions=conditions, hit_count=0, total_count=len(conditions),
-        fired=False, fire_rule=fire_rule, confidence=None, data_ok=False,
+        strategy_code=strategy_code,
+        strategy_name=strategy_name,
+        conditions=conditions,
+        hit_count=0,
+        total_count=len(conditions),
+        fired=False,
+        fire_rule=fire_rule,
+        confidence=None,
+        data_ok=False,
     )
 
 
@@ -115,11 +128,11 @@ class StrategyContext:
     """调度器统一准备的上下文容器，各 Strategy 按需读字段。"""
 
     code: str
-    gene: Any                   # GeneScore（因子得分）
-    pool_item: dict | None      # 涨停池原始 dict（lbc/zbc/fbt/zdp/hs/p/fund）
-    indicators: Any | None      # candidate_funnel.IndicatorSet（K线派生）
-    derived: dict | None        # S070 R7 分时派生（broken_duration_min/max_drop_pct/last_lock_time）
-    weather_state: str | None   # 天气（软标注，不做硬开关）
+    gene: Any  # GeneScore（因子得分）
+    pool_item: dict | None  # 涨停池原始 dict（lbc/zbc/fbt/zdp/hs/p/fund）
+    indicators: Any | None  # candidate_funnel.IndicatorSet（K线派生）
+    derived: dict | None  # S070 R7 分时派生（broken_duration_min/max_drop_pct/last_lock_time）
+    weather_state: str | None  # 天气（软标注，不做硬开关）
     # S094 R5/R6：market_scan 战法（pattern_reversal/low_absorption/platform_breakout/
     # dragon_head）的 PatternScan 因子上下文。S1 阶段 score_candidates 涨停 pipeline
     # 不构造此字段（None），4 战法 getattr 安全读降级不命中；S3 R7 score_candidates
@@ -152,8 +165,8 @@ class StrategyProtocol(Protocol):
 class PositionParams:
     """止损/止盈/最大持有期（向后兼容 routers/strategy.py + test 的 .position_params 访问）。"""
 
-    stop_loss_pct: float        # 负数（-3.0 = -3%）
-    take_profit_pct: float       # 正数（+8.0 = +8%）
+    stop_loss_pct: float  # 负数（-3.0 = -3%）
+    take_profit_pct: float  # 正数（+8.0 = +8%）
     max_hold_days: int
     position_scale: float = 1.0  # 仓位缩放（暴风暴 0.3，建议不强制）
 
@@ -184,14 +197,14 @@ class StrategyConfig:
     stop_loss_pct: float
     take_profit_pct: float
     max_hold_days: int
-    position_scale: float = 1.0           # 仓位缩放（建议，不强制）
+    position_scale: float = 1.0  # 仓位缩放（建议，不强制）
     # 漏斗参数
     funnel_type: str = "limitup"
     weight_set: str = "limitup"
     weather_regimes: list[str] = field(default_factory=list)  # 软标注
     is_primary: bool = True
     fallback: bool = False
-    activation_note: str | None = None     # 非空=当前不可用（清过时标注后置 None）
+    activation_note: str | None = None  # 非空=当前不可用（清过时标注后置 None）
     # 文本
     entry_type: str = ""
     entry_condition: str = ""
@@ -206,7 +219,10 @@ class StrategyConfig:
     def position_params(self) -> PositionParams:
         """嵌套访问兼容（routers/strategy.py:156 / test:100 读 .position_params.*）。"""
         return PositionParams(
-            self.stop_loss_pct, self.take_profit_pct, self.max_hold_days, self.position_scale,
+            self.stop_loss_pct,
+            self.take_profit_pct,
+            self.max_hold_days,
+            self.position_scale,
         )
 
     # ---- dict 兼容：s["code"] / s.get(...) / "x" in s ----
@@ -235,6 +251,7 @@ class StrategyConfig:
 # ===========================================================================
 # Strategy 基类（impl/ 各战法继承）
 # ===========================================================================
+
 
 def _round_to_tick_size(price: float, tick_size: float = 0.01) -> float:
     """A股 tick-size rounding（与 limitup_strategy._round_to_tick_size / limitup_screener.models 同款）。"""
@@ -282,6 +299,7 @@ class BaseStrategy:
 # ===========================================================================
 # 调度器
 # ===========================================================================
+
 
 def dispatch_match(ctx: StrategyContext, registry: list[StrategyConfig]) -> list:
     """调度器：遍历注册表，各 Strategy.match → 组装 StrategySignal。
@@ -336,7 +354,8 @@ def dispatch_match(ctx: StrategyContext, registry: list[StrategyConfig]) -> list
         # 真实测 winrate 由 position_advisor 的 run_strategy_backtest 覆写（不在此）。
         confidence_mapped_winrate = min(confidence * 0.8 + 0.2, 0.95)
         mapped_avg_return = round(
-            (cfg.take_profit_pct - cfg.stop_loss_pct) / 2 * confidence_mapped_winrate, 2,
+            (cfg.take_profit_pct - cfg.stop_loss_pct) / 2 * confidence_mapped_winrate,
+            2,
         )
 
         # S081 A8/B7：PRD 战法参数标注"参考值，非执行指令"
@@ -354,41 +373,43 @@ def dispatch_match(ctx: StrategyContext, registry: list[StrategyConfig]) -> list
         if is_price_proxy:
             risk_notes.append("入场价为基因得分代理（价格代理），非真实涨停价")
 
-        signals.append(StrategySignal(
-            code=ctx.code,
-            name=ctx.gene.name,
-            strategy_name=cfg.name,
-            strategy_code=cfg.code,
-            score=ctx.gene.total_score,
-            signal_strength=int(confidence * 100),
-            confidence=round(confidence, 2),
-            matches=matches,
-            logic_description="；".join(m.description for m in matches) + "。",
-            strategy_tags=[cfg.name],
-            entry_price=entry_price,
-            entry_condition=cfg.entry_condition,
-            entry_type=cfg.entry_type,
-            stop_loss=stop_loss,
-            stop_loss_condition=cfg.stop_loss_condition,
-            take_profit=take_profit,
-            take_profit_condition=cfg.take_profit_condition,
-            max_hold_days=cfg.max_hold_days,
-            exit_condition=cfg.exit_condition,
-            confidence_mapped_winrate=round(confidence_mapped_winrate, 2),
-            mapped_avg_return=mapped_avg_return,
-            winrate_source="confidence_map_synthetic",
-            sample_size=ctx.gene.zt_count_250d,
-            risk_reward_ratio=round(abs(cfg.take_profit_pct / cfg.stop_loss_pct), 2),
-            conditions={
-                "entry_condition": cfg.entry_condition,
-                "stop_loss_condition": cfg.stop_loss_condition,
-                "take_profit_condition": cfg.take_profit_condition,
-                "exit_condition": cfg.exit_condition,
-            },
-            reasoning=[m.description for m in matches],
-            risk_notes=risk_notes,
-            volume_signal=volume_signal,  # S094 R4：per-strategy 量能信号下沉 match 层
-        ))
+        signals.append(
+            StrategySignal(
+                code=ctx.code,
+                name=ctx.gene.name,
+                strategy_name=cfg.name,
+                strategy_code=cfg.code,
+                score=ctx.gene.total_score,
+                signal_strength=int(confidence * 100),
+                confidence=round(confidence, 2),
+                matches=matches,
+                logic_description="；".join(m.description for m in matches) + "。",
+                strategy_tags=[cfg.name],
+                entry_price=entry_price,
+                entry_condition=cfg.entry_condition,
+                entry_type=cfg.entry_type,
+                stop_loss=stop_loss,
+                stop_loss_condition=cfg.stop_loss_condition,
+                take_profit=take_profit,
+                take_profit_condition=cfg.take_profit_condition,
+                max_hold_days=cfg.max_hold_days,
+                exit_condition=cfg.exit_condition,
+                confidence_mapped_winrate=round(confidence_mapped_winrate, 2),
+                mapped_avg_return=mapped_avg_return,
+                winrate_source="confidence_map_synthetic",
+                sample_size=ctx.gene.zt_count_250d,
+                risk_reward_ratio=round(abs(cfg.take_profit_pct / cfg.stop_loss_pct), 2),
+                conditions={
+                    "entry_condition": cfg.entry_condition,
+                    "stop_loss_condition": cfg.stop_loss_condition,
+                    "take_profit_condition": cfg.take_profit_condition,
+                    "exit_condition": cfg.exit_condition,
+                },
+                reasoning=[m.description for m in matches],
+                risk_notes=risk_notes,
+                volume_signal=volume_signal,  # S094 R4：per-strategy 量能信号下沉 match 层
+            )
+        )
 
     # 按风险收益比 × mapped winrate 排序（合成 heuristic fallback；position_advisor 用真 backtest winrate 覆写）
     signals.sort(key=lambda s: s.risk_reward_ratio * s.confidence_mapped_winrate, reverse=True)
@@ -398,6 +419,7 @@ def dispatch_match(ctx: StrategyContext, registry: list[StrategyConfig]) -> list
 # ===========================================================================
 # 上下文准备（R8 derived fallback 上提 + R7 pool_item_map）
 # ===========================================================================
+
 
 def _prepare_derived(card_derived: dict | None, code: str) -> dict | None:
     """调度器统一准备 derived，T-1 vs 今日由调用方传参决定。
@@ -431,6 +453,7 @@ def _prepare_pool_item(pool_item_map: dict[str, dict] | None, code: str) -> dict
 # ===========================================================================
 # 兼容包装：旧 match_strategies(code, gene, pool_item, indicators, card)
 # ===========================================================================
+
 
 def match_strategies(
     code: str,
@@ -470,4 +493,5 @@ def match_strategies(
     )
     # 延迟 import 打破环：strategy_base ← strategy_funnel_registry ← impl ← strategy_base
     from strategies.strategy_funnel_registry import STRATEGY_REGISTRY
+
     return dispatch_match(ctx, STRATEGY_REGISTRY)

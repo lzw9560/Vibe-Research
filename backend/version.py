@@ -15,7 +15,8 @@ import sys
 
 _PACKAGE_JSON = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "frontend", "package.json",
+    "frontend",
+    "package.json",
 )
 
 

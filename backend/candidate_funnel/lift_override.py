@@ -14,6 +14,7 @@ validated×1.0；lift<1 robust→劣于随机×0.1；days<60→待复验×0.5，
 §44v2 方法论不破坏（day_paired + permutation + Bonferroni + walk_forward 在 s44_verifier）；
 本模块只做 writeback + reader，compute 注入（default = path_lift 从 forward_test DB 算）。
 """
+
 from __future__ import annotations
 
 import logging
@@ -43,6 +44,7 @@ _EFFECTIVE_CACHE: dict[str, dict[str, tuple[DimensionValidation, float]]] = {}
 @dataclass(frozen=True)
 class RevalidationResult:
     """单维度 revalidation 算出的输入（compute_fn 返回）——write_override 据此算 status/mult。"""
+
     lift: Optional[float]
     n: int
     days_robust: int
@@ -57,6 +59,7 @@ class RevalidationResult:
 def _override_db_path() -> Path:
     """override DB 路径：$VR_DATA_DIR/evaluation_lifts.db（resolve_data_dir 防 home 分裂）。"""
     from vr_paths import resolve_data_dir
+
     return Path(resolve_data_dir()) / _OVERRIDE_DB_FILENAME
 
 
@@ -111,8 +114,7 @@ def write_override(
     reader 经 get_effective_dimension 覆盖读。返回写入的 {dimension_id, lift, n, days_robust,
     validation_status, weight_multiplier, phase}。
     """
-    status, mult = lift_to_multiplier(lift, n, ci_overlap=ci_overlap,
-                                     robust=robust, days_robust=days_robust)
+    status, mult = lift_to_multiplier(lift, n, ci_overlap=ci_overlap, robust=robust, days_robust=days_robust)
     now = datetime.now().isoformat()
     src = source_script or f"R3 {phase} auto-writeback"
     conn = _connect(db_path)
@@ -129,18 +131,32 @@ def write_override(
                  weight_multiplier=excluded.weight_multiplier, phase=excluded.phase,
                  source_script=excluded.source_script, ci_overlap=excluded.ci_overlap,
                  robust=excluded.robust, revalidated_at=excluded.revalidated_at""",
-            (dim_id, lift, n, days_robust, status, mult, phase, src,
-             int(ci_overlap), int(robust), now, FROZEN_COMMIT),
+            (dim_id, lift, n, days_robust, status, mult, phase, src, int(ci_overlap), int(robust), now, FROZEN_COMMIT),
         )
         conn.commit()
     finally:
         conn.close()
     # 清缓存（同进程；跨进程靠 TTL）
     _EFFECTIVE_CACHE.pop(str(db_path or _override_db_path()), None)
-    logger.info("[write_override] %s lift=%s n=%d days=%d → %s ×%.2f (phase=%s)",
-                dim_id, lift, n, days_robust, status, mult, phase)
-    return {"dimension_id": dim_id, "lift": lift, "n": n, "days_robust": days_robust,
-            "validation_status": status, "weight_multiplier": mult, "phase": phase}
+    logger.info(
+        "[write_override] %s lift=%s n=%d days=%d → %s ×%.2f (phase=%s)",
+        dim_id,
+        lift,
+        n,
+        days_robust,
+        status,
+        mult,
+        phase,
+    )
+    return {
+        "dimension_id": dim_id,
+        "lift": lift,
+        "n": n,
+        "days_robust": days_robust,
+        "validation_status": status,
+        "weight_multiplier": mult,
+        "phase": phase,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -155,13 +171,21 @@ def _read_override_row(conn: sqlite3.Connection, dim_id: str) -> dict | None:
     ).fetchone()
     if not row:
         return None
-    return {"lift": row[0], "n": row[1], "days_robust": row[2],
-            "validation_status": row[3], "weight_multiplier": row[4],
-            "phase": row[5], "source_script": row[6], "revalidated_at": row[7]}
+    return {
+        "lift": row[0],
+        "n": row[1],
+        "days_robust": row[2],
+        "validation_status": row[3],
+        "weight_multiplier": row[4],
+        "phase": row[5],
+        "source_script": row[6],
+        "revalidated_at": row[7],
+    }
 
 
 def get_effective_dimension(
-    dim_id: str, db_path: Optional[str] = None,
+    dim_id: str,
+    db_path: Optional[str] = None,
 ) -> Optional[DimensionValidation]:
     """override 优先 fallback frozen。返新 frozen DimensionValidation（不改 baseline）。
 
@@ -192,15 +216,20 @@ def get_effective_dimension(
     else:
         # 构建新 frozen 实例（不改 baseline）——label/source 保留 provenance，note 标 override
         note = (frozen.note + " | " if frozen.note else "") + (
-            f"override@{row['revalidated_at']} phase={row['phase']} "
-            f"({row['source_script']})")
+            f"override@{row['revalidated_at']} phase={row['phase']} ({row['source_script']})"
+        )
         effective = DimensionValidation(
-            dimension_id=frozen.dimension_id, label=frozen.label,
-            lift=row["lift"], n=row["n"], days_robust=row["days_robust"],
+            dimension_id=frozen.dimension_id,
+            label=frozen.label,
+            lift=row["lift"],
+            n=row["n"],
+            days_robust=row["days_robust"],
             validation_status=row["validation_status"],
             weight_multiplier=row["weight_multiplier"],
             source_script=row["source_script"] or frozen.source_script,
-            note=note, frozen_commit=FROZEN_COMMIT, frozen_at=frozen.frozen_at,
+            note=note,
+            frozen_commit=FROZEN_COMMIT,
+            frozen_at=frozen.frozen_at,
         )
 
     _EFFECTIVE_CACHE.setdefault(cache_key, {})[dim_id] = (effective, now)
@@ -238,7 +267,8 @@ def _day_paired_winrate_lift(
 
 
 def _compute_path_lift_from_forward_test(
-    dim_id: str, gene_scores_db_path: Optional[str] = None,
+    dim_id: str,
+    gene_scores_db_path: Optional[str] = None,
 ) -> Optional[RevalidationResult]:
     """default compute：path_lift 从 forward_test DB 算 day_paired winrate lift。
 
@@ -261,8 +291,7 @@ def _compute_path_lift_from_forward_test(
             survivors_by_day.setdefault(date, []).append(float(rp))
         universe_by_day: dict[str, list[float]] = {}
         for date, rp in conn.execute(
-            "SELECT signal_date, return_path FROM universe_returns "
-            "WHERE return_path IS NOT NULL AND is_unbuyable = 0"
+            "SELECT signal_date, return_path FROM universe_returns WHERE return_path IS NOT NULL AND is_unbuyable = 0"
         ).fetchall():
             universe_by_day.setdefault(date, []).append(float(rp))
     finally:
@@ -272,8 +301,11 @@ def _compute_path_lift_from_forward_test(
     if lift is None or n_days == 0:
         return None  # 无可配对日 → 不写（不臆造）
     return RevalidationResult(
-        lift=lift, n=surv_n, days_robust=n_days,
-        ci_overlap=True, robust=True,
+        lift=lift,
+        n=surv_n,
+        days_robust=n_days,
+        ci_overlap=True,
+        robust=True,
         source_script="forward_test_records.return_path (R3 auto day_paired)",
     )
 
@@ -312,18 +344,28 @@ def apply_revalidation(
                 if compute is None:
                     skipped.append(dim_id)
                     continue  # 该维度无 default compute 接线（待 follow-up）
-                result = (_compute_path_lift_from_forward_test(dim_id, gene_scores_db_path)
-                           if dim_id == "path_lift" else compute(dim_id))
+                result = (
+                    _compute_path_lift_from_forward_test(dim_id, gene_scores_db_path)
+                    if dim_id == "path_lift"
+                    else compute(dim_id)
+                )
             if result is None:
                 skipped.append(dim_id)
                 continue
-            write_override(dim_id, result.lift, result.n, result.days_robust, phase,
-                           source_script=result.source_script, ci_overlap=result.ci_overlap,
-                           robust=result.robust, db_path=db_path)
+            write_override(
+                dim_id,
+                result.lift,
+                result.n,
+                result.days_robust,
+                phase,
+                source_script=result.source_script,
+                ci_overlap=result.ci_overlap,
+                robust=result.robust,
+                db_path=db_path,
+            )
             written.append(dim_id)
         except Exception as e:  # noqa: BLE001 — 单维度崩不阻断其他 + 不崩 scheduled task
             errors.append(dim_id)
             logger.warning("[apply_revalidation] %s compute 失败: %s", dim_id, e)
-    logger.info("[apply_revalidation] phase=%s written=%s skipped=%s errors=%s",
-                phase, written, skipped, errors)
+    logger.info("[apply_revalidation] phase=%s written=%s skipped=%s errors=%s", phase, written, skipped, errors)
     return {"phase": phase, "written": written, "skipped": skipped, "errors": errors}

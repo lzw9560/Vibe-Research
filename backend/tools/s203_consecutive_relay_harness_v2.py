@@ -15,6 +15,7 @@ vs 原 s203_harness（V1 edge = D close→D+1 open，D close=涨停价）：
 依赖同原 harness：baostock_kline_cache.json + zt_history.db + index_ma20_regime.json
 跑法：cd backend && .venv/bin/python tools/s203_consecutive_relay_harness_v2.py
 """
+
 import statistics  # noqa: PLC0415
 import sys
 from pathlib import Path
@@ -71,24 +72,22 @@ def compute_obs_v2(
         if d_idx is None or d_idx + 2 >= len(bars):  # V2 需 D+2 bar（V1 只需 D+1）
             continue
         entry_idx = d_idx + 1  # D+1=entry day
-        exit_idx = d_idx + 2   # D+2=exit day
+        exit_idx = d_idx + 2  # D+2=exit day
         entry_bar = bars[entry_idx]
         exit_bar = bars[exit_idx]
         # V2 unbuyable: 判 D+1 一字板（entry day 封死涨停 close 买不到）
         # vs V1 判 D 日一字板（D close 涨停价买不到）
         if _is_unbuyable_next_bar(entry_bar, code=code):
             continue  # D+1 一字板封死（entry day close 买不到，survivorship 过滤）
-        close_entry = float(entry_bar.get("close", 0) or 0)   # D+1 close
-        open_exit = float(exit_bar.get("open", 0) or 0)        # D+2 open
+        close_entry = float(entry_bar.get("close", 0) or 0)  # D+1 close
+        open_exit = float(exit_bar.get("open", 0) or 0)  # D+2 open
         if close_entry <= 0 or open_exit <= 0:
             continue
         gap_ret = (open_exit - close_entry) / close_entry  # V2 edge decimal
         cost_pct = cost_fn(open_exit, 100.0, D) if open_exit > 0 else 0.0
         cost_dec = cost_pct / 100.0
         net = gap_ret - cost_dec
-        obs.append(
-            {"D": D, "code": code, "net": net, "win": 1 if net > 0 else 0, "cost": cost_dec}
-        )
+        obs.append({"D": D, "code": code, "net": net, "win": 1 if net > 0 else 0, "cost": cost_dec})
     return obs
 
 
@@ -96,6 +95,7 @@ def main() -> dict:
     """跑 V2 edge chrono holdout → 对比 V1 verdict（+1.04% p=0.0054）。"""
     cache = _load_kline_cache()
     import datetime  # noqa: PLC0415
+
     validate_or_reject(
         "baostock_kline",
         [b for bars in cache.values() for b in bars],
@@ -128,8 +128,7 @@ def main() -> dict:
     wr = sum(o["win"] for o in obs) / n_obs
     net_mean = statistics.mean(rets)
     print(
-        f"[V2] all net-WR: {wr*100:.2f}% net_mean={net_mean*100:.2f}% "
-        f"(扣 cost ~{mean_cost_dec*100:.2f}%)",
+        f"[V2] all net-WR: {wr * 100:.2f}% net_mean={net_mean * 100:.2f}% (扣 cost ~{mean_cost_dec * 100:.2f}%)",
         flush=True,
     )
 
@@ -165,9 +164,7 @@ def main() -> dict:
             return {"decision": "insufficient", "n_test_days": 0}
         regime_rets = [p[0] for p in pairs]
         regime_dates = [p[1] for p in pairs]
-        chrono = chronological_holdout_event_check(
-            regime_rets, regime_dates, round_trip_cost=round(mean_cost_dec, 6)
-        )
+        chrono = chronological_holdout_event_check(regime_rets, regime_dates, round_trip_cost=round(mean_cost_dec, 6))
         n_test = chrono.get("n_test_days", 0) or 0
         chrono["underpowered"] = n_test < 30
         print(f"\n[V2 chrono-OOS] {tag} regime 2/3-1/3 chronological holdout:")
@@ -185,13 +182,17 @@ def main() -> dict:
     bull_chrono = _chrono_for_regime("bull")
     bear_chrono = _chrono_for_regime("bear")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("[V2 vs V1 对比]")
     print(f"  V1 (D close→D+1 open): bull net_mean=+1.04% p=0.0054 n_test=57 (旧 verdict)")
-    print(f"  V2 (D+1 close→D+2 open): bull net_mean={bull_chrono.get('test_day_mean', '?')} "
-          f"p={bull_chrono.get('test_p_one_sided', '?')} n_test={bull_chrono.get('n_test_days', '?')}")
-    print(f"  V2 bear: net_mean={bear_chrono.get('test_day_mean', '?')} "
-          f"p={bear_chrono.get('test_p_one_sided', '?')} n_test={bear_chrono.get('n_test_days', '?')}")
+    print(
+        f"  V2 (D+1 close→D+2 open): bull net_mean={bull_chrono.get('test_day_mean', '?')} "
+        f"p={bull_chrono.get('test_p_one_sided', '?')} n_test={bull_chrono.get('n_test_days', '?')}"
+    )
+    print(
+        f"  V2 bear: net_mean={bear_chrono.get('test_day_mean', '?')} "
+        f"p={bear_chrono.get('test_p_one_sided', '?')} n_test={bear_chrono.get('n_test_days', '?')}"
+    )
     print("  结论: V2 edge 消失/变负 → 当前 +1.04% 是'D 涨停封板溢价'非'连板接力 edge'→ 战法证否")
     print("        V2 edge 仍 +1% 左右 → edge 是真连板接力 → fix 安全")
 

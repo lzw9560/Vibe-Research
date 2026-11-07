@@ -40,6 +40,7 @@ class LLMConfig(BaseModel):
 
 # ---------- L1 扫描 ----------
 
+
 @router.post("/api/value-funnel/scan")
 def scan(req: ScanReq):
     """按行业/主题/指数扫描候选。"""
@@ -51,14 +52,14 @@ def scan(req: ScanReq):
 
 # ---------- 运行漏斗 ----------
 
+
 @router.post("/api/value-funnel/run")
 def run(req: RunReq):
     """运行价值漏斗（L1→L2→L3→L4 或单层）。"""
     if req.stage not in ("L1", "L2", "L3", "L4", "all"):
         raise HTTPException(400, "stage 须为 L1/L2/L3/L4/all")
     try:
-        result = funnel.run_value_funnel(req.direction, req.stage,
-                                         req.top_n_l1, req.top_n_l4)
+        result = funnel.run_value_funnel(req.direction, req.stage, req.top_n_l1, req.top_n_l4)
     except Exception as e:
         raise HTTPException(500, f"漏斗运行失败: {e}")
     _RUNS[result.run_id] = result
@@ -75,6 +76,7 @@ def get_layers(run_id: str):
 
 # ---------- 单只去劣 + 护城河 ----------
 
+
 @router.get("/api/value-funnel/{code}/quality")
 def get_quality(code: str):
     """单只标的去劣7条 + 双口径通过率 + 护城河代理。"""
@@ -86,6 +88,7 @@ def get_quality(code: str):
 
 # ---------- L3 精细分析骨架 ----------
 
+
 @router.get("/api/value-funnel/{code}/analysis")
 def get_analysis(code: str):
     try:
@@ -96,6 +99,7 @@ def get_analysis(code: str):
 
 
 # ---------- S108：财报异常 5 信号（新浪三表 → FinancialPeriod → detect_anomalies）----------
+
 
 @router.get("/api/value-funnel/{code}/anomaly")
 def get_anomaly(code: str):
@@ -109,9 +113,11 @@ def get_anomaly(code: str):
     否则 'missing'；有 periods → 'ok'。诚实缝（不臆造"有数据"）。
     """
     from circuit_breaker import get_breaker
+
     try:
         from data.sources.sina_financial import fetch_merged_periods
         from value_funnel.anomaly import detect_anomalies
+
         periods = fetch_merged_periods(code)
         assessment = detect_anomalies(periods)
         if len(periods) >= 2:
@@ -131,6 +137,7 @@ def get_anomaly(code: str):
 
 # ---------- L4 四大师 → AI 产出文字 ----------
 
+
 @router.post("/api/value-funnel/{code}/deep-ai")
 def deep_ai(code: str, llm: LLMConfig):
     """调用户 AI 填四大师文字。
@@ -148,6 +155,7 @@ def deep_ai(code: str, llm: LLMConfig):
         # 订阅接入：检测本机 CLI
         try:
             import cli_runtime
+
             kind = provider[4:]
             if not cli_runtime.detect_cli(kind):
                 raise HTTPException(400, f"未检测到「{kind}」CLI，请先安装并登录，或改用 API 接入")
@@ -159,25 +167,29 @@ def deep_ai(code: str, llm: LLMConfig):
         # API 接入：缺字段用环境变量兜底
         try:
             import chat as chat_layer
+
             env = chat_layer._get_env_llm_config()
             for k in ("baseURL", "apiKey", "model"):
                 if not cfg.get(k) and env.get(k):
                     cfg[k] = env[k]
         except Exception as e:  # noqa: BLE001
             import logging
+
             logging.getLogger(__name__).warning("LLM 配置装配失败（降级，不阻塞）: %s", e)
         if not cfg.get("apiKey") or not cfg.get("baseURL"):
             raise HTTPException(400, "缺少 Base URL 或 API Key，请先在「接入 AI」配置，或用订阅接入(cli-claude)")
 
     master_block = "\n".join(
-        f"【{p.master}】框架:{p.framework}；引导问题:{'；'.join(p.key_questions)}"
-        for p in skeleton.perspectives)
+        f"【{p.master}】框架:{p.framework}；引导问题:{'；'.join(p.key_questions)}" for p in skeleton.perspectives
+    )
     user_msg = (
         f"对股票 {code}（{name}）按四大师视角各写一段深度分析（每段约 200-300 字），"
         f"严格分块，每段以【巴菲特】【芒格】【段永平】【李录】开头。只陈述客观事实与相对位置，"
-        f"不给买卖/目标价建议。四大师框架与引导问题：\n{master_block}")
+        f"不给买卖/目标价建议。四大师框架与引导问题：\n{master_block}"
+    )
     try:
         import chat as chat_layer
+
         runner = chat_layer.run_chat_cli_stream if is_cli else chat_layer.run_chat_stream
         text = ""
         for ev in runner(cfg, [{"role": "user", "content": user_msg}], ""):

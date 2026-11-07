@@ -1,6 +1,7 @@
 """
 Health check router.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -27,6 +28,7 @@ def _check_database() -> Dict[str, Any]:
             sti_db.execute("SELECT 1 FROM sti_timeline LIMIT 1").fetchone()
 
         from config import WINRATE_DB_PATH
+
         winrate_path = WINRATE_DB_PATH
         with sqlite3.connect(winrate_path) as conn:
             conn.execute("SELECT 1 FROM winrate_records LIMIT 1").fetchone()
@@ -83,12 +85,8 @@ def _check_data_freshness() -> Dict[str, Any]:
         screener_db = get_screener_db()
         sti_db = get_sti_db()
 
-        screener_row = screener_db.execute(
-            "SELECT MAX(updated_at) AS last_updated FROM gene_scores"
-        ).fetchone()
-        sti_row = sti_db.execute(
-            "SELECT MAX(computed_at) AS last_updated FROM sti_timeline"
-        ).fetchone()
+        screener_row = screener_db.execute("SELECT MAX(updated_at) AS last_updated FROM gene_scores").fetchone()
+        sti_row = sti_db.execute("SELECT MAX(computed_at) AS last_updated FROM sti_timeline").fetchone()
 
         screener_ts = screener_row["last_updated"] if screener_row else None
         sti_ts = sti_row["last_updated"] if sti_row else None

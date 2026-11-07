@@ -1,6 +1,7 @@
 """
 Strategy router.
 """
+
 import asyncio
 from typing import Any, Dict
 
@@ -15,6 +16,7 @@ router = APIRouter(tags=["strategy"])
 async def strategy_signals(code: str, date: str = Query(None, description="日期，格式 YYYY-MM-DD")) -> Dict[str, Any]:
     """获取个股战法匹配信号。"""
     from routers.common import _validate
+
     code = _validate(code)
     try:
         signals = await lstrat.get_strategy_signals(code, date)
@@ -70,6 +72,7 @@ async def strategy_backtest(lookback_days: int = Query(60, ge=1, le=365)) -> Dic
     客观历史统计特征，市场有风险。
     """
     from strategies.strategy_backtest import run_strategy_backtest
+
     results = await asyncio.to_thread(run_strategy_backtest, lookback_days)
     return {
         "disclaimer": "历史统计特征，市场有风险，不构成投资建议。",
@@ -82,7 +85,14 @@ async def strategy_backtest(lookback_days: int = Query(60, ge=1, le=365)) -> Dic
                 "avg_return": r.avg_return,
                 "sample_size": r.sample_size,
                 "available_days": r.available_days,
-                "note": next((s.get("note", "") for s in __import__("limitup_strategy").STRATEGY_REGISTRY if s["code"] == r.strategy_code), ""),
+                "note": next(
+                    (
+                        s.get("note", "")
+                        for s in __import__("limitup_strategy").STRATEGY_REGISTRY
+                        if s["code"] == r.strategy_code
+                    ),
+                    "",
+                ),
             }
             for r in results
         ],
@@ -92,6 +102,7 @@ async def strategy_backtest(lookback_days: int = Query(60, ge=1, le=365)) -> Dic
 # ===========================================================================
 # S066 §3 策略特定漏斗（天气硬开关 + 3 套权重 + 质量标准）
 # ===========================================================================
+
 
 @router.get("/api/strategy/funnel/weather-map")
 async def get_weather_strategy_map() -> Dict[str, Any]:
@@ -106,6 +117,7 @@ async def get_weather_strategy_map() -> Dict[str, Any]:
         WEATHER_RECOMMENDATION,
         FALLBACK_STRATEGIES,
     )
+
     return {
         "data": {
             "weather_strategy_map": WEATHER_STRATEGY_MAP,  # 向后兼容字段
@@ -123,6 +135,7 @@ async def get_funnel_strategies() -> Dict[str, Any]:
     position_params / quality_standards。
     """
     from strategies.strategy_funnel_registry import STRATEGY_FUNNEL_REGISTRY
+
     return {
         "data": [
             {
@@ -140,8 +153,7 @@ async def get_funnel_strategies() -> Dict[str, Any]:
                     "position_scale": s.position_params.position_scale,
                 },
                 "quality_standards": [
-                    {"name": q.name, "required": q.required, "description": q.description}
-                    for q in s.quality_standards
+                    {"name": q.name, "required": q.required, "description": q.description} for q in s.quality_standards
                 ],
                 "note": s.note,
                 "activation_note": s.activation_note,
@@ -160,6 +172,7 @@ async def get_calendar_factor(
     返回 (仓位乘数, 原因)：周五×0.7 / 节前末日×0.3 / 节前3日×0.5 / 周四×1.0。
     """
     from strategies.calendar_factor import calendar_factor
+
     mult, reason = calendar_factor(date)
     return {
         "data": {
@@ -180,6 +193,7 @@ async def get_sector_cycle(
     返回板块在周期中的位置：启动/发酵/高潮/退潮/冷门/无历史 + 修饰系数。
     """
     from strategies.sector_cycle import analyze_sector_phase
+
     result = analyze_sector_phase(date, industry)
     if result is None:
         return {"data": None, "note": "板块无历史数据"}
@@ -197,13 +211,16 @@ async def get_sector_cycle(
 
 
 @router.get("/api/strategy/funnel/sector-rotation")
-async def get_sector_rotation(date: str | None = Query(None, description="交易日 YYYY-MM-DD（默认最近交易日 last_trading_date_str）")) -> Dict[str, Any]:
+async def get_sector_rotation(
+    date: str | None = Query(None, description="交易日 YYYY-MM-DD（默认最近交易日 last_trading_date_str）"),
+) -> Dict[str, Any]:
     """S066 §5.4.1 板块强度排名 TOP10 + §5.4.3 跨板块轮动检测（纯 label，§5.4 Q2 不接策略分）。
     fund_flow 阻断降级 0（§44 push2his IP限流）。
     S094 R18/T19：date 必填改默认 None→last_trading_date_str（非交易日/未传 date 默认最近交易日，
     修前端 ContextTab 未传 date→端点返空"未取得"的根因；非 aggregate_sectors industry 缺——ora-6 B5 实测 industry 满值）。"""
     from strategies.sector_cycle import sector_rotation
     from vr_paths import last_trading_date_str
+
     if date is None:
         date = last_trading_date_str()
     return {"data": sector_rotation(date)}
@@ -215,6 +232,7 @@ async def get_concept_rotation(date: str = Query(..., description="交易日 YYY
     概念聚合跨 f100 行业（国产芯片=半导体+元件+其他电子+...），concept_blocks per 涨停股。
     concept_blocks 走东财 slist（非 push2his，不 IP 限流）。"""
     from strategies.sector_cycle import concept_rotation
+
     return {"data": concept_rotation(date)}
 
 
@@ -224,6 +242,7 @@ async def get_multi_rotation(date: str = Query(..., description="交易日 YYYY-
     不定义单一板块——行业 f100 + ths reason 题材融合，标签平等聚合（106 全市场）。
     多维度标签（dims=[行业,题材]）更可信。"""
     from strategies.sector_cycle import multi_rotation
+
     return {"data": multi_rotation(date)}
 
 
@@ -241,6 +260,7 @@ async def get_non_limitup_funnel(
     from strategies.market_scan import build_non_limitup_candidates
     from strategies.non_limitup_funnel import run_non_limitup_funnel
     from strategies.strategy_funnel_registry import score_candidates
+
     # S094 T21：复用 first_board_filter._get_kline_cache 模块级 memo（只读一次后续复用），
     # 替代每请求 json.loads 全量 cache（T21 扩容到全 A ~150MB 后是 perf 悬崖）。
     # build_non_limitup_candidates 只读 cache（cache.get，不 mutate）→ 共享 memo 安全。
@@ -283,6 +303,7 @@ async def get_market_kill_switch() -> Dict[str, Any]:
     """
     from strategies.execution_model import check_market_kill_switch
     import astock
+
     indices = astock.index_quote()
     result = check_market_kill_switch(indices)
     return {
@@ -313,6 +334,7 @@ async def get_forward_test_summary_endpoint(
     前向测试期间不投真金。20 天运行需日历时间积累。
     """
     from strategies.forward_test import get_forward_test_summary
+
     result = get_forward_test_summary(benchmark_win_rate, min_days)
     return {
         "data": {
@@ -346,6 +368,7 @@ async def get_forward_test_daily(
 ) -> Dict[str, Any]:
     """S066 Phase 0e 某信号日前向测试推荐明细。"""
     from strategies.forward_test import get_daily_recommendations
+
     records = get_daily_recommendations(signal_date)
     return {
         "data": records,

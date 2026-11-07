@@ -4,6 +4,7 @@
 若小盘 decile edge 高、大盘 decile edge 低/负 → size premium 误标（标的习惯专家 claim 成立）。
 若各 decile edge 均匀 → 真 accumulation alpha。
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -12,11 +13,18 @@ from collections import defaultdict
 from pathlib import Path
 from math import sqrt
 import sys
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vr_paths import resolve_data_dir  # 数据路径统一走 vr_paths（S037 收口）
 from tools._factor_helpers import limit_for_code, is_yizi_t1
 from tools.explore_main_force_holder_test import (
-    load_holder, load_kline, build_picks, raw_ev, HOLD_DAYS, COST, THRESHOLDS
+    load_holder,
+    load_kline,
+    build_picks,
+    raw_ev,
+    HOLD_DAYS,
+    COST,
+    THRESHOLDS,
 )
 
 KLINE_DB = resolve_data_dir() / "baostock_kline_cache.db"
@@ -37,9 +45,9 @@ def median_amount_60bar(dmap, notice_date, window=60):
 
 
 def main():
-    print("="*70)
+    print("=" * 70)
     print("股东户数减少 edge · size-decile 分层验证（73% size premium claim）")
-    print("="*70)
+    print("=" * 70)
     holder = load_holder()
     kline_map, all_dates = load_kline()
     calendar = sorted(all_dates)
@@ -66,16 +74,14 @@ def main():
     amts = sorted(p["size_amt"] for p in enriched)
     n = len(amts)
     decile_cutoffs = [amts[min(int(n * d / 10), n - 1)] for d in range(11)]
-    print(f"\nsize(amount) decile cutoffs (亿元): "
-          f"{[round(c/1e8,3) for c in decile_cutoffs]}")
+    print(f"\nsize(amount) decile cutoffs (亿元): {[round(c / 1e8, 3) for c in decile_cutoffs]}")
 
-    print(f"\n{'decile':>6} {'size范围(亿)':>22} {'n':>7} {'mean%':>9} {'net%':>9} "
-          f"{'median%':>9} {'WR%':>6}")
-    print("-"*70)
+    print(f"\n{'decile':>6} {'size范围(亿)':>22} {'n':>7} {'mean%':>9} {'net%':>9} {'median%':>9} {'WR%':>6}")
+    print("-" * 70)
     decile_stats = []
     for d in range(10):
         lo = decile_cutoffs[d]
-        hi = decile_cutoffs[d+1]
+        hi = decile_cutoffs[d + 1]
         sub = [p for p in enriched if (lo <= p["size_amt"] < hi) or (d == 9 and p["size_amt"] >= lo)]
         if not sub:
             continue
@@ -84,13 +90,16 @@ def main():
         med = statistics.median(rets)
         wr = sum(1 for r in rets if r > 0) / len(rets) * 100
         net = mean - COST
-        lo_yi = lo/1e8; hi_yi = hi/1e8
-        decile_stats.append((d+1, lo_yi, hi_yi, len(sub), mean, net, med, wr))
-        print(f"{d+1:>6} {f'{lo_yi:.3f}~{hi_yi:.3f}':>22} {len(sub):>7} "
-              f"{mean:>+8.4f} {net:>+8.4f} {med:>+8.4f} {wr:>5.1f}")
+        lo_yi = lo / 1e8
+        hi_yi = hi / 1e8
+        decile_stats.append((d + 1, lo_yi, hi_yi, len(sub), mean, net, med, wr))
+        print(
+            f"{d + 1:>6} {f'{lo_yi:.3f}~{hi_yi:.3f}':>22} {len(sub):>7} "
+            f"{mean:>+8.4f} {net:>+8.4f} {med:>+8.4f} {wr:>5.1f}"
+        )
 
     # 判定
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("[判定]")
     if not decile_stats:
         print("无 decile 数据")
@@ -120,16 +129,19 @@ def main():
     for p in enriched:
         # 找该 pick 属于哪个 decile
         for d in range(10):
-            lo = decile_cutoffs[d]; hi = decile_cutoffs[d+1]
+            lo = decile_cutoffs[d]
+            hi = decile_cutoffs[d + 1]
             if (lo <= p["size_amt"] < hi) or (d == 9 and p["size_amt"] >= lo):
-                bhar_vals.append(p["ret"] - decile_means[d+1])
+                bhar_vals.append(p["ret"] - decile_means[d + 1])
                 break
     if bhar_vals:
         sm_mean = statistics.mean(bhar_vals)
         sm_med = statistics.median(bhar_vals)
-        sm_wr = sum(1 for r in bhar_vals if r > 0)/len(bhar_vals)*100
-        print(f"  size-decile-matched BHAR: mean={sm_mean:+.4f}% net={sm_mean-COST:+.4f}% "
-              f"median={sm_med:+.4f}% WR={sm_wr:.1f}% n={len(bhar_vals)}")
+        sm_wr = sum(1 for r in bhar_vals if r > 0) / len(bhar_vals) * 100
+        print(
+            f"  size-decile-matched BHAR: mean={sm_mean:+.4f}% net={sm_mean - COST:+.4f}% "
+            f"median={sm_med:+.4f}% WR={sm_wr:.1f}% n={len(bhar_vals)}"
+        )
         print(f"  (vs 标的习惯专家 claim: +0.36% net, WR 43.4%)")
 
 

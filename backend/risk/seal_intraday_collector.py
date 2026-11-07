@@ -107,6 +107,7 @@ def archive_old_partitions(retention_days: int = 30) -> dict[str, Any]:
     """
     import os as _os
     from config import SEAL_INTRADAY_DIR
+
     current_year = str(datetime.now().year)
     hot: list[str] = []
     cold: list[str] = []
@@ -115,13 +116,14 @@ def archive_old_partitions(retention_days: int = 30) -> dict[str, Any]:
             # seal_intraday_YYYY.db
             if not fname.startswith("seal_intraday_") or not fname.endswith(".db"):
                 continue
-            year = fname[len("seal_intraday_"):-len(".db")]
+            year = fname[len("seal_intraday_") : -len(".db")]
             if len(year) != 4 or not year.isdigit():
                 continue
             (hot if year == current_year else cold).append(year)
     _logger.info(
         "[seal_intraday] archive_old_partitions: hot=%s cold=%s（不删数据，仅标记）",
-        hot, cold,
+        hot,
+        cold,
     )
     return {"hot": hot, "cold": cold, "archived": 0}
 
@@ -150,14 +152,28 @@ def save_snapshots(rows: list[dict[str, Any]]) -> int:
     if not rows:
         return 0
     # 补齐缺失字段（允许部分字段缺失）；S070 R6 加 low_price + limit_pct
-    fields = ["ts", "date", "code", "name", "pool", "price", "seal_amount",
-              "open_count", "first_seal_time", "consec_boards", "sector",
-              "float_market_cap", "index_5min_change",
-              "low_price", "limit_pct"]
+    fields = [
+        "ts",
+        "date",
+        "code",
+        "name",
+        "pool",
+        "price",
+        "seal_amount",
+        "open_count",
+        "first_seal_time",
+        "consec_boards",
+        "sector",
+        "float_market_cap",
+        "index_5min_change",
+        "low_price",
+        "limit_pct",
+    ]
     normalized = [{k: r.get(k) for k in fields} for r in rows]
 
     # 按 (db_path, table) 分桶——跨月分表、跨年分库各成独立桶
     from collections import defaultdict
+
     buckets: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in normalized:
         date = row.get("date")
@@ -298,14 +314,18 @@ def save_derived_result(date: str, code: str, derived: dict[str, Any]) -> None:
                 (date, code, name, last_lock_time, broken_duration_min, max_drop_pct,
                  limit_price, granularity_note, computed_at, data_status)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (date, code, None,
-                 derived.get("last_lock_time"),
-                 derived.get("broken_duration_min"),
-                 derived.get("max_drop_pct"),
-                 derived.get("limit_price"),
-                 derived.get("granularity_note") or _DERIVED_GRANULARITY_NOTE,
-                 datetime.now().isoformat(),
-                 derived.get("data_status")),
+                (
+                    date,
+                    code,
+                    None,
+                    derived.get("last_lock_time"),
+                    derived.get("broken_duration_min"),
+                    derived.get("max_drop_pct"),
+                    derived.get("limit_price"),
+                    derived.get("granularity_note") or _DERIVED_GRANULARITY_NOTE,
+                    datetime.now().isoformat(),
+                    derived.get("data_status"),
+                ),
             )
             conn.commit()
     finally:
@@ -388,6 +408,7 @@ def collect_once(date_str: str | None = None) -> dict[str, Any]:
 
     # 1. 涨停池（走 em_get 限流）
     import astock
+
     try:
         zt_pool = astock.em_zt_topic_pool("getTopicZTPool", compact_date, "fbt:asc") or []
     except Exception as exc:
@@ -400,6 +421,7 @@ def collect_once(date_str: str | None = None) -> dict[str, Any]:
     index_5min_change = None
     try:
         from data.sources.tencent import index_raw
+
         indices = index_raw()
         # 上证指数（sh000001）作为大盘 5 分钟跌幅代理
         sh_idx = next((i for i in indices if "上证" in i.get("name", "")), None)
@@ -439,23 +461,25 @@ def collect_once(date_str: str | None = None) -> dict[str, Any]:
         low_price = q.get("low") if q else None
         # S070 R7 前置：涨停涨幅%（zdp，用于反推涨停价 limit_price=price/(1+limit_pct/100)）
         limit_pct = item.get("zdp")
-        rows.append({
-            "ts": ts,
-            "date": date_str,
-            "code": code,
-            "name": item.get("n"),
-            "pool": "zt",
-            "price": price,
-            "seal_amount": seal_amount,
-            "open_count": item.get("zbc"),
-            "first_seal_time": item.get("fbt"),
-            "consec_boards": item.get("lbc"),
-            "sector": item.get("hybk"),
-            "float_market_cap": float_cap,
-            "index_5min_change": index_5min_change,
-            "low_price": low_price,
-            "limit_pct": limit_pct,
-        })
+        rows.append(
+            {
+                "ts": ts,
+                "date": date_str,
+                "code": code,
+                "name": item.get("n"),
+                "pool": "zt",
+                "price": price,
+                "seal_amount": seal_amount,
+                "open_count": item.get("zbc"),
+                "first_seal_time": item.get("fbt"),
+                "consec_boards": item.get("lbc"),
+                "sector": item.get("hybk"),
+                "float_market_cap": float_cap,
+                "index_5min_change": index_5min_change,
+                "low_price": low_price,
+                "limit_pct": limit_pct,
+            }
+        )
 
     written = save_snapshots(rows)
 
@@ -465,19 +489,28 @@ def collect_once(date_str: str | None = None) -> dict[str, Any]:
     try:
         import subprocess as _sp
         import json as _json
+
         _sp.run(
-            ["/Users/lizhiwei/.nvm/versions/node/v24.21.0/bin/hithink-finance",
-             "market", "snapshot", "--limit", "5000",
-             "--output", "/tmp/seal_intraday_tail.json"],
-            capture_output=True, text=True, timeout=30,
+            [
+                "/Users/lizhiwei/.nvm/versions/node/v24.21.0/bin/hithink-finance",
+                "market",
+                "snapshot",
+                "--limit",
+                "5000",
+                "--output",
+                "/tmp/seal_intraday_tail.json",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         with open("/tmp/seal_intraday_tail.json") as f:
             snap = _json.load(f)
         all_stocks = snap.get("data", {}).get("item", [])
         tail_codes = [
-            str(s.get("thscode", ""))[:6] for s in all_stocks
-            if s.get("price_change_ratio_pct") is not None
-            and -5.0 < s.get("price_change_ratio_pct", 0) <= -3.0
+            str(s.get("thscode", ""))[:6]
+            for s in all_stocks
+            if s.get("price_change_ratio_pct") is not None and -5.0 < s.get("price_change_ratio_pct", 0) <= -3.0
         ][:100]  # 最多100只，避免腾讯行情请求过大
 
         if tail_codes:
@@ -488,23 +521,25 @@ def collect_once(date_str: str | None = None) -> dict[str, Any]:
                 chg = s.get("price_change_ratio_pct")
                 if code in tail_codes and chg is not None and -5.0 < chg <= -3.0:
                     q = tail_quotes.get(code) or {}
-                    tail_rows.append({
-                        "ts": ts,
-                        "date": date_str,
-                        "code": code,
-                        "name": s.get("name", ""),
-                        "pool": "tail_dip",
-                        "price": s.get("last_price"),
-                        "seal_amount": None,
-                        "open_count": None,
-                        "first_seal_time": None,
-                        "consec_boards": 0,
-                        "sector": None,
-                        "float_market_cap": None,
-                        "index_5min_change": index_5min_change,
-                        "low_price": q.get("low") if q else None,
-                        "limit_pct": None,
-                    })
+                    tail_rows.append(
+                        {
+                            "ts": ts,
+                            "date": date_str,
+                            "code": code,
+                            "name": s.get("name", ""),
+                            "pool": "tail_dip",
+                            "price": s.get("last_price"),
+                            "seal_amount": None,
+                            "open_count": None,
+                            "first_seal_time": None,
+                            "consec_boards": 0,
+                            "sector": None,
+                            "float_market_cap": None,
+                            "index_5min_change": index_5min_change,
+                            "low_price": q.get("low") if q else None,
+                            "limit_pct": None,
+                        }
+                    )
             if tail_rows:
                 tail_dip_written = save_snapshots(tail_rows)
     except Exception as exc:

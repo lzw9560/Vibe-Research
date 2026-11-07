@@ -14,6 +14,7 @@ gene_scores）+ 收益来自 backtest_samples；结论前过 §44 三步（口�
 
 用法：cd backend && ../.venv/bin/python tools/forward_test_backfill.py
 """
+
 from __future__ import annotations
 
 import json
@@ -108,9 +109,7 @@ def _collect_signal_dates_multi_source() -> list[tuple[str, str]]:
     if DB.exists():
         try:
             c = sqlite3.connect(str(DB))
-            rows = c.execute(
-                "SELECT DISTINCT date FROM gene_scores ORDER BY date"
-            ).fetchall()
+            rows = c.execute("SELECT DISTINCT date FROM gene_scores ORDER BY date").fetchall()
             c.close()
             for r in rows:
                 d = (r[0] or "")[:10]
@@ -124,6 +123,7 @@ def _collect_signal_dates_multi_source() -> list[tuple[str, str]]:
     if KLINE_CACHE.exists():
         try:
             import json as _json
+
             cache = _json.loads(KLINE_CACHE.read_bytes())
             all_dates: set[str] = set()
             for bars in cache.values():
@@ -158,7 +158,8 @@ def main(use_weather: bool = False) -> int:
     # universe_returns 不清（天气无关的同宇宙基准，共享）。
     conn = sqlite3.connect(str(DB))
     conn.execute("DELETE FROM forward_test_records")
-    conn.commit(); conn.close()
+    conn.commit()
+    conn.close()
     print("已清空 forward_test_records（picks 全量重派；universe_returns 保留）")
 
     # task 115：weather-adapted 模式按日取历史天气（build_context from sti_timeline.db）；
@@ -197,14 +198,20 @@ def main(use_weather: bool = False) -> int:
     print(get_forward_test_summary(benchmark_win_rate=60.0, min_days=10))
     mode = "weather-adapted（完整架构，task 115）" if use_weather else "weather=None（退化下界，task 114）"
     print(f"caveat: {mode}；早期日无 STI → weather=None 混入；31 天<30 探索性 + 日聚类（CI 偏窄）")
-    print("caveat: universe=当日全体涨停股（load_gene_scores 全源，非仅 eastmoney_live）；"
-          "若与原手算 eastmoney-only 50.2% 略异，因 pool 口径不同，§44 verdict（lift<2x）稳健不变")
+    print(
+        "caveat: universe=当日全体涨停股（load_gene_scores 全源，非仅 eastmoney_live）；"
+        "若与原手算 eastmoney-only 50.2% 略异，因 pool 口径不同，§44 verdict（lift<2x）稳健不变"
+    )
     return 0
 
 
 if __name__ == "__main__":
     import argparse
+
     ap = argparse.ArgumentParser(description="S066 Phase 0e 前向测试历史回填（§44 验证）")
-    ap.add_argument("--weather", action="store_true",
-                   help="task 115：按日 build_context 取历史天气（weather-adapted 完整架构；默认 weather=None 退化下界）")
+    ap.add_argument(
+        "--weather",
+        action="store_true",
+        help="task 115：按日 build_context 取历史天气（weather-adapted 完整架构；默认 weather=None 退化下界）",
+    )
     raise SystemExit(main(use_weather=ap.parse_args().weather))

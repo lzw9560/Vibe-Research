@@ -15,6 +15,7 @@
 
 跑法: cd backend && .venv/bin/python tools/_grill_behavioral_relay.py
 """
+
 from __future__ import annotations
 import sys
 import sqlite3
@@ -34,8 +35,15 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from tools._factor_helpers import (  # noqa: E402
-    load_kline_db, load_zt, build_picks_generic, close_ev_basic,
-    close_ev_stop, ev_stats, day_paired_t, limit_for_code, is_yizi_t1,
+    load_kline_db,
+    load_zt,
+    build_picks_generic,
+    close_ev_basic,
+    close_ev_stop,
+    ev_stats,
+    day_paired_t,
+    limit_for_code,
+    is_yizi_t1,
 )
 
 ZT_DB = resolve_data_dir() / "zt_history.db"
@@ -49,11 +57,22 @@ def load_zt_with_meta() -> list[dict]:
         "SELECT date, code, name, lbc, zbc, fund, zje, p, ltsz, fundamt, hybk, source "
         "FROM zt_history WHERE is_final=1 ORDER BY date"
     ):
-        rows.append({
-            "date": r[0], "code": r[1], "name": r[2], "lbc": r[3] or 1,
-            "zbc": r[4], "fund": r[5], "zje": r[6], "p": r[7],
-            "ltsz": r[8], "fundamt": r[9], "hybk": r[10], "source": r[11],
-        })
+        rows.append(
+            {
+                "date": r[0],
+                "code": r[1],
+                "name": r[2],
+                "lbc": r[3] or 1,
+                "zbc": r[4],
+                "fund": r[5],
+                "zje": r[6],
+                "p": r[7],
+                "ltsz": r[8],
+                "fundamt": r[9],
+                "hybk": r[10],
+                "source": r[11],
+            }
+        )
     conn.close()
     return rows
 
@@ -62,6 +81,7 @@ def load_regime_labels() -> dict[str, str]:
     """从 gap_regime_stratified.compute_regime_labels 读 regime (bull/bear/range)."""
     try:
         from tools.gap_regime_stratified import compute_regime_labels  # noqa: PLC0415
+
         return compute_regime_labels()
     except Exception as e:
         print(f"[WARN] regime load failed: {e}")
@@ -116,13 +136,26 @@ def build_relay_picks_with_meta(code_map, calendar, zt_meta_rows):
         t_low = t_bar.get("low") or t_close
         t_ampl = (t_high - t_low) / t_close * 100 if t_close > 0 else 0.0
         ltsz_yi = (r["ltsz"] / 1e8) if r["ltsz"] else None
-        picks.append({
-            "code": code, "zt_date": zt_date, "t1_date": t1_date, "t2_date": t2_date,
-            "entry": t1_open, "t_close": t_close, "t1_bar": t1_bar, "t2_bar": t2_bar,
-            "lbc": r["lbc"], "gap_pct": gap_pct, "t_ampl": t_ampl,
-            "ltsz_yi": ltsz_yi, "zbc": r["zbc"], "fund": r["fund"],
-            "hybk": r["hybk"], "t_bar": t_bar,
-        })
+        picks.append(
+            {
+                "code": code,
+                "zt_date": zt_date,
+                "t1_date": t1_date,
+                "t2_date": t2_date,
+                "entry": t1_open,
+                "t_close": t_close,
+                "t1_bar": t1_bar,
+                "t2_bar": t2_bar,
+                "lbc": r["lbc"],
+                "gap_pct": gap_pct,
+                "t_ampl": t_ampl,
+                "ltsz_yi": ltsz_yi,
+                "zbc": r["zbc"],
+                "fund": r["fund"],
+                "hybk": r["hybk"],
+                "t_bar": t_bar,
+            }
+        )
     return picks
 
 
@@ -141,18 +174,26 @@ def subset_stats(picks, ret_fn=close_ev_basic, cost_pct=0.3):
     dt = day_paired_t(by_date)
     net = s["ev"] - cost_pct
     return {
-        "n": s["n"], "n_days": dt["n_days"], "gross_ev": s["ev"], "net_ev": round(net, 3),
-        "wr": s["wr"], "day_t": dt["t"], "p_one_sided": dt["p_one_sided"],
-        "ci_lo": s["ci_lo"], "ci_hi": s["ci_hi"],
+        "n": s["n"],
+        "n_days": dt["n_days"],
+        "gross_ev": s["ev"],
+        "net_ev": round(net, 3),
+        "wr": s["wr"],
+        "day_t": dt["t"],
+        "p_one_sided": dt["p_one_sided"],
+        "ci_lo": s["ci_lo"],
+        "ci_hi": s["ci_hi"],
     }
 
 
 def ps(x):
     if x.get("n", 0) == 0:
         return f"n=0"
-    return (f"n={x['n']} days={x['n_days']} gross={x['gross_ev']}% "
-            f"net={x['net_ev']}% WR={x['wr']}% day_t={x['day_t']} "
-            f"p={x['p_one_sided']} CI[{x['ci_lo']},{x['ci_hi']}]")
+    return (
+        f"n={x['n']} days={x['n_days']} gross={x['gross_ev']}% "
+        f"net={x['net_ev']}% WR={x['wr']}% day_t={x['day_t']} "
+        f"p={x['p_one_sided']} CI[{x['ci_lo']},{x['ci_hi']}]"
+    )
 
 
 def main():
@@ -165,10 +206,12 @@ def main():
     zt_meta = load_zt_with_meta()
     regime = load_regime_labels()
     print(f"kline codes={len(code_map)} calendar_days={len(calendar)}")
-    print(f"zt_meta rows={len(zt_meta)} (lbc>=2: {sum(1 for r in zt_meta if r['lbc']>=2)})")
-    print(f"regime labels={len(regime)} "
-          f"(bull={sum(1 for v in regime.values() if v=='bull')} "
-          f"bear={sum(1 for v in regime.values() if v=='bear')})")
+    print(f"zt_meta rows={len(zt_meta)} (lbc>=2: {sum(1 for r in zt_meta if r['lbc'] >= 2)})")
+    print(
+        f"regime labels={len(regime)} "
+        f"(bull={sum(1 for v in regime.values() if v == 'bull')} "
+        f"bear={sum(1 for v in regime.values() if v == 'bear')})"
+    )
 
     picks = build_relay_picks_with_meta(code_map, calendar, zt_meta)
     print(f"\nrelay picks (lbc>=2, T+1 一字过滤后): {len(picks)}")
@@ -180,7 +223,9 @@ def main():
     bull = [p for p in picks if regime.get(p["zt_date"]) == "bull"]
     bear = [p for p in picks if regime.get(p["zt_date"]) == "bear"]
     rng = [p for p in picks if regime.get(p["zt_date"]) == "range"]
-    print(f"  bull={len(bull)} bear={len(bear)} range={len(rng)} no_regime={len(picks)-len(bull)-len(bear)-len(rng)}")
+    print(
+        f"  bull={len(bull)} bear={len(bear)} range={len(rng)} no_regime={len(picks) - len(bull) - len(bear) - len(rng)}"
+    )
 
     # ---- 1. 复现证否 (V2 close_ev basic) ----
     print("\n" + "=" * 72)
@@ -196,15 +241,19 @@ def main():
     print("2. lbc 高度 conditioning（attention extreme：连板越高=attention 越极端）")
     print("   行为预测：若 overreaction reversal，高 lbc 应最负；低 lbc(2) 可能中性")
     print("=" * 72)
-    for lbl, sub in [("lbc=2", [p for p in picks if p["lbc"] == 2]),
-                     ("lbc=3", [p for p in picks if p["lbc"] == 3]),
-                     ("lbc>=4", [p for p in picks if p["lbc"] >= 4]),
-                     ("lbc>=6", [p for p in picks if p["lbc"] >= 6])]:
+    for lbl, sub in [
+        ("lbc=2", [p for p in picks if p["lbc"] == 2]),
+        ("lbc=3", [p for p in picks if p["lbc"] == 3]),
+        ("lbc>=4", [p for p in picks if p["lbc"] >= 4]),
+        ("lbc>=6", [p for p in picks if p["lbc"] >= 6]),
+    ]:
         print(f"  ALL {lbl}: {ps(subset_stats(sub))}")
     print("  --- bull only ---")
-    for lbl, sub in [("lbc=2", [p for p in bull if p["lbc"] == 2]),
-                     ("lbc=3", [p for p in bull if p["lbc"] == 3]),
-                     ("lbc>=4", [p for p in bull if p["lbc"] >= 4])]:
+    for lbl, sub in [
+        ("lbc=2", [p for p in bull if p["lbc"] == 2]),
+        ("lbc=3", [p for p in bull if p["lbc"] == 3]),
+        ("lbc>=4", [p for p in bull if p["lbc"] >= 4]),
+    ]:
         print(f"  BULL {lbl}: {ps(subset_stats(sub))}")
 
     # ---- 3. gap_pct conditioning (anchoring/chasing) ----
@@ -217,10 +266,12 @@ def main():
     q50 = gaps[len(gaps) // 2]
     q75 = gaps[3 * len(gaps) // 4]
     print(f"  gap_pct quartiles: q25={q25:.2f}% q50={q50:.2f}% q75={q75:.2f}%")
-    bins = [(-999, -1, "gap<-1% (低开/平开, 不追)"),
-            (-1, 1, "-1%<=gap<1% (温和)"),
-            (1, 3, "1%<=gap<3% (中追)"),
-            (3, 999, "gap>=3% (高追 anchoring)")]
+    bins = [
+        (-999, -1, "gap<-1% (低开/平开, 不追)"),
+        (-1, 1, "-1%<=gap<1% (温和)"),
+        (1, 3, "1%<=gap<3% (中追)"),
+        (3, 999, "gap>=3% (高追 anchoring)"),
+    ]
     for lo, hi, lbl in bins:
         sub = [p for p in picks if lo <= p["gap_pct"] < hi]
         print(f"  ALL {lbl}: {ps(subset_stats(sub))}")
@@ -234,9 +285,7 @@ def main():
     print("4. ltsz 市值 conditioning（lottery preference：小盘=lottery，散户偏好）")
     print("   行为预测：小盘 lottery tail 拖垮；大盘可能中性")
     print("=" * 72)
-    cap_bins = [(0, 50, "小盘<50亿 (lottery)"),
-                (50, 200, "中盘50-200亿"),
-                (200, 99999, "大盘>=200亿")]
+    cap_bins = [(0, 50, "小盘<50亿 (lottery)"), (50, 200, "中盘50-200亿"), (200, 99999, "大盘>=200亿")]
     for lo, hi, lbl in cap_bins:
         sub = [p for p in picks if p["ltsz_yi"] is not None and lo <= p["ltsz_yi"] < hi]
         print(f"  ALL {lbl}: {ps(subset_stats(sub))}")
@@ -252,8 +301,7 @@ def main():
     ampls = sorted(p["t_ampl"] for p in picks)
     med_ampl = ampls[len(ampls) // 2]
     print(f"  median t_ampl={med_ampl:.2f}%")
-    for lo, hi, lbl in [(0, med_ampl, f"低振幅<{med_ampl:.1f}%"),
-                        (med_ampl, 999, f"高振幅>={med_ampl:.1f}%")]:
+    for lo, hi, lbl in [(0, med_ampl, f"低振幅<{med_ampl:.1f}%"), (med_ampl, 999, f"高振幅>={med_ampl:.1f}%")]:
         sub = [p for p in picks if lo <= p["t_ampl"] < hi]
         print(f"  ALL {lbl}: {ps(subset_stats(sub))}")
 
@@ -287,31 +335,35 @@ def main():
     print(f"  ALL new-theme: {ps(subset_stats(new_theme_picks))}")
     print(f"  ALL crowded(>=3 same-day same-theme): {ps(subset_stats(crowded_picks))}")
     print("  --- bull only ---")
-    print(f"  BULL new-theme: {ps(subset_stats([p for p in new_theme_picks if regime.get(p['zt_date'])=='bull']))}")
-    print(f"  BULL crowded: {ps(subset_stats([p for p in crowded_picks if regime.get(p['zt_date'])=='bull']))}")
+    print(f"  BULL new-theme: {ps(subset_stats([p for p in new_theme_picks if regime.get(p['zt_date']) == 'bull']))}")
+    print(f"  BULL crowded: {ps(subset_stats([p for p in crowded_picks if regime.get(p['zt_date']) == 'bull']))}")
 
     # ---- 7. combined behavioral filter (low-chase + large/mid cap + low-mid lbc) ----
     print("\n" + "=" * 72)
     print("7. 组合行为过滤（低追 gap<1% + 中大盘>=50亿 + lbc<=3）")
     print("   测试：排除 behavioral-extreme tail 后核心是否中性")
     print("=" * 72)
-    core = [p for p in picks if p["gap_pct"] < 1.0 and p["lbc"] <= 3
-            and p["ltsz_yi"] is not None and p["ltsz_yi"] >= 50]
+    core = [
+        p for p in picks if p["gap_pct"] < 1.0 and p["lbc"] <= 3 and p["ltsz_yi"] is not None and p["ltsz_yi"] >= 50
+    ]
     print(f"  ALL core (low-chase+midcap+lbc<=3): {ps(subset_stats(core))}")
-    print(f"  BULL core: {ps(subset_stats([p for p in core if regime.get(p['zt_date'])=='bull']))}")
+    print(f"  BULL core: {ps(subset_stats([p for p in core if regime.get(p['zt_date']) == 'bull']))}")
     # even tighter: gap<=0 (no chase at all)
-    ncore = [p for p in picks if p["gap_pct"] <= 0.0 and p["lbc"] <= 3
-             and p["ltsz_yi"] is not None and p["ltsz_yi"] >= 50]
+    ncore = [
+        p for p in picks if p["gap_pct"] <= 0.0 and p["lbc"] <= 3 and p["ltsz_yi"] is not None and p["ltsz_yi"] >= 50
+    ]
     print(f"  ALL no-chase core (gap<=0+midcap+lbc<=3): {ps(subset_stats(ncore))}")
-    print(f"  BULL no-chase core: {ps(subset_stats([p for p in ncore if regime.get(p['zt_date'])=='bull']))}")
+    print(f"  BULL no-chase core: {ps(subset_stats([p for p in ncore if regime.get(p['zt_date']) == 'bull']))}")
 
     # ---- 8. stop variant on core (does -3% stop rescue?) ----
     print("\n" + "=" * 72)
     print("8. -3% stop variant on core（止损能否救行为反转）")
     print("=" * 72)
+
     def stop_ret(p):
         r = close_ev_stop(p)
         return r[0] if r else None
+
     if core:
         print(f"  ALL core +stop: {ps(subset_stats(core, ret_fn=stop_ret))}")
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from dotenv import load_dotenv
+
 # 仓库根 .env 统一收拢 env（VR_DATA_DIR/VR_LLM_*/飞书 key）——import 前读，让 vr_paths.resolve_data_dir() 能用 VR_DATA_DIR
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -18,6 +19,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 # 每次 HTTP 请求 run_in_threadpool → asyncio.to_thread → call_soon 都会打，刷屏日志。
 # 只压这一条，不全量静默，保留其它真实 DeprecationWarning。
 import warnings as _warnings
+
 _warnings.filterwarnings(
     "ignore",
     message=r"'asyncio\.iscoroutinefunction' is deprecated.*",
@@ -40,14 +42,42 @@ import portfolio as pf
 import scheduled_tasks as _st
 
 # Router imports
-from routers import health, chat, portfolio, watchlist, myreports as myreports_router, radar, market as market_router, stock_data, stock_financial, limitup, review, sti
+from routers import (
+    health,
+    chat,
+    portfolio,
+    watchlist,
+    myreports as myreports_router,
+    radar,
+    market as market_router,
+    stock_data,
+    stock_financial,
+    limitup,
+    review,
+    sti,
+)
 from routers import discipline_gate as discipline_gate_router  # S231: 打板纪律门禁看板
 from routers import t1_forecast as t1_forecast_router  # S232: T+1 涨停预测 watchlist（观察池非买入信号）
 from routers import limitup_workflow as limitup_workflow_router  # S233: 打板工作流闭环（-3% stop OOS）
-from routers import recommendation, win_rate, backtest, bidding, strategy as strategy_router, sector_divergence, risk as risk_router, sentiment_weather, workflow, scheduled_tasks, prediction, advisory
+from routers import (
+    recommendation,
+    win_rate,
+    backtest,
+    bidding,
+    strategy as strategy_router,
+    sector_divergence,
+    risk as risk_router,
+    sentiment_weather,
+    workflow,
+    scheduled_tasks,
+    prediction,
+    advisory,
+)
 from routers import intraday_sentiment as intraday_sentiment_router  # S063：盘中情绪辅助决策
 from routers import intraday_ofi as intraday_ofi_router  # S178：OFI 盘中数据只读看板
-from routers import coach as coach_router  # 2026-09-27 restored: v6 发现前端 IntradayCockpit/IntradayCoach 依赖（v5 grep /api/coach 漏 hook 名 useCoachStatus）
+from routers import (
+    coach as coach_router,
+)  # 2026-09-27 restored: v6 发现前端 IntradayCockpit/IntradayCoach 依赖（v5 grep /api/coach 漏 hook 名 useCoachStatus）
 from routers import debate as debate_router  # main：多空辩论 + 反思审计
 from routers import prediction_ledger_router as prediction_ledger_router_mod
 from routers import premarket as premarket_router  # S071：盘前选股（breakout 弱信号+风控）
@@ -59,7 +89,9 @@ from routers import fusion as fusion_router  # S194 FE-6：融合研判查询（
 from routers import wechat_bot as wechat_bot_router  # 微信 Bot 双向对话（企业微信回调 + KG 工具）
 from routers import verifier as verifier_router  # S165：§44 验证卡 + 实验记录（contract-first UI 接线）
 from routers import journal as journal_router  # S166：交易日志 + 风险账本（Trade Journal + Risk Ledger，fresh-impl）
-from routers import tracking as tracking_router  # S204 T9：多日跟踪查询 API（candidate_tracking_pool + indicator_snapshots 只读看板）
+from routers import (
+    tracking as tracking_router,
+)  # S204 T9：多日跟踪查询 API（candidate_tracking_pool + indicator_snapshots 只读看板）
 from routers import signals as signals_router  # S218: 每日信号报告路由
 from routers import tail_dip as tail_dip_router  # v6.00：策略4进化版（tail_dip_engine）
 
@@ -77,6 +109,7 @@ __version__ = read_version()
 # S032 R6：两个后台周期任务（CronScheduler ticker + 持仓刷新）统一挂 FastAPI 主循环，
 # 废除 daemon 线程 + 线程内 asyncio.run 桥接；shutdown 依次 stop/cancel。
 
+
 async def _warmup_advisory_backtest() -> None:
     """S067 P0-1：advisory 回测预热。
 
@@ -86,6 +119,7 @@ async def _warmup_advisory_backtest() -> None:
     try:
         import anyio
         from strategies.position_advisor import _win_rate_map
+
         await anyio.to_thread.run_sync(_win_rate_map)
         logging.info("[S067] advisory 回测预热完成")
     except Exception as _we:  # noqa: BLE001 — 预热失败不阻断启动
@@ -96,10 +130,12 @@ async def _warmup_advisory_backtest() -> None:
 async def lifespan(_app: FastAPI):
     # startup
     from routers.workflow import set_main_loop  # S148：存主 loop 供 sync executor 触发 _collect
+
     set_main_loop(asyncio.get_running_loop())
     # S164 R4：secrets gate 启动校验（非阻塞，只 log warning）
     try:
         from secrets_gate import validate as _validate_secrets  # noqa: PLC0415
+
         _validate_secrets()
     except Exception as _sg_err:  # noqa: BLE001 — 密钥校验失败不阻断服务
         logger.warning("[S164] secrets_gate 启动校验失败（不影响服务）: %s", _sg_err)
@@ -107,11 +143,13 @@ async def lifespan(_app: FastAPI):
     _pf_refresh_task = await pf.start_scheduler(1800)  # 持仓后台刷新 task
     # S052 D4：启动缺口补跑——回测快照缺失日后台排队回填
     from backfill_snapshots import startup_backfill_gap_check  # noqa: PLC0415
+
     # verification_card 表迁移（启动时一次，不在请求路径上）
     # 旧实现每次请求调 run_migrations → 并发锁异常 → 路由 502；移到 startup 幂等执行。
     # 迁移失败不阻塞 startup（verification_card 是辅助功能）
     try:
         from workflow.verification_card import ensure_migrations  # noqa: PLC0415
+
         ensure_migrations()
     except Exception as _vc_err:  # noqa: BLE001 — 辅助功能失败不阻断启动
         logger.warning("verification_card migration failed: %s", _vc_err)
@@ -120,11 +158,13 @@ async def lifespan(_app: FastAPI):
     # grill：缺口补跑 + advisory 预热改为后台 fire-and-forget，不阻塞 startup
     # 保存引用防 GC 回收 + 加异常回调防静默崩溃
     _bg_tasks: set[asyncio.Task] = set()
+
     def _spawn(coro):
         t = asyncio.create_task(coro)
         _bg_tasks.add(t)
         t.add_done_callback(_bg_tasks.discard)
         return t
+
     _spawn(startup_backfill_gap_check())
     _spawn(_warmup_advisory_backtest())
     # S088 Q1：storm-daemon 接入 lifespan——每 30min 存外围+新闻快照，
@@ -132,6 +172,7 @@ async def lifespan(_app: FastAPI):
     # 不接入则冷启动当日无快照必 fallback、首次 fetch 被动等 30min。
     try:
         import strategies.storm_daemon as _storm_daemon  # noqa: PLC0415
+
         _storm_daemon.start()
     except Exception as _e:  # noqa: BLE001 — daemon 启动失败不阻断服务
         logger.warning("[S088] storm_daemon 启动失败（不影响服务）: %s", _e)
@@ -140,15 +181,19 @@ async def lifespan(_app: FastAPI):
     # 缺 SDK 或缺凭据时静默降级（仅 warning log），不阻断服务。
     try:
         import threading as _threading_mod
+
         _fw_started = _threading_mod.Event()
+
         def _start_fw():
             try:
                 from notification.feishu_ws_client import start_feishu_ws  # noqa: PLC0415
+
                 start_feishu_ws()
             except Exception as _fw_err:  # noqa: BLE001
                 logger.warning("飞书 WebSocket 长连接启动失败（不影响服务）: %s", _fw_err)
             finally:
                 _fw_started.set()
+
         _fw_thread = _threading_mod.Thread(target=_start_fw, name="feishu-ws-init", daemon=True)
         _fw_thread.start()
         _fw_started.wait(timeout=5)  # 最多等 5 秒，超时则继续启动服务
@@ -169,6 +214,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="Vibe-Research API", version=__version__, lifespan=lifespan)
 
+
 @app.get("/")
 async def root():
     """API 根路径：返回基本信息，避免 404。"""
@@ -178,6 +224,7 @@ async def root():
         "docs": "/docs",
         "health": "/api/health",
     }
+
 
 # 日志配置
 logging.basicConfig(
@@ -202,9 +249,12 @@ app.add_middleware(
 _API_KEY = os.environ.get("VR_API_KEY", "").strip()
 if not _API_KEY:
     import logging as _logging  # noqa: PLC0415
+
     _logging.getLogger("vibe-research").warning(
         "[startup] VR_API_KEY 未设——公网部署务必设（否则别人能读持仓/调后端，v5 H2）。localhost 自托管可忽略。"
     )
+
+
 @app.middleware("http")
 async def _require_api_key(request: Request, call_next):
     if (
@@ -222,13 +272,18 @@ async def _require_api_key(request: Request, call_next):
 async def _metrics_middleware(request: Request, call_next):
     """性能指标采集中间件：记录每次请求耗时。"""
     from metrics_collector import collector
+
     start = time.perf_counter()
     try:
         response = await call_next(request)
         duration = time.perf_counter() - start
         # 按路径前缀分层
         path = request.url.path
-        if path.startswith("/api/limitup") or path.startswith("/api/recommendation") or path.startswith("/api/strategy"):
+        if (
+            path.startswith("/api/limitup")
+            or path.startswith("/api/recommendation")
+            or path.startswith("/api/strategy")
+        ):
             tier = "compute"
         elif path.startswith("/api/metrics"):
             tier = "api_response"
@@ -241,12 +296,17 @@ async def _metrics_middleware(request: Request, call_next):
         collector.record(duration, request.url.path, "api_response")
         raise
 
+
 _CODE_RE = r"^\d{6}$"
+
+
 def _validate(code: str) -> str:
     code = (code or "").strip()
     if not code.isdigit() or len(code) != 6:
         raise HTTPException(400, "代码必须是 6 位数字")
     return code
+
+
 # ============ Router Registration ============
 
 app.include_router(health.router)
@@ -259,7 +319,9 @@ app.include_router(market_router.router)
 app.include_router(stock_data.router)
 app.include_router(stock_financial.router)
 app.include_router(limitup.router)
-app.include_router(review.router)  # 2026-09-27 restored: v6 发现 Settings.tsx 依赖（useReviewParams/saveReviewParams 调 /api/review/params）
+app.include_router(
+    review.router
+)  # 2026-09-27 restored: v6 发现 Settings.tsx 依赖（useReviewParams/saveReviewParams 调 /api/review/params）
 app.include_router(discipline_gate_router.router)  # S231: 打板纪律门禁看板 /api/discipline-gate/*
 app.include_router(t1_forecast_router.router)  # S232: T+1 涨停预测 watchlist /api/t1-forecast/*
 app.include_router(limitup_workflow_router.router)  # S233: 打板工作流 /api/limitup-workflow/*
@@ -288,7 +350,9 @@ app.include_router(prediction_ledger_router_mod.router)  # S061：预测账本
 app.include_router(advisory.router)
 app.include_router(intraday_sentiment_router.router)  # S063：盘中情绪辅助决策
 app.include_router(intraday_ofi_router.router)  # S178：OFI 盘中数据只读看板
-app.include_router(coach_router.router)  # 2026-09-27 restored: v6 发现前端依赖（IntradayCockpit/IntradayCoach 调 useCoachStatus）
+app.include_router(
+    coach_router.router
+)  # 2026-09-27 restored: v6 发现前端依赖（IntradayCockpit/IntradayCoach 调 useCoachStatus）
 app.include_router(debate_router.router)  # main：多空辩论 + 反思审计
 app.include_router(verifier_router.router)  # S165：§44 验证卡 + 实验记录
 app.include_router(journal_router.router)  # S166：交易日志 + 风险账本（Trade Journal + Risk Ledger）
@@ -300,18 +364,23 @@ if value_funnel_router is not None:
 
 # ============ Unified error handling ============
 
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},
     )
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content={"detail": "服务器内部错误"},
     )
+
+
 # ============ Route-level cache decorator ===========
 
 import functools
@@ -354,6 +423,7 @@ def _cache_key(func: Callable, args: tuple, kwargs: dict) -> str:
 
 def cache_response(ttl: int = 300):
     """Route-level cache decorator for GET endpoints."""
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -370,7 +440,9 @@ def cache_response(ttl: int = 300):
                 for k in keys[: len(keys) // 2]:
                     _RESPONSE_CACHE.pop(k, None)
             return result
+
         return wrapper
+
     return decorator
 
 
@@ -383,4 +455,3 @@ app.include_router(candidates_router.router)
 from routers import topology as topology_router  # noqa: E402
 
 app.include_router(topology_router.router)
-

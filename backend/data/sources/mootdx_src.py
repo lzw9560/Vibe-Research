@@ -18,6 +18,7 @@ from ._common import DependencyMissing
 def _mootdx_client():
     try:
         from mootdx.quotes import Quotes
+
         return Quotes.factory(market="std")
     except ImportError as e:
         raise DependencyMissing("mootdx 未安装：pip install mootdx") from e
@@ -26,7 +27,8 @@ def _mootdx_client():
 def _get_mootdx_client():
     """动态获取，支持 astock._mootdx_client monkeypatch（测试用）。"""
     import astock as _astock
-    return getattr(_astock, '_mootdx_client', _mootdx_client)
+
+    return getattr(_astock, "_mootdx_client", _mootdx_client)
 
 
 # mootdx bars frequency 映射（mootdx 用 frequency 非 category）：4=日 5=周 6=月 3=60min
@@ -54,6 +56,7 @@ def kline(code: str, category: int = 4, offset: int = 60) -> list[dict]:
         try:
             from datetime import datetime, timedelta
             from data.sources.baostock_src import fetch_daily_bars
+
             end = datetime.now().strftime("%Y-%m-%d")
             start = (datetime.now() - timedelta(days=offset * 2)).strftime("%Y-%m-%d")  # offset*2 容纳周末
             bars = fetch_daily_bars(code, start, end)

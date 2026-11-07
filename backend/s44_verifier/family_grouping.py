@@ -11,6 +11,7 @@
 - ``split_into_subphases``: K>8 拆成≤8 子 phase（每子 alpha_adj=0.05/K_sub）。
 - ``FrozenK``: K 冻结 dataclass（首次入库冻结，后续 K 变→rejected 防后调）。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

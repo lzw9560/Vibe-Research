@@ -20,6 +20,7 @@
 
 S166 fresh-impl（design-agnostic）。build 算法参考自 cb54a96 历史，非整文件复活。
 """
+
 from __future__ import annotations
 
 from statistics import median
@@ -78,8 +79,7 @@ def build(limit: int = 500) -> dict:
     rules = risk.load_rules()
     # 自己的习惯基线（样本不够就不做这类判定，而不是拿 3 笔当习惯）
     caps = [c for c in (_capital_of(t) for t in trades) if c]
-    holds = [h for h in ((t.get("settled") or {}).get("hold_days") for t in trades)
-             if h is not None]
+    holds = [h for h in ((t.get("settled") or {}).get("hold_days") for t in trades) if h is not None]
     med_cap = median(caps) if len(caps) >= _MIN_HISTORY else None
     med_hold = median(holds) if len(holds) >= _MIN_HISTORY else None
 
@@ -91,7 +91,7 @@ def build(limit: int = 500) -> dict:
     exc_skipped = 0
     for t in trades:
         if not (t.get("settled") or {}).get("closed"):
-            continue                     # 未平仓没有 MFE/MAE 可言
+            continue  # 未平仓没有 MFE/MAE 可言
         try:
             r = excursion.for_trade_cached_only(t)
             if r and t.get("id"):
@@ -111,23 +111,27 @@ def build(limit: int = 500) -> dict:
         lim = _num(rules.get("max_loss_per_trade_pct"))
         pnl = _num(t.get("pnl_pct"))
         if lim and pnl is not None and pnl < -lim:
-            flags.append({"key": "over_loss_limit",
-                          "text": f"亏 {pnl:.1f}%，超过你自己写的单笔上限 {lim:g}%"})
+            flags.append({"key": "over_loss_limit", "text": f"亏 {pnl:.1f}%，超过你自己写的单笔上限 {lim:g}%"})
 
         # ② 仓位明显偏离自己的中位（相对他自己，不是行业标准）
         cap = _capital_of(t)
         if med_cap and cap and cap > med_cap * _DEVIATION_X:
-            flags.append({"key": "oversized",
-                          "text": f"占用 {cap:,.0f} 元，是你中位仓位（{med_cap:,.0f}）的 "
-                                  f"{cap / med_cap:.1f} 倍"})
+            flags.append(
+                {
+                    "key": "oversized",
+                    "text": f"占用 {cap:,.0f} 元，是你中位仓位（{med_cap:,.0f}）的 {cap / med_cap:.1f} 倍",
+                }
+            )
 
         # ③ 持有时间明显偏离自己的中位
         hold = st.get("hold_days")
-        if med_hold is not None and hold is not None and med_hold > 0 \
-                and hold > med_hold * _DEVIATION_X:
-            flags.append({"key": "held_long",
-                          "text": f"持有 {hold} 天，是你中位持有（{med_hold:g} 天）的 "
-                                  f"{hold / med_hold:.1f} 倍"})
+        if med_hold is not None and hold is not None and med_hold > 0 and hold > med_hold * _DEVIATION_X:
+            flags.append(
+                {
+                    "key": "held_long",
+                    "text": f"持有 {hold} 天，是你中位持有（{med_hold:g} 天）的 {hold / med_hold:.1f} 倍",
+                }
+            )
 
         # ④ 计划外交易
         if t.get("as_planned") is False:
@@ -135,36 +139,43 @@ def build(limit: int = 500) -> dict:
 
         # ⑤ 未平仓却没写计划止损——在险资金无从估计
         if not st.get("closed") and st.get("has_fills") and not t.get("planned_stop"):
-            flags.append({"key": "no_stop",
-                          "text": "还在手上，但没写计划止损——最坏情况无从估计"})
+            flags.append({"key": "no_stop", "text": "还在手上，但没写计划止损——最坏情况无从估计"})
 
         ex = exc_by_id.get(t.get("id") or "")
         if ex:
             # ⑥ 扛过大幅浮亏（不论最后赚没赚，都是值得看一眼的样本）
             if ex["mae_pct"] <= _DEEP_MAE:
                 tail = "最后还是赚的" if ex["realized_pct"] > 0 else "最后亏了"
-                flags.append({"key": "deep_mae",
-                              "text": f"中途最多浮亏 {ex['mae_pct']:.1f}%（{tail}）"})
+                flags.append({"key": "deep_mae", "text": f"中途最多浮亏 {ex['mae_pct']:.1f}%（{tail}）"})
             # ⑦ 行情本来有肉但几乎没吃到
             cr = ex.get("capture_rate")
             if cr is not None and cr < _LOW_CAPTURE:
-                flags.append({"key": "low_capture",
-                              "text": f"这段最多能赚 {ex['mfe_pct']:.1f}%，实际落袋 "
-                                      f"{ex['realized_pct']:.1f}%（吃到 {cr:.0%}）"
-                                      + ("；同日进出，MFE 只是上界" if ex["same_day"] else "")})
+                flags.append(
+                    {
+                        "key": "low_capture",
+                        "text": f"这段最多能赚 {ex['mfe_pct']:.1f}%，实际落袋 "
+                        f"{ex['realized_pct']:.1f}%（吃到 {cr:.0%}）"
+                        + ("；同日进出，MFE 只是上界" if ex["same_day"] else ""),
+                    }
+                )
 
         if flags:
-            items.append({
-                "id": t.get("id"), "date": st.get("first_buy") or t.get("date"),
-                "code": t.get("code"), "name": t.get("name"),
-                "playbook": t.get("playbook"), "pnl_pct": pnl,
-                "note": t.get("note") or "",
-                "closed": bool(st.get("closed")),
-                "flags": flags,
-            })
+            items.append(
+                {
+                    "id": t.get("id"),
+                    "date": st.get("first_buy") or t.get("date"),
+                    "code": t.get("code"),
+                    "name": t.get("name"),
+                    "playbook": t.get("playbook"),
+                    "pnl_pct": pnl,
+                    "note": t.get("note") or "",
+                    "closed": bool(st.get("closed")),
+                    "flags": flags,
+                }
+            )
 
     # ⚠️ 按日期倒序（最近的先看），不按"我们觉得多严重"排——那是替用户判断
-    items.sort(key=lambda r: (r["date"] or ""), reverse=True)
+    items.sort(key=lambda r: r["date"] or "", reverse=True)
     by_key: dict[str, int] = {}
     for it in items:
         for f in it["flags"]:
@@ -175,18 +186,26 @@ def build(limit: int = 500) -> dict:
         "count": len(items),
         "scanned": len(trades),
         "by_flag": by_key,
-        "baseline": {"median_capital": med_cap, "median_hold_days": med_hold,
-                     "history_enough": med_cap is not None,
-                     "min_history": _MIN_HISTORY},
+        "baseline": {
+            "median_capital": med_cap,
+            "median_hold_days": med_hold,
+            "history_enough": med_cap is not None,
+            "min_history": _MIN_HISTORY,
+        },
         "rules_is_default": bool(rules.get("_is_default")),
         # 有多少笔因为行情没缓存而跳过了 MFE/MAE 类判定——说清楚，别让人以为"没问题"
         "excursion_skipped": exc_skipped,
-        "excursion_hint": (f"{exc_skipped} 笔的行情还没缓存，扛大幅浮亏 / 没吃到行情"
-                           "这两类判定暂时跳过了——打开上面的 MFE/MAE 面板会把行情囤下来，"
-                           "之后刷新这里就有了。"
-                           if exc_skipped else None),
-        "note": ("判定基准全部来自你自己：仓位/持有久不久是相对**你自己的中位数**，"
-                 "亏损上限用的是**你写下的**阈值。这里只说哪里不寻常，不说该怎么做。"),
+        "excursion_hint": (
+            f"{exc_skipped} 笔的行情还没缓存，扛大幅浮亏 / 没吃到行情"
+            "这两类判定暂时跳过了——打开上面的 MFE/MAE 面板会把行情囤下来，"
+            "之后刷新这里就有了。"
+            if exc_skipped
+            else None
+        ),
+        "note": (
+            "判定基准全部来自你自己：仓位/持有久不久是相对**你自己的中位数**，"
+            "亏损上限用的是**你写下的**阈值。这里只说哪里不寻常，不说该怎么做。"
+        ),
         "excursion_available": bool(exc_by_id),
     }
 

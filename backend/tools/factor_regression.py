@@ -107,9 +107,7 @@ def load_src_map() -> dict[tuple[str, str], str]:
     """从 gene_scores.db 读 (date, code) -> data_source 映射。"""
     conn = sqlite3.connect(str(DB_PATH))
     try:
-        rows = conn.execute(
-            "SELECT date, code, data_source FROM gene_scores"
-        ).fetchall()
+        rows = conn.execute("SELECT date, code, data_source FROM gene_scores").fetchall()
     finally:
         conn.close()
     return {(r[0], r[1]): r[2] for r in rows}
@@ -158,8 +156,7 @@ def quintile_winrates(x: np.ndarray, y: np.ndarray) -> list[dict]:
     """按 x 分 5 组，每组算 y>0 比例 + Wilson CI。"""
     n = len(x)
     if n < 5:
-        return [{"q": f"Q{i+1}", "wr": float("nan"), "ci": [float("nan"), float("nan")], "n": 0}
-                for i in range(5)]
+        return [{"q": f"Q{i + 1}", "wr": float("nan"), "ci": [float("nan"), float("nan")], "n": 0} for i in range(5)]
     order = np.argsort(x, kind="mergesort")  # 稳定排序
     # 分成 5 组，每组尽量等量
     edges = np.array_split(order, 5)
@@ -169,12 +166,14 @@ def quintile_winrates(x: np.ndarray, y: np.ndarray) -> list[dict]:
         k = int(np.sum(yq > 0))
         nn = len(yq)
         wr = k / nn if nn else float("nan")
-        out.append({
-            "q": f"Q{i+1}",
-            "wr": float(wr),
-            "ci": wilson_ci(k, nn),
-            "n": nn,
-        })
+        out.append(
+            {
+                "q": f"Q{i + 1}",
+                "wr": float(wr),
+                "ci": wilson_ci(k, nn),
+                "n": nn,
+            }
+        )
     return out
 
 
@@ -197,9 +196,7 @@ def _safe_pearson(x: np.ndarray, y: np.ndarray) -> float:
     return float(stats.pearsonr(x, y)[0])
 
 
-def intraday_decomposition(
-    samples: list[dict], factor: str, return_metric: str
-) -> dict:
+def intraday_decomposition(samples: list[dict], factor: str, return_metric: str) -> dict:
     """按交易日分解因子与收益的关联。
 
     调用方保证 samples 已过滤（同 filter_for_factor 的口径），且每条带 date。
@@ -230,21 +227,14 @@ def intraday_decomposition(
 
     # 方差分解
     ss_total = float(np.sum((x - x.mean()) ** 2))
-    ss_between = float(sum(
-        mask_by_day[d].sum() * (x[mask_by_day[d]].mean() - x.mean()) ** 2
-        for d in udays
-    ))
+    ss_between = float(sum(mask_by_day[d].sum() * (x[mask_by_day[d]].mean() - x.mean()) ** 2 for d in udays))
     var_between_pct = (ss_between / ss_total * 100.0) if ss_total > 0 else float("nan")
 
     # 日级因子检测：日内 distinct 值个数
     daily_distinct = [len(set(np.round(x[mask_by_day[d]], 6))) for d in udays]
     mean_daily_distinct = float(np.mean(daily_distinct))
-    pct_days_single_value = (
-        sum(1 for c in daily_distinct if c == 1) / len(daily_distinct) * 100.0
-    )
-    is_day_level = pct_days_single_value >= 50.0 or (
-        mean_daily_distinct <= 2.0 and var_between_pct >= 60.0
-    )
+    pct_days_single_value = sum(1 for c in daily_distinct if c == 1) / len(daily_distinct) * 100.0
+    is_day_level = pct_days_single_value >= 50.0 or (mean_daily_distinct <= 2.0 and var_between_pct >= 60.0)
 
     return {
         "pooled_r": pooled_r,
@@ -440,15 +430,17 @@ def compute_verdict(groups: dict[str, dict]) -> dict:
                 if (r > 0 and expected_sign < 0) or (r < 0 and expected_sign > 0):
                     factor_reversed_sig = True
                     any_reversal_significant = True
-                    direction_changes.append({
-                        "factor": factor,
-                        "group": group_name,
-                        "baseline_r": baseline,
-                        "observed_r": r,
-                        "ci": ci,
-                        "p": entry["p"],
-                        "note": f"方向反转：spec §1.1 r={baseline:+.2f}，本组 r={r:+.4f} CI 排除 0",
-                    })
+                    direction_changes.append(
+                        {
+                            "factor": factor,
+                            "group": group_name,
+                            "baseline_r": baseline,
+                            "observed_r": r,
+                            "ci": ci,
+                            "p": entry["p"],
+                            "note": f"方向反转：spec §1.1 r={baseline:+.2f}，本组 r={r:+.4f} CI 排除 0",
+                        }
+                    )
 
         sign_check_per_factor[factor] = {
             "reversed_sig": factor_reversed_sig,
@@ -469,9 +461,7 @@ def compute_verdict(groups: dict[str, dict]) -> dict:
     else:
         # 方向都一致，看显著性是否达到 3 个
         # 统计 CI 排除 0 的方向因子数（跨组去重：一个因子任一组显著即算）
-        sig_count = sum(
-            1 for v in sign_check_per_factor.values() if v["significant_any"]
-        )
+        sig_count = sum(1 for v in sign_check_per_factor.values() if v["significant_any"])
         if sig_count >= 3:
             grade = "A"
             rationale = f"所有核心因子方向不变，且 {sig_count} 个因子 CI 排除 0（≥3）"
@@ -495,9 +485,7 @@ def compute_verdict(groups: dict[str, dict]) -> dict:
 # =====================================================================
 # 主流程
 # =====================================================================
-def analyze_group(
-    samples: list[dict], factors: list[str], return_metric: str, group: str
-) -> dict:
+def analyze_group(samples: list[dict], factors: list[str], return_metric: str, group: str) -> dict:
     out = {}
     for factor in factors:
         x, y = filter_for_factor(samples, factor, return_metric, group)
@@ -533,12 +521,8 @@ def main(return_metric: str, bootstrap_iters: int = 2000) -> int:
     g_unknown = [s for s in samples if s.get("_src") not in ("kline_rebuild", "eastmoney_live")]
 
     groups = {
-        "kline_rebuild": analyze_group(
-            g_kline, GROUP_FACTORS["kline_rebuild"], return_metric, "kline_rebuild"
-        ),
-        "eastmoney_live": analyze_group(
-            g_east, GROUP_FACTORS["eastmoney_live"], return_metric, "eastmoney_live"
-        ),
+        "kline_rebuild": analyze_group(g_kline, GROUP_FACTORS["kline_rebuild"], return_metric, "kline_rebuild"),
+        "eastmoney_live": analyze_group(g_east, GROUP_FACTORS["eastmoney_live"], return_metric, "eastmoney_live"),
     }
 
     # ---- 日内/日间分解 + day-cluster bootstrap ----
@@ -557,9 +541,7 @@ def main(return_metric: str, bootstrap_iters: int = 2000) -> int:
         filtered_cache[factor] = sub
         decomposition[factor] = intraday_decomposition(sub, factor, return_metric)
     decomposition["_bootstrap"] = {
-        factor: day_cluster_bootstrap(
-            filtered_cache.get(factor, []), factor, return_metric, iters=bootstrap_iters
-        )
+        factor: day_cluster_bootstrap(filtered_cache.get(factor, []), factor, return_metric, iters=bootstrap_iters)
         for factor in GROUP_FACTORS["eastmoney_live"]
         if factor in filtered_cache
     }
@@ -595,10 +577,12 @@ def main(return_metric: str, bootstrap_iters: int = 2000) -> int:
     print("=" * 72)
     print(f"Phase 0b 因子回归  |  return_metric={return_metric}")
     print("=" * 72)
-    print(f"total_samples={meta['total_samples']}  "
-          f"kline_rebuild={meta['kline_rebuild_n']}  "
-          f"eastmoney_live={meta['eastmoney_live_n']}  "
-          f"unknown={meta['unknown_source_n']}")
+    print(
+        f"total_samples={meta['total_samples']}  "
+        f"kline_rebuild={meta['kline_rebuild_n']}  "
+        f"eastmoney_live={meta['eastmoney_live_n']}  "
+        f"unknown={meta['unknown_source_n']}"
+    )
     print(f"benchmarks: {meta['benchmarks']}")
     print()
 
@@ -616,9 +600,11 @@ def main(return_metric: str, bootstrap_iters: int = 2000) -> int:
             if math.isnan(r):
                 print(f"  {f:28s}  n={n:<5d}  r=NaN")
             else:
-                print(f"  {f:28s}  n={n:<5d}  r={r:+.4f}  "
-                      f"CI=[{ci[0]:+.4f}, {ci[1]:+.4f}]  p={p:.4g}  "
-                      f"{base_str}  {ci_excl}")
+                print(
+                    f"  {f:28s}  n={n:<5d}  r={r:+.4f}  "
+                    f"CI=[{ci[0]:+.4f}, {ci[1]:+.4f}]  p={p:.4g}  "
+                    f"{base_str}  {ci_excl}"
+                )
         print()
 
     print("--- eastmoney_live 日内/日间分解（2026-08-16 续 grill）---")
@@ -626,10 +612,13 @@ def main(return_metric: str, bootstrap_iters: int = 2000) -> int:
     for f in GROUP_FACTORS["eastmoney_live"]:
         dec = decomposition.get(f, {})
         if dec.get("n_days", 0) == 0:
-            print(f"  {f:26s}  无样本"); continue
-        print(f"  {f:26s} {dec['pooled_r']:+9.4f} {dec['within_day_r']:+11.4f} "
-              f"{dec['between_day_r']:+12.4f} {dec['var_between_pct']:7.1f}% "
-              f"{'是' if dec['is_day_level'] else '否':>4s}")
+            print(f"  {f:26s}  无样本")
+            continue
+        print(
+            f"  {f:26s} {dec['pooled_r']:+9.4f} {dec['within_day_r']:+11.4f} "
+            f"{dec['between_day_r']:+12.4f} {dec['var_between_pct']:7.1f}% "
+            f"{'是' if dec['is_day_level'] else '否':>4s}"
+        )
     print()
     print("day-cluster bootstrap（按日整日重抽样，尊重聚类结构）:")
     bs = decomposition.get("_bootstrap", {})
@@ -639,8 +628,7 @@ def main(return_metric: str, bootstrap_iters: int = 2000) -> int:
             continue
         plo, phi = b["pooled_r_ci95"]
         wlo, whi = b["within_day_r_ci95"]
-        print(f"  {f:26s} pooled CI=[{plo:+.4f},{phi:+.4f}]  "
-              f"within CI=[{wlo:+.4f},{whi:+.4f}]")
+        print(f"  {f:26s} pooled CI=[{plo:+.4f},{phi:+.4f}]  within CI=[{wlo:+.4f},{whi:+.4f}]")
     print()
 
     print("verdict:")
@@ -650,9 +638,11 @@ def main(return_metric: str, bootstrap_iters: int = 2000) -> int:
     if verdict["direction_changes"]:
         print(f"  direction_changes ({len(verdict['direction_changes'])}):")
         for dc in verdict["direction_changes"]:
-            print(f"    - {dc['factor']} ({dc['group']}): "
-                  f"{dc['baseline_r']:+.2f} -> {dc['observed_r']:+.4f} "
-                  f"CI={dc['ci']} p={dc['p']:.4g}")
+            print(
+                f"    - {dc['factor']} ({dc['group']}): "
+                f"{dc['baseline_r']:+.2f} -> {dc['observed_r']:+.4f} "
+                f"CI={dc['ci']} p={dc['p']:.4g}"
+            )
             print(f"      {dc['note']}")
     else:
         print("  direction_changes: []")

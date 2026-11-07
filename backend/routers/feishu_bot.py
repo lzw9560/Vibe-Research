@@ -9,6 +9,7 @@
 合规（CLAUDE.md §1 弱合规）：本路由只做「事件接入 → AI 对话 → 回复」
 管道，不预置标的、不建议；方向性研判由 chat 层 SYSTEM_PROMPT 约束。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -28,10 +29,7 @@ router = APIRouter(tags=["feishu_bot"])
 # ── 飞书交互卡片格式化 ──────────────────────────────────────────────
 
 
-_OBSIDIAN_REVIEWS_URI = (
-    "obsidian://open?vault=Obsidian%20Vault"
-    "&file=10_Reference/investing/reviews"
-)
+_OBSIDIAN_REVIEWS_URI = "obsidian://open?vault=Obsidian%20Vault&file=10_Reference/investing/reviews"
 
 
 def _button_action(actions: list[dict]) -> dict:
@@ -77,93 +75,123 @@ def _format_kg_card(kg_result: Any, title: str = "投研知识图谱") -> dict:
     # 1. kg_audit 结果 → 分类型计数 + 审查跳转按钮
     if isinstance(kg_result, dict) and kg_result.get("by_type"):
         total = kg_result.get("total_entities", 0)
-        elements.append({
-            "tag": "div",
-            "text": {"content": f"**总实体数**：{total}", "tag": "lark_md"},
-        })
+        elements.append(
+            {
+                "tag": "div",
+                "text": {"content": f"**总实体数**：{total}", "tag": "lark_md"},
+            }
+        )
         elements.append({"tag": "hr"})
         for folder, count in sorted(kg_result["by_type"].items()):
             emoji = "✅" if count > 0 else "❌"
-            elements.append({
-                "tag": "div",
-                "text": {"content": f"{emoji} `{folder}`：{count}", "tag": "lark_md"},
-            })
+            elements.append(
+                {
+                    "tag": "div",
+                    "text": {"content": f"{emoji} `{folder}`：{count}", "tag": "lark_md"},
+                }
+            )
         # 按钮：跳 Obsidian 审查目录
-        elements.append(_button_action([
-            _url_button("查看完整审查", _OBSIDIAN_REVIEWS_URI),
-        ]))
+        elements.append(
+            _button_action(
+                [
+                    _url_button("查看完整审查", _OBSIDIAN_REVIEWS_URI),
+                ]
+            )
+        )
 
     # 2. query_kg_relations 结果 → 关系列表
     elif isinstance(kg_result, dict) and kg_result.get("relations") is not None:
         entity = kg_result.get("entity", "")
         total = kg_result.get("total", 0)
-        elements.append({
-            "tag": "div",
-            "text": {"content": f"**实体**：{entity}（{total} 条关系）", "tag": "lark_md"},
-        })
+        elements.append(
+            {
+                "tag": "div",
+                "text": {"content": f"**实体**：{entity}（{total} 条关系）", "tag": "lark_md"},
+            }
+        )
         elements.append({"tag": "hr"})
         relations = kg_result.get("relations", [])
         if not relations:
-            elements.append({
-                "tag": "div",
-                "text": {"content": "_无关联实体_", "tag": "lark_md"},
-            })
+            elements.append(
+                {
+                    "tag": "div",
+                    "text": {"content": "_无关联实体_", "tag": "lark_md"},
+                }
+            )
         for item in relations[:20]:
             target = item.get("target", "")
-            elements.append({
-                "tag": "div",
-                "text": {"content": f"- → {target}", "tag": "lark_md"},
-            })
+            elements.append(
+                {
+                    "tag": "div",
+                    "text": {"content": f"- → {target}", "tag": "lark_md"},
+                }
+            )
         if len(relations) > 20:
-            elements.append({
-                "tag": "div",
-                "text": {"content": f"_…共 {total} 条，仅显示前 20_", "tag": "lark_md"},
-            })
+            elements.append(
+                {
+                    "tag": "div",
+                    "text": {"content": f"_…共 {total} 条，仅显示前 20_", "tag": "lark_md"},
+                }
+            )
 
     # 3. query_kg_entities 结果 → 实体列表（list[dict]）+ 查行情按钮
     elif isinstance(kg_result, list):
         if not kg_result:
-            elements.append({
-                "tag": "div",
-                "text": {"content": "_无匹配实体_", "tag": "lark_md"},
-            })
+            elements.append(
+                {
+                    "tag": "div",
+                    "text": {"content": "_无匹配实体_", "tag": "lark_md"},
+                }
+            )
         shown = kg_result[:20]
         for item in shown:
             code = item.get("code") or item.get("_filename", "")
             name = item.get("name") or item.get("title", "")
-            elements.append({
-                "tag": "div",
-                "text": {"content": f"- `{code}` {name}", "tag": "lark_md"},
-            })
+            elements.append(
+                {
+                    "tag": "div",
+                    "text": {"content": f"- `{code}` {name}", "tag": "lark_md"},
+                }
+            )
         if len(kg_result) > 20:
-            elements.append({
-                "tag": "div",
-                "text": {"content": f"_…共 {len(kg_result)} 条，仅显示前 20_", "tag": "lark_md"},
-            })
+            elements.append(
+                {
+                    "tag": "div",
+                    "text": {"content": f"_…共 {len(kg_result)} 条，仅显示前 20_", "tag": "lark_md"},
+                }
+            )
         # 按钮：查前 N 只行情（回调 query_quote）
-        quote_codes = [
-            item.get("code") for item in shown
-            if isinstance(item, dict) and item.get("code")
-        ][:5]
+        quote_codes = [item.get("code") for item in shown if isinstance(item, dict) and item.get("code")][:5]
         if quote_codes:
-            elements.append(_button_action([
-                _callback_button(
-                    f"查前 {len(quote_codes)} 只行情",
-                    {"action": "query_quote", "codes": quote_codes},
-                ),
-            ]))
+            elements.append(
+                _button_action(
+                    [
+                        _callback_button(
+                            f"查前 {len(quote_codes)} 只行情",
+                            {"action": "query_quote", "codes": quote_codes},
+                        ),
+                    ]
+                )
+            )
 
     # 4. error dict 或未知结构 → 回退纯文本
     elif isinstance(kg_result, dict) and kg_result.get("error"):
-        elements.append({
-            "tag": "div",
-            "text": {"content": f"❌ {kg_result['error']}", "tag": "lark_md"},
-        })
+        elements.append(
+            {
+                "tag": "div",
+                "text": {"content": f"❌ {kg_result['error']}", "tag": "lark_md"},
+            }
+        )
     else:
-        elements.append({
-            "tag": "div",
-            "text": {"content": f"```\n{json.dumps(kg_result, ensure_ascii=False, indent=2)[:2000]}\n```", "tag": "lark_md"},
-        })
+        elements.append(
+            {
+                "tag": "div",
+                "text": {
+                    "content": f"```\n{json.dumps(kg_result, ensure_ascii=False, indent=2)[:2000]}\n```",
+                    "tag": "lark_md",
+                },
+            }
+        )
 
     return {
         "config": {"wide_screen_mode": True, "enable_forward": False},
@@ -212,13 +240,20 @@ def _direct_kg_lookup(text: str) -> Optional[dict]:
 
     # "查所有股票" / "查白酒行业"
     type_map = {
-        "股票": "stock", "stock": "stock",
-        "行业": "industry", "industry": "industry",
-        "概念": "concept", "concept": "concept",
-        "战法": "strategy", "strategy": "strategy",
-        "数据源": "data_source", "data source": "data_source",
-        "spec": "spec", "决策": "spec",
-        "事件": "event", "event": "event",
+        "股票": "stock",
+        "stock": "stock",
+        "行业": "industry",
+        "industry": "industry",
+        "概念": "concept",
+        "concept": "concept",
+        "战法": "strategy",
+        "strategy": "strategy",
+        "数据源": "data_source",
+        "data source": "data_source",
+        "spec": "spec",
+        "决策": "spec",
+        "事件": "event",
+        "event": "event",
     }
     detected_type = None
     for kw, t in type_map.items():
@@ -230,11 +265,14 @@ def _direct_kg_lookup(text: str) -> Optional[dict]:
         industry_match = re.search(r"(\S+?)行业", text)
         if industry_match:
             industry = industry_match.group(1)
-            return exec_tool("query_kg_entities", {
-                "entity_type": detected_type,
-                "filter_field": "industry",
-                "filter_value": industry,
-            })
+            return exec_tool(
+                "query_kg_entities",
+                {
+                    "entity_type": detected_type,
+                    "filter_field": "industry",
+                    "filter_value": industry,
+                },
+            )
         return exec_tool("query_kg_entities", {"entity_type": detected_type})
 
     return None
@@ -269,9 +307,13 @@ def _build_kg_context(text: str) -> str:
         parts: list[str] = []
         # 知识图谱关联
         try:
-            result = exec_tool("query_kg_relations", {
-                "entity_code": code, "entity_type": "stock",
-            })
+            result = exec_tool(
+                "query_kg_relations",
+                {
+                    "entity_code": code,
+                    "entity_type": "stock",
+                },
+            )
             if isinstance(result, dict) and not result.get("error"):
                 entity = result.get("entity", code)
                 relations = result.get("relations", [])
@@ -290,6 +332,7 @@ def _build_kg_context(text: str) -> str:
         try:
             from engine.fusion_pipeline import compute_fusion_for_query  # noqa: PLC0415
             from engine.fusion_layer import build_fusion_context  # noqa: PLC0415
+
             fusion_out = compute_fusion_for_query(code)
             if fusion_out.get("confidence", 0.0) > 0 or fusion_out.get("regime") != "未知":
                 parts.append(build_fusion_context(fusion_out))
@@ -303,11 +346,14 @@ def _build_kg_context(text: str) -> str:
     if industry_match:
         industry = industry_match.group(1)
         try:
-            result = exec_tool("query_kg_entities", {
-                "entity_type": "stock",
-                "filter_field": "industry",
-                "filter_value": industry,
-            })
+            result = exec_tool(
+                "query_kg_entities",
+                {
+                    "entity_type": "stock",
+                    "filter_field": "industry",
+                    "filter_value": industry,
+                },
+            )
             if isinstance(result, list) and result:
                 lines = [f"知识图谱：{industry}行业的股票（共 {len(result)} 只）："]
                 for item in result[:15]:
@@ -393,6 +439,7 @@ async def feishu_bot_webhook(request: Request) -> Dict[str, Any]:
         # 回复走 BOT app（FEISHU_BOT_APP_ID）——事件回调配在 BOT app 上，
         # 回复必须用同一 app 才能达（跨 app 发不过去）。未配 BOT 凭据则降级用通知 app。
         import os as _os
+
         _bid = _os.getenv("FEISHU_BOT_APP_ID", "")
         _bsec = _os.getenv("FEISHU_BOT_APP_SECRET", "")
         if _bid and _bsec:
@@ -426,10 +473,12 @@ async def feishu_bot_webhook(request: Request) -> Dict[str, Any]:
             if not llm_failed and reply:
                 # 在卡片末尾追加 AI 解读块
                 card["elements"].append({"tag": "hr"})
-                card["elements"].append({
-                    "tag": "div",
-                    "text": {"content": f"**AI 解读**：{reply[:1500]}", "tag": "lark_md"},
-                })
+                card["elements"].append(
+                    {
+                        "tag": "div",
+                        "text": {"content": f"**AI 解读**：{reply[:1500]}", "tag": "lark_md"},
+                    }
+                )
             ok = sender.send_feishu_card(card)
         elif not llm_failed:
             # KG 不可答、LLM 成功 → 纯文本
@@ -497,6 +546,7 @@ async def feishu_bot_direct(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     # "600519 关联" / "查 600519 关系"
     import re
+
     code_match = re.search(r"(\d{6}|[A-Z]{1,5})\s*(关联|关系|relations)", text)
     if code_match:
         code = code_match.group(1)
@@ -505,13 +555,20 @@ async def feishu_bot_direct(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     # "查所有股票" / "查白酒行业"
     type_map = {
-        "股票": "stock", "stock": "stock",
-        "行业": "industry", "industry": "industry",
-        "概念": "concept", "concept": "concept",
-        "战法": "strategy", "strategy": "strategy",
-        "数据源": "data_source", "data source": "data_source",
-        "spec": "spec", "决策": "spec",
-        "事件": "event", "event": "event",
+        "股票": "stock",
+        "stock": "stock",
+        "行业": "industry",
+        "industry": "industry",
+        "概念": "concept",
+        "concept": "concept",
+        "战法": "strategy",
+        "strategy": "strategy",
+        "数据源": "data_source",
+        "data source": "data_source",
+        "spec": "spec",
+        "决策": "spec",
+        "事件": "event",
+        "event": "event",
     }
     detected_type = None
     for kw, t in type_map.items():
@@ -524,11 +581,14 @@ async def feishu_bot_direct(payload: Dict[str, Any]) -> Dict[str, Any]:
         industry_match = re.search(r"(\S+?)行业", text)
         if industry_match:
             industry = industry_match.group(1)
-            result = exec_tool("query_kg_entities", {
-                "entity_type": detected_type,
-                "filter_field": "industry",
-                "filter_value": industry,
-            })
+            result = exec_tool(
+                "query_kg_entities",
+                {
+                    "entity_type": detected_type,
+                    "filter_field": "industry",
+                    "filter_value": industry,
+                },
+            )
             return {"ok": True, "action": "query_kg_entities", "filter": f"industry={industry}", "result": result}
         result = exec_tool("query_kg_entities", {"entity_type": detected_type})
         return {"ok": True, "action": "query_kg_entities", "type": detected_type, "result": result}
@@ -602,9 +662,11 @@ async def feishu_bot_stream(payload: Dict[str, Any]):
 
     # text 为空时仍返回 SSE（带 error + done），保持流式契约一致
     if not text:
+
         async def empty_stream():
             yield f"data: {json.dumps({'type': 'error', 'data': 'text 不能为空'}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
         return StreamingResponse(empty_stream(), media_type="text/event-stream")
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

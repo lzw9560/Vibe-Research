@@ -28,6 +28,7 @@ Output: .vibe-research/sector_rotation_data.json
 
 Return units: decimal (pctChg / 100). null = no stocks in industry that day.
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -50,18 +51,16 @@ GENE_DB = DATA / "gene_scores.db"
 INDEX_OHLC = DATA / "index_ohlc_cache.json"
 OUT = DATA / "sector_rotation_data.json"
 
-BENCH_CODE = "sh.000001"          # 上证指数 (SSE Composite)
+BENCH_CODE = "sh.000001"  # 上证指数 (SSE Composite)
 BENCH_LABEL = "上证指数"
-MIN_STOCKS_PER_INDUSTRY = 2       # keep industries with >=2 classified stocks
+MIN_STOCKS_PER_INDUSTRY = 2  # keep industries with >=2 classified stocks
 
 
 def load_industry_map() -> dict[str, str]:
     """code(6-digit) -> industry. Drops '-' (unclassified)."""
     conn = sqlite3.connect(str(GENE_DB))
     mp: dict[str, str] = {}
-    for code, _name, industry in conn.execute(
-        "SELECT code, name, industry FROM code_industry"
-    ):
+    for code, _name, industry in conn.execute("SELECT code, name, industry FROM code_industry"):
         if industry and industry != "-":
             mp[code] = industry
     conn.close()
@@ -147,14 +146,14 @@ def build() -> dict:
     industry_map = load_industry_map()
     # industries with enough stocks
     from collections import Counter
+
     ind_counts = Counter(industry_map.values())
     keep_industries = {i for i, n in ind_counts.items() if n >= MIN_STOCKS_PER_INDUSTRY}
 
     code_rets = load_code_returns(set(industry_map.keys()))
 
     # restrict to kept industries
-    code_to_ind = {c: i for c, i in industry_map.items()
-                   if i in keep_industries and c in code_rets}
+    code_to_ind = {c: i for c, i in industry_map.items() if i in keep_industries and c in code_rets}
 
     # build calendar = union of stock dates AND benchmark dates (intersection later)
     stock_dates: set[str] = set()
@@ -191,8 +190,7 @@ def build() -> dict:
         sector_membership[ind] = memb
 
     # benchmark aligned
-    bench_aligned = [round(bench_rets[d], 8) if d in bench_rets else None
-                     for d in dates]
+    bench_aligned = [round(bench_rets[d], 8) if d in bench_rets else None for d in dates]
 
     # ---- survivorship / coverage stats ----
     # per industry: first date with >=2 stocks, last date, peak/min membership
@@ -204,8 +202,7 @@ def build() -> dict:
         mx = max(memb) if memb else 0
         mn = min(memb) if memb else 0
         # codes with FULL history (present on every date in dates)
-        full = sum(1 for c in codes
-                   if all(d in code_rets[c] for d in dates))
+        full = sum(1 for c in codes if all(d in code_rets[c] for d in dates))
         ind_cov[ind] = {
             "n_classified_stocks": len(codes),
             "first_date_ge2": first2,
@@ -220,8 +217,7 @@ def build() -> dict:
     n_on_first = sum(1 for c, dmap in code_rets.items() if dates[0] in dmap) if dates else 0
     n_on_last = sum(1 for c, dmap in code_rets.items() if dates[-1] in dmap) if dates else 0
     # codes with full history
-    n_full_universe = sum(1 for c, dmap in code_rets.items()
-                          if all(d in dmap for d in dates)) if dates else 0
+    n_full_universe = sum(1 for c, dmap in code_rets.items() if all(d in dmap for d in dates)) if dates else 0
 
     # per-date total universe coverage (sum of membership across industries)
     coverage_per_date: list[int] = [0] * len(dates)
@@ -253,8 +249,7 @@ def build() -> dict:
     # notable major sectors absent from long-history core
     absent_major = sorted([ind for ind, n in ind_long.items() if n == 0])
     # coverage transition: first date where coverage jumps above 1500 (recent-wave onset)
-    cov_jump_date = next((dates[i] for i, c in enumerate(coverage_per_date)
-                          if c > 1500), None)
+    cov_jump_date = next((dates[i] for i, c in enumerate(coverage_per_date) if c > 1500), None)
 
     # fetch actual snapshot date from DB
     conn = sqlite3.connect(str(GENE_DB))
@@ -340,9 +335,8 @@ def build() -> dict:
                     f"{n_ind_ge10_long} well-covered industries."
                 ),
                 "industries_absent_from_long_core": absent_major,
-                "notable_absent_major_sectors": [
-                    i for i in absent_major if i in ("银行Ⅱ", "保险Ⅱ", "证券Ⅱ")
-                ] or (
+                "notable_absent_major_sectors": [i for i in absent_major if i in ("银行Ⅱ", "保险Ⅱ", "证券Ⅱ")]
+                or (
                     "银行Ⅱ & 保险Ⅱ have ZERO long-history codes — major financial "
                     "sectors absent from any 2018-2025 rotation analysis"
                 ),
@@ -370,24 +364,29 @@ def main() -> None:
     print(f"  dates: {m['n_dates']}  ({m['date_range'][0]} -> {m['date_range'][1]})")
     print(f"  sectors: {m['n_sectors']}")
     print(f"  universe codes used: {m['universe_codes_used']}")
-    print(f"  benchmark: {data['benchmark']['code']} {data['benchmark']['label']} "
-          f"({sum(1 for r in data['benchmark']['returns'] if r is not None)} non-null)")
+    print(
+        f"  benchmark: {data['benchmark']['code']} {data['benchmark']['label']} "
+        f"({sum(1 for r in data['benchmark']['returns'] if r is not None)} non-null)"
+    )
     sv = m["survivorship"]["universe_membership_churn"]
-    print(f"  survivorship: first-date codes={sv['n_codes_present_on_first_date']}, "
-          f"last-date codes={sv['n_codes_present_on_last_date']}, "
-          f"full-history codes={sv['n_codes_full_history_all_dates']}")
+    print(
+        f"  survivorship: first-date codes={sv['n_codes_present_on_first_date']}, "
+        f"last-date codes={sv['n_codes_present_on_last_date']}, "
+        f"full-history codes={sv['n_codes_full_history_all_dates']}"
+    )
     dc = m["dense_core"]
-    print(f"  dense core (>=5yr history): {dc['n_dense_core_codes']} codes, "
-          f"{dc['n_industries_with_ge10_long_codes']} industries well-covered, "
-          f"{dc['n_industries_with_zero_long_codes']} industries absent")
+    print(
+        f"  dense core (>=5yr history): {dc['n_dense_core_codes']} codes, "
+        f"{dc['n_industries_with_ge10_long_codes']} industries well-covered, "
+        f"{dc['n_industries_with_zero_long_codes']} industries absent"
+    )
     print(f"  coverage jump (recent-wave onset): {dc['coverage_jump_to_recent_wave'][:60]}...")
     print(f"  notable absent: {dc['notable_absent_major_sectors']}")
     # spot check: print a sample sector
     sample_ind = next(iter(data["sector_returns"]))
     sr = data["sector_returns"][sample_ind]
     nn = sum(1 for r in sr if r is not None)
-    print(f"  sample sector '{sample_ind}': {nn} non-null days, "
-          f"first 3 returns={sr[:3]}")
+    print(f"  sample sector '{sample_ind}': {nn} non-null days, first 3 returns={sr[:3]}")
     print(f"  written: {OUT}")
 
 

@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """事件 deep dive v3：zt_buy（涨停榜+机构净买）按净买额分大/小 + 持有2日。
 看大额机构净买是否 lift 更高、持有2日是否更稳。临时探针。"""
+
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tools.first_board_layer_lift import _to_float, _winrate, day_paired_lift, four_state
 import statistics
@@ -37,6 +39,7 @@ med = statistics.median(nbs)
 big = [x for x in zt_buy if x["net_buy"] >= med]
 small = [x for x in zt_buy if x["net_buy"] < med]
 
+
 def by_day(items, key="r1"):
     out = {}
     for x in items:
@@ -46,11 +49,14 @@ def by_day(items, key="r1"):
         out.setdefault(x["date"], []).append(v)
     return out
 
+
 def wms(items, key, label):
     rs = [x[key] for x in items if x[key] is not None and x[key] == x[key]]
     if not rs:
-        print(f"  {label}: 空"); return
+        print(f"  {label}: 空")
+        return
     print(f"  {label}: n={len(rs)} winrate={_winrate(rs):.4f} mean={statistics.mean(rs):.4f}%")
+
 
 print("\n=== zt_buy 持有1日 vs 2日 ===")
 wms(zt_buy, "r1", "zt_buy 持1日")

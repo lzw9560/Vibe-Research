@@ -167,17 +167,13 @@ def _cleanup_expired(now_ts: float) -> None:
         _cooldown_expires_at.pop(key, None)
 
     expired_dedup_inflight = [
-        key
-        for key, (expires_at, _token) in _dedup_inflight_until.items()
-        if expires_at <= now_ts
+        key for key, (expires_at, _token) in _dedup_inflight_until.items() if expires_at <= now_ts
     ]
     for key in expired_dedup_inflight:
         _dedup_inflight_until.pop(key, None)
 
     expired_cooldown_inflight = [
-        key
-        for key, (expires_at, _token) in _cooldown_inflight_until.items()
-        if expires_at <= now_ts
+        key for key, (expires_at, _token) in _cooldown_inflight_until.items() if expires_at <= now_ts
     ]
     for key in expired_cooldown_inflight:
         _cooldown_inflight_until.pop(key, None)
@@ -278,10 +274,7 @@ def _evaluate_notification_noise(
             return NotificationNoiseDecision(
                 should_send=False,
                 reason_code="min_severity",
-                message=(
-                    f"通知级别 {resolved_severity} 低于最低级别 {min_severity_raw}，"
-                    "已跳过静态通知渠道。"
-                ),
+                message=(f"通知级别 {resolved_severity} 低于最低级别 {min_severity_raw}，已跳过静态通知渠道。"),
                 **decision_base,
             )
 

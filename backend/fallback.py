@@ -208,9 +208,7 @@ def get_with_fallback_meta(
     except Exception as e:
         # 实时获取失败（源宕/限流/编程 bug），降级到缓存——记日志便于排查
         # （非 bare 吞无日志：S111 spec R7 批的同款 anti-pattern 不在此重演）
-        logging.getLogger("fallback").debug(
-            "get_with_fallback_meta fetch_fn 失败 key=%s，降级到缓存: %s", key, e
-        )
+        logging.getLogger("fallback").debug("get_with_fallback_meta fetch_fn 失败 key=%s，降级到缓存: %s", key, e)
 
     # 2. 降级到缓存
     cached = load_cache(key, ttl)

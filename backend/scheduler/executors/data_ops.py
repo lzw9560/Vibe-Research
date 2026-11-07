@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """data_ops executors——数据刷新/同步/清理/kline 刷新/月度 VACUUM。"""
+
 from __future__ import annotations
 
 import logging
@@ -74,11 +75,13 @@ def kline_refresh(payload: Dict[str, Any]) -> Dict[str, Any]:
     max_stocks = payload.get("max_stocks")
     try:
         from tools.refresh_kline_cache import main as _refresh_kline  # noqa: PLC0415
+
         ret = _refresh_kline(max_stocks)
         if ret == 0:
             # S175/S177：kline 刷盘成功后清 bars_provider 单例 cache，
             # 防 kline_refresh 16:30 写新 bar 但 cache 仍读旧 → signal_date 不在 bars → 全 unbuyable
             from engine.bars_provider import KlineCacheBarsProvider  # noqa: PLC0415
+
             KlineCacheBarsProvider.reload()
         return {"status": "ok" if ret == 0 else "degraded", "return_code": ret}
     except ImportError as e:  # noqa: BLE001
@@ -124,7 +127,7 @@ def monthly_vacuum(payload: Dict[str, Any]) -> Dict[str, Any]:
             continue
         if fname.endswith(".bak"):
             continue
-        year = fname[len("seal_intraday_"):-len(".db")]
+        year = fname[len("seal_intraday_") : -len(".db")]
         if len(year) != 4 or not year.isdigit():
             continue
         is_hot = year == target_year
@@ -155,7 +158,8 @@ def monthly_vacuum(payload: Dict[str, Any]) -> Dict[str, Any]:
                 elif row:
                     logger.warning(
                         "[monthly_vacuum] %s wal_checkpoint busy（有并发写，未截断）: %s",
-                        fname, tuple(row),
+                        fname,
+                        tuple(row),
                     )
                     checkpointed.append(fname)  # 仍记（已尽力）
             finally:
@@ -166,7 +170,10 @@ def monthly_vacuum(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     logger.info(
         "[monthly_vacuum] year=%s vacuumed=%s checkpointed=%s errors=%s",
-        target_year, vacuumed, checkpointed, errors,
+        target_year,
+        vacuumed,
+        checkpointed,
+        errors,
     )
     return {
         "vacuumed": vacuumed,
@@ -224,6 +231,7 @@ def weekly_brainstorm_remind(payload: Dict[str, Any]) -> Dict[str, Any]:
     notif_ok = False
     try:
         from notification.notification_service import get_notification_service  # noqa: PLC0415
+
         service = get_notification_service()
         msg = (
             f"📅 每周全局优化头脑风暴提醒（{today}）\n"
@@ -269,18 +277,23 @@ def daily_full_pull(payload: Dict[str, Any]) -> Dict[str, Any]:
     # 1. stoke 沉淀（研报/新闻/强势涨停/PE-PB）—— stoke 走 ~/stoke venv subprocess，失败降级不阻塞
     try:
         from data.sources.stoke_src import strong_stocks, cls_telegraph, index_pe, market_pb, research_report  # noqa: PLC0415
+
         strong = strong_stocks() or []
         # 研报（research_reports 表）——research_report(code) 是单股接口，需遍历首板 codes
         # 之前 items 漏 "reports" key 致研报从未拉取（subagent B 实测 9-11 research_reports 0 行）
         import sqlite3 as _sql  # noqa: PLC0415
+
         zt_db = resolve_data_dir() / "zt_history.db"
         report_codes = []
         if zt_db.exists():
             try:
                 _c = _sql.connect(str(zt_db), timeout=5)
-                report_codes = [r[0] for r in _c.execute(
-                    "SELECT code FROM zt_history WHERE date=? AND code IS NOT NULL", (date_str,)
-                ).fetchall()][:30]  # 限 30 股研报（防 stoke subprocess 长时间）
+                report_codes = [
+                    r[0]
+                    for r in _c.execute(
+                        "SELECT code FROM zt_history WHERE date=? AND code IS NOT NULL", (date_str,)
+                    ).fetchall()
+                ][:30]  # 限 30 股研报（防 stoke subprocess 长时间）
                 _c.close()
             except Exception as e:  # noqa: BLE001
                 logger.warning("[daily_full_pull] zt_history 取 codes 失败: %s", e)
@@ -320,8 +333,13 @@ def daily_full_pull(payload: Dict[str, Any]) -> Dict[str, Any]:
             logger.warning("[daily_full_pull] market_pb 拉取失败: %s", e)
         items = {"strong": strong, "reports": reports_list, "news": telegraph_list, "pe_pb": pe_rows}
         r = save_stoke_data(date_str, items)
-        result["stoke"] = {"saved": r.get("saved", 0), "n_strong": len(strong),
-                           "n_reports": len(reports_list), "n_telegraph": len(telegraph_list), "n_pe_pb": len(pe_rows)}
+        result["stoke"] = {
+            "saved": r.get("saved", 0),
+            "n_strong": len(strong),
+            "n_reports": len(reports_list),
+            "n_telegraph": len(telegraph_list),
+            "n_pe_pb": len(pe_rows),
+        }
     except Exception as e:  # noqa: BLE001
         logger.warning("[daily_full_pull] stoke 沉淀失败: %s", e)
         result["stoke"] = {"error": str(e)}
@@ -332,12 +350,16 @@ def daily_full_pull(payload: Dict[str, Any]) -> Dict[str, Any]:
         import subprocess  # noqa: PLC0415
         import json as _json  # noqa: PLC0415
         from pathlib import Path  # noqa: PLC0415
+
         zt_db = resolve_data_dir() / "zt_history.db"
         if zt_db.exists():
             conn = sqlite3.connect(str(zt_db), timeout=5)
-            codes = [r[0] for r in conn.execute(
-                "SELECT code FROM zt_history WHERE date=? AND code IS NOT NULL", (date_str,)
-            ).fetchall()]
+            codes = [
+                r[0]
+                for r in conn.execute(
+                    "SELECT code FROM zt_history WHERE date=? AND code IS NOT NULL", (date_str,)
+                ).fetchall()
+            ]
             conn.close()
         else:
             codes = []
@@ -352,24 +374,38 @@ def daily_full_pull(payload: Dict[str, Any]) -> Dict[str, Any]:
             try:
                 # 单次 subprocess 多 codes + --save-datalake（proxy 内部遍历+落盘，比每股一次省 50x 开销）
                 r = subprocess.run(
-                    [str(stoke_py), str(proxy_script), "--codes", ",".join(target_codes),
-                     "--date", date_str.replace("-", ""), "--save-datalake"],
-                    capture_output=True, text=True, timeout=300,  # 50 股 × mootdx 拉 tick，给 5 分钟
+                    [
+                        str(stoke_py),
+                        str(proxy_script),
+                        "--codes",
+                        ",".join(target_codes),
+                        "--date",
+                        date_str.replace("-", ""),
+                        "--save-datalake",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=300,  # 50 股 × mootdx 拉 tick，给 5 分钟
                 )
                 if r.returncode == 0:
                     out = _json.loads(r.stdout.strip() or "{}")
                     saved_codes = out.get("saved_codes_dates", 0)
                 else:
                     failed_codes = len(target_codes)
-                    logger.warning("[daily_full_pull] ticks proxy 失败 rc=%s stderr=%s",
-                                   r.returncode, (r.stderr or "")[:200])
+                    logger.warning(
+                        "[daily_full_pull] ticks proxy 失败 rc=%s stderr=%s", r.returncode, (r.stderr or "")[:200]
+                    )
             except (subprocess.TimeoutExpired, _json.JSONDecodeError, OSError) as e:
                 failed_codes = len(target_codes)
                 logger.warning("[daily_full_pull] ticks subprocess 异常: %s", e)
         result["ticks"] = {
-            "n_codes": len(codes), "pulled_codes": len(target_codes),
-            "saved_codes_dates": saved_codes, "failed_codes": failed_codes,
-            "note": "mootdx raw ticks 经 stoke venv subprocess --save-datalake 落 datalake" if stoke_py.exists() else "stoke venv 缺",
+            "n_codes": len(codes),
+            "pulled_codes": len(target_codes),
+            "saved_codes_dates": saved_codes,
+            "failed_codes": failed_codes,
+            "note": "mootdx raw ticks 经 stoke venv subprocess --save-datalake 落 datalake"
+            if stoke_py.exists()
+            else "stoke venv 缺",
         }
     except Exception as e:  # noqa: BLE001
         logger.warning("[daily_full_pull] ticks 沉淀失败: %s", e)
@@ -377,5 +413,3 @@ def daily_full_pull(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     logger.info("[daily_full_pull] %s done: stoke=%s ticks=%s", date_str, result["stoke"], result["ticks"])
     return result
-
-

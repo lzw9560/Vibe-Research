@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """回测快照存取——_save_snapshot / get_backtest_snapshots。"""
+
 from __future__ import annotations
 
 import json
@@ -67,8 +68,17 @@ def _save_snapshot(snapshot_date: str, engine: str, result: Any) -> None:
                 percentile_json = excluded.percentile_json,
                 strategy_breakdown_json = excluded.strategy_breakdown_json
             """,
-            (snapshot_date, engine, hit_rate, avg_return, max_drawdown,
-             sharpe_ratio, total_signals, percentile_json, strategy_breakdown_json),
+            (
+                snapshot_date,
+                engine,
+                hit_rate,
+                avg_return,
+                max_drawdown,
+                sharpe_ratio,
+                total_signals,
+                percentile_json,
+                strategy_breakdown_json,
+            ),
         )
         conn.commit()
     finally:

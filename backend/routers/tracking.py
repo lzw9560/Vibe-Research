@@ -8,6 +8,7 @@ tracking_pool_repo._ensure_tables() 在模块 import 时幂等建表（mirror wo
 DB: .vibe-research/market_data.db（不进 git）。tracking 级 label（admit/tracking/decayed/promoted）
 与 WorkflowStatus enum 词表分离（R5/R6 对抗审修正，不破 _ALLOWED_TRANSITIONS）。
 """
+
 from __future__ import annotations
 
 import json

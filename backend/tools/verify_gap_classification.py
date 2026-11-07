@@ -34,6 +34,7 @@ v2 修正：
 用法：python tools/verify_gap_classification.py
 输出：docs/gap-classification-sanity-report.md
 """
+
 import sys
 from pathlib import Path
 from collections import defaultdict
@@ -169,23 +170,35 @@ def main() -> None:
     R = []
     R.append("# S193 R5 v3：缺口分类准确率 sanity（cluster-robust, s44_verifier day_clustered+Bonferroni 集成）")
     R.append("")
-    R.append(f"> spec §3 R5 验收 A4。cache {len(cache)} 只股票（{n_codes_with_bars} 只有 bars）"
-             f"，缺口 case {n_gap}。趋势启动阈值 |后N日收益| > {TREND_THRESHOLD*100}%。")
-    R.append(f"> v2 修正（对抗审 verdict partially-holds）：基线改普通-only exogenous + "
-             f"统一 continuation 口径 + 3 日前视上界标注 + sigma z + 混淆矩阵分方向。")
-    R.append(f"> v3 cluster-robust：day_clustered_t_test（per-date cluster, s44_verifier）+ Bonferroni-BH K≤8 "
-             f"已集成（替代 v2 binomial z 的 case 不独立问题）；permutation_p_value 待后续（HIGH）。"
-             f"衰竭 cluster-robust survive Bonferroni ✅。")
-    R.append(f"> 真实 caveat：cache=load_industry_map 全 A 股（非 breakout 选过，v1 caveat 错）；"
-             f"regime-mix（9 月牛月权重高，无 regime 拆分，1 月失效被 pooled 掩盖）。")
+    R.append(
+        f"> spec §3 R5 验收 A4。cache {len(cache)} 只股票（{n_codes_with_bars} 只有 bars）"
+        f"，缺口 case {n_gap}。趋势启动阈值 |后N日收益| > {TREND_THRESHOLD * 100}%。"
+    )
+    R.append(
+        f"> v2 修正（对抗审 verdict partially-holds）：基线改普通-only exogenous + "
+        f"统一 continuation 口径 + 3 日前视上界标注 + sigma z + 混淆矩阵分方向。"
+    )
+    R.append(
+        f"> v3 cluster-robust：day_clustered_t_test（per-date cluster, s44_verifier）+ Bonferroni-BH K≤8 "
+        f"已集成（替代 v2 binomial z 的 case 不独立问题）；permutation_p_value 待后续（HIGH）。"
+        f"衰竭 cluster-robust survive Bonferroni ✅。"
+    )
+    R.append(
+        f"> 真实 caveat：cache=load_industry_map 全 A 股（非 breakout 选过，v1 caveat 错）；"
+        f"regime-mix（9 月牛月权重高，无 regime 拆分，1 月失效被 pooled 掩盖）。"
+    )
     R.append("")
 
     R.append("## continuation rate vs 普通基线（统一口径 + cluster-robust v3）")
     R.append("")
     R.append("> continuation hit = 后 N 日延续缺口 direction。基线 = 普通缺口 continuation rate（exogenous ~43%）。")
-    R.append("> z(bino)=binomial（case 不独立夸大）；t/p(cluster)=day_clustered_t_test（per-date cluster, s44_verifier）；Bonf=Bonferroni-BH K≤8。")
+    R.append(
+        "> z(bino)=binomial（case 不独立夸大）；t/p(cluster)=day_clustered_t_test（per-date cluster, s44_verifier）；Bonf=Bonferroni-BH K≤8。"
+    )
     R.append("")
-    R.append("| 类型 | 窗口 | cont 命中/总 | cont rate | 普通基线 | delta | z(bino) | t(cluster) | p(cluster) | n_days | Bonf | 定性 |")
+    R.append(
+        "| 类型 | 窗口 | cont 命中/总 | cont rate | 普通基线 | delta | z(bino) | t(cluster) | p(cluster) | n_days | Bonf | 定性 |"
+    )
     R.append("|---|---|---|---|---|---|---|---|---|---|---|---|")
     for gtype in TYPES:
         for n in WINDOWS:
@@ -211,8 +224,10 @@ def main() -> None:
             elif gtype == "衰竭":
                 lookahead = "✓无前视(不查filled)"
             nature = "continuation 预测力" if delta > 0 else ("反转倾向" if delta < 0 else "≈基线")
-            R.append(f"| {gtype} | {n}日 | {s['hit']}/{s['total']} | {rate:.1%} | "
-                     f"{base:.1%} | {delta:+.1%} | {z:+.2f} | {t_cl} | {p_cl} | {n_d} | {bf_s} | {nature} {lookahead} |")
+            R.append(
+                f"| {gtype} | {n}日 | {s['hit']}/{s['total']} | {rate:.1%} | "
+                f"{base:.1%} | {delta:+.1%} | {z:+.2f} | {t_cl} | {p_cl} | {n_d} | {bf_s} | {nature} {lookahead} |"
+            )
     R.append("")
 
     R.append("## 混淆矩阵分方向（n=5，predicted type × direction × outcome bucket）")
@@ -253,33 +268,44 @@ def main() -> None:
         delta5 = rate5 - baseline[5]
         cs5 = cluster_stats.get((gtype, 5))
         bf5 = bonf_p.get((gtype, 5))
-        t5 = (f"t={cs5.t_stat:+.2f}, p={cs5.p_one_sided:.4f}, Bonf={bf5:.4f}, n_days={cs5.n_days}"
-              if cs5 else "n/a")
+        t5 = f"t={cs5.t_stat:+.2f}, p={cs5.p_one_sided:.4f}, Bonf={bf5:.4f}, n_days={cs5.n_days}" if cs5 else "n/a"
         if gtype == "衰竭":
-            R.append(f"- **衰竭**（全表唯一无前视标签，最可信）：5 日 continuation {rate5:.1%} vs "
-                     f"普通基线 {baseline[5]:.1%}（delta {delta5:+.1%}, cluster-robust {t5}）→ **极性倒置正信号**"
-                     f"（continuation 预测力非 reversal，cluster-robust survive Bonferroni ✅）。"
-                     f"regime label\"反转\"疑误（该 continuation）。"
-                     f"正确动作：翻 regime 极性（反转→延续），非剔除出融合池。")
+            R.append(
+                f"- **衰竭**（全表唯一无前视标签，最可信）：5 日 continuation {rate5:.1%} vs "
+                f"普通基线 {baseline[5]:.1%}（delta {delta5:+.1%}, cluster-robust {t5}）→ **极性倒置正信号**"
+                f"（continuation 预测力非 reversal，cluster-robust survive Bonferroni ✅）。"
+                f'regime label"反转"疑误（该 continuation）。'
+                f"正确动作：翻 regime 极性（反转→延续），非剔除出融合池。"
+            )
         elif gtype == "突破":
-            R.append(f"- **突破**：5 日 continuation {rate5:.1%} vs 基线 {baseline[5]:.1%}"
-                     f"（delta {delta5:+.1%}, cluster-robust {t5}）→ 方向预测力 survive Bonferroni，但 3 日前视膨胀"
-                     f"+5/10 日部分污染+regime 依赖（1 月失效被 pooled 掩盖）。止于调研候选，"
-                     f"不进融合权重/图谱 codify。")
+            R.append(
+                f"- **突破**：5 日 continuation {rate5:.1%} vs 基线 {baseline[5]:.1%}"
+                f"（delta {delta5:+.1%}, cluster-robust {t5}）→ 方向预测力 survive Bonferroni，但 3 日前视膨胀"
+                f"+5/10 日部分污染+regime 依赖（1 月失效被 pooled 掩盖）。止于调研候选，"
+                f"不进融合权重/图谱 codify。"
+            )
         elif gtype == "持续":
-            R.append(f"- **持续**：5 日 continuation {rate5:.1%} vs 基线 {baseline[5]:.1%}"
-                     f"（delta {delta5:+.1%}, cluster-robust {t5}）→ 同突破，方向预测力 survive 但前视+regime 依赖，"
-                     f"止于调研候选。")
+            R.append(
+                f"- **持续**：5 日 continuation {rate5:.1%} vs 基线 {baseline[5]:.1%}"
+                f"（delta {delta5:+.1%}, cluster-robust {t5}）→ 同突破，方向预测力 survive 但前视+regime 依赖，"
+                f"止于调研候选。"
+            )
         elif gtype == "普通":
-            R.append(f"- **普通**（基线）：5 日 continuation {rate5:.1%}（exogenous 噪声基线，"
-                     f"均值回归倾向 {1-rate5:.1%} reversal；普通 cluster t self-referential vs 自身 baseline，忽略）。")
+            R.append(
+                f"- **普通**（基线）：5 日 continuation {rate5:.1%}（exogenous 噪声基线，"
+                f"均值回归倾向 {1 - rate5:.1%} reversal；普通 cluster t self-referential vs 自身 baseline，忽略）。"
+            )
     R.append("")
-    R.append("> 不阻断集成（spec R5=sanity 非 gate）。v3 已集成 day_clustered_t_test+Bonferroni-BH（cluster-robust，"
-             f"替代 v2 binomial z 的 case 不独立问题）；permutation_p_value 待后续（HIGH）。"
-             f"衰竭 cluster-robust survive Bonferroni ✅。")
-    R.append("> 不建议起\"剔除衰竭重测 S194\"新 spec——S194 no_contribution 真因是方向无关编码"
-             f"（GAP_REGIME_ENCODE 丢 direction）+ 常数权重，非衰竭。若重测应是\"方向感知编码+衰竭重标+"
-             f"multifactor null+regime 分拆\"连贯 spec。")
+    R.append(
+        "> 不阻断集成（spec R5=sanity 非 gate）。v3 已集成 day_clustered_t_test+Bonferroni-BH（cluster-robust，"
+        f"替代 v2 binomial z 的 case 不独立问题）；permutation_p_value 待后续（HIGH）。"
+        f"衰竭 cluster-robust survive Bonferroni ✅。"
+    )
+    R.append(
+        '> 不建议起"剔除衰竭重测 S194"新 spec——S194 no_contribution 真因是方向无关编码'
+        f'（GAP_REGIME_ENCODE 丢 direction）+ 常数权重，非衰竭。若重测应是"方向感知编码+衰竭重标+'
+        f'multifactor null+regime 分拆"连贯 spec。'
+    )
 
     R.append("")
     R.append("## 关联")

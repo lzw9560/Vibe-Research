@@ -8,6 +8,7 @@
 
 合规：不臆造（sti 无行 → missing）；快照落 .gitignored DB。
 """
+
 from __future__ import annotations
 
 import logging
@@ -29,9 +30,16 @@ def _get_conn() -> sqlite3.Connection:
 
 
 _TABLE_FIELDS = (
-    "date", "weather_state", "composite_score", "sti_score",
-    "risk_score", "sector_continuity", "capital_momentum",
-    "public_sentiment", "phase", "confidence",
+    "date",
+    "weather_state",
+    "composite_score",
+    "sti_score",
+    "risk_score",
+    "sector_continuity",
+    "capital_momentum",
+    "public_sentiment",
+    "phase",
+    "confidence",
 )
 
 
@@ -56,9 +64,7 @@ def save_weather_snapshot(row: dict[str, Any]) -> None:
 def get_weather_by_date(date: str) -> dict[str, Any] | None:
     conn = _get_conn()
     try:
-        row = conn.execute(
-            "SELECT * FROM weather_history WHERE date = ?", (date,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM weather_history WHERE date = ?", (date,)).fetchone()
         return dict(row) if row else None
     finally:
         conn.close()
@@ -68,9 +74,7 @@ def get_weather_history(days: int = 90) -> list[dict[str, Any]]:
     """近 N 天快照（date 降序）。"""
     conn = _get_conn()
     try:
-        rows = conn.execute(
-            "SELECT * FROM weather_history ORDER BY date DESC LIMIT ?", (days,)
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM weather_history ORDER BY date DESC LIMIT ?", (days,)).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()

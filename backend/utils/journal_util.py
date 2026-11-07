@@ -9,6 +9,7 @@ S166 fresh-impl（design-agnostic，非 vibe-astock 移植）：
 
 这三个函数被 journal / excursion / at_risk / risk_rules 共享（DRY），故提取到此。
 """
+
 from __future__ import annotations
 
 import datetime

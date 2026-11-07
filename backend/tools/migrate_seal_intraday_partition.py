@@ -54,9 +54,7 @@ def _old_table_exists(conn: sqlite3.Connection) -> bool:
 def _read_old_rows(conn: sqlite3.Connection) -> list[dict]:
     """读旧库 seal_intraday_snapshots 全量（dict 列）。"""
     conn.row_factory = sqlite3.Row
-    rows = conn.execute(
-        f"SELECT * FROM {OLD_TABLE}"
-    ).fetchall()
+    rows = conn.execute(f"SELECT * FROM {OLD_TABLE}").fetchall()
     return [dict(r) for r in rows]
 
 
@@ -82,9 +80,23 @@ def _bucket_rows(rows: list[dict]) -> dict[tuple[str, str], list[dict]]:
 
 def _insert_fields() -> list[str]:
     """分表 INSERT 字段（与 ensure_partition DDL 对齐，不含 id/created_at）。"""
-    return ["ts", "date", "code", "name", "pool", "price", "seal_amount",
-            "open_count", "first_seal_time", "consec_boards", "sector",
-            "float_market_cap", "index_5min_change", "low_price", "limit_pct"]
+    return [
+        "ts",
+        "date",
+        "code",
+        "name",
+        "pool",
+        "price",
+        "seal_amount",
+        "open_count",
+        "first_seal_time",
+        "consec_boards",
+        "sector",
+        "float_market_cap",
+        "index_5min_change",
+        "low_price",
+        "limit_pct",
+    ]
 
 
 def _write_bucket(db_path: str, table: str, rows: list[dict]) -> int:
@@ -117,7 +129,7 @@ def _count_new(buckets: dict[tuple[str, str], list[dict]]) -> int:
     total = 0
     # 按 db_path 聚合，每库开一次连接
     by_db: dict[str, list[str]] = defaultdict(list)
-    for (db_path, table) in buckets:
+    for db_path, table in buckets:
         if table not in by_db[db_path]:
             by_db[db_path].append(table)
     for db_path, tables in by_db.items():
@@ -130,6 +142,7 @@ def _count_new(buckets: dict[tuple[str, str], list[dict]]) -> int:
                     total += conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
                 except sqlite3.OperationalError as e:
                     import logging
+
                     logging.getLogger(__name__).debug("migrate 表不存在→0（幂等，不阻塞）: %s", e)
         finally:
             conn.close()
@@ -150,6 +163,7 @@ def _preserve_aux_tables(bak_path: str, new_main_db: str) -> dict[str, int]:
     # 1. 新主库 run_migrations 重建辅助表 schema（intraday_features /
     #    seal_derived_features / bomb_alert_history / migrations）
     from risk.seal_intraday_collector import run_migrations
+
     run_migrations()  # 写入 new_main_db（_DB_PATH 已指向它）
 
     # 2. 从 .bak 拷 bomb_alert_history 行（+ 防御性拷其他有行的辅助表）
@@ -197,9 +211,15 @@ def _rename_old_to_bak() -> str:
     return bak
 
 
-def _print_report(old_count: int, new_count: int | None, buckets: dict,
-                  date_min: str | None, date_max: str | None,
-                  dry_run: bool, bak_path: str | None) -> None:
+def _print_report(
+    old_count: int,
+    new_count: int | None,
+    buckets: dict,
+    date_min: str | None,
+    date_max: str | None,
+    dry_run: bool,
+    bak_path: str | None,
+) -> None:
     print("=" * 60)
     print("[migrate_seal_intraday_partition] 迁移报告")
     print("=" * 60)
@@ -227,8 +247,7 @@ def _print_report(old_count: int, new_count: int | None, buckets: dict,
 def main() -> int:
     parser = argparse.ArgumentParser(description="S089 C5: seal_intraday 历史数据迁移到分表分库")
     parser.add_argument("--dry-run", action="store_true", help="只打印不写")
-    parser.add_argument("--no-keep-old", action="store_true",
-                        help="不保留旧库 .bak（默认保留）")
+    parser.add_argument("--no-keep-old", action="store_true", help="不保留旧库 .bak（默认保留）")
     args = parser.parse_args()
 
     print(f"[migrate] PRIVATE_DATA_DIR={PRIVATE_DATA_DIR}")
@@ -268,8 +287,7 @@ def main() -> int:
 
     if args.dry_run:
         # dry-run 只统计、不写；行数一致标 N/A（未写 → new_count=0 不代表真失败）
-        _print_report(old_count, None, buckets, date_min, date_max,
-                      dry_run=True, bak_path=None)
+        _print_report(old_count, None, buckets, date_min, date_max, dry_run=True, bak_path=None)
         print("[migrate] dry-run 模式，未写入分表。")
         return 0
 
@@ -300,8 +318,7 @@ def main() -> int:
         else:
             print("[migrate] 辅助表无行需保留（新主库已重建空表）")
 
-    _print_report(old_count, new_count, buckets, date_min, date_max,
-                  dry_run=False, bak_path=bak_path)
+    _print_report(old_count, new_count, buckets, date_min, date_max, dry_run=False, bak_path=bak_path)
     return 0
 
 

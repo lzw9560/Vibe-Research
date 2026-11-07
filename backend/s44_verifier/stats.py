@@ -14,6 +14,7 @@ Sources merged:
 - walk-forward: ``platform_breakout_lift.py:179`` (train=100/test=20/step=20) +
   ``low_absorption_c3_lift.py:170`` + ``multifactor_combo_test.py`` (LODO/expanding)
 """
+
 from __future__ import annotations
 
 import math
@@ -26,12 +27,12 @@ import numpy as np
 from scipy import stats as sp_stats
 
 # ── constants (merged from sources) ──────────────────────────────────────────
-_N_PERM_DEFAULT = 500          # pead_event_study.py N_PERM
-_PERM_SEED_DEFAULT = 42        # pead_event_study.py PERM_SEED
-_WALK_TRAIN_DEFAULT = 100      # platform_breakout_lift.py WALK_TRAIN
-_WALK_TEST_DEFAULT = 20        # platform_breakout_lift.py WALK_TEST
-_WALK_STEP_DEFAULT = 20        # platform_breakout_lift.py WALK_STEP
-_MAX_BONFERRONI_K = 8          # §44v2: cap K at 8, NEVER K=20 (v1 over-correction)
+_N_PERM_DEFAULT = 500  # pead_event_study.py N_PERM
+_PERM_SEED_DEFAULT = 42  # pead_event_study.py PERM_SEED
+_WALK_TRAIN_DEFAULT = 100  # platform_breakout_lift.py WALK_TRAIN
+_WALK_TEST_DEFAULT = 20  # platform_breakout_lift.py WALK_TEST
+_WALK_STEP_DEFAULT = 20  # platform_breakout_lift.py WALK_STEP
+_MAX_BONFERRONI_K = 8  # §44v2: cap K at 8, NEVER K=20 (v1 over-correction)
 
 #: Minimum net-of-cost day-mean to distinguish "robust" from "thin positive"
 #: (spec S161 §3 line 83: mean>0 not mean>0.3%; 0.003 = 0.3% floor). Callers
@@ -173,16 +174,21 @@ def day_clustered_t_test(
     if day_std == 0:
         if overall_day_mean > 0:
             return DayClusteredTResult(
-                t_stat=float("inf"), p_one_sided=0.0,
-                n_days=n_days, day_mean=overall_day_mean, day_std=day_std,
+                t_stat=float("inf"),
+                p_one_sided=0.0,
+                n_days=n_days,
+                day_mean=overall_day_mean,
+                day_std=day_std,
             )
         return DayClusteredTResult(
             t_stat=0.0 if overall_day_mean == 0 else float("-inf"),
             p_one_sided=1.0,
-            n_days=n_days, day_mean=overall_day_mean, day_std=day_std,
+            n_days=n_days,
+            day_mean=overall_day_mean,
+            day_std=day_std,
         )
 
-    se = day_std / (n_days ** 0.5)
+    se = day_std / (n_days**0.5)
     t_stat = overall_day_mean / se
     p_one_sided = 1.0 - float(sp_stats.t.cdf(t_stat, df=n_days - 1))
 
@@ -218,12 +224,14 @@ def day_paired_lift(
         r_wr = _winrate(r)
         s_mean = statistics.mean(s)
         r_mean = statistics.mean(r)
-        day_lifts.append({
-            "surv_n": len(s),
-            "raw_n": len(r),
-            "winrate_lift": s_wr / r_wr if r_wr > 0 else None,
-            "mean_lift": s_mean / r_mean if r_mean != 0 else None,
-        })
+        day_lifts.append(
+            {
+                "surv_n": len(s),
+                "raw_n": len(r),
+                "winrate_lift": s_wr / r_wr if r_wr > 0 else None,
+                "mean_lift": s_mean / r_mean if r_mean != 0 else None,
+            }
+        )
     wr_lifts = [d["winrate_lift"] for d in day_lifts if d["winrate_lift"] is not None]
     m_lifts = [d["mean_lift"] for d in day_lifts if d["mean_lift"] is not None]
     return DayPairedResult(
@@ -528,11 +536,7 @@ def chronological_holdout_event_check(
     # train day-mean (reference / drift comparison — NOT gated, for reporting)
     train_returns = r_arr[mask_train]
     train_dates_arr = d_arr[mask_train]
-    train_res = (
-        day_clustered_t_test(train_returns, train_dates_arr)
-        if len(train_returns) > 0
-        else None
-    )
+    train_res = day_clustered_t_test(train_returns, train_dates_arr) if len(train_returns) > 0 else None
     train_day_mean = train_res.day_mean if train_res else None
 
     test_returns = r_arr[mask_test]
@@ -572,22 +576,22 @@ def chronological_holdout_event_check(
     if test_day_mean > floor and test_p < 0.05:
         decision = "oos_supporting"
         note = (
-            f"test third mean={test_day_mean*100:.2f}% > floor={floor*100:.2f}% "
+            f"test third mean={test_day_mean * 100:.2f}% > floor={floor * 100:.2f}% "
             f"AND p={test_p:.4f}<0.05 -> survives unseen data (within-regime "
             f"only, provisional; NOT x1.0 until cross-regime replication)"
         )
     elif test_day_mean < 0 and test_p > 0.95:
         decision = "strong_negative"
         note = (
-            f"test third mean={test_day_mean*100:.2f}% < 0 AND "
+            f"test third mean={test_day_mean * 100:.2f}% < 0 AND "
             f"p={test_p:.4f}>0.95 -> reversed on held-out data (warning; "
             f"NOT formal falsify until powered test, stage 2)"
         )
     else:
         decision = "inconclusive"
         note = (
-            f"test third mean={test_day_mean*100:.2f}%, p={test_p:.4f}, "
-            f"floor={floor*100:.2f}% -> cannot tell from n_test_days="
+            f"test third mean={test_day_mean * 100:.2f}%, p={test_p:.4f}, "
+            f"floor={floor * 100:.2f}% -> cannot tell from n_test_days="
             f"{test_res.n_days}; stay x0.5, pursue backfill (S214), "
             f"do NOT falsify"
         )

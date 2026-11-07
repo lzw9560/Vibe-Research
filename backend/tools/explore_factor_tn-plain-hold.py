@@ -28,6 +28,7 @@ build_picks_generic 只载 T+1/T+2, 本脚本 enrich T+3/T+4 bar.
   .venv/bin/python tools/explore_factor_tn-plain-hold.py
   (hyphen 文件名不可 -m, 用文件路径跑)
 """
+
 from __future__ import annotations
 
 import sys
@@ -56,9 +57,8 @@ from tools._factor_helpers import (  # noqa: E402  DRY: 禁复制 helper 代码
 
 # ---------- T+3/T+4 enrichment (build_picks_generic 只载 T+1/T+2) ----------
 
-def enrich_tn(picks: list[dict],
-              code_map: dict[str, dict[str, dict]],
-              calendar: list[str]) -> list[dict]:
+
+def enrich_tn(picks: list[dict], code_map: dict[str, dict[str, dict]], calendar: list[str]) -> list[dict]:
     """给每个 pick 加 t3_bar / t4_bar (T+3 / T+4 bars).
 
     build_picks_generic 只载 T+1/T+2 (d_idx+2 < len 检查).
@@ -95,16 +95,14 @@ def enrich_tn(picks: list[dict],
             n_dropped += 1
             continue
         # immutable: 新 dict 不改原 p
-        p2 = {**p,
-              "t3_date": t3_date, "t4_date": t4_date,
-              "t3_bar": t3_bar, "t4_bar": t4_bar}
+        p2 = {**p, "t3_date": t3_date, "t4_date": t4_date, "t3_bar": t3_bar, "t4_bar": t4_bar}
         enriched.append(p2)
-    print(f"  enrich: {len(picks)} → {len(enriched)} picks "
-          f"(dropped {n_dropped} 缺 T+3/T+4 bar)")
+    print(f"  enrich: {len(picks)} → {len(enriched)} picks (dropped {n_dropped} 缺 T+3/T+4 bar)")
     return enriched
 
 
 # ---------- close_ev_tn (factor-specific ret_fn) ----------
+
 
 def close_ev_tn(p: dict, n: int) -> float | None:
     """T+1 open 买 → T+N close 卖 (N=2/3/4). 无 stop 无 trailing.
@@ -133,6 +131,7 @@ def make_ret_fn(n: int):
 
 
 # ---------- main ----------
+
 
 def main() -> None:
     print("=" * 70)
@@ -164,9 +163,10 @@ def main() -> None:
     for n in ns:
         name = f"N={n} (T+{n} close)"
         r = analyze_subset(
-            name, picks,
+            name,
+            picks,
             ret_fn_basic=make_ret_fn(n),
-            ret_fn_stop=None,        # plain hold 无 stop → 无 stop variant
+            ret_fn_stop=None,  # plain hold 无 stop → 无 stop variant
             ret_fn_label=f"close_ev_t+{n}",
         )
         results.append((n, picks, r))
@@ -195,58 +195,70 @@ def main() -> None:
         net_ev = ev_gross - COST * 100
         wf = r.get("wf_basic", {})
         wf_status = wf.get("status", "no_picks")
-        wf_train_ev = (wf.get("train_ev", {}).get("ev", 0.0)
-                       if wf_status == "ok" else 0.0)
-        wf_test_ev = (wf.get("test_ev", {}).get("ev", 0.0)
-                      if wf_status == "ok" else 0.0)
-        wf_test_t = (wf.get("test_day_t", {}).get("t", 0.0)
-                     if wf_status == "ok" else 0.0)
-        wf_test_p = (wf.get("test_day_t", {}).get("p_one_sided", 1.0)
-                     if wf_status == "ok" else 1.0)
+        wf_train_ev = wf.get("train_ev", {}).get("ev", 0.0) if wf_status == "ok" else 0.0
+        wf_test_ev = wf.get("test_ev", {}).get("ev", 0.0) if wf_status == "ok" else 0.0
+        wf_test_t = wf.get("test_day_t", {}).get("t", 0.0) if wf_status == "ok" else 0.0
+        wf_test_p = wf.get("test_day_t", {}).get("p_one_sided", 1.0) if wf_status == "ok" else 1.0
         v = verdict_for(
-            ev_gross, t_day, p_raw, wf_status, wf_train_ev,
-            wf_test_ev, wf_test_p, n_days, net_ev, name,
+            ev_gross,
+            t_day,
+            p_raw,
+            wf_status,
+            wf_train_ev,
+            wf_test_ev,
+            wf_test_p,
+            n_days,
+            net_ev,
+            name,
             n_cross_factor=6,  # ×12 = 6 factors × 2 subsets
         )
         verdicts.append(v)
-        summary_rows.append({
-            "name": name, "n": n,
-            "n_picks": len(picks),
-            "n_days": n_days,
-            "ev_gross": ev_gross,
-            "net_ev": round(net_ev, 3),
-            "t_day": t_day,
-            "p_raw": p_raw,
-            "bonf_x12": bonferroni_p(p_raw, 12),
-            "wf_status": wf_status,
-            "wf_train_ev": wf_train_ev,
-            "wf_test_ev": wf_test_ev,
-            "wf_test_t": wf_test_t,
-            "wf_test_p": wf_test_p,
-            "verdict": v,
-        })
+        summary_rows.append(
+            {
+                "name": name,
+                "n": n,
+                "n_picks": len(picks),
+                "n_days": n_days,
+                "ev_gross": ev_gross,
+                "net_ev": round(net_ev, 3),
+                "t_day": t_day,
+                "p_raw": p_raw,
+                "bonf_x12": bonferroni_p(p_raw, 12),
+                "wf_status": wf_status,
+                "wf_train_ev": wf_train_ev,
+                "wf_test_ev": wf_test_ev,
+                "wf_test_t": wf_test_t,
+                "wf_test_p": wf_test_p,
+                "verdict": v,
+            }
+        )
 
     # ---- summary table ----
     print(f"\n{'=' * 70}")
     print("汇总表 (tn-plain-hold 三 holding-period 子集, 同一 pick 集)")
     print(f"{'=' * 70}")
-    print(f"  {'subset':<16} {'n':>6} {'days':>5} {'gross%':>8} {'net%':>7} "
-          f"{'day_t':>6} {'p_raw':>8} {'Bonf×12':>8} {'wf_tr%':>7} "
-          f"{'wf_te%':>7} {'verdict':<14}")
+    print(
+        f"  {'subset':<16} {'n':>6} {'days':>5} {'gross%':>8} {'net%':>7} "
+        f"{'day_t':>6} {'p_raw':>8} {'Bonf×12':>8} {'wf_tr%':>7} "
+        f"{'wf_te%':>7} {'verdict':<14}"
+    )
     for s in summary_rows:
         if s.get("verdict") == "no-data":
-            print(f"  {s['name']:<16} {'-':>6} {'-':>5} {'-':>8} {'-':>7} "
-                  f"{'-':>6} {'-':>8} {'-':>8} {'-':>7} {'-':>7} no-data")
+            print(
+                f"  {s['name']:<16} {'-':>6} {'-':>5} {'-':>8} {'-':>7} "
+                f"{'-':>6} {'-':>8} {'-':>8} {'-':>7} {'-':>7} no-data"
+            )
             continue
-        print(f"  {s['name']:<16} {s['n_picks']:>6} {s['n_days']:>5} "
-              f"{s['ev_gross']:>8} {s['net_ev']:>7} {s['t_day']:>6} "
-              f"{s['p_raw']:>8} {s['bonf_x12']:>8} {s['wf_train_ev']:>7} "
-              f"{s['wf_test_ev']:>7} {s['verdict']:<14}")
+        print(
+            f"  {s['name']:<16} {s['n_picks']:>6} {s['n_days']:>5} "
+            f"{s['ev_gross']:>8} {s['net_ev']:>7} {s['t_day']:>6} "
+            f"{s['p_raw']:>8} {s['bonf_x12']:>8} {s['wf_train_ev']:>7} "
+            f"{s['wf_test_ev']:>7} {s['verdict']:<14}"
+        )
 
     # trend analysis: N=2 → N=3 → N=4 EV trajectory
     print(f"\n--- holding-period 趋势 (N=2 → N=3 → N=4) ---")
-    evs = {s["n"]: s.get("ev_gross") for s in summary_rows
-           if s.get("verdict") != "no-data"}
+    evs = {s["n"]: s.get("ev_gross") for s in summary_rows if s.get("verdict") != "no-data"}
     if len(evs) >= 2:
         n2, n3, n4 = evs.get(2), evs.get(3), evs.get(4)
         print(f"  N=2: {n2}%  →  N=3: {n3}%  →  N=4: {n4}%")
@@ -275,14 +287,13 @@ def main() -> None:
         overall = "edge-falsified"
     print(f"\n  OVERALL (tn-plain-hold factor): {overall}")
 
-    print(f"\n注: 本实验只测 plain hold holding-period 维度 (N=2/3/4), "
-          f"禁止外推成'打板有/无 edge'。")
-    print(f"R6: plain hold 无 stop → R6 gap-through fill N/A "
-          f"(r6_fill_applied=False)。")
-    print(f"realistic entry: T+1 open (非 T+1 close), 一字涨停跳过 "
-          f"(limit_for_code FIXED 2026-10-06)。")
-    print(f"Bonferroni: cross-factor ×12 (6 factors × 2 subsets); "
-          f"本因子 3 子集 full correction 应 ×18, 按跨因子标准 ×12 报告。")
+    print(f"\n注: 本实验只测 plain hold holding-period 维度 (N=2/3/4), 禁止外推成'打板有/无 edge'。")
+    print(f"R6: plain hold 无 stop → R6 gap-through fill N/A (r6_fill_applied=False)。")
+    print(f"realistic entry: T+1 open (非 T+1 close), 一字涨停跳过 (limit_for_code FIXED 2026-10-06)。")
+    print(
+        f"Bonferroni: cross-factor ×12 (6 factors × 2 subsets); "
+        f"本因子 3 子集 full correction 应 ×18, 按跨因子标准 ×12 报告。"
+    )
     print(f"同一 pick 集跑 N=2/3/4 (apples-to-apples, 不因缺 T+3/T+4 偏差).")
 
 

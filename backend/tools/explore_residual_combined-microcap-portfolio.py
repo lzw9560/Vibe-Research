@@ -26,6 +26,7 @@
   cd /Users/lizhiwei/project/code/stock/Vibe-Research/backend
   .venv/bin/python tools/explore_residual_combined-microcap-portfolio.py
 """
+
 from __future__ import annotations
 import json
 import sys
@@ -38,9 +39,15 @@ import statsmodels.api as sm
 # import shared infrastructure (DRY)
 sys.path.insert(0, str(Path(__file__).parent))
 from build_factor_baselines import (  # noqa: E402
-    DATA, LIQ_AMT_FLOOR, MIN_DECILE_STOCKS,
-    scan_kline_dates, load_calendar_and_index, load_panels,
-    daily_returns, month_end_dates, form_decile_legs,
+    DATA,
+    LIQ_AMT_FLOOR,
+    MIN_DECILE_STOCKS,
+    scan_kline_dates,
+    load_calendar_and_index,
+    load_panels,
+    daily_returns,
+    month_end_dates,
+    form_decile_legs,
 )
 from _factor_helpers import bonferroni_p, norm_sf_positive  # noqa: E402
 
@@ -50,12 +57,13 @@ FACTOR_BASELINES = DATA / "factor_baselines.json"
 VOL_DAYS = 20
 ROLLING_WINDOW = 60
 ALPHA_LEVEL = 0.05
-N_BONF = 4          # 4 strategies in parallel (cross-strategy Bonferroni)
-REGIME_BULL = 0.03   # 60d cumulative market return > 3% = bull
+N_BONF = 4  # 4 strategies in parallel (cross-strategy Bonferroni)
+REGIME_BULL = 0.03  # 60d cumulative market return > 3% = bull
 REGIME_BEAR = -0.03  # < -3% = bear
 
 
 # ---------- load factor baselines ----------
+
 
 def load_baselines() -> dict:
     """Load mkt, SMB, UMD daily series from factor_baselines.json."""
@@ -65,8 +73,10 @@ def load_baselines() -> dict:
 
 # ---------- build low-vol daily factor series ----------
 
-def build_lowvol_series(close: np.ndarray, amount: np.ndarray, ret: np.ndarray,
-                        calendar: list[str], rebal_idx: list[int]) -> dict[str, float]:
+
+def build_lowvol_series(
+    close: np.ndarray, amount: np.ndarray, ret: np.ndarray, calendar: list[str], rebal_idx: list[int]
+) -> dict[str, float]:
     """Low-vol daily returns: month-end rebalance, 20d return std signal.
 
     long = bottom decile (LOW volatility, low-volatility anomaly)
@@ -80,24 +90,29 @@ def build_lowvol_series(close: np.ndarray, amount: np.ndarray, ret: np.ndarray,
             continue
 
         # 20d return std (no look-ahead: uses ret up to formation day ri inclusive)
-        vol_window = ret[:, ri - VOL_DAYS + 1: ri + 1]   # [nc, 20]
+        vol_window = ret[:, ri - VOL_DAYS + 1 : ri + 1]  # [nc, 20]
         n_valid = np.sum(np.isfinite(vol_window), axis=1)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
             vol = np.full(close.shape[0], np.nan)
-            mask_vol = n_valid >= VOL_DAYS // 2   # at least 10/20 valid
+            mask_vol = n_valid >= VOL_DAYS // 2  # at least 10/20 valid
             vol[mask_vol] = np.nanstd(vol_window[mask_vol], axis=1, ddof=1)
 
         # liquidity filter (same as SMB): 20d mean amount >= floor + formation amount > 0
-        amt_window = amount[:, ri - VOL_DAYS + 1: ri + 1]
+        amt_window = amount[:, ri - VOL_DAYS + 1 : ri + 1]
         finite_mask = np.isfinite(amt_window)
         finite_cnt = finite_mask.sum(axis=1)
         finite_sum = np.where(finite_mask, amt_window, 0.0).sum(axis=1)
         mean_amt = np.where(finite_cnt > 0, finite_sum / np.maximum(finite_cnt, 1), np.nan)
         form_amt = amount[:, ri]
-        elig = (np.isfinite(vol) & (vol > 0)
-                & np.isfinite(mean_amt) & (mean_amt >= LIQ_AMT_FLOOR)
-                & np.isfinite(form_amt) & (form_amt > 0))
+        elig = (
+            np.isfinite(vol)
+            & (vol > 0)
+            & np.isfinite(mean_amt)
+            & (mean_amt >= LIQ_AMT_FLOOR)
+            & np.isfinite(form_amt)
+            & (form_amt > 0)
+        )
 
         signal = np.full(close.shape[0], np.nan)
         signal[elig] = vol[elig]
@@ -122,6 +137,7 @@ def build_lowvol_series(close: np.ndarray, amount: np.ndarray, ret: np.ndarray,
 
 # ---------- OLS with NW-HAC SE ----------
 
+
 def ols_hac(y: np.ndarray, X: np.ndarray, maxlags: int | None = None):
     """OLS with Newey-West HAC SE (Bartlett kernel).
 
@@ -137,8 +153,7 @@ def ols_hac(y: np.ndarray, X: np.ndarray, maxlags: int | None = None):
     return model.fit(cov_type="HAC", cov_kwds={"maxlags": maxlags})
 
 
-def regression_report(y: np.ndarray, factors: np.ndarray, factor_names: list[str],
-                      label: str = "") -> dict:
+def regression_report(y: np.ndarray, factors: np.ndarray, factor_names: list[str], label: str = "") -> dict:
     """Run OLS regression and report alpha + factor loadings."""
     # drop nan rows
     mask = np.isfinite(y) & np.all(np.isfinite(factors), axis=1)
@@ -147,8 +162,14 @@ def regression_report(y: np.ndarray, factors: np.ndarray, factor_names: list[str
     n = len(y_c)
     if n < 20:
         print(f"  [{label}] n={n} < 20, underpowered")
-        return {"label": label, "n": n, "alpha_pct": 0.0, "alpha_t": 0.0,
-                "alpha_p_one_sided": 1.0, "verdict": "underpowered"}
+        return {
+            "label": label,
+            "n": n,
+            "alpha_pct": 0.0,
+            "alpha_t": 0.0,
+            "alpha_p_one_sided": 1.0,
+            "verdict": "underpowered",
+        }
 
     r = ols_hac(y_c, X_c)
     alpha = float(r.params[0])
@@ -158,8 +179,7 @@ def regression_report(y: np.ndarray, factors: np.ndarray, factor_names: list[str
     p_one = norm_sf_positive(alpha_t)
 
     print(f"\n  [{label}] n={n}")
-    print(f"    alpha = {alpha*100:.4f}%/period  (SE {alpha_se*100:.4f}%, "
-          f"NW t = {alpha_t:.3f})")
+    print(f"    alpha = {alpha * 100:.4f}%/period  (SE {alpha_se * 100:.4f}%, NW t = {alpha_t:.3f})")
     print(f"    p_one_sided = {p_one:.6f}  p_two_sided = {alpha_p_two:.6f}")
 
     betas: dict[str, dict] = {}
@@ -173,7 +193,8 @@ def regression_report(y: np.ndarray, factors: np.ndarray, factor_names: list[str
     print(f"    R² = {r.rsquared:.4f}")
 
     return {
-        "label": label, "n": n,
+        "label": label,
+        "n": n,
         "alpha_pct": round(alpha * 100, 4),
         "alpha_se_pct": round(alpha_se * 100, 4),
         "alpha_t": round(alpha_t, 3),
@@ -186,16 +207,16 @@ def regression_report(y: np.ndarray, factors: np.ndarray, factor_names: list[str
 
 # ---------- rolling 60-day alpha stability ----------
 
-def rolling_alpha(y: np.ndarray, mkt: np.ndarray, dates: list[str],
-                   window: int = ROLLING_WINDOW) -> dict:
+
+def rolling_alpha(y: np.ndarray, mkt: np.ndarray, dates: list[str], window: int = ROLLING_WINDOW) -> dict:
     """60-day rolling alpha from mkt-only OLS (simple OLS for speed, no HAC per window)."""
     alphas: list[float] = []
     alpha_ts: list[float] = []
     roll_dates: list[str] = []
     n = len(y)
     for i in range(window, n + 1):
-        y_w = y[i - window:i]
-        m_w = mkt[i - window:i]
+        y_w = y[i - window : i]
+        m_w = mkt[i - window : i]
         # simple OLS: y = a + b*m + e
         X = np.column_stack([np.ones(window), m_w])
         try:
@@ -204,7 +225,7 @@ def rolling_alpha(y: np.ndarray, mkt: np.ndarray, dates: list[str],
             df = window - 2
             if df <= 0:
                 continue
-            sigma2 = float(np.sum(resid ** 2) / df)
+            sigma2 = float(np.sum(resid**2) / df)
             XtX_inv = np.linalg.inv(X.T @ X)
             se_a = float(np.sqrt(sigma2 * XtX_inv[0, 0]))
             a = float(beta[0])
@@ -225,9 +246,9 @@ def rolling_alpha(y: np.ndarray, mkt: np.ndarray, dates: list[str],
 
     print(f"\n  rolling {window}d alpha stability:")
     print(f"    n_windows = {len(arr)}")
-    print(f"    mean alpha = {arr.mean()*100:.4f}%  std = {arr.std()*100:.4f}%")
+    print(f"    mean alpha = {arr.mean() * 100:.4f}%  std = {arr.std() * 100:.4f}%")
     print(f"    % positive = {pct_pos:.1f}%  % significant(t>2) = {pct_sig:.1f}%")
-    print(f"    range: [{arr.min()*100:.4f}%, {arr.max()*100:.4f}%]")
+    print(f"    range: [{arr.min() * 100:.4f}%, {arr.max() * 100:.4f}%]")
 
     return {
         "n_windows": len(arr),
@@ -242,14 +263,14 @@ def rolling_alpha(y: np.ndarray, mkt: np.ndarray, dates: list[str],
 
 # ---------- regime breakdown ----------
 
-def classify_regimes(mkt_returns: np.ndarray, dates: list[str],
-                     window: int = ROLLING_WINDOW) -> dict[str, str]:
+
+def classify_regimes(mkt_returns: np.ndarray, dates: list[str], window: int = ROLLING_WINDOW) -> dict[str, str]:
     """Classify each date as bull/bear/range based on 60d cumulative market return."""
     n = len(mkt_returns)
     regimes: dict[str, str] = {}
     for i in range(n):
         start = max(0, i - window + 1)
-        chunk = mkt_returns[start:i + 1]
+        chunk = mkt_returns[start : i + 1]
         chunk = chunk[np.isfinite(chunk)]
         cum = float(np.prod(1.0 + chunk) - 1.0) if len(chunk) > 0 else 0.0
         if cum > REGIME_BULL:
@@ -261,8 +282,7 @@ def classify_regimes(mkt_returns: np.ndarray, dates: list[str],
     return regimes
 
 
-def regime_breakdown_analysis(y: np.ndarray, mkt: np.ndarray,
-                              dates: list[str], regimes: dict[str, str]) -> dict:
+def regime_breakdown_analysis(y: np.ndarray, mkt: np.ndarray, dates: list[str], regimes: dict[str, str]) -> dict:
     """Run mkt-only regression within each regime."""
     results: dict[str, dict] = {}
     for regime in ["bull", "bear", "range"]:
@@ -279,7 +299,7 @@ def regime_breakdown_analysis(y: np.ndarray, mkt: np.ndarray,
         a_t = float(r.tvalues[0])
         p_one = norm_sf_positive(a_t)
         print(f"\n  [{regime}] n={n_r}")
-        print(f"    alpha = {a*100:.4f}%  (NW t = {a_t:.3f}, p_one = {p_one:.6f})")
+        print(f"    alpha = {a * 100:.4f}%  (NW t = {a_t:.3f}, p_one = {p_one:.6f})")
         print(f"    beta_mkt = {float(r.params[1]):.4f}")
         results[regime] = {
             "n": n_r,
@@ -292,6 +312,7 @@ def regime_breakdown_analysis(y: np.ndarray, mkt: np.ndarray,
 
 
 # ---------- BH FDR ----------
+
 
 def bh_fdr_adjust(pvals: list[float]) -> list[float]:
     """Benjamini-Hochberg FDR adjusted p-values."""
@@ -309,6 +330,7 @@ def bh_fdr_adjust(pvals: list[float]) -> list[float]:
 
 
 # ---------- main ----------
+
 
 def main() -> int:
     # 1. Load factor baselines
@@ -334,8 +356,7 @@ def main() -> int:
 
     # 3. Align all series on common dates
     common = sorted(set(mkt_s) & set(smb_s) & set(umd_s) & set(lowvol_s))
-    print(f"\n==> aligned (mkt ∩ SMB ∩ UMD ∩ lowvol): {len(common)}d  "
-          f"{common[0]}~{common[-1]}")
+    print(f"\n==> aligned (mkt ∩ SMB ∩ UMD ∩ lowvol): {len(common)}d  {common[0]}~{common[-1]}")
 
     mkt = np.array([mkt_s[d] for d in common])
     smb = np.array([smb_s[d] for d in common])
@@ -348,17 +369,16 @@ def main() -> int:
 
     mean_c = float(r_combo.mean())
     std_c = float(r_combo.std(ddof=1))
-    sharpe_c = mean_c / std_c * (252 ** 0.5) if std_c > 0 else 0.0
+    sharpe_c = mean_c / std_c * (252**0.5) if std_c > 0 else 0.0
     wr_c = float((r_combo > 0).mean() * 100)
     corr_sl = float(np.corrcoef(smb, lowvol)[0, 1])
 
-    print(f"\n{'='*72}")
+    print(f"\n{'=' * 72}")
     print(f"combined-microcap-portfolio = 0.5*SMB + 0.5*lowvol")
-    print(f"{'='*72}")
+    print(f"{'=' * 72}")
     print(f"  n_days = {n_days}")
-    print(f"  mean = {mean_c*100:.4f}%/d  std = {std_c*100:.4f}%/d  "
-          f"Sharpe = {sharpe_c:.4f}  WR = {wr_c:.1f}%")
-    print(f"  SMB mean = {smb.mean()*100:.4f}%/d  lowvol mean = {lowvol.mean()*100:.4f}%/d")
+    print(f"  mean = {mean_c * 100:.4f}%/d  std = {std_c * 100:.4f}%/d  Sharpe = {sharpe_c:.4f}  WR = {wr_c:.1f}%")
+    print(f"  SMB mean = {smb.mean() * 100:.4f}%/d  lowvol mean = {lowvol.mean() * 100:.4f}%/d")
     print(f"  corr(SMB, lowvol) = {corr_sl:.4f}")
     if abs(corr_sl) > 0.5:
         print(f"  [!] SMB 与 lowvol 强相关 (|r|>0.5) -> 非独立, 组合可能无增量 alpha")
@@ -368,45 +388,42 @@ def main() -> int:
         print(f"  SMB 与 lowvol 弱相关 (|r|<0.3) -> 较独立, 组合可能有增量 alpha")
 
     # 5. Primary regression: r_combo ~ mkt (simplified, per task)
-    print(f"\n{'='*72}")
+    print(f"\n{'=' * 72}")
     print(f"PRIMARY: r_combo = alpha + beta_mkt*r_mkt + residual")
-    print(f"{'='*72}")
+    print(f"{'=' * 72}")
     primary = regression_report(r_combo, mkt.reshape(-1, 1), ["mkt"], "mkt-only")
 
     # 6. Multi-factor regression: r_combo ~ mkt + SMB + UMD
-    print(f"\n{'='*72}")
+    print(f"\n{'=' * 72}")
     print(f"MULTI-FACTOR: r_combo = alpha + beta_mkt*mkt + beta_smb*SMB + beta_umd*UMD + residual")
-    print(f"{'='*72}")
+    print(f"{'=' * 72}")
     X_multi = np.column_stack([mkt, smb, umd])
     multi = regression_report(r_combo, X_multi, ["mkt", "smb", "umd"], "3-factor")
 
     # 7. Alternate baseline sensitivity
-    print(f"\n{'='*72}")
+    print(f"\n{'=' * 72}")
     print(f"ALTERNATE BASELINE SENSITIVITY")
-    print(f"{'='*72}")
-    sens_a = regression_report(r_combo, np.column_stack([mkt, smb]),
-                               ["mkt", "smb"], "mkt+SMB")
-    sens_b = regression_report(r_combo, np.column_stack([mkt, umd]),
-                               ["mkt", "umd"], "mkt+UMD")
+    print(f"{'=' * 72}")
+    sens_a = regression_report(r_combo, np.column_stack([mkt, smb]), ["mkt", "smb"], "mkt+SMB")
+    sens_b = regression_report(r_combo, np.column_stack([mkt, umd]), ["mkt", "umd"], "mkt+UMD")
 
     sens_summary = {
-        "mkt_only":      {"alpha_pct": primary["alpha_pct"], "alpha_t": primary["alpha_t"]},
-        "mkt_smb":       {"alpha_pct": sens_a["alpha_pct"], "alpha_t": sens_a["alpha_t"]},
-        "mkt_umd":       {"alpha_pct": sens_b["alpha_pct"], "alpha_t": sens_b["alpha_t"]},
-        "mkt_smb_umd":   {"alpha_pct": multi["alpha_pct"], "alpha_t": multi["alpha_t"]},
+        "mkt_only": {"alpha_pct": primary["alpha_pct"], "alpha_t": primary["alpha_t"]},
+        "mkt_smb": {"alpha_pct": sens_a["alpha_pct"], "alpha_t": sens_a["alpha_t"]},
+        "mkt_umd": {"alpha_pct": sens_b["alpha_pct"], "alpha_t": sens_b["alpha_t"]},
+        "mkt_smb_umd": {"alpha_pct": multi["alpha_pct"], "alpha_t": multi["alpha_t"]},
     }
 
     # 8. Rolling 60-day alpha stability (mkt-only)
-    print(f"\n{'='*72}")
+    print(f"\n{'=' * 72}")
     print(f"ROLLING {ROLLING_WINDOW}-DAY ALPHA STABILITY (mkt-only)")
-    print(f"{'='*72}")
+    print(f"{'=' * 72}")
     rolling = rolling_alpha(r_combo, mkt, common, ROLLING_WINDOW)
 
     # 9. Regime breakdown
-    print(f"\n{'='*72}")
-    print(f"REGIME BREAKDOWN (60d cum mkt: bull>{REGIME_BULL*100}%, "
-          f"bear<{REGIME_BEAR*100}%)")
-    print(f"{'='*72}")
+    print(f"\n{'=' * 72}")
+    print(f"REGIME BREAKDOWN (60d cum mkt: bull>{REGIME_BULL * 100}%, bear<{REGIME_BEAR * 100}%)")
+    print(f"{'=' * 72}")
     regimes = classify_regimes(mkt, common, ROLLING_WINDOW)
     rdist = {}
     for d in common:
@@ -416,28 +433,33 @@ def main() -> int:
     regime_res = regime_breakdown_analysis(r_combo, mkt, common, regimes)
 
     # 10. Bonferroni + BH FDR
-    print(f"\n{'='*72}")
+    print(f"\n{'=' * 72}")
     print(f"MULTIPLE TESTING CORRECTION")
-    print(f"{'='*72}")
+    print(f"{'=' * 72}")
     p_raw = primary["alpha_p_one_sided"]
     p_bonf = bonferroni_p(p_raw, N_BONF)
     print(f"  primary (mkt-only) alpha: p_one = {p_raw:.6f}")
-    print(f"  Bonferroni x{N_BONF} = {p_bonf:.6f}  "
-          f"({'PASS' if p_bonf < ALPHA_LEVEL else 'FAIL'} at a={ALPHA_LEVEL})")
+    print(f"  Bonferroni x{N_BONF} = {p_bonf:.6f}  ({'PASS' if p_bonf < ALPHA_LEVEL else 'FAIL'} at a={ALPHA_LEVEL})")
 
-    p_list = [primary["alpha_p_one_sided"], sens_a["alpha_p_one_sided"],
-              sens_b["alpha_p_one_sided"], multi["alpha_p_one_sided"]]
+    p_list = [
+        primary["alpha_p_one_sided"],
+        sens_a["alpha_p_one_sided"],
+        sens_b["alpha_p_one_sided"],
+        multi["alpha_p_one_sided"],
+    ]
     bh_adj = bh_fdr_adjust(p_list)
     bh_labels = ["mkt_only", "mkt_smb", "mkt_umd", "mkt_smb_umd"]
     print(f"  BH FDR sensitivity (across {len(p_list)} baseline combos):")
     for i, lab in enumerate(bh_labels):
-        print(f"    {lab}: raw p = {p_list[i]:.6f} -> BH-adj = {bh_adj[i]:.6f} "
-              f"({'PASS' if bh_adj[i] < ALPHA_LEVEL else 'FAIL'} FDR<0.05)")
+        print(
+            f"    {lab}: raw p = {p_list[i]:.6f} -> BH-adj = {bh_adj[i]:.6f} "
+            f"({'PASS' if bh_adj[i] < ALPHA_LEVEL else 'FAIL'} FDR<0.05)"
+        )
 
     # 11. Verdict
-    print(f"\n{'='*72}")
+    print(f"\n{'=' * 72}")
     print(f"HONEST VERDICT")
-    print(f"{'='*72}")
+    print(f"{'=' * 72}")
 
     alpha_pct = primary["alpha_pct"]
     alpha_t = primary["alpha_t"]
@@ -456,12 +478,10 @@ def main() -> int:
         print(f"  -> FALSIFIED: Bonferroni p = {p_bonf} >= {ALPHA_LEVEL} (not significant)")
         verdict = "edge-falsified"
     elif rolling.get("pct_positive", 0) < 60:
-        print(f"  -> EXPLORATORY: rolling alpha positive only "
-              f"{rolling.get('pct_positive', 0)}% of windows")
+        print(f"  -> EXPLORATORY: rolling alpha positive only {rolling.get('pct_positive', 0)}% of windows")
         verdict = "exploratory"
     else:
-        regime_alphas = [v.get("alpha_pct", 0) for v in regime_res.values()
-                         if isinstance(v, dict) and "alpha_pct" in v]
+        regime_alphas = [v.get("alpha_pct", 0) for v in regime_res.values() if isinstance(v, dict) and "alpha_pct" in v]
         if len(regime_alphas) >= 2 and all(a > 0 for a in regime_alphas):
             print(f"  -> EDGE-CONFIRMED: alpha positive + significant + stable + regime-robust")
             verdict = "edge-confirmed"
@@ -476,8 +496,10 @@ def main() -> int:
     print("3. SMB proxy = log(20d mean amount) is liquidity/turnover proxy, NOT true market cap")
     print("4. HML omitted (3-factor baseline: mkt+SMB+UMD, not 4-factor Carhart)")
     print(f"5. SMB & UMD strongly negatively correlated (-0.71, VIF~2.0 multicollinearity)")
-    print(f"6. corr(SMB, lowvol) = {corr_sl:.4f} -> "
-          f"{'non-independent' if abs(corr_sl) > 0.3 else 'relatively independent'}")
+    print(
+        f"6. corr(SMB, lowvol) = {corr_sl:.4f} -> "
+        f"{'non-independent' if abs(corr_sl) > 0.3 else 'relatively independent'}"
+    )
     print("7. combined alpha != size/low-vol each has edge != selection strategy has edge")
     print("8. close-to-close daily returns (not open_ev, no intraday leakage)")
     print("9. month-end close formation (standard FF convention, mildly unrealistic)")

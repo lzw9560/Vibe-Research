@@ -26,6 +26,7 @@
   cd /Users/lizhiwei/project/code/stock/Vibe-Research/backend
   .venv/bin/python tools/explore_retest_composite-score-top5.py
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -84,6 +85,7 @@ GENE_DB = resolve_data_dir() / "gene_scores.db"
 # 新方法学函数 (自写)
 # ====================================================================
 
+
 def bh_fdr(p_list: list[float], alpha: float = 0.05) -> dict:
     """Benjamini-Hochberg FDR 控制.
 
@@ -107,8 +109,14 @@ def bh_fdr(p_list: list[float], alpha: float = 0.05) -> dict:
     """
     m = len(p_list)
     if m == 0:
-        return {"n_tests": 0, "alpha": alpha, "adjusted_p": [],
-                "rejected": [], "n_rejected": 0, "threshold_line": "no tests"}
+        return {
+            "n_tests": 0,
+            "alpha": alpha,
+            "adjusted_p": [],
+            "rejected": [],
+            "n_rejected": 0,
+            "threshold_line": "no tests",
+        }
 
     # 排序: (p_value, original_index)
     indexed = sorted(enumerate(p_list), key=lambda x: x[1])
@@ -138,10 +146,7 @@ def bh_fdr(p_list: list[float], alpha: float = 0.05) -> dict:
         adjusted_p[oi] = q_sorted[rank]
         rejected[oi] = rank < k_max  # rank 0..k_max-1 被拒绝
 
-    threshold_line = (
-        f"BH alpha={alpha}, m={m} tests, "
-        f"reject {k_max} (threshold: p_(k) <= k*{alpha}/{m})"
-    )
+    threshold_line = f"BH alpha={alpha}, m={m} tests, reject {k_max} (threshold: p_(k) <= k*{alpha}/{m})"
     return {
         "n_tests": m,
         "alpha": alpha,
@@ -150,15 +155,12 @@ def bh_fdr(p_list: list[float], alpha: float = 0.05) -> dict:
         "n_rejected": k_max,
         "threshold_line": threshold_line,
         "sorted_p_with_threshold": [
-            (round(sorted_p[k], 6), round((k + 1) / m * alpha, 6),
-             sorted_p[k] <= (k + 1) / m * alpha)
-            for k in range(m)
+            (round(sorted_p[k], 6), round((k + 1) / m * alpha, 6), sorted_p[k] <= (k + 1) / m * alpha) for k in range(m)
         ],
     }
 
 
-def per_trade_t_hac(rets: list[float], dates: list[str],
-                    max_lag: int | None = None) -> dict:
+def per_trade_t_hac(rets: list[float], dates: list[str], max_lag: int | None = None) -> dict:
     """per-trade t-test with Newey-West HAC standard errors.
 
     替代 per-day-mean t: 不缩 N, 用 HAC 处理同日相关+异方差+序列相关.
@@ -178,8 +180,7 @@ def per_trade_t_hac(rets: list[float], dates: list[str],
     返回: {n, mean, hac_var, se, t, p_one_sided, lag, n_days, n_trades_per_day}
     """
     if not rets:
-        return {"n": 0, "mean": 0.0, "se": 0.0, "t": 0.0, "p_one_sided": 1.0,
-                "lag": 0, "n_days": 0}
+        return {"n": 0, "mean": 0.0, "se": 0.0, "t": 0.0, "p_one_sided": 1.0, "lag": 0, "n_days": 0}
 
     # 按日期排序 (同日内保持原序), 同步排序 rets 和 dates
     paired = sorted(zip(dates, rets), key=lambda x: x[0])
@@ -254,8 +255,7 @@ def rolling_walk_forward(
     dates = sorted(set(p["zt_date"] for p in ps))
     n_dates = len(dates)
     if n_dates < n_windows:
-        return {"status": "too_few_dates", "n_dates": n_dates,
-                "n_windows": n_windows, "windows": []}
+        return {"status": "too_few_dates", "n_dates": n_dates, "n_windows": n_windows, "windows": []}
 
     # 分成 n_windows 个等分 (by date count)
     quarter = n_dates // n_windows
@@ -282,10 +282,8 @@ def rolling_walk_forward(
         test_rets = [ret_fn(p) for p in test_picks]
         test_rets = [r for r in test_rets if r is not None]
 
-        train_dates_list = [p["zt_date"] for p in train_picks
-                            if ret_fn(p) is not None]
-        test_dates_list = [p["zt_date"] for p in test_picks
-                           if ret_fn(p) is not None]
+        train_dates_list = [p["zt_date"] for p in train_picks if ret_fn(p) is not None]
+        test_dates_list = [p["zt_date"] for p in test_picks if ret_fn(p) is not None]
 
         # per-trade HAC for test window
         test_hac = per_trade_t_hac(test_rets, test_dates_list)
@@ -308,21 +306,23 @@ def rolling_walk_forward(
         train_ev = ev_stats(train_rets)
         test_ev = ev_stats(test_rets)
 
-        windows.append({
-            "window": w,
-            "train_date_range": f"{dates[0]} ~ {dates[train_end - 1]}" if train_end > 0 else "-",
-            "test_date_range": f"{dates[test_start]} ~ {dates[test_end - 1]}" if test_end > test_start else "-",
-            "n_train": len(train_rets),
-            "n_test": len(test_rets),
-            "n_train_dates": len(train_dates),
-            "n_test_dates": len(test_dates),
-            "train_ev": train_ev["ev"],
-            "test_ev": test_ev["ev"],
-            "test_wr": test_ev["wr"],
-            "test_hac": test_hac,
-            "test_day_t": test_day_t,
-            "train_day_t": train_day_t,
-        })
+        windows.append(
+            {
+                "window": w,
+                "train_date_range": f"{dates[0]} ~ {dates[train_end - 1]}" if train_end > 0 else "-",
+                "test_date_range": f"{dates[test_start]} ~ {dates[test_end - 1]}" if test_end > test_start else "-",
+                "n_train": len(train_rets),
+                "n_test": len(test_rets),
+                "n_train_dates": len(train_dates),
+                "n_test_dates": len(test_dates),
+                "train_ev": train_ev["ev"],
+                "test_ev": test_ev["ev"],
+                "test_wr": test_ev["wr"],
+                "test_hac": test_hac,
+                "test_day_t": test_day_t,
+                "train_day_t": train_day_t,
+            }
+        )
 
     # 汇总: 3 test windows 的 combined EV (所有 test picks)
     all_test_rets: list[float] = []
@@ -365,8 +365,8 @@ def rolling_walk_forward(
 # 假 edge 5 模式审
 # ====================================================================
 
-def fake_edge_audit(picks: list[dict], ret_fn: Callable,
-                    rwf_result: dict | None = None) -> dict:
+
+def fake_edge_audit(picks: list[dict], ret_fn: Callable, rwf_result: dict | None = None) -> dict:
     """审假 edge 5 模式. 翻正必须过.
 
     1. entry 涨停价溢价: edge 是否来自涨停封板溢价?
@@ -426,23 +426,30 @@ def fake_edge_audit(picks: list[dict], ret_fn: Callable,
         combined_p = rwf_result["combined_test"]["hac"]["p_one_sided"]
         # 经典倒 U = train 强 test 弱. 这里相反: test >= train 或一致正.
         # 但如果某 train window 负而 test 正 → regime emergence 非倒 U.
-        mode4_detail = (f"test EVs: {['%.3f' % e for e in test_evs]}, "
-                        f"train EVs: {['%.3f' % e for e in train_evs]}, "
-                        f"all_test_pos={all_test_pos}, combined_p={combined_p:.5f}")
+        mode4_detail = (
+            f"test EVs: {['%.3f' % e for e in test_evs]}, "
+            f"train EVs: {['%.3f' % e for e in train_evs]}, "
+            f"all_test_pos={all_test_pos}, combined_p={combined_p:.5f}"
+        )
         mode4_pass = all_test_pos and combined_p < 0.05
 
     return {
         "mode1_entry_gap_avg_pct": round(avg_gap, 3),
-        "mode1_verdict": ("PASS: entry=T+1 open (非 T close sealed), gap 是成本非假 edge; "
-                          f"avg gap {avg_gap:.2f}% 是 entry 溢价 (close_ev 已含)"),
+        "mode1_verdict": (
+            "PASS: entry=T+1 open (非 T close sealed), gap 是成本非假 edge; "
+            f"avg gap {avg_gap:.2f}% 是 entry 溢价 (close_ev 已含)"
+        ),
         "mode1_pass": mode1_pass,
         "mode2_survivorship": "涨停股 universe (事件选择, 非存活偏差); 标注",
         "mode2_pass": True,
         "mode3_open_ev_avg": round(avg_open_ev, 3),
         "mode3_close_ev_avg": round(avg_close_ev, 3),
         "mode3_leakage": round(leakage, 3),
-        "mode3_verdict": ("PASS" if avg_close_ev >= avg_open_ev
-                          else f"FAIL: open_ev={avg_open_ev} > close_ev={avg_close_ev}, 日内泄漏"),
+        "mode3_verdict": (
+            "PASS"
+            if avg_close_ev >= avg_open_ev
+            else f"FAIL: open_ev={avg_open_ev} > close_ev={avg_close_ev}, 日内泄漏"
+        ),
         "mode3_pass": avg_close_ev >= avg_open_ev,
         "mode4_detail": mode4_detail,
         "mode4_verdict": ("PASS" if mode4_pass else "FAIL: rolling WF not all positive/significant"),
@@ -455,6 +462,7 @@ def fake_edge_audit(picks: list[dict], ret_fn: Callable,
 # ====================================================================
 # main
 # ====================================================================
+
 
 def main() -> None:
     print("=" * 76)
@@ -469,10 +477,8 @@ def main() -> None:
     zt_rows = load_zt()
     gene, n_gene = load_gene_scores()
     calendar = sorted(all_dates)
-    print(f"  kline codes={len(code_map)} calendar days={len(calendar)} "
-          f"zt_rows={len(zt_rows)}")
-    print(f"  gene_scores: {n_gene} rows, {len(gene)} dates "
-          f"({min(gene)} ~ {max(gene)})")
+    print(f"  kline codes={len(code_map)} calendar days={len(calendar)} zt_rows={len(zt_rows)}")
+    print(f"  gene_scores: {n_gene} rows, {len(gene)} dates ({min(gene)} ~ {max(gene)})")
 
     # ---- build blanket picks ----
     print("\n[2] 构建 blanket picks (entry=T+1 open, exit=T+2 close, 一字涨停跳过)…")
@@ -482,8 +488,7 @@ def main() -> None:
     # ---- attach 5 factors ----
     print("\n[3] 附 5 因子 + 算 composite (equal weight) ...")
     blanket, n_complete, counts = attach_factors(blanket, code_map, gene)
-    print(f"  5 因子全有 (composite universe): {n_complete} "
-          f"({n_complete/max(len(blanket),1)*100:.1f}%)")
+    print(f"  5 因子全有 (composite universe): {n_complete} ({n_complete / max(len(blanket), 1) * 100:.1f}%)")
 
     compute_composite(blanket, weights=WEIGHT_SCHEMES["equal"])
 
@@ -501,10 +506,9 @@ def main() -> None:
     top5_dates = [p["zt_date"] for p in top5 if close_ev_basic(p) is not None]
 
     ev_s = ev_stats(top5_rets)
-    print(f"  top-5: n={ev_s['n']} gross_EV={ev_s['ev']}% std={ev_s['std']}% "
-          f"WR={ev_s['wr']}% t_naive={ev_s['t']}")
+    print(f"  top-5: n={ev_s['n']} gross_EV={ev_s['ev']}% std={ev_s['std']}% WR={ev_s['wr']}% t_naive={ev_s['t']}")
     net_ev = ev_s["ev"] - COST * 100
-    print(f"  net EV (after {COST*100:.1f}% cost): {net_ev:.3f}%")
+    print(f"  net EV (after {COST * 100:.1f}% cost): {net_ev:.3f}%")
 
     # ---- [A] 原方法学 (reference) ----
     print(f"\n{'=' * 76}")
@@ -519,31 +523,32 @@ def main() -> None:
     orig_day_t = day_paired_t(top5_by_date)
     orig_p_raw = orig_day_t["p_one_sided"]
     orig_bonf12 = bonferroni_p(orig_p_raw, 12)
-    print(f"  per-day-mean t: n_days={orig_day_t['n_days']} mean={orig_day_t['mean']}% "
-          f"t={orig_day_t['t']} p_raw={orig_p_raw}")
-    print(f"  Bonferroni ×12 = {orig_bonf12:.6f} → {'PASS' if orig_bonf12 < 0.05 else 'FAIL'} "
-          f"(original verdict: falsified)")
+    print(
+        f"  per-day-mean t: n_days={orig_day_t['n_days']} mean={orig_day_t['mean']}% "
+        f"t={orig_day_t['t']} p_raw={orig_p_raw}"
+    )
+    print(
+        f"  Bonferroni ×12 = {orig_bonf12:.6f} → {'PASS' if orig_bonf12 < 0.05 else 'FAIL'} "
+        f"(original verdict: falsified)"
+    )
 
     orig_wf = walk_forward(top5, close_ev_basic)
     if orig_wf["status"] == "ok":
-        print(f"  walk-forward (50/50): train_EV={orig_wf['train_ev']['ev']}% "
-              f"test_EV={orig_wf['test_ev']['ev']}% test_p={orig_wf['test_day_t']['p_one_sided']}")
+        print(
+            f"  walk-forward (50/50): train_EV={orig_wf['train_ev']['ev']}% "
+            f"test_EV={orig_wf['test_ev']['ev']}% test_p={orig_wf['test_day_t']['p_one_sided']}"
+        )
 
     # ---- [B] 新方法学 1: per-trade HAC t ----
     print(f"\n{'=' * 76}")
     print("[B] 新方法学 1: per-trade t + Newey-West HAC SE")
     print(f"{'=' * 76}")
     hac_result = per_trade_t_hac(top5_rets, top5_dates)
-    print(f"  n_trades={hac_result['n']} n_days={hac_result['n_days']} "
-          f"trades/day={hac_result['trades_per_day']}")
-    print(f"  mean={hac_result['mean']}% HAC_var={hac_result['hac_var']} "
-          f"SE={hac_result['se']}")
-    print(f"  lag (NW auto)={hac_result['lag']} t_HAC={hac_result['t']} "
-          f"p_one_sided={hac_result['p_one_sided']}")
-    print(f"  对比: per-day-mean t={orig_day_t['t']} p={orig_p_raw} "
-          f"(n_days={orig_day_t['n_days']})")
-    print(f"        per-trade HAC t={hac_result['t']} p={hac_result['p_one_sided']} "
-          f"(n_trades={hac_result['n']})")
+    print(f"  n_trades={hac_result['n']} n_days={hac_result['n_days']} trades/day={hac_result['trades_per_day']}")
+    print(f"  mean={hac_result['mean']}% HAC_var={hac_result['hac_var']} SE={hac_result['se']}")
+    print(f"  lag (NW auto)={hac_result['lag']} t_HAC={hac_result['t']} p_one_sided={hac_result['p_one_sided']}")
+    print(f"  对比: per-day-mean t={orig_day_t['t']} p={orig_p_raw} (n_days={orig_day_t['n_days']})")
+    print(f"        per-trade HAC t={hac_result['t']} p={hac_result['p_one_sided']} (n_trades={hac_result['n']})")
     delta_t = hac_result["t"] - orig_day_t["t"]
     print(f"  Δt = {delta_t:+.3f} (HAC {'more' if delta_t > 0 else 'less'} significant)")
 
@@ -567,11 +572,13 @@ def main() -> None:
 
     bh3 = bh_fdr(hac_p_list, alpha=0.05)
     top5_idx = labels.index("top-5")
-    print(f"    BH(n=3): adjusted_p for top-5 = {bh3['adjusted_p'][top5_idx]} "
-          f"→ {'PASS' if bh3['rejected'][top5_idx] else 'FAIL'}")
+    print(
+        f"    BH(n=3): adjusted_p for top-5 = {bh3['adjusted_p'][top5_idx]} "
+        f"→ {'PASS' if bh3['rejected'][top5_idx] else 'FAIL'}"
+    )
     print(f"    {bh3['threshold_line']}")
     for k, (p_val, thresh, ok) in enumerate(bh3["sorted_p_with_threshold"]):
-        print(f"      rank {k+1}: p={p_val} threshold={thresh} {'✓' if ok else '✗'}")
+        print(f"      rank {k + 1}: p={p_val} threshold={thresh} {'✓' if ok else '✗'}")
 
     # BH family 2: original family size (n=12, matching Bonferroni ×12)
     print("\n  --- BH family 2: n=12 (matching original Bonferroni family) ---")
@@ -608,23 +615,24 @@ def main() -> None:
     bh7 = bh_fdr(hac_p_list_12, alpha=0.05)
     top5_idx_12 = labels_12.index("top-5/equal")
     print(f"    BH(n={len(hac_p_list_12)}): tests = {labels_12}")
-    print(f"    adjusted_p for top-5/equal = {bh7['adjusted_p'][top5_idx_12]} "
-          f"→ {'PASS' if bh7['rejected'][top5_idx_12] else 'FAIL'}")
+    print(
+        f"    adjusted_p for top-5/equal = {bh7['adjusted_p'][top5_idx_12]} "
+        f"→ {'PASS' if bh7['rejected'][top5_idx_12] else 'FAIL'}"
+    )
     print(f"    {bh7['threshold_line']}")
     for k, (p_val, thresh, ok) in enumerate(bh7["sorted_p_with_threshold"]):
         # find label for this rank
         sorted_labels = [l for _, l in sorted(zip(hac_p_list_12, labels_12))]
-        print(f"      rank {k+1}: {sorted_labels[k]:<20} p={p_val} "
-              f"threshold={thresh} {'✓' if ok else '✗'}")
+        print(f"      rank {k + 1}: {sorted_labels[k]:<20} p={p_val} threshold={thresh} {'✓' if ok else '✗'}")
 
     # BH family 3: the 4 re-tested strategies (n=4)
     print("\n  --- BH family 3: n=4 (4 re-tested strategies, theoretical) ---")
     print(f"    composite-score-top5 HAC p = {hac_result['p_one_sided']}")
     print(f"    (其他 3 策略由各自脚本计算, 此处假设 top-5 是最小 p)")
-    print(f"    若 top-5 p 是 rank 1/4: BH threshold = 0.05/4 = {0.05/4:.6f}")
-    print(f"      → {'PASS' if hac_result['p_one_sided'] <= 0.05/4 else 'FAIL'}")
-    print(f"    若 top-5 p 是 rank 2/4: BH threshold = 2*0.05/4 = {2*0.05/4:.6f}")
-    print(f"      → {'PASS' if hac_result['p_one_sided'] <= 2*0.05/4 else 'FAIL'}")
+    print(f"    若 top-5 p 是 rank 1/4: BH threshold = 0.05/4 = {0.05 / 4:.6f}")
+    print(f"      → {'PASS' if hac_result['p_one_sided'] <= 0.05 / 4 else 'FAIL'}")
+    print(f"    若 top-5 p 是 rank 2/4: BH threshold = 2*0.05/4 = {2 * 0.05 / 4:.6f}")
+    print(f"      → {'PASS' if hac_result['p_one_sided'] <= 2 * 0.05 / 4 else 'FAIL'}")
 
     # ---- [D] 新方法学 3: rolling 4-window walk-forward ----
     print(f"\n{'=' * 76}")
@@ -633,24 +641,26 @@ def main() -> None:
     rwf = rolling_walk_forward(top5, close_ev_basic, n_windows=4)
     if rwf["status"] == "ok":
         print(f"  n_dates={rwf['n_dates']} quarter_size={rwf['quarter_size']}")
-        print(f"\n  {'window':>3} {'train_range':<26} {'test_range':<26} "
-              f"{'n_tr':>5} {'n_te':>5} {'tr_ev%':>8} {'te_ev%':>8} "
-              f"{'te_WR%':>7} {'te_HAC_t':>9} {'te_HAC_p':>9} {'te_day_t':>9} {'te_day_p':>9}")
+        print(
+            f"\n  {'window':>3} {'train_range':<26} {'test_range':<26} "
+            f"{'n_tr':>5} {'n_te':>5} {'tr_ev%':>8} {'te_ev%':>8} "
+            f"{'te_WR%':>7} {'te_HAC_t':>9} {'te_HAC_p':>9} {'te_day_t':>9} {'te_day_p':>9}"
+        )
         for w in rwf["windows"]:
             hac = w["test_hac"]
             dt = w["test_day_t"]
-            print(f"  {w['window']:>3} {w['train_date_range']:<26} {w['test_date_range']:<26} "
-                  f"{w['n_train']:>5} {w['n_test']:>5} {w['train_ev']:>+8.3f} "
-                  f"{w['test_ev']:>+8.3f} {w['test_wr']:>7.1f} "
-                  f"{hac['t']:>9.3f} {hac['p_one_sided']:>9.5f} "
-                  f"{dt['t']:>9.3f} {dt['p_one_sided']:>9.5f}")
+            print(
+                f"  {w['window']:>3} {w['train_date_range']:<26} {w['test_date_range']:<26} "
+                f"{w['n_train']:>5} {w['n_test']:>5} {w['train_ev']:>+8.3f} "
+                f"{w['test_ev']:>+8.3f} {w['test_wr']:>7.1f} "
+                f"{hac['t']:>9.3f} {hac['p_one_sided']:>9.5f} "
+                f"{dt['t']:>9.3f} {dt['p_one_sided']:>9.5f}"
+            )
 
         comb = rwf["combined_test"]
-        print(f"\n  combined test (all 3 windows): n={comb['n']} "
-              f"EV={comb['ev']:.3f}% WR={comb['wr']:.1f}%")
+        print(f"\n  combined test (all 3 windows): n={comb['n']} EV={comb['ev']:.3f}% WR={comb['wr']:.1f}%")
         ch = comb["hac"]
-        print(f"    HAC: t={ch['t']} p={ch['p_one_sided']} lag={ch['lag']} "
-              f"n_trades={ch['n']} n_days={ch['n_days']}")
+        print(f"    HAC: t={ch['t']} p={ch['p_one_sided']} lag={ch['lag']} n_trades={ch['n']} n_days={ch['n_days']}")
 
         # decay analysis
         train_evs = [w["train_ev"] for w in rwf["windows"]]
@@ -671,9 +681,11 @@ def main() -> None:
     print(f"  1. entry 涨停价溢价: avg gap={audit['mode1_entry_gap_avg_pct']}%")
     print(f"     → {audit['mode1_verdict']}")
     print(f"  2. survivorship: {audit['mode2_survivorship']}")
-    print(f"  3. T+1 日内泄漏: open_ev_avg={audit['mode3_open_ev_avg']}% "
-          f"close_ev_avg={audit['mode3_close_ev_avg']}% "
-          f"leakage={audit['mode3_leakage']}%")
+    print(
+        f"  3. T+1 日内泄漏: open_ev_avg={audit['mode3_open_ev_avg']}% "
+        f"close_ev_avg={audit['mode3_close_ev_avg']}% "
+        f"leakage={audit['mode3_leakage']}%"
+    )
     print(f"     → {audit['mode3_verdict']}")
     print(f"  4. 拥挤倒 U: {audit['mode4_detail']}")
     print(f"     → {audit['mode4_verdict']}")
@@ -707,23 +719,28 @@ def main() -> None:
     print(f"\n  原方法学 verdict: FALSIFIED (Bonf×12={orig_bonf12:.6f})")
     print(f"\n  新方法学逐项:")
     print(f"    [1] gross EV = {ev_s['ev']:.3f}% → {'PASS' if ev_s['ev'] > 0 else 'FAIL'}")
-    print(f"    [2] n_days = {hac_result['n_days']} → {'PASS' if hac_result['n_days'] >= 60 else 'FAIL (underpowered)'}")
+    print(
+        f"    [2] n_days = {hac_result['n_days']} → {'PASS' if hac_result['n_days'] >= 60 else 'FAIL (underpowered)'}"
+    )
     print(f"    [3] per-trade HAC t = {hac_t}, p = {hac_p}")
     print(f"        BH(n=3 within-composite): adj_p={bh3['adjusted_p'][top5_idx]} → {'PASS' if bh3_pass else 'FAIL'}")
     print(f"        BH(n=7 all-tests): adj_p={bh7['adjusted_p'][top5_idx_12]} → {'PASS' if bh7_pass else 'FAIL'}")
-    print(f"        BH(n=4 rank1): {hac_p:.6f} vs {0.05/4:.6f} → {'PASS' if bh4_rank1_pass else 'FAIL'}")
-    print(f"        BH(n=4 rank2): {hac_p:.6f} vs {2*0.05/4:.6f} → {'PASS' if bh4_rank2_pass else 'FAIL'}")
+    print(f"        BH(n=4 rank1): {hac_p:.6f} vs {0.05 / 4:.6f} → {'PASS' if bh4_rank1_pass else 'FAIL'}")
+    print(f"        BH(n=4 rank2): {hac_p:.6f} vs {2 * 0.05 / 4:.6f} → {'PASS' if bh4_rank2_pass else 'FAIL'}")
     print(f"    [4] net EV = {net_ev:.3f}% → {'PASS' if net_ev > 0 else 'FAIL'}")
     print(f"    [5] rolling WF: all test windows EV>0 = {rwf_all_test_pos}")
     print(f"        combined test EV={rwf_combined_ev:.3f}% HAC p={rwf_combined_p:.5f}")
     print(f"        → {'PASS' if rwf_all_test_pos and rwf_combined_p < 0.05 else 'FAIL/exploratory'}")
 
     # 假 edge 审结果 (5 模式全过才 PASS)
-    audit_pass = (audit["mode1_pass"] and audit["mode2_pass"]
-                  and audit["mode3_pass"] and audit["mode4_pass"]
-                  and audit["mode5_pass"])
-    audit_fail_modes = [f"mode{i}" for i in range(1, 6)
-                        if not audit.get(f"mode{i}_pass", False)]
+    audit_pass = (
+        audit["mode1_pass"]
+        and audit["mode2_pass"]
+        and audit["mode3_pass"]
+        and audit["mode4_pass"]
+        and audit["mode5_pass"]
+    )
+    audit_fail_modes = [f"mode{i}" for i in range(1, 6) if not audit.get(f"mode{i}_pass", False)]
     print(f"\n  假 edge 5 模式审: {'PASS' if audit_pass else 'FAIL'}")
     if not audit_pass:
         print(f"    失败模式: {audit_fail_modes}")
@@ -756,9 +773,11 @@ def main() -> None:
     elif not bh_pass_any:
         new_verdict = "edge-falsified"
         flipped = False
-        key = (f"BH FDR 5% FAIL in all families "
-               f"(HAC p={hac_p:.5f}, best BH adj_p="
-               f"{min(bh3['adjusted_p'][top5_idx], bh7['adjusted_p'][top5_idx_12]):.5f})")
+        key = (
+            f"BH FDR 5% FAIL in all families "
+            f"(HAC p={hac_p:.5f}, best BH adj_p="
+            f"{min(bh3['adjusted_p'][top5_idx], bh7['adjusted_p'][top5_idx_12]):.5f})"
+        )
     elif net_ev <= 0:
         new_verdict = "edge-falsified"
         flipped = False
@@ -766,8 +785,10 @@ def main() -> None:
     elif not wf_pass:
         new_verdict = "exploratory"
         flipped = False
-        key = (f"BH PASS but rolling WF "
-               f"{'not all test windows positive' if not rwf_all_test_pos else 'combined p not significant'}")
+        key = (
+            f"BH PASS but rolling WF "
+            f"{'not all test windows positive' if not rwf_all_test_pos else 'combined p not significant'}"
+        )
     elif not audit_pass:
         new_verdict = "exploratory"
         flipped = False
@@ -778,22 +799,25 @@ def main() -> None:
         if wf_q1_absent:
             concerns.append(f"edge absent in Q1 (train EV={rwf['windows'][0]['train_ev']:.3f}% <= 0, regime emergence)")
         if wf_windows_borderline:
-            borderline_windows = [w["window"] for w in rwf["windows"]
-                                  if w["test_hac"]["p_one_sided"] >= 0.05]
+            borderline_windows = [w["window"] for w in rwf["windows"] if w["test_hac"]["p_one_sided"] >= 0.05]
             concerns.append(f"individual WF windows {borderline_windows} borderline (p>=0.05)")
         concerns.append("single regime (2026 only, 174 days, no cross-regime)")
         # 翻正: 原 falsified → 现在 BH+WF+audit 过, 但降为 exploratory
         new_verdict = "exploratory"
         flipped = True  # 从 falsified 翻正 (falsified→exploratory 是翻正, 非 edge-confirmed)
-        key = (f"BH+WF+audit all PASS, but downgraded to exploratory: "
-               f"{'; '.join(concerns)}. "
-               f"Combined WF p={rwf_combined_p:.5f} (significant). "
-               f"Flip is from BH (less conservative), NOT from HAC (HAC p={hac_p:.5f} > per-day p={orig_p_raw:.5f}).")
+        key = (
+            f"BH+WF+audit all PASS, but downgraded to exploratory: "
+            f"{'; '.join(concerns)}. "
+            f"Combined WF p={rwf_combined_p:.5f} (significant). "
+            f"Flip is from BH (less conservative), NOT from HAC (HAC p={hac_p:.5f} > per-day p={orig_p_raw:.5f})."
+        )
     else:
         new_verdict = "edge-confirmed"
         flipped = True
-        key = (f"BH FDR PASS + rolling WF PASS + fake-edge audit PASS "
-               f"(HAC p={hac_p:.5f}, combined WF p={rwf_combined_p:.5f})")
+        key = (
+            f"BH FDR PASS + rolling WF PASS + fake-edge audit PASS "
+            f"(HAC p={hac_p:.5f}, combined WF p={rwf_combined_p:.5f})"
+        )
 
     print(f"\n  {'=' * 60}")
     print(f"  NEW VERDICT: {new_verdict}")
@@ -807,12 +831,16 @@ def main() -> None:
     print(f"{'=' * 76}")
     print(f"  原 verdict:    falsified (Bonf×12={orig_bonf12:.6f}, p_raw={orig_p_raw:.5f})")
     print(f"  新 HAC p:      {hac_p:.5f} (t={hac_t}, n_trades={hac_result['n']}, lag={hac_result['lag']})")
-    print(f"  BH FDR 5%:     n=3:{'PASS' if bh3_pass else 'FAIL'} "
-          f"n=7:{'PASS' if bh7_pass else 'FAIL'} "
-          f"n=4r1:{'PASS' if bh4_rank1_pass else 'FAIL'} "
-          f"n=4r2:{'PASS' if bh4_rank2_pass else 'FAIL'}")
-    print(f"  rolling WF:    all_test_pos={rwf_all_test_pos} "
-          f"combined_p={rwf_combined_p:.5f} combined_ev={rwf_combined_ev:.3f}%")
+    print(
+        f"  BH FDR 5%:     n=3:{'PASS' if bh3_pass else 'FAIL'} "
+        f"n=7:{'PASS' if bh7_pass else 'FAIL'} "
+        f"n=4r1:{'PASS' if bh4_rank1_pass else 'FAIL'} "
+        f"n=4r2:{'PASS' if bh4_rank2_pass else 'FAIL'}"
+    )
+    print(
+        f"  rolling WF:    all_test_pos={rwf_all_test_pos} "
+        f"combined_p={rwf_combined_p:.5f} combined_ev={rwf_combined_ev:.3f}%"
+    )
     print(f"  fake-edge:     {'PASS' if audit_pass else 'FAIL'}")
     print(f"  NEW VERDICT:   {new_verdict}  (flipped={flipped})")
 

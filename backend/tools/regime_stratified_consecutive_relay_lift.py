@@ -19,6 +19,7 @@ underpowered, not extrapolated.
 
 picks by D-day regime -> day-paired event lift -> wire_verdict.
 """
+
 from __future__ import annotations
 
 import sys
@@ -80,7 +81,9 @@ def run(
         return {}
 
     by_regime, by_regime_day, n_untagged = stratify_gap(
-        returns, dates, regime_map,
+        returns,
+        dates,
+        regime_map,
     )
     if n_untagged:
         print(f"[regime] WARNING: {n_untagged} trades have no regime tag")
@@ -108,10 +111,7 @@ def run(
         # S210 T2: per regime filter universe（同 regime days）让 drift fix 控 regime-specific drift
         universe_by_regime: dict[str, list[float]] | None = None
         if universe_by_day is not None:
-            universe_by_regime = {
-                d: universe_by_day[d] for d in universe_by_day
-                if regime_map.get(d) == tag
-            }
+            universe_by_regime = {d: universe_by_day[d] for d in universe_by_day if regime_map.get(d) == tag}
         v = wire_verdict(
             line_id=f"{STRATEGY_NAME}_regime:{tag}",
             returns=rets,

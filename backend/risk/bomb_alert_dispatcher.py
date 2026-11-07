@@ -86,17 +86,22 @@ def save_alert(
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     now.isoformat(),
-                    last_trading_date_str(now.date()),  # task 120：按交易日历落 date（非 now.strftime 日历今日，否则非交易日存写/查询错位）
+                    last_trading_date_str(
+                        now.date()
+                    ),  # task 120：按交易日历落 date（非 now.strftime 日历今日，否则非交易日存写/查询错位）
                     code,
                     name,
                     result.rule_id,
                     alert.alert_level,
                     result.reason or alert.condition,
-                    json.dumps({
-                        "seal_amount": alert.current_seal_amount,
-                        "change_5min": alert.seal_amount_change_5min,
-                        "data_status": result.data_status,
-                    }, ensure_ascii=False),
+                    json.dumps(
+                        {
+                            "seal_amount": alert.current_seal_amount,
+                            "change_5min": alert.seal_amount_change_5min,
+                            "data_status": result.data_status,
+                        },
+                        ensure_ascii=False,
+                    ),
                     result.data_status,
                 ),
             )
@@ -121,7 +126,9 @@ def get_active_alerts(date: str | None = None) -> list[dict[str, Any]]:
 
 
 def _build_feishu_card(
-    code: str, name: str, result: RuleCheckResult,
+    code: str,
+    name: str,
+    result: RuleCheckResult,
 ) -> str:
     """构建飞书卡片 Markdown 内容（含操作建议 + 风险提醒）。
 
@@ -146,7 +153,9 @@ def _build_feishu_card(
 
 
 def notify_if_enabled(
-    code: str, name: str, result: RuleCheckResult,
+    code: str,
+    name: str,
+    result: RuleCheckResult,
 ) -> bool:
     """通知通道接线（默认关）。
 
@@ -165,17 +174,16 @@ def notify_if_enabled(
     try:
         # 延迟 import 避免循环依赖
         from notification.notification_service import NotificationService
+
         service = NotificationService()
         ok = service.send(content)
         if ok:
             _logger.info("[bomb_alert] 飞书通知已发送：%s %s(%s)", result.rule_id, name, code)
         else:
-            _logger.warning("[bomb_alert] 飞书通知发送未成功（渠道可能未配置）：%s %s(%s)",
-                            result.rule_id, name, code)
+            _logger.warning("[bomb_alert] 飞书通知发送未成功（渠道可能未配置）：%s %s(%s)", result.rule_id, name, code)
         return ok
     except Exception as exc:
-        _logger.warning("[bomb_alert] 通知发送失败（不阻塞落库）：%s %s(%s) %s",
-                        result.rule_id, name, code, exc)
+        _logger.warning("[bomb_alert] 通知发送失败（不阻塞落库）：%s %s(%s) %s", result.rule_id, name, code, exc)
         return False
 
 
@@ -209,14 +217,16 @@ def process_alerts(
         if alert_id is None:
             continue  # 冷却期内
         notify_if_enabled(code, name, r)
-        active.append({
-            "id": alert_id,
-            "rule_id": r.rule_id,
-            "alert_level": r.alert.alert_level if r.alert else "unknown",
-            "condition": r.alert.condition if r.alert else r.reason,
-            "code": code,
-            "name": name,
-            "ts": now.isoformat(),
-            "data_status": r.data_status,
-        })
+        active.append(
+            {
+                "id": alert_id,
+                "rule_id": r.rule_id,
+                "alert_level": r.alert.alert_level if r.alert else "unknown",
+                "condition": r.alert.condition if r.alert else r.reason,
+                "code": code,
+                "name": name,
+                "ts": now.isoformat(),
+                "data_status": r.data_status,
+            }
+        )
     return active

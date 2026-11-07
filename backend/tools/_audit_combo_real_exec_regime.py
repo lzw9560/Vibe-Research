@@ -7,6 +7,7 @@
 3. 60 天滚动前向模拟（每 60 天窗口 real-exec net 分布）+ 10 日 batch 连续负 streak（STOP 标准）
 去 gap 版（rank 动量+小盘），mode=filtered 过滤。
 """
+
 from __future__ import annotations
 
 import json
@@ -77,10 +78,17 @@ def build_by_date() -> dict:
             real_exec = (t5_close - t1_open) / t1_open
             past5_c = float(bars[i - 5].get("close", 0) or 0) if i >= 5 else prev_c
             past5 = (c - past5_c) / past5_c if past5_c else 0.0
-            by_date[bars[i].get("date", "")].append({
-                "code": code, "gap": gap, "tr": today_ret, "amt": amt,
-                "real_exec": real_exec, "up": c > ma60, "past5": past5,
-            })
+            by_date[bars[i].get("date", "")].append(
+                {
+                    "code": code,
+                    "gap": gap,
+                    "tr": today_ret,
+                    "amt": amt,
+                    "real_exec": real_exec,
+                    "up": c > ma60,
+                    "past5": past5,
+                }
+            )
     return by_date
 
 
@@ -124,8 +132,15 @@ def stats(dates: list, by_date: dict) -> dict | None:
     std = statistics.pstdev(daily_mean) if len(daily_mean) > 1 else 0
     se = std / (len(daily_mean) ** 0.5) if daily_mean else 0
     t = m / se if se > 0 else 0
-    return {"n_days": len(daily_mean), "n_picks": len(all_picks),
-            "mean": m, "median": med, "wr": wr, "net": m - COST, "t": t}
+    return {
+        "n_days": len(daily_mean),
+        "n_picks": len(all_picks),
+        "mean": m,
+        "median": med,
+        "wr": wr,
+        "net": m - COST,
+        "t": t,
+    }
 
 
 def main() -> None:
@@ -140,7 +155,9 @@ def main() -> None:
     for label, ds in [("gate=ON", on_d), ("gate=OFF", off_d), ("全", all_d)]:
         r = stats(ds, by_date)
         if r:
-            print(f"  {label}: days={r['n_days']} mean={r['mean']*100:+.3f}% median={r['median']*100:+.3f}% WR={r['wr']*100:.1f}% net={r['net']*100:+.3f}% t={r['t']:.2f}")
+            print(
+                f"  {label}: days={r['n_days']} mean={r['mean'] * 100:+.3f}% median={r['median'] * 100:+.3f}% WR={r['wr'] * 100:.1f}% net={r['net'] * 100:+.3f}% t={r['t']:.2f}"
+            )
     print()
 
     # 2. walk-forward（train 60% / test 40%）
@@ -150,25 +167,29 @@ def main() -> None:
     for label, ds in [("train", train), ("test", test)]:
         r = stats(ds, by_date)
         if r:
-            print(f"  {label}: mean={r['mean']*100:+.3f}% net={r['net']*100:+.3f}% t={r['t']:.2f} WR={r['wr']*100:.1f}% median={r['median']*100:+.3f}%")
+            print(
+                f"  {label}: mean={r['mean'] * 100:+.3f}% net={r['net'] * 100:+.3f}% t={r['t']:.2f} WR={r['wr'] * 100:.1f}% median={r['median'] * 100:+.3f}%"
+            )
     print()
 
     # 3. 60 天滚动前向模拟
     windows = []
     for i in range(0, len(all_d) - 60, 60):
-        r = stats(all_d[i:i + 60], by_date)
+        r = stats(all_d[i : i + 60], by_date)
         if r:
             windows.append(r["net"])
     if windows:
         print(f"【3】60 天滚动前向模拟（{len(windows)} 个 60 天窗口）")
-        print(f"  net 分布: mean={statistics.mean(windows)*100:+.3f}% median={statistics.median(windows)*100:+.3f}%")
+        print(
+            f"  net 分布: mean={statistics.mean(windows) * 100:+.3f}% median={statistics.median(windows) * 100:+.3f}%"
+        )
         pos = sum(1 for w in windows if w > 0)
-        print(f"  正窗口: {pos}/{len(windows)} ({pos/len(windows)*100:.1f}%)")
-        print(f"  最差: {min(windows)*100:+.3f}% / 最好: {max(windows)*100:+.3f}%")
+        print(f"  正窗口: {pos}/{len(windows)} ({pos / len(windows) * 100:.1f}%)")
+        print(f"  最差: {min(windows) * 100:+.3f}% / 最好: {max(windows) * 100:+.3f}%")
         # 10 日 batch 连续负 streak（STOP 标准）
         batches = []
         for i in range(0, len(all_d) - 10, 10):
-            r = stats(all_d[i:i + 10], by_date)
+            r = stats(all_d[i : i + 10], by_date)
             if r:
                 batches.append(r["net"])
         if batches:
@@ -180,7 +201,9 @@ def main() -> None:
                 else:
                     neg_streak = 0
             print(f"  10 日 batch 连续负 max streak: {max_consec_neg}（前 10 clean batch 都负=STOP 的历史最坏）")
-            print(f"  10 日 batch 正占比: {sum(1 for b in batches if b>0)}/{len(batches)} ({sum(1 for b in batches if b>0)/len(batches)*100:.1f}%)")
+            print(
+                f"  10 日 batch 正占比: {sum(1 for b in batches if b > 0)}/{len(batches)} ({sum(1 for b in batches if b > 0) / len(batches) * 100:.1f}%)"
+            )
 
 
 if __name__ == "__main__":

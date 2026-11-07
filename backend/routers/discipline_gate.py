@@ -3,6 +3,7 @@
 
 风控工具非 edge 基建。只读 evaluate_discipline_gate 结果，不创造 alpha。
 """
+
 from typing import Any, Dict
 
 from fastapi import APIRouter, Query

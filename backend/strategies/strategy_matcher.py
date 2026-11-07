@@ -6,6 +6,7 @@
 - 返回匹配结果、置信度、入场/止损/止盈建议
 - 与现有 limitup_strategy.py 的 STRATEGY_REGISTRY / match_strategies 对齐
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -69,6 +70,7 @@ class StrategyMatcher:
         signals = match_strategies(gene.code, gene, pool_item, indicators, card=card, derived=derived)
         if weather_state is not None:
             from limitup_strategy import calc_weather_fit  # noqa: PLC0415
+
             for s in signals:
                 s.weather_fit = calc_weather_fit(s.strategy_code, weather_state)
         return signals

@@ -11,6 +11,7 @@
 诚实：-3% stop OOS 4 段全正但 in-sample 分段非真正 walk-forward，需实盘验证。
 定位：打板工作流操作建议工具，非自动交易系统。
 """
+
 from __future__ import annotations
 
 import json
@@ -76,9 +77,7 @@ def limitup_workflow(target_date: str) -> dict[str, Any]:
     if zt_db.exists():
         conn = sqlite3.connect(str(zt_db))
         try:
-            cal = [r[0] for r in conn.execute(
-                "SELECT DISTINCT date FROM zt_history ORDER BY date"
-            ).fetchall()]
+            cal = [r[0] for r in conn.execute("SELECT DISTINCT date FROM zt_history ORDER BY date").fetchall()]
             for i, d in enumerate(cal):
                 if d == target_date and i + 1 < len(cal):
                     t1_date = cal[i + 1]
@@ -114,9 +113,7 @@ def limitup_workflow(target_date: str) -> dict[str, Any]:
             # Stage 3/4: exit 规则
             s["entry_price"] = t1_open
             s["stop_price"] = round(t1_open * (1 + STOP_PCT), 2)
-            s["exit_rule"] = (
-                f"T+1 open {t1_open} 买，T+2 盘中 low<={s['stop_price']} 止损卖 / 否则 T+2 close 卖"
-            )
+            s["exit_rule"] = f"T+1 open {t1_open} 买，T+2 盘中 low<={s['stop_price']} 止损卖 / 否则 T+2 close 卖"
             confirmed_stocks.append(s)
 
     watchlist_count = watchlist.get("count", len(watchlist.get("stocks", [])))

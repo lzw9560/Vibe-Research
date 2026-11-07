@@ -15,6 +15,7 @@ cache 即 checkpoint——per-batch atomic write，resume 跳过 cache 已有 co
 re-login per N 股（BaoStock 长会话超时返空，retry once）——复用 first_board_premium_baseline +
 refresh_kline_cache 的 _login/logout/re-login/retry-once/finally-logout 模式（CLAUDE.md §7 先搜后写）。
 """
+
 from __future__ import annotations
 
 import json
@@ -29,8 +30,14 @@ sys.path.insert(0, str(ROOT / "backend"))
 from vr_paths import resolve_data_dir  # noqa: E402
 
 from data.sources.baostock_src import (  # P2 DRY: baostock 统一接口
-    ensure_login, logout, fetch_daily_bars, fetch_trade_dates,
-    fetch_all_stock, fetch_stock_basic, fetch_profit_data, fetch_bars,
+    ensure_login,
+    logout,
+    fetch_daily_bars,
+    fetch_trade_dates,
+    fetch_all_stock,
+    fetch_stock_basic,
+    fetch_profit_data,
+    fetch_bars,
     DependencyMissing,
 )
 
@@ -54,7 +61,7 @@ _PROFIT_YEARS = list(range(2016, 2027))  # 2016..2026 inclusive
 _PROFIT_QUARTERS = (1, 2, 3, 4)
 
 # re-login 批大小（BaoStock 长会话超时返空，每 N 股 re-login）
-_RELOGIN_BATCH_KLINE = 50    # spec §Layer1 per-50（first_board_premium_baseline.py:44）
+_RELOGIN_BATCH_KLINE = 50  # spec §Layer1 per-50（first_board_premium_baseline.py:44）
 _RELOGIN_BATCH_PROFIT = 300  # profit 1-row/call 更快，re-login 间隔可大（avoid 600 re-logins）
 
 # benchmark 指数（adjustflag=3 指数惯例——pctChg 不含分红，股息率 caveat 标注）
@@ -184,8 +191,10 @@ def scan_stock_basic() -> dict:
         }
 
     _atomic_write_json(cache_path, a_shares)
-    print(f"[S171 Layer0.5] {len(all_securities)} 证券 → {len(a_shares)} A 股 "
-          f"（{n_delisted} 退市 outDate!=''）→ {cache_path}")
+    print(
+        f"[S171 Layer0.5] {len(all_securities)} 证券 → {len(a_shares)} A 股 "
+        f"（{n_delisted} 退市 outDate!=''）→ {cache_path}"
+    )
     print(f"[S171 Layer0.5] 退市股数 {n_delisted} vs 已知~300+（bug 3 漏标率交叉验）")
     return a_shares
 
@@ -216,8 +225,7 @@ def scan_kline_long(adjustflag: str = "both", limit: int | None = None) -> dict:
             cache = json.loads(cache_path.read_bytes())
         done = set(cache.keys())
         todo = [c for c in codes if c not in done]
-        print(f"[S171 Layer1/{suffix}] {len(done)}/{len(codes)} done, {len(todo)} todo, adjustflag={flag}",
-              flush=True)
+        print(f"[S171 Layer1/{suffix}] {len(done)}/{len(codes)} done, {len(todo)} todo, adjustflag={flag}", flush=True)
 
         if not todo:
             out[flag] = cache
@@ -238,8 +246,11 @@ def scan_kline_long(adjustflag: str = "both", limit: int | None = None) -> dict:
                         print(f"[S171 Layer1/{suffix}] re-login 失败 @ {i}, 中止（已写 {len(cache)}）")
                         break
                     el = time.time() - t0
-                    print(f"[S171 Layer1/{suffix}] re-login @ {i}/{len(todo)} done={len(cache)} "
-                          f"elapsed={el:.0f}s eta={el / i * (len(todo) - i):.0f}s", flush=True)
+                    print(
+                        f"[S171 Layer1/{suffix}] re-login @ {i}/{len(todo)} done={len(cache)} "
+                        f"elapsed={el:.0f}s eta={el / i * (len(todo) - i):.0f}s",
+                        flush=True,
+                    )
 
                 bars = _fetch_kline_one(code, flag)
                 if not bars:
@@ -259,8 +270,7 @@ def scan_kline_long(adjustflag: str = "both", limit: int | None = None) -> dict:
 
         _atomic_write_json(cache_path, cache)  # 最终写
         out[flag] = cache
-        print(f"[S171 Layer1/{suffix}] done: {len(cache)}/{len(codes)} adjustflag={flag} → {cache_path}",
-              flush=True)
+        print(f"[S171 Layer1/{suffix}] done: {len(cache)}/{len(codes)} adjustflag={flag} → {cache_path}", flush=True)
     return out
 
 
@@ -304,8 +314,11 @@ def scan_profit_multiyear(limit: int | None = None) -> dict:
                     print(f"[S171 Layer2] re-login 失败 @ {i}, 中止（已写 {len(cache)}）")
                     break
                 el = time.time() - t0
-                print(f"[S171 Layer2] re-login @ {i}/{len(todo)} done={len(cache)} "
-                      f"elapsed={el:.0f}s eta={el / i * (len(todo) - i):.0f}s", flush=True)
+                print(
+                    f"[S171 Layer2] re-login @ {i}/{len(todo)} done={len(cache)} "
+                    f"elapsed={el:.0f}s eta={el / i * (len(todo) - i):.0f}s",
+                    flush=True,
+                )
 
             quarters = _fetch_all_quarters(code, basics[code])
             # 全 empty → 可能 timeout（非无数据，pre-IPO 的 quarter 本就 empty 但不全是）
@@ -388,11 +401,12 @@ def scan_universe_monthly() -> dict:
             }
             # PIT gate 抽查（前 3 月）：active ∩ stock_basic(outDate>D) 须非空
             if i < 3:
-                soon_delist = [c for c in active
-                               if basics.get(c, {}).get("outDate", "") > d]
+                soon_delist = [c for c in active if basics.get(c, {}).get("outDate", "") > d]
                 n_delist_seen += len(soon_delist)
-                print(f"[S171 Layer3 PIT gate] {d}: active={len(active)} "
-                      f"soon_delist(outDate>D)={len(soon_delist)}", flush=True)
+                print(
+                    f"[S171 Layer3 PIT gate] {d}: active={len(active)} soon_delist(outDate>D)={len(soon_delist)}",
+                    flush=True,
+                )
             if (i + 1) % 20 == 0:
                 _atomic_write_json(cache_path, universe)
                 print(f"[S171 Layer3] {i + 1}/{len(month_ends)} months", flush=True)
@@ -404,8 +418,10 @@ def scan_universe_monthly() -> dict:
     # 退市覆盖审计（T6.4）：退市股总数统计（0-bars 覆盖率在 R2 harness 算——需 Layer1 kline）
     delisted = {c: v for c, v in basics.items() if v.get("outDate", "")}
     print(f"[S171 Layer3] 退市股总数 {len(delisted)}（outDate!=''）——0-bars 覆盖率在 R2 harness 算")
-    print(f"[S171 Layer3] PIT gate 抽查 {min(3, len(month_ends))} 月，soon_delist 总 {n_delist_seen} "
-          f"({'PIT 确认' if n_delist_seen > 0 else '⚠ query_all_stock PIT 覆盖不全，R2 须 fallback stock_basic 重建'})")
+    print(
+        f"[S171 Layer3] PIT gate 抽查 {min(3, len(month_ends))} 月，soon_delist 总 {n_delist_seen} "
+        f"({'PIT 确认' if n_delist_seen > 0 else '⚠ query_all_stock PIT 覆盖不全，R2 须 fallback stock_basic 重建'})"
+    )
     print(f"[S171 Layer3] done: {len(universe)} 月 → {cache_path}", flush=True)
     return universe
 
@@ -425,8 +441,7 @@ def scan_benchmark() -> dict:
 
     out: dict[str, list[dict]] = {}
     for code in _BENCHMARK_CODES:
-        bars = fetch_bars(code, _KLINE_START, _KLINE_END,
-                          fields="date,close,pctChg", adjustflag="3")
+        bars = fetch_bars(code, _KLINE_START, _KLINE_END, fields="date,close,pctChg", adjustflag="3")
         if not bars:
             print(f"[S171 Layer4] {code} 无数据, 跳过")
             continue
@@ -443,9 +458,11 @@ if __name__ == "__main__":
     # 默认跑 Layer0.5（T2.1，快无依赖）。Layer1-4 通过 --layer 指定。
     # --limit 限制股数（timing 测试用，如 --limit 5）。
     import argparse
+
     p = argparse.ArgumentParser()
-    p.add_argument("--layer", default="0.5",
-                   help="0.5 stock_basic / 1 kline / 2 profit / 3 universe / 4 benchmark / all")
+    p.add_argument(
+        "--layer", default="0.5", help="0.5 stock_basic / 1 kline / 2 profit / 3 universe / 4 benchmark / all"
+    )
     p.add_argument("--limit", type=int, default=None, help="限制股数（timing 测试用）")
     p.add_argument("--adjustflag", default="both", help="Layer1: both / 2 (qfq) / 3 (raw)")
     args = p.parse_args()

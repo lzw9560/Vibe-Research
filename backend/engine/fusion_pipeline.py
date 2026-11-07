@@ -9,6 +9,7 @@ date=None → 用 bars cache 里该股最新日（bot 问股无日期时用最�
 case 库模块级缓存（首次 load，后续查询不重读文件）。
 ofi/fund_flow 信号未接（同 T5.3 局限：历史逐笔无法回补；fund_flow 网络限流）。
 """
+
 from __future__ import annotations
 
 import json
@@ -24,12 +25,20 @@ from strategies.premarket_selection import _compute_breakout
 from vr_paths import resolve_data_dir
 
 GAP_REGIME_ENCODE: dict[str, float] = {
-    "无": 0.0, "噪声": 0.1, "反转": 0.5, "动能延续": 0.5, "趋势中继": 0.7, "趋势启动": 0.9,  # S198 flip: 衰竭→动能延续(continuation, gate 5/5 PASS)，暂 0.5 不改 fusion 行为，S199 方向感知重测 re-tune
+    "无": 0.0,
+    "噪声": 0.1,
+    "反转": 0.5,
+    "动能延续": 0.5,
+    "趋势中继": 0.7,
+    "趋势启动": 0.9,  # S198 flip: 衰竭→动能延续(continuation, gate 5/5 PASS)，暂 0.5 不改 fusion 行为，S199 方向感知重测 re-tune
 }
 
 _EMPTY_FUSION: dict = {
-    "regime": "未知", "direction": "中性", "confidence": 0.0,
-    "top_similar_cases": [], "signal_weights": {},
+    "regime": "未知",
+    "direction": "中性",
+    "confidence": 0.0,
+    "top_similar_cases": [],
+    "signal_weights": {},
 }
 
 _case_library_cache: list[dict] | None = None
@@ -43,7 +52,7 @@ def _load_case_library() -> list[dict]:
         if path.exists():
             raw = path.read_text()
             try:
-                _case_library_cache = json.loads(raw[raw.index("["):])
+                _case_library_cache = json.loads(raw[raw.index("[") :])
             except (json.JSONDecodeError, ValueError):
                 _case_library_cache = []
         else:
@@ -82,15 +91,27 @@ def compute_fusion_for_query(stock: str, date: str | None = None) -> dict:
     if idx >= 1:
         gap = _classify_gap_from_bars(bars, idx)
         gap_regime = gap.get("regime", "无")
-        signals.append({"signal_name": "gap", "value": gap_regime,
-                        "confidence": gap.get("confidence", 0.0),
-                        "timestamp": date, "source": "S193"})
+        signals.append(
+            {
+                "signal_name": "gap",
+                "value": gap_regime,
+                "confidence": gap.get("confidence", 0.0),
+                "timestamp": date,
+                "source": "S193",
+            }
+        )
     br = _compute_breakout(bars, date)
     if br:
         breakout_score = br[0]
-        signals.append({"signal_name": "breakout", "value": breakout_score,
-                        "confidence": breakout_score, "timestamp": date,
-                        "source": "premarket_selection"})
+        signals.append(
+            {
+                "signal_name": "breakout",
+                "value": breakout_score,
+                "confidence": breakout_score,
+                "timestamp": date,
+                "source": "premarket_selection",
+            }
+        )
 
     # R1 对齐
     aligned = align_signals(signals, date)
@@ -105,8 +126,7 @@ def compute_fusion_for_query(stock: str, date: str | None = None) -> dict:
     bsw = BayesianSignalWeight()
     fs2 = {"breakout": bsw.weight("breakout", wins, losses), "gap": bsw.weight("gap", 0, 0)}
     # R2 fewshot 检索
-    query = {"breakout_score": breakout_score,
-             "gap_regime_encoded": GAP_REGIME_ENCODE.get(gap_regime, 0.0)}
+    query = {"breakout_score": breakout_score, "gap_regime_encoded": GAP_REGIME_ENCODE.get(gap_regime, 0.0)}
     top_cases = FewshotRetriever(_load_case_library()).retrieve(query, top_k=3)
     # R4 融合
     return fusion_layer(aligned, top_cases, fs2)

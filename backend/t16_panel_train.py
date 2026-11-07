@@ -21,6 +21,7 @@ Features (6, all <= t): short_term_reversal, abnormal_turnover, momentum_20d,
 realized_vol_5d, day_of_week, is_month_end. Macro/external/fund_flow/limitup/
 seat/sentiment/text still DEFERRED (not faked).
 """
+
 from __future__ import annotations
 
 import time
@@ -41,16 +42,33 @@ from predict.evaluate import win_rate, LEAKAGE_WIN_RATE_THRESHOLD
 
 SYMBOL_INDEX = "sh000300"
 UNIVERSE = [
-    "600519", "000858", "600036", "601318", "000333", "600276", "002594",
-    "600030", "000725", "601166", "002475", "600009", "601888", "000651",
-    "600690", "000568", "002271", "601012", "600887", "000063",
+    "600519",
+    "000858",
+    "600036",
+    "601318",
+    "000333",
+    "600276",
+    "002594",
+    "600030",
+    "000725",
+    "601166",
+    "002475",
+    "600009",
+    "601888",
+    "000651",
+    "600690",
+    "000568",
+    "002271",
+    "601012",
+    "600887",
+    "000063",
 ]
 H = 3
-TRAIN_DAYS = 60      # ~3 months of panel training per fold
+TRAIN_DAYS = 60  # ~3 months of panel training per fold
 TEST_DAYS = 5
 STEP_DAYS = 10
-GAP = 8              # embargo(5)+purge(3)
-LOOKBACK = 20        # max feature lookback (momentum_20d)
+GAP = 8  # embargo(5)+purge(3)
+LOOKBACK = 20  # max feature lookback (momentum_20d)
 START = "20240801"
 END = "20260730"
 # dashed 形式供多源解析器返回的 "YYYY-MM-DD" 日期过滤
@@ -58,6 +76,7 @@ _START_DASH, _END_DASH = "2024-08-01", "2026-07-30"
 
 
 # ── fetch ──────────────────────────────────────────────────────────────
+
 
 def fetch_stock(code: str) -> dict[str, dict]:
     """多源异构取个股日K线（``astock.kline_multi``：baidu→sina→mootdx→akshare
@@ -93,6 +112,7 @@ def fetch_index() -> dict[str, dict]:
 
 # ── features ──────────────────────────────────────────────────────────
 
+
 def stock_features(hist: list[dict], date: str, date_str: str, last_in_month: bool):
     """6 features from this stock's kline up to and including `date`. None if insufficient."""
     if len(hist) < LOOKBACK + 1:
@@ -118,7 +138,7 @@ def _momentum(hist, w):
 
 
 def _realized_vol(hist, w):
-    c = np.array([h["close"] for h in hist[-(w + 1):]], dtype=float)
+    c = np.array([h["close"] for h in hist[-(w + 1) :]], dtype=float)
     if len(c) < w + 1:
         return None
     rets = np.diff(c) / c[:-1]
@@ -126,6 +146,7 @@ def _realized_vol(hist, w):
 
 
 # ── panel build ───────────────────────────────────────────────────────
+
 
 def build_panel(stocks, index, dates_all):
     """Return (dates, X, y, stock_ids) panel over common trading dates.
@@ -144,7 +165,7 @@ def build_panel(stocks, index, dates_all):
         # stock fwd return vs index fwd return
         idx_close_now = index.get(d, {}).get("close")
         idx_close_fwd = index.get(common[di + H], {}).get("close") if di + H < len(common) else None
-        rel_label_ok = (idx_close_now is not None and idx_close_fwd is not None)
+        rel_label_ok = idx_close_now is not None and idx_close_fwd is not None
         for c in stocks:
             # advance this stock's history to date d
             hd = stocks[c].get(d)
@@ -173,16 +194,16 @@ def build_panel(stocks, index, dates_all):
 
 # ── walk-forward panel ────────────────────────────────────────────────
 
-def panel_walk_forward(dates, X, y, train_days=TRAIN_DAYS, test_days=TEST_DAYS,
-                       step_days=STEP_DAYS, gap=GAP):
+
+def panel_walk_forward(dates, X, y, train_days=TRAIN_DAYS, test_days=TEST_DAYS, step_days=STEP_DAYS, gap=GAP):
     """Yield (train_idx, test_idx) over the panel, date-aligned."""
     uniq = sorted(set(dates))
     {d: [i for i, dd in enumerate(dates) if dd == d] for d in uniq}
     folds = []
     t = train_days + gap
     while t + test_days <= len(uniq):
-        tr_dates = set(uniq[t - gap - train_days: t - gap])
-        te_dates = set(uniq[t: t + test_days])
+        tr_dates = set(uniq[t - gap - train_days : t - gap])
+        te_dates = set(uniq[t : t + test_days])
         tr = [i for i, dd in enumerate(dates) if dd in tr_dates]
         te = [i for i, dd in enumerate(dates) if dd in te_dates]
         if tr and te:
@@ -193,7 +214,9 @@ def panel_walk_forward(dates, X, y, train_days=TRAIN_DAYS, test_days=TEST_DAYS,
 
 def main():
     print(f"akshare {ak.__version__}; benchmark {SYMBOL_INDEX}; universe {len(UNIVERSE)} stocks")
-    print(f"  fetch window {START}..{END}; H={H} train_days={TRAIN_DAYS} test_days={TEST_DAYS} step={STEP_DAYS} gap={GAP}")
+    print(
+        f"  fetch window {START}..{END}; H={H} train_days={TRAIN_DAYS} test_days={TEST_DAYS} step={STEP_DAYS} gap={GAP}"
+    )
     print("  fetching index + stocks (qfq, unified caliber)...")
     index = fetch_index()
     stocks = {}
@@ -233,8 +256,10 @@ def main():
     agg = float(np.mean(wrs))
     # also a baseline: predict majority class
     base = max(y.mean(), 1 - y.mean())
-    print(f"\n  [aggregated cross-sectional OOS] folds={len(wrs)} mean_win_rate={agg:.3f} "
-          f"(majority baseline={base:.3f})  leakage_flag(>{LEAKAGE_WIN_RATE_THRESHOLD:.0%})={agg > LEAKAGE_WIN_RATE_THRESHOLD}")
+    print(
+        f"\n  [aggregated cross-sectional OOS] folds={len(wrs)} mean_win_rate={agg:.3f} "
+        f"(majority baseline={base:.3f})  leakage_flag(>{LEAKAGE_WIN_RATE_THRESHOLD:.0%})={agg > LEAKAGE_WIN_RATE_THRESHOLD}"
+    )
 
     # top-quintile vs bottom-quintile realized relative return (alpha check)
     last_tr, last_te, _, _ = folds[-1]
@@ -244,16 +269,18 @@ def main():
     # rank test samples by proba, split into top/bottom quintile, measure actual outperformance rate
     order = np.argsort(proba)
     n = len(order)
-    top = order[int(0.8 * n):]
+    top = order[int(0.8 * n) :]
     bot = order[: int(0.2 * n)]
-    print(f"  [last fold quintile spread] top-q outperform rate={y[last_te][top].mean():.3f}  "
-          f"bottom-q outperform rate={y[last_te][bot].mean():.3f}  (positive spread => alpha)")
+    print(
+        f"  [last fold quintile spread] top-q outperform rate={y[last_te][top].mean():.3f}  "
+        f"bottom-q outperform rate={y[last_te][bot].mean():.3f}  (positive spread => alpha)"
+    )
 
     print(f"\n  Backends (last fold): {e.backends()}")
     print("  NOTE: last-fold quintile spread above is NOT an alpha claim — single fold,")
     print("  tiny sample, rising-market biased. Trust the aggregated OOS vs majority")
     print("  baseline across all folds, not the last-fold quintile.")
-    print("  Data: stocks via baidu qfq (adjust=\"qfq\" caliber-unified, no raw fallback);")
+    print('  Data: stocks via baidu qfq (adjust="qfq" caliber-unified, no raw fallback);')
     print("  index via akshare stock_zh_index_daily. Empty-bar stocks are dropped, not faked.")
 
 

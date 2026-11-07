@@ -48,6 +48,7 @@ _logger = logging.getLogger(__name__)
 # 模块导入时自动运行迁移（幂等）
 try:
     from limitup_screener.data import run_migrations
+
     run_migrations()
 except Exception as e:
     _logger.warning("[limitup_screener] 自动迁移失败（不影响主流程）: %s", e)

@@ -27,6 +27,7 @@ A 股散户可交易 (做多被剔除股博反弹, 不需做空).
 - 禁止外推: 单事件策略 ≠ 事件驱动有/无 edge ≠ 短线有/无 edge
 - 半年一次 rebalance → 8 年 ~13-16 distinct effective dates < 60 → 结构性 underpowered
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -43,9 +44,15 @@ import baostock as bs
 
 # import shared helpers (DRY) — reuse statistical functions
 import sys
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tools._factor_helpers import (  # noqa: E402
-    ev_stats, day_paired_t, bonferroni_p, norm_sf_positive, ALPHA, COST,
+    ev_stats,
+    day_paired_t,
+    bonferroni_p,
+    norm_sf_positive,
+    ALPHA,
+    COST,
 )
 
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
@@ -58,8 +65,8 @@ from vr_paths import resolve_data_dir
 ROOT = Path(__file__).resolve().parents[2]
 DATA = resolve_data_dir()
 KLINE_DB = DATA / "baostock_kline_cache.db"
-DIFF_CACHE = DATA / "_idx_constituent_diff_cache.json"   # constituent diff (eff dates + add/remove)
-FETCH_CACHE = DATA / "_idx_add_fetch_cache.json"         # reuse addition fetch cache (shared kline fetches)
+DIFF_CACHE = DATA / "_idx_constituent_diff_cache.json"  # constituent diff (eff dates + add/remove)
+FETCH_CACHE = DATA / "_idx_add_fetch_cache.json"  # reuse addition fetch cache (shared kline fetches)
 REGIME_FILE = DATA / "index_ma20_regime.json"
 
 # matched index per source index (the index the stock was REMOVED from)
@@ -76,7 +83,7 @@ INDEX_QUERY = {
 
 # event windows (relative to effective date, in trading days)
 WINDOWS = [
-    ("T5", 5),    # entry=eff+1 open, exit=eff+5 close  (4 trading-day hold)
+    ("T5", 5),  # entry=eff+1 open, exit=eff+5 close  (4 trading-day hold)
     ("T10", 10),  # entry=eff+1 open, exit=eff+10 close (9 trading-day hold)
 ]
 
@@ -84,6 +91,7 @@ CROSS_STRATEGY_N = 4  # Bonferroni ×4 (index-removal × index-addition × basic
 
 
 # ---------- baostock constituent queries (with diff caching) ----------
+
 
 def _login() -> None:
     lg = bs.login()
@@ -104,8 +112,7 @@ def query_constituents(index_key: str, d: str) -> set[str]:
 
 def second_friday(year: int, month: int) -> str:
     c = calendar.Calendar()
-    fridays = [d for d in c.itermonthdates(year, month)
-               if d.weekday() == 4 and d.month == month]
+    fridays = [d for d in c.itermonthdates(year, month) if d.weekday() == 4 and d.month == month]
     return fridays[1].isoformat()
 
 
@@ -152,11 +159,15 @@ def get_removals(index_key: str, do_probe: bool = True) -> list[dict]:
         removals: list[dict] = []
         for ev in cached:
             for c in ev["removed"]:
-                removals.append({
-                    "code": c, "code6": c.split(".")[1],
-                    "effective_date": ev["effective_date"],
-                    "index_key": index_key, "direction": "remove",
-                })
+                removals.append(
+                    {
+                        "code": c,
+                        "code6": c.split(".")[1],
+                        "effective_date": ev["effective_date"],
+                        "index_key": index_key,
+                        "direction": "remove",
+                    }
+                )
         return removals
 
     if not do_probe:
@@ -176,18 +187,23 @@ def get_removals(index_key: str, do_probe: bool = True) -> list[dict]:
             time.sleep(0.3)
             added = sorted(new - old)
             removed = sorted(old - new)
-            events_meta.append({
-                "effective_date": eff, "year": year, "month": month,
-                "added": added, "removed": removed,
-            })
-            print(f"  [{index_key} {year}-{month:02d}] eff={eff} "
-                  f"added={len(added)} removed={len(removed)}")
+            events_meta.append(
+                {
+                    "effective_date": eff,
+                    "year": year,
+                    "month": month,
+                    "added": added,
+                    "removed": removed,
+                }
+            )
+            print(f"  [{index_key} {year}-{month:02d}] eff={eff} added={len(added)} removed={len(removed)}")
     dc[index_key] = events_meta
     save_diff_cache(dc)
     return get_removals(index_key, do_probe=False)
 
 
 # ---------- kline (cache + baostock fetch) ----------
+
 
 def load_kline_cache() -> dict[str, dict[str, dict]]:
     conn = sqlite3.connect(str(KLINE_DB))
@@ -222,8 +238,13 @@ def save_fetch_cache(fc: dict) -> None:
 def fetch_kline_baostock(code: str, start: str, end: str) -> dict[str, dict]:
     """Fetch daily kline for one code from baostock. Returns {date: bar}."""
     rs = bs.query_history_k_data_plus(
-        code, "date,open,high,low,close,volume,amount,turn,pctChg",
-        start_date=start, end_date=end, frequency="d", adjustflag="3")
+        code,
+        "date,open,high,low,close,volume,amount,turn,pctChg",
+        start_date=start,
+        end_date=end,
+        frequency="d",
+        adjustflag="3",
+    )
     if rs.error_code != "0":
         return {}
     dmap: dict[str, dict] = {}
@@ -233,8 +254,11 @@ def fetch_kline_baostock(code: str, start: str, end: str) -> dict[str, dict]:
             continue
         try:
             dmap[r[0]] = {
-                "date": r[0], "open": float(r[1]), "high": float(r[2]),
-                "low": float(r[3]), "close": float(r[4]),
+                "date": r[0],
+                "open": float(r[1]),
+                "high": float(r[2]),
+                "low": float(r[3]),
+                "close": float(r[4]),
                 "volume": float(r[5]) if r[5] else 0.0,
                 "turn": float(r[7]) if r[7] else 0.0,
                 "pctChg": float(r[8]) if r[8] else 0.0,
@@ -244,8 +268,9 @@ def fetch_kline_baostock(code: str, start: str, end: str) -> dict[str, dict]:
     return dmap
 
 
-def get_kline_for_removal(rem: dict, code_map: dict, fetch_cache: dict,
-                          do_fetch: bool = True) -> dict[str, dict] | None:
+def get_kline_for_removal(
+    rem: dict, code_map: dict, fetch_cache: dict, do_fetch: bool = True
+) -> dict[str, dict] | None:
     """Get kline bars around effective date. Cache first, then baostock fetch if gap.
     Returns {date: bar} covering effective-3 .. effective+15, or None."""
     code6 = rem["code6"]
@@ -280,16 +305,23 @@ def get_kline_for_removal(rem: dict, code_map: dict, fetch_cache: dict,
 def fetch_index_kline(index_code: str) -> tuple[dict[str, dict], list[str]]:
     """Full-period index kline (2018-01 to 2026-09). Returns (date->bar, sorted trading days)."""
     rs = bs.query_history_k_data_plus(
-        index_code, "date,open,high,low,close,volume,amount,turn,pctChg",
-        start_date="2018-01-01", end_date="2026-09-30",
-        frequency="d", adjustflag="3")
+        index_code,
+        "date,open,high,low,close,volume,amount,turn,pctChg",
+        start_date="2018-01-01",
+        end_date="2026-09-30",
+        frequency="d",
+        adjustflag="3",
+    )
     dmap: dict[str, dict] = {}
     while rs.error_code == "0" and rs.next():
         r = rs.get_row_data()
         try:
             dmap[r[0]] = {
-                "date": r[0], "open": float(r[1]), "high": float(r[2]),
-                "low": float(r[3]), "close": float(r[4]),
+                "date": r[0],
+                "open": float(r[1]),
+                "high": float(r[2]),
+                "low": float(r[3]),
+                "close": float(r[4]),
             }
         except (ValueError, IndexError):
             continue
@@ -298,9 +330,10 @@ def fetch_index_kline(index_code: str) -> tuple[dict[str, dict], list[str]]:
 
 # ---------- BHAR computation ----------
 
-def compute_bhar(rem: dict, bars: dict[str, dict],
-                 idx_bars: dict[str, dict], idx_dates: list[str],
-                 window_n: int) -> dict | None:
+
+def compute_bhar(
+    rem: dict, bars: dict[str, dict], idx_bars: dict[str, dict], idx_dates: list[str], window_n: int
+) -> dict | None:
     """BHAR for one removal.
     entry = effective+1 open, exit = effective+N close (N=window_n).
     stock_ret = (close_N - open_1) / open_1
@@ -345,15 +378,20 @@ def compute_bhar(rem: dict, bars: dict[str, dict],
 
     bhar = stock_ret - index_ret
     return {
-        "bhar": round(bhar, 4), "stock_ret": round(stock_ret, 4),
+        "bhar": round(bhar, 4),
+        "stock_ret": round(stock_ret, 4),
         "index_ret": round(index_ret, 4),
-        "entry_date": entry_date, "exit_date": exit_date,
-        "effective_date": eff, "code": rem["code"], "code6": rem["code6"],
+        "entry_date": entry_date,
+        "exit_date": exit_date,
+        "effective_date": eff,
+        "code": rem["code"],
+        "code6": rem["code6"],
         "index_key": rem["index_key"],
     }
 
 
 # ---------- build_picks: diff + kline + BHAR (per window) ----------
+
 
 def build_picks(
     removals: list[dict],
@@ -383,8 +421,10 @@ def build_picks(
             n_fetched += 1
         else:
             n_cached += 1
-    print(f"  kline usable: {len(bars_by_rem)}/{len(removals)} "
-          f"(cached={n_cached} fetched={n_fetched} missing={n_missing})")
+    print(
+        f"  kline usable: {len(bars_by_rem)}/{len(removals)} "
+        f"(cached={n_cached} fetched={n_fetched} missing={n_missing})"
+    )
 
     picks_by_window: dict[str, list[dict]] = {}
     for wname, wn in WINDOWS:
@@ -405,6 +445,7 @@ def build_picks(
 
 # ---------- regime ----------
 
+
 def load_regime() -> dict[str, str]:
     """date -> regime ('strong'/'weak'/'range')."""
     if not REGIME_FILE.exists():
@@ -422,6 +463,7 @@ def load_regime() -> dict[str, str]:
 
 # ---------- per-event t (descriptive) ----------
 
+
 def per_event_t(rets: list[float]) -> dict:
     n = len(rets)
     if n == 0:
@@ -431,20 +473,18 @@ def per_event_t(rets: list[float]) -> dict:
     se = std / sqrt(n) if n > 0 else 0.0
     t = mean / se if se > 0 else 0.0
     p = norm_sf_positive(t)
-    return {"n": n, "mean": round(mean, 4), "std": round(std, 4),
-            "t": round(t, 2), "p_one_sided": round(p, 6)}
+    return {"n": n, "mean": round(mean, 4), "std": round(std, 4), "t": round(t, 2), "p_one_sided": round(p, 6)}
 
 
 # ---------- DSR estimation ----------
 
-def estimate_dsr(ev_mean: float, ev_std: float, n_events: int,
-                 n_trials: int) -> dict:
+
+def estimate_dsr(ev_mean: float, ev_std: float, n_events: int, n_trials: int) -> dict:
     """Approximate Deflated Sharpe Ratio (Bailey & Lopez de Prado 2014).
     Multiple-testing haircut: ann Sharpe must exceed expected max SR under H0
     = sqrt(2*ln(N_trials)) to survive."""
     if ev_std <= 0 or n_events <= 0:
-        return {"event_sharpe": 0, "ann_sharpe": 0, "dsr_approx": 0,
-                "expected_max_sr": 0, "n_trials": n_trials}
+        return {"event_sharpe": 0, "ann_sharpe": 0, "dsr_approx": 0, "expected_max_sr": 0, "n_trials": n_trials}
     event_sharpe = ev_mean / ev_std
     # semiannual rebalance: ~2 events/yr per index, ~6 indices-of-events/yr spread →
     # use n_events/8yr as events-per-year proxy
@@ -462,6 +502,7 @@ def estimate_dsr(ev_mean: float, ev_std: float, n_events: int,
 
 
 # ---------- per-window BHAR analysis (PRIMARY, gated) ----------
+
 
 def analyze_window_bhar(name: str, picks: list[dict]) -> dict:
     """Full BHAR analysis on one window: stats + day-paired t + walk-forward + regime.
@@ -485,9 +526,11 @@ def analyze_window_bhar(name: str, picks: list[dict]) -> dict:
     ev = ev_stats(bhars)
     net_bhar = ev["ev"] - COST * 100
     print(f"\n  [PRIMARY: BHAR = stock_ret - matched_index_ret]")
-    print(f"    n={ev['n']} BHAR_gross={ev['ev']}% std={ev['std']}% "
-          f"WR={ev['wr']}% t={ev['t']} CI[{ev['ci_lo']},{ev['ci_hi']}]")
-    print(f"    BHAR_net (after {COST*100:.1f}% cost): {net_bhar:.3f}%")
+    print(
+        f"    n={ev['n']} BHAR_gross={ev['ev']}% std={ev['std']}% "
+        f"WR={ev['wr']}% t={ev['t']} CI[{ev['ci_lo']},{ev['ci_hi']}]"
+    )
+    print(f"    BHAR_net (after {COST * 100:.1f}% cost): {net_bhar:.3f}%")
 
     # per-event t (descriptive)
     pet = per_event_t(bhars)
@@ -503,10 +546,8 @@ def analyze_window_bhar(name: str, picks: list[dict]) -> dict:
     p_raw = dt["p_one_sided"]
     p_bonf = bonferroni_p(p_raw, CROSS_STRATEGY_N)
     print(f"\n  [per-day-mean t (PRIMARY, cluster by effective date)]")
-    print(f"    n_days={dt['n_days']} mean={dt['mean']}% std={dt['std']}% "
-          f"t={dt['t']} p_one_sided={p_raw}")
-    print(f"    Bonferroni ×{CROSS_STRATEGY_N}: p={p_bonf:.6f} "
-          f"({'PASS' if p_bonf < ALPHA else 'FAIL'} @ α={ALPHA})")
+    print(f"    n_days={dt['n_days']} mean={dt['mean']}% std={dt['std']}% t={dt['t']} p_one_sided={p_raw}")
+    print(f"    Bonferroni ×{CROSS_STRATEGY_N}: p={p_bonf:.6f} ({'PASS' if p_bonf < ALPHA else 'FAIL'} @ α={ALPHA})")
 
     # per-index breakdown
     print(f"\n  per-index BHAR:")
@@ -542,12 +583,12 @@ def analyze_window_bhar(name: str, picks: list[dict]) -> dict:
         te_ev = ev_stats(test_rets)
         tr_dt = day_paired_t({d: by_date[d] for d in train_dates})
         te_dt = day_paired_t({d: by_date[d] for d in test_dates})
-        print(f"    train: n_dates={len(train_dates)} n={tr_ev['n']} "
-              f"BHAR={tr_ev['ev']}% t={tr_dt['t']} (day-paired)")
-        print(f"    test:  n_dates={len(test_dates)} n={te_ev['n']} "
-              f"BHAR={te_ev['ev']}% t={te_dt['t']} p={te_dt['p_one_sided']}")
-        decay = ((tr_ev["ev"] - te_ev["ev"]) / abs(tr_ev["ev"]) * 100
-                 if tr_ev["ev"] != 0 else 0)
+        print(f"    train: n_dates={len(train_dates)} n={tr_ev['n']} BHAR={tr_ev['ev']}% t={tr_dt['t']} (day-paired)")
+        print(
+            f"    test:  n_dates={len(test_dates)} n={te_ev['n']} "
+            f"BHAR={te_ev['ev']}% t={te_dt['t']} p={te_dt['p_one_sided']}"
+        )
+        decay = (tr_ev["ev"] - te_ev["ev"]) / abs(tr_ev["ev"]) * 100 if tr_ev["ev"] != 0 else 0
         print(f"    decay: {decay:.0f}% (train→test)")
         wf_status = "ok"
         wf_train_bhar = tr_ev["ev"]
@@ -583,6 +624,7 @@ def analyze_window_bhar(name: str, picks: list[dict]) -> dict:
 
 # ---------- verdict cascade: GATE BHAR (not raw EV) ----------
 
+
 def verdict_bhar_gated(r: dict) -> str:
     """§44 v3 verdict cascade — gates on BHAR (除权除息教训: raw EV 含 beta).
     Cascade:
@@ -601,29 +643,37 @@ def verdict_bhar_gated(r: dict) -> str:
     t_day = r["day_t"]
     p_bonf = r["p_bonf"]
     print(f"\n  --- verdict cascade (BHAR-gated, §44 v3) ---")
-    print(f"    bhar_gross={g}% bhar_net={net:.3f}% day_t={t_day} "
-          f"Bonf×{CROSS_STRATEGY_N}={p_bonf:.6f} n_dates={n_dates}")
-    print(f"    [descriptive raw stock_ret={r['raw_stock_ret_mean']}% — NOT gated, "
-          f"market beta; if raw>0 but BHAR<0 → fake edge = market drift]")
+    print(
+        f"    bhar_gross={g}% bhar_net={net:.3f}% day_t={t_day} Bonf×{CROSS_STRATEGY_N}={p_bonf:.6f} n_dates={n_dates}"
+    )
+    print(
+        f"    [descriptive raw stock_ret={r['raw_stock_ret_mean']}% — NOT gated, "
+        f"market beta; if raw>0 but BHAR<0 → fake edge = market drift]"
+    )
     if r["wf_status"] == "ok":
-        print(f"    walk-forward: train_BHAR={r['wf_train_bhar']}% "
-              f"test_BHAR={r['wf_test_bhar']}% test_p={r['wf_test_p']} "
-              f"(n_test_dates={r['wf_n_test_dates']})")
+        print(
+            f"    walk-forward: train_BHAR={r['wf_train_bhar']}% "
+            f"test_BHAR={r['wf_test_bhar']}% test_p={r['wf_test_p']} "
+            f"(n_test_dates={r['wf_n_test_dates']})"
+        )
 
     if g < 0:
         # §44 v2: 小n不判劣于随机 — gross<0 with n_dates<30 = underpowered not falsified
         # (3 dates could be regime artifact; need ≥30 to definitively falsify a loser)
         if n_dates >= 30:
-            print(f"    → FALSIFIED: bhar_gross={g}% < 0 (no post-removal bounce; "
-                  f"n_dates={n_dates}≥30; if raw_ret>0 it was market beta not abnormal)")
+            print(
+                f"    → FALSIFIED: bhar_gross={g}% < 0 (no post-removal bounce; "
+                f"n_dates={n_dates}≥30; if raw_ret>0 it was market beta not abnormal)"
+            )
             return "edge-falsified"
-        print(f"    → UNDERPOWERED: bhar_gross={g}% < 0 BUT n_dates={n_dates} < 30 "
-              f"(suggestive negative — no bounce support, but can't definitively "
-              f"falsify from {n_dates} dates; §44 v2 小n不判劣于随机)")
+        print(
+            f"    → UNDERPOWERED: bhar_gross={g}% < 0 BUT n_dates={n_dates} < 30 "
+            f"(suggestive negative — no bounce support, but can't definitively "
+            f"falsify from {n_dates} dates; §44 v2 小n不判劣于随机)"
+        )
         return "underpowered"
     if n_dates < 60:
-        print(f"    → UNDERPOWERED: n_dates={n_dates} < 60 "
-              f"(结构性: 半年 rebalance, 8 年 ~13-16 event dates)")
+        print(f"    → UNDERPOWERED: n_dates={n_dates} < 60 (结构性: 半年 rebalance, 8 年 ~13-16 event dates)")
         return "underpowered"
     if p_bonf >= ALPHA:
         print(f"    → FALSIFIED: Bonferroni p={p_bonf} >= {ALPHA} (not significant)")
@@ -633,16 +683,20 @@ def verdict_bhar_gated(r: dict) -> str:
         return "edge-falsified"
     if r["wf_status"] == "ok":
         if r["wf_train_bhar"] <= 0:
-            print(f"    → EXPLORATORY: train_BHAR={r['wf_train_bhar']}% <= 0 "
-                  f"(edge not in train half, test may be regime overfit)")
+            print(
+                f"    → EXPLORATORY: train_BHAR={r['wf_train_bhar']}% <= 0 "
+                f"(edge not in train half, test may be regime overfit)"
+            )
             return "exploratory"
         if r["wf_test_bhar"] <= 0:
             print(f"    → FALSIFIED: walk-forward test_BHAR={r['wf_test_bhar']}% <= 0")
             return "edge-falsified"
         wf_p_bonf = bonferroni_p(r["wf_test_p"], CROSS_STRATEGY_N)
         if wf_p_bonf >= ALPHA:
-            print(f"    → EXPLORATORY: OOS BHAR>0 but test p={r['wf_test_p']} "
-                  f"Bonf×{CROSS_STRATEGY_N}={wf_p_bonf} >= {ALPHA} (not significant OOS)")
+            print(
+                f"    → EXPLORATORY: OOS BHAR>0 but test p={r['wf_test_p']} "
+                f"Bonf×{CROSS_STRATEGY_N}={wf_p_bonf} >= {ALPHA} (not significant OOS)"
+            )
             return "exploratory"
         print(f"    → EDGE-CONFIRMED: BHAR>0, Bonf PASS, OOS significant")
         return "edge-confirmed"
@@ -651,6 +705,7 @@ def verdict_bhar_gated(r: dict) -> str:
 
 
 # ---------- main ----------
+
 
 def main() -> None:
     _login()
@@ -682,14 +737,14 @@ def main() -> None:
     print(f"\n  TOTAL removals (all indices, all rebalances): {len(all_removals)}")
     eff_dates_all = sorted(set(r["effective_date"] for r in all_removals))
     if eff_dates_all:
-        print(f"  distinct effective dates: {len(eff_dates_all)} "
-              f"({eff_dates_all[0]}~{eff_dates_all[-1]})")
-        print(f"  ⚠ 结构性限制: 半年一次 rebalance → per-day-mean t N_days={len(eff_dates_all)} "
-              f"< 60 → 预期 underpowered (诚实标注)")
+        print(f"  distinct effective dates: {len(eff_dates_all)} ({eff_dates_all[0]}~{eff_dates_all[-1]})")
+        print(
+            f"  ⚠ 结构性限制: 半年一次 rebalance → per-day-mean t N_days={len(eff_dates_all)} "
+            f"< 60 → 预期 underpowered (诚实标注)"
+        )
     else:
         print("  无 removals 检出 → no-data")
-        _final_summary(0, 0, 0.0, 0.0, 0.0, "no-data",
-                       "No removals detected from constituent diff")
+        _final_summary(0, 0, 0.0, 0.0, 0.0, "no-data", "No removals detected from constituent diff")
         bs.logout()
         return
 
@@ -722,26 +777,30 @@ def main() -> None:
     primary = results.get("T5")
     if primary and primary.get("n_picks", 0) > 0:
         print(f"\n  primary window: T5")
-        print(f"    n_events={primary['n_events']} n_dates={primary['n_dates']} "
-              f"BHAR_gross={primary['bhar_gross']}% BHAR_net={primary['bhar_net']:.3f}%")
-        print(f"    day_t={primary['day_t']} p_raw={primary['p_raw']} "
-              f"Bonf×{CROSS_STRATEGY_N}={primary['p_bonf']}")
+        print(
+            f"    n_events={primary['n_events']} n_dates={primary['n_dates']} "
+            f"BHAR_gross={primary['bhar_gross']}% BHAR_net={primary['bhar_net']:.3f}%"
+        )
+        print(f"    day_t={primary['day_t']} p_raw={primary['p_raw']} Bonf×{CROSS_STRATEGY_N}={primary['p_bonf']}")
         print(f"    [descriptive raw stock_ret={primary['raw_stock_ret_mean']}% — market beta, NOT gated]")
         if primary["wf_status"] == "ok":
-            print(f"    walk-forward: train={primary['wf_train_bhar']}% "
-                  f"test={primary['wf_test_bhar']}% test_p={primary['wf_test_p']} "
-                  f"(n_test_dates={primary['wf_n_test_dates']})")
+            print(
+                f"    walk-forward: train={primary['wf_train_bhar']}% "
+                f"test={primary['wf_test_bhar']}% test_p={primary['wf_test_p']} "
+                f"(n_test_dates={primary['wf_n_test_dates']})"
+            )
         print(f"    verdict: {primary.get('verdict', '?')}")
 
     print(f"\n  --- DSR/PBO 适用性 ---")
     if primary and primary.get("bhar_std", 0) > 0:
         n_trials = CROSS_STRATEGY_N * len(WINDOWS)  # ×4 strategies-variants ×2 windows
-        dsr = estimate_dsr(primary["bhar_gross"], primary["bhar_std"],
-                           primary["n_events"], n_trials)
+        dsr = estimate_dsr(primary["bhar_gross"], primary["bhar_std"], primary["n_events"], n_trials)
         print(f"  DSR estimate (event-level Sharpe, haircut):")
-        print(f"    event Sharpe={dsr['event_sharpe']} ann Sharpe={dsr['ann_sharpe']} "
-              f"expected_max_sr(n_trials={n_trials})={dsr['expected_max_sr']} "
-              f"DSR_approx={dsr['dsr_approx']}")
+        print(
+            f"    event Sharpe={dsr['event_sharpe']} ann Sharpe={dsr['ann_sharpe']} "
+            f"expected_max_sr(n_trials={n_trials})={dsr['expected_max_sr']} "
+            f"DSR_approx={dsr['dsr_approx']}"
+        )
         if dsr["dsr_approx"] < 0:
             print(f"    → DSR<0: 多重检验校正后 Sharpe 不显著 (overfitting 风险)")
         else:
@@ -754,8 +813,12 @@ def main() -> None:
     if primary and primary.get("n_picks", 0) > 0:
         v = primary.get("verdict", "exploratory")
         _final_summary(
-            primary["n_events"], primary["n_dates"],
-            primary["bhar_gross"], primary["bhar_net"], primary["p_bonf"], v,
+            primary["n_events"],
+            primary["n_dates"],
+            primary["bhar_gross"],
+            primary["bhar_net"],
+            primary["p_bonf"],
+            v,
             f"primary T5: BHAR_gross={primary['bhar_gross']}% (raw stock_ret="
             f"{primary['raw_stock_ret_mean']}% market-beta-ungated) "
             f"net={primary['bhar_net']:.3f}% day_t={primary['day_t']} "
@@ -768,31 +831,32 @@ def main() -> None:
             f"| 禁止外推: 单事件≠事件驱动/短线有/无edge",
         )
     else:
-        _final_summary(0, 0, 0.0, 0.0, 0.0, "no-data",
-                       "No valid BHAR picks after matching removals to kline")
+        _final_summary(0, 0, 0.0, 0.0, 0.0, "no-data", "No valid BHAR picks after matching removals to kline")
 
     bs.logout()
 
 
-def _final_summary(n_events: int, n_dates: int, bhar_gross: float,
-                   bhar_net: float, p_bonf: float, verdict: str,
-                   key_finding: str) -> None:
+def _final_summary(
+    n_events: int, n_dates: int, bhar_gross: float, bhar_net: float, p_bonf: float, verdict: str, key_finding: str
+) -> None:
     print(f"\n{'=' * 72}")
     print(f"[FINAL SUMMARY]")
     print(f"{'=' * 72}")
     print(f"策略: 指数调出 post-removal bounce (hs300/sz50/zz500 removals)")
-    print(f"数据: baostock 历史成份股 diff (2018-2026, 3 rebalance baostock gap) + "
-          f"kline cache + baostock 补缺 fetch + matched index kline")
+    print(
+        f"数据: baostock 历史成份股 diff (2018-2026, 3 rebalance baostock gap) + "
+        f"kline cache + baostock 补缺 fetch + matched index kline"
+    )
     print(f"  entry=effective+1 open, exit=effective+5/+10 close, BHAR vs 同指数")
     print(f"  verdict cascade GATE BHAR (非 raw EV — 除权除息 cascade flaw 教训)")
-    print(f"  n_events={n_events} n_dates={n_dates} BHAR_gross={bhar_gross}% "
-          f"BHAR_net={bhar_net:.3f}% Bonf×{CROSS_STRATEGY_N}={p_bonf:.4f}")
+    print(
+        f"  n_events={n_events} n_dates={n_dates} BHAR_gross={bhar_gross}% "
+        f"BHAR_net={bhar_net:.3f}% Bonf×{CROSS_STRATEGY_N}={p_bonf:.4f}"
+    )
     print(f"verdict: {verdict}")
     print(f"key: {key_finding}")
-    print(f"诚实约束: post-removal 口径 (非 announcement pre-effective); "
-          f"n_dates<60 结构性 underpowered;")
-    print(f"          调出含 selection (指数公司剔除 decline/ST/退市, 非 winner; "
-          f"缺 bar 偏存活) — 已审。")
+    print(f"诚实约束: post-removal 口径 (非 announcement pre-effective); n_dates<60 结构性 underpowered;")
+    print(f"          调出含 selection (指数公司剔除 decline/ST/退市, 非 winner; 缺 bar 偏存活) — 已审。")
     print(f"禁止外推: 单事件策略 ≠ 事件驱动有/无 edge ≠ 短线有/无 edge。")
 
 

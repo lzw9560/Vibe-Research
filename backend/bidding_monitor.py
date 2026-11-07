@@ -14,6 +14,7 @@ from data.mappers import quote_from_tencent
 @dataclass
 class AuctionSignal:
     """集合竞价信号。"""
+
     code: str
     name: str
     open_premium: float
@@ -28,9 +29,9 @@ class AuctionSignal:
 
 # 不同市值的竞价金额阈值
 _AUCTION_THRESHOLDS = {
-    "small":  {"amount_min": 3_000_000,  "volume_ratio_min": 3.0},
-    "mid":    {"amount_min": 10_000_000, "volume_ratio_min": 2.5},
-    "large":  {"amount_min": 30_000_000, "volume_ratio_min": 2.0},
+    "small": {"amount_min": 3_000_000, "volume_ratio_min": 3.0},
+    "mid": {"amount_min": 10_000_000, "volume_ratio_min": 2.5},
+    "large": {"amount_min": 30_000_000, "volume_ratio_min": 2.0},
 }
 
 
@@ -49,13 +50,19 @@ async def build_auction_watchlist(limit: int = 20) -> list[str]:
     避免当日 screener 尚未预计算时返回空列表。
     """
     try:
-        from limitup_screener import public_get_cache, public_get_cache_ttl, public_resolve_date, public_load_gene_scores
+        from limitup_screener import (
+            public_get_cache,
+            public_get_cache_ttl,
+            public_resolve_date,
+            public_load_gene_scores,
+        )
         from limitup_screener.service import _COMPUTING
 
         # 使用前一交易日日期
         target_date = await public_resolve_date(None)
         # 前一交易日（非日历日 -1，跨周末取非交易日→cache miss）
         from vr_paths import prev_trading_date_str
+
         prev_date = prev_trading_date_str(datetime.strptime(target_date, "%Y%m%d").date()).replace("-", "")
         cache_key = f"limitup_screener_{prev_date}"
         now = time.time()
@@ -143,12 +150,20 @@ def analyze_final_auction(snapshots: list[dict]) -> list[AuctionSignal]:
         # S128 R1：degraded（quote 失败，critical 字段 None）→ 不生成信号（不喂 0 触发
         # "缩量平开"/错 tier "爆量高开"），返 "无信号" + reason。
         if snap.get("data_status") == "degraded":
-            signals.append(AuctionSignal(
-                code=code, name=name, open_premium=0.0, auction_amount=0.0,
-                volume_ratio=0.0, cancel_rate=0.0, market_cap_tier="unknown",
-                signal_type="无信号", confidence=0.0,
-                reasoning=["行情取数失败（degraded），不生成竞价信号"],
-            ))
+            signals.append(
+                AuctionSignal(
+                    code=code,
+                    name=name,
+                    open_premium=0.0,
+                    auction_amount=0.0,
+                    volume_ratio=0.0,
+                    cancel_rate=0.0,
+                    market_cap_tier="unknown",
+                    signal_type="无信号",
+                    confidence=0.0,
+                    reasoning=["行情取数失败（degraded），不生成竞价信号"],
+                )
+            )
             continue
         open_premium = snap.get("open_premium") or 0
         amount = snap.get("auction_amount") or 0
@@ -163,11 +178,7 @@ def analyze_final_auction(snapshots: list[dict]) -> list[AuctionSignal]:
         signal_type = "无信号"
 
         # 爆量高开
-        if (
-            open_premium >= 0.02
-            and amount >= threshold["amount_min"]
-            and volume_ratio >= threshold["volume_ratio_min"]
-        ):
+        if open_premium >= 0.02 and amount >= threshold["amount_min"] and volume_ratio >= threshold["volume_ratio_min"]:
             signal_type = "爆量高开"
             reasoning.append("竞价成交额显著放大")
             reasoning.append("量比高于阈值")

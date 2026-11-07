@@ -1,6 +1,7 @@
 """
 LimitUp analysis router.
 """
+
 from fastapi import APIRouter, HTTPException, Query
 from typing import Any, Dict
 
@@ -12,7 +13,9 @@ router = APIRouter(tags=["limitup"])
 
 
 @router.get("/api/limitup/analysis/{code}")
-async def limitup_analysis(code: str, date: str = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")) -> Dict[str, Any]:
+async def limitup_analysis(
+    code: str, date: str = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")
+) -> Dict[str, Any]:
     """获取个股的基因得分 + 策略逻辑匹配 + 风控规则知识（教育性展示，非行动建议）。"""
     code = _validate(code)
     try:

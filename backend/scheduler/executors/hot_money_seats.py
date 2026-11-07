@@ -18,6 +18,7 @@ strategies.hot_money_seats.update_hot_money_seats() 全 backend 零调用，S066
 不碰 evaluation.py / signal_report.py / s203 / routers/signals.py / journal_recorder.py
 （只新 executor + seed.py + __init__ dispatch + test）。
 """
+
 from __future__ import annotations
 
 import logging

@@ -3,6 +3,7 @@
 零 em_get（只读 sti_timeline dimensions，复用 compute_weather_snapshot）。
 手动触发：cd backend && .venv/bin/python -m scripts.backfill_weather_history
 """
+
 from __future__ import annotations
 
 import sys
@@ -20,9 +21,7 @@ from weather_history import save_weather_snapshot, get_weather_history
 def main() -> None:
     conn = sqlite3.connect(STI_TIMELINE_DB_PATH)
     try:
-        rows = conn.execute(
-            "SELECT date FROM sti_timeline WHERE score IS NOT NULL ORDER BY date ASC"
-        ).fetchall()
+        rows = conn.execute("SELECT date FROM sti_timeline WHERE score IS NOT NULL ORDER BY date ASC").fetchall()
     finally:
         conn.close()
 

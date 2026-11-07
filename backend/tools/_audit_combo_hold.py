@@ -4,6 +4,7 @@
 轮4 combo OOS survivor 但 1 日 mean +0.25% 被成本 0.4% 吃（net 负）+ lottery（median 负）。
 本脚本测 1/3/5 日持有，看 mean 累积是否超成本（1 次成本摊多日）+ lottery 是否持续。
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -38,7 +39,7 @@ def main() -> None:
         if len(bars) < 30:
             continue
         for i in range(5, len(bars) - 5):
-            prev_c = float(bars[i-1].get("close", 0) or 0)
+            prev_c = float(bars[i - 1].get("close", 0) or 0)
             o = float(bars[i].get("open", 0) or 0)
             c = float(bars[i].get("close", 0) or 0)
             amt = float(bars[i].get("amount", 0) or 0)
@@ -50,7 +51,7 @@ def main() -> None:
             fwd = {}
             for n in (1, 3, 5):
                 if i + n < len(bars):
-                    nc = float(bars[i+n].get("close", 0) or 0)
+                    nc = float(bars[i + n].get("close", 0) or 0)
                     fwd[n] = (nc - c) / c if c else None
                 else:
                     fwd[n] = None
@@ -92,7 +93,7 @@ def main() -> None:
 
     test = sorted(d for d in by_date if d >= SPLIT)
     print(f"=== 轮5 combo 延长持有（test {len(test)} 日）===")
-    print(f"combo = rank(gap)+rank(动量)+rank(-小盘) top decile，1 次成本 {COST*100}% 摊 N 日\n")
+    print(f"combo = rank(gap)+rank(动量)+rank(-小盘) top decile，1 次成本 {COST * 100}% 摊 N 日\n")
     print(f"{'持有':<6}{'mean':>10}{'median':>10}{'WR':>8}{'net(扣成本)':>14}{'t':>7}{'可交易?':>9}")
     print("-" * 64)
     for n in (1, 3, 5):
@@ -100,7 +101,9 @@ def main() -> None:
         if not r:
             continue
         ok = r["net"] > 0 and r["median"] > 0 and r["wr"] > 0.5
-        print(f"{n}日{'':<4}{r['mean']*100:>+9.4f}%{r['median']*100:>+9.4f}%{r['wr']*100:>6.1f}%{r['net']*100:>+12.4f}%{r['t']:>6.2f}{'✅' if ok else '❌':>6}")
+        print(
+            f"{n}日{'':<4}{r['mean'] * 100:>+9.4f}%{r['median'] * 100:>+9.4f}%{r['wr'] * 100:>6.1f}%{r['net'] * 100:>+12.4f}%{r['t']:>6.2f}{'✅' if ok else '❌':>6}"
+        )
     print()
     print("读法：net 正 + median 正 + WR>50% = 可交易；否则 lottery/成本吃光")
 

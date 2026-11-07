@@ -37,6 +37,7 @@
   cd /Users/lizhiwei/project/code/stock/Vibe-Research/backend
   .venv/bin/python tools/explore_standalone_vr5_stop.py
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -77,6 +78,7 @@ N_TESTS = max(2, N_CROSS_FACTOR * 2)  # = 6
 
 # ---------- helpers ----------
 
+
 def _stop_ret_fn(p: dict) -> float | None:
     """Wrapper: close_ev_stop returns (float, str), walk_forward needs float."""
     r = close_ev_stop(p)
@@ -116,23 +118,35 @@ def run_standalone(
     factor_picks = [p for p in blanket if p.get(factor) is not None]
     topk = select_topk_by_factor(factor_picks, factor, k)
 
-    print(f"\n  {name}: universe={len(factor_picks)} picks → top-{k}={len(topk)} "
-          f"({len(set(p['zt_date'] for p in topk))} days)")
+    print(
+        f"\n  {name}: universe={len(factor_picks)} picks → top-{k}={len(topk)} "
+        f"({len(set(p['zt_date'] for p in topk))} days)"
+    )
 
     if not topk:
         print(f"  → no-data: 无 pick 有 {factor}")
         return {
-            "name": name, "factor": factor, "n_picks": 0,
-            "basic_ev": 0.0, "n_days": 0, "stop_bonf_x6": 1.0,
-            "stop_day_t": 0.0, "stop_ev_gross": 0.0, "stop_ev_net": 0.0,
-            "verdict": "underpowered", "walk_forward_test_ev": 0.0,
-            "walk_forward_test_p": 1.0, "walk_forward_train_ev": 0.0,
-            "wf_status": "no_picks", "stop_p_raw": 1.0,
+            "name": name,
+            "factor": factor,
+            "n_picks": 0,
+            "basic_ev": 0.0,
+            "n_days": 0,
+            "stop_bonf_x6": 1.0,
+            "stop_day_t": 0.0,
+            "stop_ev_gross": 0.0,
+            "stop_ev_net": 0.0,
+            "verdict": "underpowered",
+            "walk_forward_test_ev": 0.0,
+            "walk_forward_test_p": 1.0,
+            "walk_forward_train_ev": 0.0,
+            "wf_status": "no_picks",
+            "stop_p_raw": 1.0,
         }
 
     # analyze_subset (basic + stop + R6 + walk_forward_basic)
     r = analyze_subset(
-        f"{name} (top-{k})", topk,
+        f"{name} (top-{k})",
+        topk,
         ret_fn_basic=close_ev_basic,
         ret_fn_stop=close_ev_stop,
         ret_fn_label="close_ev",
@@ -156,28 +170,29 @@ def run_standalone(
     wf_status = wf_stop.get("status", "no_picks")
     wf_train_ev = wf_stop.get("train_ev", {}).get("ev", 0.0) if wf_status == "ok" else 0.0
     wf_test_ev = wf_stop.get("test_ev", {}).get("ev", 0.0) if wf_status == "ok" else 0.0
-    wf_test_p = (wf_stop.get("test_day_t", {}).get("p_one_sided", 1.0)
-                 if wf_status == "ok" else 1.0)
+    wf_test_p = wf_stop.get("test_day_t", {}).get("p_one_sided", 1.0) if wf_status == "ok" else 1.0
 
     stop_bonf_x6 = bonferroni_p(stop_p_raw, N_TESTS)
 
     # verdict: 喂 stop 变体 EV (非 basic!) — composite 教训
     v = verdict_for(
-        stop_ev_gross,        # ev_gross = STOP variant
-        stop_t_day,           # t_day = stop variant
-        stop_p_raw,           # p_raw = stop variant
-        wf_status,            # wf_status from stop walk_forward
-        wf_train_ev,          # train_ev from stop walk_forward
-        wf_test_ev,           # test_ev from stop walk_forward
-        wf_test_p,            # test_p from stop walk_forward
-        stop_n_days,          # n_days from stop variant
-        stop_ev_net,          # net_ev = stop EV - cost
+        stop_ev_gross,  # ev_gross = STOP variant
+        stop_t_day,  # t_day = stop variant
+        stop_p_raw,  # p_raw = stop variant
+        wf_status,  # wf_status from stop walk_forward
+        wf_train_ev,  # train_ev from stop walk_forward
+        wf_test_ev,  # test_ev from stop walk_forward
+        wf_test_p,  # test_p from stop walk_forward
+        stop_n_days,  # n_days from stop variant
+        stop_ev_net,  # net_ev = stop EV - cost
         f"{name} (stop variant)",
         n_cross_factor=N_CROSS_FACTOR,  # ×6
     )
 
     return {
-        "name": name, "factor": factor, "n_picks": len(topk),
+        "name": name,
+        "factor": factor,
+        "n_picks": len(topk),
         "basic_ev": basic_ev,
         "n_days": stop_n_days,
         "stop_bonf_x6": stop_bonf_x6,
@@ -195,6 +210,7 @@ def run_standalone(
 
 # ---------- main ----------
 
+
 def main() -> None:
     print("=" * 70)
     print("standalone vr5 加 stop 变体最终测试")
@@ -209,10 +225,8 @@ def main() -> None:
     code_map, all_dates = load_kline_db()
     zt_rows = load_zt()
     calendar = sorted(all_dates)
-    print(f"  kline codes={len(code_map)} calendar days={len(calendar)} "
-          f"zt_rows={len(zt_rows)}")
-    print(f"  zt date range: {min(d for d,_,_ in zt_rows)} ~ "
-          f"{max(d for d,_,_ in zt_rows)}")
+    print(f"  kline codes={len(code_map)} calendar days={len(calendar)} zt_rows={len(zt_rows)}")
+    print(f"  zt date range: {min(d for d, _, _ in zt_rows)} ~ {max(d for d, _, _ in zt_rows)}")
 
     # ---- build blanket picks ----
     print("\n[2] 构建 blanket picks (entry=T+1 open, exit=T+2 close, 一字涨停跳过)…")
@@ -225,14 +239,13 @@ def main() -> None:
     # vr5 自算 = (t_close/close[-5]-1)*100, bisect_left 回看 5 bar.
     blanket, n_complete, counts = attach_factors(blanket, code_map, {})
     n_vr5 = counts["vr5"]
-    print(f"  vr5 覆盖: {n_vr5} ({n_vr5/max(len(blanket),1)*100:.1f}% of blanket)")
+    print(f"  vr5 覆盖: {n_vr5} ({n_vr5 / max(len(blanket), 1) * 100:.1f}% of blanket)")
     print(f"  注: vr5 全样本可算 (kline history 足够 5 bar), 不受 gene_score")
     print(f"      2026-01-05+ 限制——这是 vr5 vs gene 的样本量优势")
 
     vr5_dates = sorted({p["zt_date"] for p in blanket if p.get("vr5") is not None})
     if vr5_dates:
-        print(f"  vr5 universe 日期: {len(vr5_dates)} "
-              f"({vr5_dates[0]} ~ {vr5_dates[-1]})")
+        print(f"  vr5 universe 日期: {len(vr5_dates)} ({vr5_dates[0]} ~ {vr5_dates[-1]})")
 
     # ---- [4] vr5-alone ----
     print(f"\n{'=' * 70}")
@@ -244,22 +257,25 @@ def main() -> None:
 
     # ---- [5] summary table ----
     print(f"\n{'=' * 70}")
-    print(f"[5] 汇总 (close_ev %, per-day-mean t, Bonf ×{N_TESTS}, "
-          f"walk-forward stop, verdict)")
+    print(f"[5] 汇总 (close_ev %, per-day-mean t, Bonf ×{N_TESTS}, walk-forward stop, verdict)")
     print(f"{'=' * 70}")
-    hdr = (f"  {'component':<12} {'n':>5} {'days':>5} "
-           f"{'basic%':>8} {'stop_gr%':>8} {'stop_net%':>9} "
-           f"{'stop_t':>6} {'Bonf×6':>9} "
-           f"{'wf_tr%':>7} {'wf_te%':>7} {'wf_te_p':>8} {'verdict':<16}")
+    hdr = (
+        f"  {'component':<12} {'n':>5} {'days':>5} "
+        f"{'basic%':>8} {'stop_gr%':>8} {'stop_net%':>9} "
+        f"{'stop_t':>6} {'Bonf×6':>9} "
+        f"{'wf_tr%':>7} {'wf_te%':>7} {'wf_te_p':>8} {'verdict':<16}"
+    )
     print(hdr)
-    print(f"  {'-'*108}")
-    print(f"  {'vr5':<12} {r_vr5['n_picks']:>5} {r_vr5['n_days']:>5} "
-          f"{r_vr5['basic_ev']:>+8.3f} {r_vr5['stop_ev_gross']:>+8.3f} "
-          f"{r_vr5['stop_ev_net']:>+9.3f} "
-          f"{r_vr5['stop_day_t']:>6.2f} {r_vr5['stop_bonf_x6']:>9.6f} "
-          f"{r_vr5['walk_forward_train_ev']:>+7.3f} "
-          f"{r_vr5['walk_forward_test_ev']:>+7.3f} "
-          f"{r_vr5['walk_forward_test_p']:>8.4f} {r_vr5['verdict']:<16}")
+    print(f"  {'-' * 108}")
+    print(
+        f"  {'vr5':<12} {r_vr5['n_picks']:>5} {r_vr5['n_days']:>5} "
+        f"{r_vr5['basic_ev']:>+8.3f} {r_vr5['stop_ev_gross']:>+8.3f} "
+        f"{r_vr5['stop_ev_net']:>+9.3f} "
+        f"{r_vr5['stop_day_t']:>6.2f} {r_vr5['stop_bonf_x6']:>9.6f} "
+        f"{r_vr5['walk_forward_train_ev']:>+7.3f} "
+        f"{r_vr5['walk_forward_test_ev']:>+7.3f} "
+        f"{r_vr5['walk_forward_test_p']:>8.4f} {r_vr5['verdict']:<16}"
+    )
 
     # ---- [6] honest notes ----
     _print_honest_notes(r_vr5)

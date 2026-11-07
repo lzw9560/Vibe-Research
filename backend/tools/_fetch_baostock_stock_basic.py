@@ -7,6 +7,7 @@ scan_long_value_cache.py Layer0.5 委托 baostock_src.fetch_stock_basic，
 fields: code, code_name, ipoDate, outDate, type, status（query_stock_basic 返 6 字段，非 query_all_stock 的 3 字段）。
 anonymous login（baostock 免费）。
 """
+
 import json
 from pathlib import Path
 
@@ -33,6 +34,7 @@ def is_a_share(code: str) -> bool:
 
 def main() -> None:
     import baostock as bs  # noqa: PLC0415
+
     lg = bs.login()
     print(f"login: {lg.error_code} {lg.error_msg}")
     if lg.error_code != "0":

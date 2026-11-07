@@ -18,6 +18,7 @@ backend/risk/seal_intraday_collector.py:206-207 注释）：
 
 合规：本模块按用户传入的 date 返回客观涨停池过滤结果，不预置标的、不排名、不建议。
 """
+
 from __future__ import annotations
 
 import logging
@@ -34,8 +35,8 @@ _logger = logging.getLogger(__name__)
 # 标注"待回测校准"：实际阈值需用 30 天首板数据回测后调整（见 tasks.md 021 回测校准）。
 EXCLUDE_THRESHOLDS: dict = {
     # ── 硬剔除底线（grill 收紧：只留"绝对不能买"2 条，待回测校准）─────────
-    "max_break_times": 2,          # 炸板次数 ≥2 剔除（封板不牢）
-    "min_seal_ratio": 0.001,        # 封单/流通市值 <0.1% 剔除（封单太薄）
+    "max_break_times": 2,  # 炸板次数 ≥2 剔除（封板不牢）
+    "min_seal_ratio": 0.001,  # 封单/流通市值 <0.1% 剔除（封单太薄）
     # 移除的（改为评分维度，不再硬剔除）：
     # "max_turnover": 30.0,          # 移除，改 score_dim_turnover 倒U型评分
     # "late_seal_time": 140000,      # 改为 score_dim_seal_time 评分
@@ -43,9 +44,9 @@ EXCLUDE_THRESHOLDS: dict = {
     # "max_vol_ratio": 2.0,          # 改为 chip 评分体现
     # ── 层3 改纯环境标记（不剔除，只输出 env_flags 供评分权重分层用）────────
     "exclude_isolated_board": False,  # 孤板不硬剔除，改评分（grill 收紧）
-    "exclude_chinext": False,       # 创业板不剔除（候选池按板块分组排序区分展示）
+    "exclude_chinext": False,  # 创业板不剔除（候选池按板块分组排序区分展示）
     "market_drop_threshold": -1.5,  # 大盘跌 >1.5% 标记高风险（不剔除，仅标记）
-    "min_sector_zt_count": 2,       # 保留但只做评分参考，不剔除
+    "min_sector_zt_count": 2,  # 保留但只做评分参考，不剔除
 }
 
 
@@ -56,20 +57,32 @@ EXCLUDE_THRESHOLDS: dict = {
 # 数据缺失维度 score=-1 不参与加权，权重重分配到其他有效维度。
 MARKET_PHASE_WEIGHTS: dict[str, dict[str, float]] = {
     "冰点": {  # zt<30：封板质量主导（seal_time+seal_ratio=0.55），板块联动弱
-        "seal_time": 0.25, "sector_link": 0.10, "market_cap": 0.20,
-        "seal_ratio": 0.30, "turnover": 0.15,
+        "seal_time": 0.25,
+        "sector_link": 0.10,
+        "market_cap": 0.20,
+        "seal_ratio": 0.30,
+        "turnover": 0.15,
     },
     "普通": {  # 30-60：均衡
-        "seal_time": 0.20, "sector_link": 0.20, "market_cap": 0.15,
-        "seal_ratio": 0.30, "turnover": 0.15,
+        "seal_time": 0.20,
+        "sector_link": 0.20,
+        "market_cap": 0.15,
+        "seal_ratio": 0.30,
+        "turnover": 0.15,
     },
     "活跃": {  # 60-100：板块联动权重提升
-        "seal_time": 0.15, "sector_link": 0.30, "market_cap": 0.10,
-        "seal_ratio": 0.30, "turnover": 0.15,
+        "seal_time": 0.15,
+        "sector_link": 0.30,
+        "market_cap": 0.10,
+        "seal_ratio": 0.30,
+        "turnover": 0.15,
     },
     "亢奋": {  # zt>=100：板块联动主导（接力情绪强）
-        "seal_time": 0.10, "sector_link": 0.40, "market_cap": 0.10,
-        "seal_ratio": 0.25, "turnover": 0.15,
+        "seal_time": 0.10,
+        "sector_link": 0.40,
+        "market_cap": 0.10,
+        "seal_ratio": 0.25,
+        "turnover": 0.15,
     },
 }
 
@@ -139,6 +152,7 @@ PHASE_TO_CAP_TIER: dict[str, str] = {
 # 003-006 数据层
 # ===========================================================================
 
+
 def fetch_zt_pool(date: str) -> list[dict]:
     """取涨停池 raw dict list。
 
@@ -161,6 +175,7 @@ def fetch_zt_pool(date: str) -> list[dict]:
     try:
         from vr_paths import resolve_data_dir  # noqa: PLC0415
         import sqlite3  # noqa: PLC0415
+
         zt_db = resolve_data_dir() / "zt_history.db"
         if zt_db.exists():
             conn = sqlite3.connect(str(zt_db))
@@ -264,17 +279,19 @@ def filter_first_board(pool: list[dict]) -> list[dict]:
 
         price = _to_float(p.get("p")) or _to_float(p.get("zje"))
         fbt = _to_float(p.get("fbt"))
-        out.append({
-            "code": code,
-            "name": p.get("n") or "",
-            "price": price,
-            "lbc": lbc,
-            "break_times": _to_float(p.get("zbc")),
-            "first_seal": fbt,
-            "first_seal_hhmm": _fbt_to_hhmm(fbt),
-            "seal_amount": _to_float(p.get("fund")),      # 封单额，元
-            "float_cap": _to_float(p.get("ltsz")),        # 流通市值，元
-            "amount": _to_float(p.get("fundamt")),         # 成交额，元
-            "industry": p.get("hybk") or None,
-        })
+        out.append(
+            {
+                "code": code,
+                "name": p.get("n") or "",
+                "price": price,
+                "lbc": lbc,
+                "break_times": _to_float(p.get("zbc")),
+                "first_seal": fbt,
+                "first_seal_hhmm": _fbt_to_hhmm(fbt),
+                "seal_amount": _to_float(p.get("fund")),  # 封单额，元
+                "float_cap": _to_float(p.get("ltsz")),  # 流通市值，元
+                "amount": _to_float(p.get("fundamt")),  # 成交额，元
+                "industry": p.get("hybk") or None,
+            }
+        )
     return out

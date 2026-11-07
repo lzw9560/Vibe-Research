@@ -13,6 +13,7 @@
 
 回放引擎 replay.py 按 (date, code) 从各库拉数据按时间戳排序回放，供盘中策略调试。
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -83,25 +84,46 @@ def save_stoke_data(date_str: str, items: dict[str, list[dict]]) -> dict:
                 "INSERT OR REPLACE INTO research_reports "
                 "(date, code, report_name, institution, rating, report_date, snapshot_at, raw_json) "
                 "VALUES (?,?,?,?,?,?,?,?)",
-                (date_str, r.get("code", ""), r.get("报告名称", r.get("report_name", "")),
-                 r.get("机构", ""), r.get("东财评级", ""), r.get("日期", ""), now, ""),
+                (
+                    date_str,
+                    r.get("code", ""),
+                    r.get("报告名称", r.get("report_name", "")),
+                    r.get("机构", ""),
+                    r.get("东财评级", ""),
+                    r.get("日期", ""),
+                    now,
+                    "",
+                ),
             )
             saved += 1
         for n in items.get("news", []):
             conn.execute(
                 "INSERT OR REPLACE INTO news (date, code, title, content, time, source, snapshot_at) "
                 "VALUES (?,?,?,?,?,?,?)",
-                (date_str, n.get("code", ""), n.get("标题", n.get("title", "")),
-                 n.get("内容", n.get("content", "")), n.get("时间", n.get("time", "")), "", now),
+                (
+                    date_str,
+                    n.get("code", ""),
+                    n.get("标题", n.get("title", "")),
+                    n.get("内容", n.get("content", "")),
+                    n.get("时间", n.get("time", "")),
+                    "",
+                    now,
+                ),
             )
             saved += 1
         for s in items.get("strong", []):
             conn.execute(
                 "INSERT OR REPLACE INTO strong_stocks "
                 "(date, code, name, pct, reason, industry, snapshot_at) VALUES (?,?,?,?,?,?,?)",
-                (date_str, s.get("代码", s.get("code", "")), s.get("名称", s.get("name", "")),
-                 str(s.get("涨跌幅", s.get("pct", ""))), s.get("入选理由", s.get("reason", "")),
-                 s.get("所属行业", s.get("industry", "")), now),
+                (
+                    date_str,
+                    s.get("代码", s.get("code", "")),
+                    s.get("名称", s.get("name", "")),
+                    str(s.get("涨跌幅", s.get("pct", ""))),
+                    s.get("入选理由", s.get("reason", "")),
+                    s.get("所属行业", s.get("industry", "")),
+                    now,
+                ),
             )
             saved += 1
         for p in items.get("pe_pb", []):
@@ -153,8 +175,19 @@ def save_ticks(date_str: str, code: str, ticks: list[dict]) -> dict:
         conn.executemany(
             "INSERT OR REPLACE INTO ticks (date, code, time, price, vol, buyorsell, volume, snapshot_at) "
             "VALUES (?,?,?,?,?,?,?,?)",
-            [(date_str, code, t.get("time", ""), t.get("price", 0), int(t.get("vol", 0)),
-              int(t.get("buyorsell", 0)), int(t.get("volume", 0)), now) for t in ticks],
+            [
+                (
+                    date_str,
+                    code,
+                    t.get("time", ""),
+                    t.get("price", 0),
+                    int(t.get("vol", 0)),
+                    int(t.get("buyorsell", 0)),
+                    int(t.get("volume", 0)),
+                    now,
+                )
+                for t in ticks
+            ],
         )
         conn.commit()
     finally:

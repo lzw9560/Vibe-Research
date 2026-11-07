@@ -19,6 +19,7 @@ cost 模型（spec §2）：0.15% round-trip（0.10% slippage + 0.05% residual h
 + 佣金 5 元（per side，A 股最低佣金）。apply_cost=False 时 simulate_holding
 legacy 无 cost（backward compat 精确匹配）。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -114,8 +115,7 @@ def t0_cost(entry_price: float, size: float, date: str = "") -> float:
 def _find_signal_idx(bars: list, signal_date: str) -> int | None:
     """在 bars 中找 signal_date 的 idx（date 字段前 10 字符匹配）。"""
     return next(
-        (i for i, b in enumerate(bars)
-         if str(_bar_get(b, "date", ""))[:10] == signal_date),
+        (i for i, b in enumerate(bars) if str(_bar_get(b, "date", ""))[:10] == signal_date),
         None,
     )
 
@@ -220,9 +220,12 @@ def path_return(
             gross = (stop_fill_price - entry) / entry * 100
             net = gross - cost
             return PathReturn(
-                won=False, return_pct=round(net, 2) if apply_cost else round(gross, 2),
-                exit_reason="stop", exit_date=str(_bar_get(bars[j], "date", "")),
-                cost_pct=cost, gross_return_pct=round(gross, 2),
+                won=False,
+                return_pct=round(net, 2) if apply_cost else round(gross, 2),
+                exit_reason="stop",
+                exit_date=str(_bar_get(bars[j], "date", "")),
+                cost_pct=cost,
+                gross_return_pct=round(gross, 2),
                 exit_price=stop_fill_price,
             )
         # S201b stage 2: take-side 不碰（limit sell 触及即成交，fill 在限价水平已 realistic）
@@ -232,8 +235,10 @@ def path_return(
             return PathReturn(
                 won=(net if apply_cost else gross) > 0,
                 return_pct=round(net, 2) if apply_cost else gross,
-                exit_reason="take", exit_date=str(_bar_get(bars[j], "date", "")),
-                cost_pct=cost, gross_return_pct=gross,
+                exit_reason="take",
+                exit_date=str(_bar_get(bars[j], "date", "")),
+                cost_pct=cost,
+                gross_return_pct=gross,
                 exit_price=take_level,  # S175 T2：take level（limit sell，不 gap-through）
             )
 

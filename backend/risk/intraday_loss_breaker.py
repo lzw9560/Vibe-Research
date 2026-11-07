@@ -8,6 +8,7 @@
 四层乘积 final_size = arm_size × portfolio_mult × lift_mult × intraday_mult（intraday_mult
 由本模块算：单笔>5% → 该 code intraday_mult=0 禁加仓；合计>8% → 全账户 intraday_mult=0 禁新仓）。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

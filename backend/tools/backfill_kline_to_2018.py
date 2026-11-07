@@ -6,6 +6,7 @@
 增量 merge（已有 date 不重拉）。断点 .vibe-research/backfill_progress.json。
 用法：python tools/backfill_kline_to_2018.py [limit]  (limit=0 全量)
 """
+
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vr_paths import resolve_data_dir
@@ -60,6 +61,7 @@ def _load_priority_codes() -> list[str] | None:
 
 def backfill(limit: int = 0) -> None:
     import baostock as bs  # noqa: PLC0415
+
     bs.login()
     cache = _load_cache()
     codes = _load_priority_codes() or list(cache.keys())
@@ -82,22 +84,27 @@ def backfill(limit: int = 0) -> None:
         bs_code = _bs_code(code)
         try:
             rs = bs.query_history_k_data_plus(
-                bs_code, start_date=START, end_date=END,
-                frequency="d", adjustflag="2",
+                bs_code,
+                start_date=START,
+                end_date=END,
+                frequency="d",
+                adjustflag="2",
                 fields="date,open,high,low,close,volume,amount",
             )
             new_bars = []
             while rs.error_code == "0" and rs.next():
                 row = rs.get_row_data()
-                new_bars.append({
-                    "date": row[0],
-                    "open": float(row[1]) if row[1] else 0.0,
-                    "high": float(row[2]) if row[2] else 0.0,
-                    "low": float(row[3]) if row[3] else 0.0,
-                    "close": float(row[4]) if row[4] else 0.0,
-                    "volume": float(row[5]) if row[5] else 0.0,
-                    "amount": float(row[6]) if row[6] else 0.0,
-                })
+                new_bars.append(
+                    {
+                        "date": row[0],
+                        "open": float(row[1]) if row[1] else 0.0,
+                        "high": float(row[2]) if row[2] else 0.0,
+                        "low": float(row[3]) if row[3] else 0.0,
+                        "close": float(row[4]) if row[4] else 0.0,
+                        "volume": float(row[5]) if row[5] else 0.0,
+                        "amount": float(row[6]) if row[6] else 0.0,
+                    }
+                )
             merged = {b["date"]: b for b in existing}
             for b in new_bars:
                 if b["date"] not in merged:
@@ -110,7 +117,7 @@ def backfill(limit: int = 0) -> None:
         if n_done % BATCH == 0:
             _save_cache(cache)
             _save_progress(prog)
-            print(f"# batch: {n_done} done, idx {i+1}/{len(codes)}", file=sys.stderr)
+            print(f"# batch: {n_done} done, idx {i + 1}/{len(codes)}", file=sys.stderr)
         if limit and n_done >= limit:
             break
         time.sleep(0.1)  # baostock 礼貌限速

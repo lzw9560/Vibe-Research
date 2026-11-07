@@ -3,6 +3,7 @@
 逐个调用后端端点，记录 HTTP 状态码与错误片段。
 不执行破坏性写操作（持仓增删/研报上传/定时任务增删/熔断赦免等），仅测只读 + 幂等触发类。
 """
+
 from __future__ import annotations
 
 import json
@@ -21,7 +22,12 @@ ENDPOINTS: list[tuple[str, str, str, object | None]] = [
     (GET, "/", "root", None),
     (GET, "/docs", "docs", None),
     (GET, "/api/settings/llm-env-status", "settings/llm-env-status", None),
-    (POST, "/api/chat", "chat(已知bug)", {"messages": [{"role": "user", "content": "你好"}], "model": "test", "stream": False}),
+    (
+        POST,
+        "/api/chat",
+        "chat(已知bug)",
+        {"messages": [{"role": "user", "content": "你好"}], "model": "test", "stream": False},
+    ),
     (GET, "/api/portfolio", "portfolio", None),
     (POST, "/api/portfolio/refresh", "portfolio/refresh", None),
     (GET, "/api/watchlist", "watchlist", None),
@@ -147,8 +153,17 @@ def main() -> None:
     for method, path, label, body in ENDPOINTS:
         status, snippet, dt = call(method, path, body)
         ok = 200 <= status < 300
-        results.append({"label": label, "method": method, "path": path,
-                         "status": status, "ok": ok, "sec": round(dt, 2), "err": snippet})
+        results.append(
+            {
+                "label": label,
+                "method": method,
+                "path": path,
+                "status": status,
+                "ok": ok,
+                "sec": round(dt, 2),
+                "err": snippet,
+            }
+        )
         flag = "OK " if ok else "ERR"
         print(f"[{flag}] {status:>4} {method:4} {label:32} {dt:5.1f}s  {snippet[:120]}")
 

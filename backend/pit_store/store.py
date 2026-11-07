@@ -11,6 +11,7 @@
 
 存储路径：``<VR_DATA_DIR>/pit_store/pit_store.db``（.vibe-research 子目录，gitignored）。
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -100,9 +101,7 @@ class SnapshotStore:
         if isinstance(raw_bytes, str):
             raw_bytes = raw_bytes.encode("utf-8")
         elif not isinstance(raw_bytes, (bytes, bytearray)):
-            raise TypeError(
-                f"raw_bytes 须为 bytes/str，得到 {type(raw_bytes).__name__}"
-            )
+            raise TypeError(f"raw_bytes 须为 bytes/str，得到 {type(raw_bytes).__name__}")
         raw_bytes = bytes(raw_bytes)
         spec_str = (
             query_spec
@@ -138,16 +137,12 @@ class SnapshotStore:
         """取整行（含 raw_blob/content_hash/query_spec）。不存在返 None。"""
         conn = self._conn()
         try:
-            row = conn.execute(
-                "SELECT * FROM snapshots WHERE snapshot_id = ?", (snapshot_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM snapshots WHERE snapshot_id = ?", (snapshot_id,)).fetchone()
             return dict(row) if row else None
         finally:
             conn.close()
 
-    def latest_snapshot_id(
-        self, source: str, data_date: str | None
-    ) -> int | None:
+    def latest_snapshot_id(self, source: str, data_date: str | None) -> int | None:
         """(source, data_date) 下最新 snapshot_id——给 S161 Recorder 作 data_snapshot_id。
 
         无则 None。``data_date IS ?`` 用 IS 而非 =，NULL 安全（data_date=None 也匹配 NULL）。
@@ -231,9 +226,7 @@ class SnapshotStore:
             if source is None:
                 row = conn.execute("SELECT COUNT(*) AS n FROM snapshots").fetchone()
             else:
-                row = conn.execute(
-                    "SELECT COUNT(*) AS n FROM snapshots WHERE source = ?", (source,)
-                ).fetchone()
+                row = conn.execute("SELECT COUNT(*) AS n FROM snapshots WHERE source = ?", (source,)).fetchone()
             return int(row["n"])
         finally:
             conn.close()
@@ -247,12 +240,7 @@ def run_migrations(db_path: str | Path | None = None) -> None:
     """
     from migrations import MigrationManager  # noqa: PLC0415  # 避免顶层循环 import
 
-    sql_path = (
-        Path(__file__).resolve().parent.parent
-        / "migrations"
-        / "pit_store"
-        / "20260906-001_create_snapshots.sql"
-    )
+    sql_path = Path(__file__).resolve().parent.parent / "migrations" / "pit_store" / "20260906-001_create_snapshots.sql"
     manager = MigrationManager(db_path=db_path or _default_db_path())
     manager.upgrade(
         [

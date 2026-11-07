@@ -17,6 +17,7 @@ dispatch 注册待 #8 agent（scheduler/executors/__init__.py _executors dict）
 fund_accumulation cron task（30 16 * * 0-4），dispatch 未接线前 cron 触发落 failed run
 （未知任务类型）——预期行为，#8 接线后生效。
 """
+
 from __future__ import annotations
 
 import logging
@@ -59,16 +60,14 @@ def fund_accumulation(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     if not d_iso or not d_compact:
         logger.warning("[fund_accumulation] 无法解析日期 payload=%r", payload)
-        return {"status": "error", "date": "", "n_updated": 0, "source": "",
-                "error": "无法解析日期"}
+        return {"status": "error", "date": "", "n_updated": 0, "source": "", "error": "无法解析日期"}
 
     # em 取当日涨停池（走 em_get 限流/熔断/代理，不裸调 requests）
     try:
         pool = astock.em_zt_topic_pool("getTopicZTPool", d_compact, "fbt:asc") or []
     except Exception as e:  # noqa: BLE001
         logger.warning("[fund_accumulation] em_zt_topic_pool 失败 date=%s err=%s", d_iso, e)
-        return {"status": "error", "date": d_iso, "n_updated": 0, "source": "em",
-                "error": str(e)}
+        return {"status": "error", "date": d_iso, "n_updated": 0, "source": "em", "error": str(e)}
 
     if not pool:
         logger.info("[fund_accumulation] date=%s em 涨停池空（非交易日/端点空），0 行更新", d_iso)

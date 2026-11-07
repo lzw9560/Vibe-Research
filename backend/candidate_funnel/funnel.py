@@ -49,6 +49,7 @@ def _fetch_sentiment_phase(date: str, ctx: "SentimentContext | None" = None) -> 
         return ctx.weather_state
     try:
         from routers import sentiment_weather as sw
+
         data = sw.get_weather_latest()
         if hasattr(data, "__awaitable__"):
             return None  # 异步处理器不在此同步调用，降级
@@ -68,6 +69,7 @@ def _funnel_cache_ttl() -> int:
     """从 config 读 TTL（惰性，避免模块导入时 config 未就绪）。"""
     try:
         from config import default_config
+
         return int(getattr(default_config, "CANDIDATE_FUNNEL_CACHE_TTL", 3600))
     except Exception:
         return 3600
@@ -76,12 +78,15 @@ def _funnel_cache_ttl() -> int:
 def _funnel_cache_key(date: str, cfg: ThresholdConfig) -> str:
     """缓存键=date + config 排序 JSON（防不同阈值串数据）。"""
     import json
+
     cfg_dict = cfg.model_dump(mode="json")
     return f"{date}|{json.dumps(cfg_dict, sort_keys=True, ensure_ascii=False)}"
 
 
 def _filter_tradability(
-    codes: list[str], genes: dict[str, dict], radar_set: dict[str, str] | None = None,
+    codes: list[str],
+    genes: dict[str, dict],
+    radar_set: dict[str, str] | None = None,
 ) -> tuple[list[str], list[FilterRecord], dict[str, str]]:
     """R2 可交易性过滤（S148(b)）：classify_tradability = ST(radar carve-out) + board 排除 + 退市/新股。
 
@@ -112,15 +117,20 @@ def _top_n_by_gene_score(codes: list[str], genes: dict[str, dict], n: int) -> li
     """
     if n <= 0 or len(codes) <= n:
         return list(codes)
+
     def _score(c: str) -> float:
         g = genes.get(c, {})
         s = g.get("gene_score")
         return float(s) if s is not None else 0.0
+
     return sorted(codes, key=lambda c: (-_score(c), c))[:n]
 
 
 def _filter_r2(
-    codes: list[str], activity: dict[str, dict], eff, fund: dict[str, dict] | None = None,
+    codes: list[str],
+    activity: dict[str, dict],
+    eff,
+    fund: dict[str, dict] | None = None,
 ) -> tuple[list[str], list[FilterRecord]]:
     """R2 收敛：按生效阈值剔除冷股（换手 < turnover_cold）+ 北向绝对值过滤（S044 R5）。
 
@@ -206,8 +216,11 @@ def _catalyst_summary(code: str, catalyst: dict[str, dict]) -> str | None:
 
 
 def _filter_r3(
-    codes: list[str], auction: dict[str, dict], catalyst: dict[str, dict],
-    genes: dict[str, dict], activity: dict[str, dict],
+    codes: list[str],
+    auction: dict[str, dict],
+    catalyst: dict[str, dict],
+    genes: dict[str, dict],
+    activity: dict[str, dict],
     ann_types: list[str] | None = None,
 ) -> tuple[list[str], list[FilterRecord]]:
     """R3 定稿：保留有竞价异动或公告催化的标的。
@@ -249,6 +262,7 @@ def run_funnel(stage: str, date: str, cfg: ThresholdConfig, ctx: "SentimentConte
     若 T-1 情绪数据（weather_state）改了，应走 run_funnel_force 清缓存（S072：STI 不再调 R2 阈值，仅 weather_state 软标注）。
     """
     import time
+
     key = _funnel_cache_key(date, cfg)
     now = time.time()
     with _FUNNEL_CACHE_LOCK:
@@ -261,9 +275,12 @@ def run_funnel(stage: str, date: str, cfg: ThresholdConfig, ctx: "SentimentConte
     return result
 
 
-def run_funnel_force(stage: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext | None" = None) -> FunnelResult:
+def run_funnel_force(
+    stage: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext | None" = None
+) -> FunnelResult:
     """rerun 显式清缓存路径（不受 TTL 缓存影响）。"""
     import time
+
     key = _funnel_cache_key(date, cfg)
     with _FUNNEL_CACHE_LOCK:
         _FUNNEL_CACHE.pop(key, None)
@@ -282,7 +299,9 @@ def clear_funnel_cache(date: str | None = None) -> None:
             _FUNNEL_CACHE.pop(k, None)
 
 
-def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext | None" = None) -> FunnelResult:
+def _run_funnel_impl(
+    stage: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext | None" = None
+) -> FunnelResult:
     """R1→R2→R3 + 自选并行实现（无缓存，由 run_funnel 包裹缓存）。
 
     S063 T5：ctx 优先——管线头部 SentimentContext 下传 weather_state + source_date。
@@ -292,15 +311,18 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
     """
     from concurrent.futures import ThreadPoolExecutor
     from config import default_config
+
     as_of = datetime.now()
     phase = _fetch_sentiment_phase(date, ctx)
     eff = resolve_thresholds(cfg, phase)  # S072 STI 去噪：phase 不再调阈值（固定基数），仅记录
     current_stage = _STAGE_MAP.get(stage, "s1")
     # S084 Q1=A/Q2=B：T-1 昨日（zt_pool/derived 取昨日值；activity/fund 按 date 分路径）
     from datetime import date as _date, timedelta as _timedelta
+
     yesterday_date: str | None
     try:
         from vr_paths import last_trading_date as _last_td
+
         _d = _date.fromisoformat((date or "")[:10])
         yesterday_date = _last_td(_d - _timedelta(days=1)).isoformat()
     except Exception:
@@ -311,11 +333,13 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
     sectors = None
     try:
         import market as _market
+
         sectors = (_market.get_overview() or {}).get("sectors")
     except Exception:
         sectors = None
     # S084 R2：涨停池原始 dict（T-1 昨日池，走 em_get 限流）+ 行业映射（hybk）
     from candidate_funnel.sources import zt_pool_source
+
     zt_pool_map = zt_pool_source.fetch_zt_pool_map(yesterday_date) if yesterday_date else {}
     # 行业映射从 zt pool hybk 提取（em_get-backed 替代 raw akshare individual_info，防封 review HIGH 修复）
     industry_map = {c: p.get("hybk") for c, p in zt_pool_map.items() if p.get("hybk")}
@@ -352,17 +376,25 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
         r1_data_reason = f"R1 宽源采集失败: {exc}"
     r1_codes = list(genes.keys())
     r1 = FunnelLayer(
-        layer_id="R1", name="宽源", as_of=as_of,
-        input_count=len(r1_codes), output_count=len(r1_codes),
-        filtered_out=[], output_codes=r1_codes,
+        layer_id="R1",
+        name="宽源",
+        as_of=as_of,
+        input_count=len(r1_codes),
+        output_count=len(r1_codes),
+        filtered_out=[],
+        output_codes=r1_codes,
         conditions=["涨停基因得分筛选", "连板梯队（含炸板/昨涨停今表现）", *base_conditions],
         passed=[
-            {"code": c, "name": genes.get(c, {}).get("name", c),
-             "gene_score": genes.get(c, {}).get("gene_score"),
-             "consec_boards": _consec_boards_for(c, board)}
+            {
+                "code": c,
+                "name": genes.get(c, {}).get("name", c),
+                "gene_score": genes.get(c, {}).get("gene_score"),
+                "consec_boards": _consec_boards_for(c, board),
+            }
             for c in r1_codes
         ],
-        data_status=r1_data_status, data_reason=r1_data_reason,
+        data_status=r1_data_status,
+        data_reason=r1_data_reason,
     )
     layers: list[FunnelLayer] = [r1]
 
@@ -372,15 +404,22 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
     radar_set = load_st_play_radar()
     r2_kept, r2_filtered, r2_st_play = _filter_tradability(r1_codes, genes, radar_set)
     r2 = FunnelLayer(
-        layer_id="R2", name="可交易性", as_of=as_of,
-        input_count=len(r1_codes), output_count=len(r2_kept),
-        filtered_out=r2_filtered, output_codes=r2_kept,
+        layer_id="R2",
+        name="可交易性",
+        as_of=as_of,
+        input_count=len(r1_codes),
+        output_count=len(r2_kept),
+        filtered_out=r2_filtered,
+        output_codes=r2_kept,
         conditions=["板别/ST 可交易性过滤（S148 b）：ST radar carve-out + 创业板/科创板/北交所排除", *base_conditions],
         passed=[
-            {"code": c, "name": genes.get(c, {}).get("name", c),
-             "gene_score": genes.get(c, {}).get("gene_score"),
-             "consec_boards": _consec_boards_for(c, board),
-             "st_play": r2_st_play.get(c)}
+            {
+                "code": c,
+                "name": genes.get(c, {}).get("name", c),
+                "gene_score": genes.get(c, {}).get("gene_score"),
+                "consec_boards": _consec_boards_for(c, board),
+                "st_play": r2_st_play.get(c),
+            }
             for c in r2_kept
         ],
     )
@@ -430,9 +469,13 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
     # ---- 自选/手动并行 ----
     wl = sources.watchlist_in.get_watchlist_codes()
     self_layer = FunnelLayer(
-        layer_id="SELF", name="自选/手动", as_of=as_of,
-        input_count=len(wl), output_count=len(wl),
-        filtered_out=[], output_codes=list(wl),
+        layer_id="SELF",
+        name="自选/手动",
+        as_of=as_of,
+        input_count=len(wl),
+        output_count=len(wl),
+        filtered_out=[],
+        output_codes=list(wl),
     )
     layers.append(self_layer)
 
@@ -441,6 +484,7 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
     cards = []
     # S084 R3：derived source 懒加载（per code 取 T-1 昨日派生，盘前未采集→None 降级）
     from candidate_funnel.sources import derived_source
+
     for code in final_codes:
         name = (
             genes.get(code, {}).get("name")
@@ -456,18 +500,28 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
         # S085 B3：seal_delta 从 derived 透传到 ind（derived_source 已并入 trajectory reader）
         if derived is not None:
             ind.seal_delta = derived.get("seal_delta")
-        cards.append(build_diagnosis_card(
-            code, name, ind, eff, market_ctx=board, as_of=as_of,
-            gene_obj=gene_obj, pool_item=pool_item, derived=derived,
-            st_play=r2_st_play.get(code),  # S148(b)：ST carve-out 标透传到诊断卡（摘帽/重组/扭亏）
-            # S085 B2：bulk 漏斗 with_seat_detail=False（默认）——席位聚合 per-code 调
-            # compute_consensus_signal（3 次 datacenter/code），N 候选会拖垮响应；
-            # 选股池列表跳过，单股 diagnose() 才开 with_seat_detail=True。
-        ))
+        cards.append(
+            build_diagnosis_card(
+                code,
+                name,
+                ind,
+                eff,
+                market_ctx=board,
+                as_of=as_of,
+                gene_obj=gene_obj,
+                pool_item=pool_item,
+                derived=derived,
+                st_play=r2_st_play.get(code),  # S148(b)：ST carve-out 标透传到诊断卡（摘帽/重组/扭亏）
+                # S085 B2：bulk 漏斗 with_seat_detail=False（默认）——席位聚合 per-code 调
+                # compute_consensus_signal（3 次 datacenter/code），N 候选会拖垮响应；
+                # 选股池列表跳过，单股 diagnose() 才开 with_seat_detail=True。
+            )
+        )
 
     # S151 R5：评价层注入（降权+即时处理+诚实标注），在 card 构建后、return 前
     # 透明嵌入——precompute/_collect/candidates router 调 run_funnel 自动获得 evaluation_summary
     from candidate_funnel.evaluation import _apply_evaluation_layer
+
     cards, evaluation_summary = _apply_evaluation_layer(cards, genes, activity, None, date)
 
     # S085 B1：run 级市场聚合上下文（4 率 + lianban_stocks + date），
@@ -476,6 +530,7 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
     market_context: dict | None = None
     try:
         from candidate_funnel.sources.board_ladder import get_market_emotion_raw
+
         emo = get_market_emotion_raw(date)
         if emo:
             market_context = {
@@ -490,11 +545,10 @@ def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "Sentimen
             # sector_rotation 内部有 em_get 限流+熔断，失败不阻塞漏斗
             try:
                 from strategies.sector_cycle import sector_rotation
+
                 rot = sector_rotation(date)
                 rank = rot.get("strength_rank") or []
-                market_context["hot_sectors"] = [
-                    {"name": s.get("industry")} for s in rank[:10] if s.get("industry")
-                ]
+                market_context["hot_sectors"] = [{"name": s.get("industry")} for s in rank[:10] if s.get("industry")]
             except Exception as e:  # noqa: BLE001
                 logger.warning("hot_sectors 注入失败（降级 missing，不阻塞）: %s", e)
     except Exception:
@@ -527,9 +581,11 @@ def diagnose(code: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext 
     board = sources.board_ladder.fetch_board_ladder(date)
     # S085 A4/A3：先算 yesterday_date（盘前所有因子取 T-1 用，原在 fetch_activity 后移前）
     from datetime import date as _date, timedelta as _timedelta
+
     yesterday_date: str | None
     try:
         from vr_paths import last_trading_date as _last_td
+
         _d = _date.fromisoformat((date or "")[:10])
         yesterday_date = _last_td(_d - _timedelta(days=1)).isoformat()
     except Exception:
@@ -543,21 +599,19 @@ def diagnose(code: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext 
     sectors = None
     try:
         import market as _market
+
         sectors = (_market.get_overview() or {}).get("sectors")
     except Exception:
         sectors = None
     # S084 R2：zt_pool_map + 行业映射（hybk，em_get-backed 替代 individual_info，防封 review HIGH 修复）
     from candidate_funnel.sources import zt_pool_source
+
     zt_pool_map = zt_pool_source.fetch_zt_pool_map(yesterday_date) if yesterday_date else {}
     industry_map = {c: p.get("hybk") for c, p in zt_pool_map.items() if p.get("hybk")}
     fund = sources.fund_flow.fetch_fund_flow([code], date, sectors=sectors, industry_map=industry_map)
     auction = sources.auction.fetch_auction(date)
     catalyst = sources.catalyst.fetch_catalyst([code], date)
-    name = (
-        genes.get(code, {}).get("name")
-        or activity.get(code, {}).get("name")
-        or code
-    )
+    name = genes.get(code, {}).get("name") or activity.get(code, {}).get("name") or code
     # S049 C1：收集各源 _as_of 取最早（YYYY-MM-DD 字典序=日历序），无则 now()
     src_dates: list[str] = []
     for src in (activity.get(code, {}), fund.get(code, {}), auction.get(code, {}), catalyst.get(code, {})):
@@ -568,13 +622,21 @@ def diagnose(code: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext 
     ind = build_indicator_set(code, name, genes, activity, fund, auction, catalyst, board)
     # S084 Q6=B：透传 3 子对象（zt_pool_map 已采集复用；derived guard yesterday_date）
     from candidate_funnel.sources import derived_source
+
     gene_obj = genes.get(code, {}).get("gene_obj")
     pool_item = zt_pool_map.get(code)
     derived = derived_source.fetch_derived(code, yesterday_date) if yesterday_date else None
     _radar = load_st_play_radar()  # S148：单股 diagnose 也带 ST carve-out 标（若该 code 在 radar 白名单）
     return build_diagnosis_card(
-        code, name, ind, eff, market_ctx=board, as_of=as_of,
-        gene_obj=gene_obj, pool_item=pool_item, derived=derived,
+        code,
+        name,
+        ind,
+        eff,
+        market_ctx=board,
+        as_of=as_of,
+        gene_obj=gene_obj,
+        pool_item=pool_item,
+        derived=derived,
         trade_date=yesterday_date,  # S085 B2：单股 diagnose 开席位聚合（1 code 开销可接受）
         with_seat_detail=True,
         st_play=_radar.get(code),  # S148

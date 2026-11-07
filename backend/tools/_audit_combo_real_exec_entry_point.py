@@ -7,6 +7,7 @@
 - T+2 open：次日次日开盘买，避 T+1 高开，但信号滞后 1 天 + 持有 3 天
 去 gap rank（动量+小盘），mode=filtered。
 """
+
 from __future__ import annotations
 
 import json
@@ -75,12 +76,16 @@ def build_by_date() -> dict:
             t5_close = float(bars[i + 5].get("close", 0) or 0)
             if not t1_open or not t1_close or not t5_close:
                 continue
-            by_date[bars[i].get("date", "")].append({
-                "code": code, "tr": today_ret, "amt": amt,
-                "t1_open": (t5_close - t1_open) / t1_open,
-                "t1_close": (t5_close - t1_close) / t1_close,
-                "t2_open": (t5_close - t2_open) / t2_open if t2_open else None,
-            })
+            by_date[bars[i].get("date", "")].append(
+                {
+                    "code": code,
+                    "tr": today_ret,
+                    "amt": amt,
+                    "t1_open": (t5_close - t1_open) / t1_open,
+                    "t1_close": (t5_close - t1_close) / t1_close,
+                    "t2_open": (t5_close - t2_open) / t2_open if t2_open else None,
+                }
+            )
     return by_date
 
 
@@ -127,7 +132,9 @@ def main() -> None:
         r = stats(all_d, by_date, field)
         results.append((label, r))
         if r:
-            print(f"{label:<16}{r['n_days']:>6}{r['net']*100:>+9.3f}%{r['mean']*100:>+9.3f}%{r['wr']*100:>6.1f}%{r['t']:>6.2f}")
+            print(
+                f"{label:<16}{r['n_days']:>6}{r['net'] * 100:>+9.3f}%{r['mean'] * 100:>+9.3f}%{r['wr'] * 100:>6.1f}%{r['t']:>6.2f}"
+            )
     print()
     valid = [(l, r) for l, r in results if r]
     if valid:
@@ -135,7 +142,9 @@ def main() -> None:
         base = next(r for l, r in results if "T+1 open" in l)
         if base:
             delta = best[1]["net"] - base["net"]
-            print(f"最佳买点: {best[0]} net {best[1]['net']*100:+.3f}%（vs T+1 open {base['net']*100:+.3f}%，{'提升' if delta>0 else '降'} {delta*100:+.3f}%）")
+            print(
+                f"最佳买点: {best[0]} net {best[1]['net'] * 100:+.3f}%（vs T+1 open {base['net'] * 100:+.3f}%，{'提升' if delta > 0 else '降'} {delta * 100:+.3f}%）"
+            )
             if best[0] != "T+1 open(当前)":
                 print(f"→ 改买点 {best[0]} 可能避开 entry gap 高点提升 edge（但注意持有期变 + 滞后）")
 

@@ -15,6 +15,7 @@ S201b v2：BH 跨口径多重比较校正（verdict §8 #7）——5 口径各 n
 
 纯函数 compute_net_at_levels 可单测；main() 调 s44_verifier + journal I/O + BH 校正。
 """
+
 from __future__ import annotations
 
 import sys
@@ -40,12 +41,18 @@ def recompute_gross_v2(cases: list, bars_provider=None) -> list[tuple]:
     from engine.accounting import path_return, _cost_pct  # noqa: PLC0415
     from engine.decision import Trades, FILL_T_PLUS_1_OPEN, FILL_ACCEPTED  # noqa: PLC0415
     from strategies.journal_recorder import (  # noqa: PLC0415
-        DEFAULT_SIZE, BREAKOUT_STOP_PCT, BREAKOUT_TAKE_PCT, BREAKOUT_MAX_HOLD,
-        TREND_STOP_PCT, TREND_TAKE_PCT, TREND_MAX_HOLD,
+        DEFAULT_SIZE,
+        BREAKOUT_STOP_PCT,
+        BREAKOUT_TAKE_PCT,
+        BREAKOUT_MAX_HOLD,
+        TREND_STOP_PCT,
+        TREND_TAKE_PCT,
+        TREND_MAX_HOLD,
     )
 
     if bars_provider is None:
         from engine.bars_provider import KlineCacheBarsProvider  # noqa: PLC0415
+
         bars_provider = KlineCacheBarsProvider()
 
     arm_params = {
@@ -77,9 +84,12 @@ def recompute_gross_v2(cases: list, bars_provider=None) -> list[tuple]:
             continue
 
         trades = Trades(
-            code=rec.stock_code, signal_date=rec.entry_date,
-            fill_type=FILL_T_PLUS_1_OPEN, direction="long",
-            size=DEFAULT_SIZE, entry_price=entry_price,
+            code=rec.stock_code,
+            signal_date=rec.entry_date,
+            fill_type=FILL_T_PLUS_1_OPEN,
+            direction="long",
+            size=DEFAULT_SIZE,
+            entry_price=entry_price,
             fill_status=FILL_ACCEPTED,
         )
         stop, take, max_hold = params
@@ -91,8 +101,7 @@ def recompute_gross_v2(cases: list, bars_provider=None) -> list[tuple]:
             results.append((pr.gross_return_pct, pr.cost_pct, rec.entry_date))
             n_recomputed += 1
 
-    print(f"# recompute_gross_v2: {n_recomputed} recomputed, {n_fallback} fallback (frozen)",
-          file=sys.stderr)
+    print(f"# recompute_gross_v2: {n_recomputed} recomputed, {n_fallback} fallback (frozen)", file=sys.stderr)
     return results
 
 
@@ -112,19 +121,23 @@ def compute_net_at_levels(
     out: list[dict] = []
     for c in levels:
         returns = [gr - c / 100.0 for gr in gross_returns]
-        out.append({
-            "label": f"flat {c}%",
-            "returns": returns,
-            "round_trip_cost": c / 100.0,
-            "cost_pct_mean": mean_cost,
-        })
+        out.append(
+            {
+                "label": f"flat {c}%",
+                "returns": returns,
+                "round_trip_cost": c / 100.0,
+                "cost_pct_mean": mean_cost,
+            }
+        )
     # 逐笔 _cost_pct（S201a 真实 size-dependent 5元门）
-    out.append({
-        "label": f"逐笔 _cost_pct mean={mean_cost:.3f}%",
-        "returns": [gr - c / 100.0 for gr, c in zip(gross_returns, per_trade_costs)],
-        "round_trip_cost": mean_cost / 100.0,
-        "cost_pct_mean": mean_cost,
-    })
+    out.append(
+        {
+            "label": f"逐笔 _cost_pct mean={mean_cost:.3f}%",
+            "returns": [gr - c / 100.0 for gr, c in zip(gross_returns, per_trade_costs)],
+            "round_trip_cost": mean_cost / 100.0,
+            "cost_pct_mean": mean_cost,
+        }
+    )
     return out
 
 
@@ -151,8 +164,13 @@ def main() -> None:
         return
 
     sweeps = compute_net_at_levels(gross_returns, per_trade_costs)
-    print(f"# S201b cost-sweep（RTC=0.15 + stage2 stop fix）：{len(gross_returns)} 条 event，{len(set(dates))} 唯一日", file=sys.stderr)
-    print(f"# 逐笔 _cost_pct mean={sum(per_trade_costs)/len(per_trade_costs):.3f}% (S201b RTC=0.15 后)", file=sys.stderr)
+    print(
+        f"# S201b cost-sweep（RTC=0.15 + stage2 stop fix）：{len(gross_returns)} 条 event，{len(set(dates))} 唯一日",
+        file=sys.stderr,
+    )
+    print(
+        f"# 逐笔 _cost_pct mean={sum(per_trade_costs) / len(per_trade_costs):.3f}% (S201b RTC=0.15 后)", file=sys.stderr
+    )
     print(f"{'cost 口径':<35} {'day_mean':>10} {'status':>18} {'days_robust':>12} {'p_raw':>8} {'p_bh':>8}")
     print("-" * 100)
 
@@ -161,8 +179,12 @@ def main() -> None:
     verdicts: list = []
     for s in sweeps:
         v = verify(
-            returns=s["returns"], n_trials=1, edge_type="event", dates=dates,
-            round_trip_cost=s["round_trip_cost"], frozen_commit="S194-F3-dev",
+            returns=s["returns"],
+            n_trials=1,
+            edge_type="event",
+            dates=dates,
+            round_trip_cost=s["round_trip_cost"],
+            frozen_commit="S194-F3-dev",
             n_comparisons=1,
         )
         verdicts.append(v)
@@ -176,11 +198,15 @@ def main() -> None:
         v = verdicts[i]
         em = getattr(v, "event_metrics", None)
         day_mean = getattr(em, "day_mean", None) if em else None
-        print(f"{s['label']:<35} {str(day_mean):>10} {v.status:>18} {v.days_robust:>12} {raw_p_values[i]:>8.4f} {bh_adjusted[i]:>8.4f}")
+        print(
+            f"{s['label']:<35} {str(day_mean):>10} {v.status:>18} {v.days_robust:>12} {raw_p_values[i]:>8.4f} {bh_adjusted[i]:>8.4f}"
+        )
     print()
     print("# S201b stage2 结论（stop gap-through-aware fix 后）：", file=sys.stderr)
     print("# - 全口径 falsified（含 flat 0.10%，stage1 raw p<0.05 robust_edge artifact 消失）", file=sys.stderr)
-    print("# - stop 出场乐观修复使 gross 更差（gap-through fill=open > 硬编码 stop_pct），day_mean 更负", file=sys.stderr)
+    print(
+        "# - stop 出场乐观修复使 gross 更差（gap-through fill=open > 硬编码 stop_pct），day_mean 更负", file=sys.stderr
+    )
     print("# - 佣金门是结构性杀手（逐笔 mean=0.914% > gross day_mean），降 spread 不 unfalsify", file=sys.stderr)
 
 

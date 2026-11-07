@@ -14,6 +14,7 @@ combo edge 第一天 live -3% + 涨停票 -12.72%/-7.35% 崩 → 怀疑 combo ed
 - 涨停 picks 贡献 <30% → 真 edge（小盘动量，涨停附带的）
 - 中间 → 部分涨停驱动，须滤涨停后重测
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -67,10 +68,16 @@ def build_by_date() -> dict:
             if not nc:
                 continue
             today_ret = (c - prev_c) / prev_c
-            by_date[bars[i].get("date", "")].append({
-                "code": code, "gap": (o - prev_c) / prev_c, "tr": today_ret,
-                "amt": amt, "fwd5": (nc - c) / c, "is_zt": today_ret >= thr,
-            })
+            by_date[bars[i].get("date", "")].append(
+                {
+                    "code": code,
+                    "gap": (o - prev_c) / prev_c,
+                    "tr": today_ret,
+                    "amt": amt,
+                    "fwd5": (nc - c) / c,
+                    "is_zt": today_ret >= thr,
+                }
+            )
     return by_date
 
 
@@ -107,8 +114,14 @@ def combo_top_fwd(dates, by_date, exclude_zt: bool = False):
     m = statistics.mean(daily_mean)
     std = statistics.pstdev(daily_mean) if len(daily_mean) > 1 else 0
     se = std / (len(daily_mean) ** 0.5) if daily_mean else 0
-    return {"mean": m, "net": m - COST, "t": m / se if se > 0 else 0,
-            "n_days": len(daily_mean), "n_picks": n_total_picks, "n_zt": n_zt_picks}
+    return {
+        "mean": m,
+        "net": m - COST,
+        "t": m / se if se > 0 else 0,
+        "n_days": len(daily_mean),
+        "n_picks": n_total_picks,
+        "n_zt": n_zt_picks,
+    }
 
 
 def main() -> None:
@@ -120,11 +133,15 @@ def main() -> None:
     no_zt = combo_top_fwd(test, by_date, exclude_zt=True)
 
     if full:
-        print(f"全 combo（含涨停）: mean {full['mean']*100:+.4f}% net {full['net']*100:+.4f}% t={full['t']:.2f} "
-              f"[{full['n_days']}日, {full['n_picks']} picks, 涨停 {full['n_zt']}={full['n_zt']/full['n_picks']*100:.1f}%]")
+        print(
+            f"全 combo（含涨停）: mean {full['mean'] * 100:+.4f}% net {full['net'] * 100:+.4f}% t={full['t']:.2f} "
+            f"[{full['n_days']}日, {full['n_picks']} picks, 涨停 {full['n_zt']}={full['n_zt'] / full['n_picks'] * 100:.1f}%]"
+        )
     if no_zt:
-        print(f"去涨停 combo:       mean {no_zt['mean']*100:+.4f}% net {no_zt['net']*100:+.4f}% t={no_zt['t']:.2f} "
-              f"[{no_zt['n_days']}日, {no_zt['n_picks']} picks]")
+        print(
+            f"去涨停 combo:       mean {no_zt['mean'] * 100:+.4f}% net {no_zt['net'] * 100:+.4f}% t={no_zt['t']:.2f} "
+            f"[{no_zt['n_days']}日, {no_zt['n_picks']} picks]"
+        )
 
     if full and no_zt:
         # 涨停 picks 贡献 = (full_mean - no_zt_mean) / full_mean （涨停 picks 拉高 full 的部分）
@@ -132,13 +149,13 @@ def main() -> None:
         # 简化：看 full vs no_zt 的差。no_zt >= full 的 70% → 涨停贡献 <30% → 真 edge
         ratio = no_zt["mean"] / full["mean"] if full["mean"] else 0
         print()
-        print(f"去涨停/全 = {ratio*100:.1f}%")
+        print(f"去涨停/全 = {ratio * 100:.1f}%")
         if ratio >= 0.7:
-            print(f"→ ✅ 真 edge（涨停贡献 <30%，去涨停后 edge 仍在 {no_zt['mean']*100:+.3f}%）")
+            print(f"→ ✅ 真 edge（涨停贡献 <30%，去涨停后 edge 仍在 {no_zt['mean'] * 100:+.3f}%）")
         elif ratio >= 0.3:
-            print(f"→ ⚠️ 部分涨停驱动（涨停贡献 {100-ratio*100:.0f}%，须滤涨停后用）")
+            print(f"→ ⚠️ 部分涨停驱动（涨停贡献 {100 - ratio * 100:.0f}%，须滤涨停后用）")
         else:
-            print(f"→ ❌ 假 edge（涨停封板溢价，去涨停后 edge 崩到 {no_zt['mean']*100:+.3f}%）")
+            print(f"→ ❌ 假 edge（涨停封板溢价，去涨停后 edge 崩到 {no_zt['mean'] * 100:+.3f}%）")
 
 
 if __name__ == "__main__":

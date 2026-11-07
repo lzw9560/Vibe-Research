@@ -8,6 +8,7 @@ close (14:50): 尾盘排雷+飞书推送（沸点期 score>70 才触发 filter�
 §44 v3 R26：情绪得分透明（fetcher 脚本化非黑箱）
 §44 v3 R30：仓位附 verdict 诚实标注
 """
+
 from __future__ import annotations
 import logging
 import sys
@@ -30,6 +31,7 @@ def _run_commander(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     try:
         from commander_runner import run as commander_run, format_text, push_feishu
+
         r = commander_run()
         text = format_text(r)
         push_feishu(text)
@@ -70,12 +72,17 @@ def sentiment_commander_close(payload: Dict[str, Any]) -> Dict[str, Any]:
     logger.info("[sentiment_commander] close 14:50 触发（仅沸点期推，常态降噪）")
     try:
         from commander_runner import run as commander_run, format_text, push_feishu
+
         r = commander_run()
         score = r.get("score", 0)
         n_tactics = len(r.get("tactics_filter_results", []))
         result: Dict[str, Any] = {
-            "status": "ok", "score": score, "state": r.get("state"),
-            "trade_date": r.get("trade_date"), "tactics_filter_count": n_tactics, "pushed": False,
+            "status": "ok",
+            "score": score,
+            "state": r.get("state"),
+            "trade_date": r.get("trade_date"),
+            "tactics_filter_count": n_tactics,
+            "pushed": False,
         }
         if r.get("tactics_filter_error"):
             result["tactics_filter_error"] = r["tactics_filter_error"]

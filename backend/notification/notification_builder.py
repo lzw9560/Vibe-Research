@@ -8,7 +8,13 @@ from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from notification.notification_types import AnalysisResult
-    from report_language import (normalize_report_language, get_report_labels, get_signal_level, get_localized_stock_name, localize_operation_advice)
+    from report_language import (
+        normalize_report_language,
+        get_report_labels,
+        get_signal_level,
+        get_localized_stock_name,
+        localize_operation_advice,
+    )
 
 
 class NotificationBuilder:
@@ -19,11 +25,7 @@ class NotificationBuilder:
     """
 
     @staticmethod
-    def build_simple_alert(
-        title: str,
-        content: str,
-        alert_type: str = "info"
-    ) -> str:
+    def build_simple_alert(title: str, content: str, alert_type: str = "info") -> str:
         """
         构建简单的提醒消息
 
@@ -50,7 +52,14 @@ class NotificationBuilder:
         适用于快速通知
         """
         report_language = normalize_report_language(
-            next((getattr(result, "report_language", None) for result in results if getattr(result, "report_language", None)), None)
+            next(
+                (
+                    getattr(result, "report_language", None)
+                    for result in results
+                    if getattr(result, "report_language", None)
+                ),
+                None,
+            )
         )
         labels = get_report_labels(report_language)
         lines = [f"📊 **{labels['summary_heading']}**", ""]

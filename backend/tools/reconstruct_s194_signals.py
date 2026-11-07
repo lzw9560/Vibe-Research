@@ -10,6 +10,7 @@
 
 用法：python tools/reconstruct_s194_signals.py [limit]  (默认全量，样本先 20)
 """
+
 import json
 import sys
 from pathlib import Path
@@ -37,9 +38,9 @@ GAP_REGIME_ENCODE = GAP_REGIME_BASE_SCORE
 # A 股 long-only direction weight（§1.1 弱合规：做空受限）
 # 向上 → 1.0（可交易多头）；向下 → 0.0（不可交易，空头受限→零贡献）；无 → 1.0（无缺口中性，不 zero out base）
 DIRECTION_WEIGHT = {
-    "向上": 1.0,   # tradeable (long-only)
-    "向下": 0.0,   # not tradeable (short restricted → zero contribution)
-    "无": 1.0,     # no gap = neutral, doesn't zero out the base score
+    "向上": 1.0,  # tradeable (long-only)
+    "向下": 0.0,  # not tradeable (short restricted → zero contribution)
+    "无": 1.0,  # no gap = neutral, doesn't zero out the base score
 }
 
 
@@ -103,27 +104,31 @@ def main() -> None:
         gap = _classify_gap_from_bars(bars, idx)
         regime = gap.get("regime", "无")
         direction = gap.get("direction", "无")
-        out.append({
-            "signal_id": rec.signal_id,
-            "stock": rec.stock_code,
-            "entry_date": rec.entry_date,
-            "arm": rec.arm,
-            "gross_return": rec.gross_return,
-            "net_pnl": rec.net_pnl,
-            "breakout_score": breakout_score,
-            "breakout_binary": breakout_binary,
-            "gap_regime": regime,
-            "gap_direction": direction,
-            "gap_regime_encoded": encode_gap_direction_agnostic(regime),  # backward-compat
-            "gap_regime_encoded_a": encode_gap_direction_aware(regime, direction),  # S199 version A
-            "gap_regime_encoded_b": encode_gap_direction_agnostic(regime),  # S199 version B (control)
-            "gap_confidence": gap.get("confidence", 0.0),
-            "gap_type": gap.get("type"),
-        })
+        out.append(
+            {
+                "signal_id": rec.signal_id,
+                "stock": rec.stock_code,
+                "entry_date": rec.entry_date,
+                "arm": rec.arm,
+                "gross_return": rec.gross_return,
+                "net_pnl": rec.net_pnl,
+                "breakout_score": breakout_score,
+                "breakout_binary": breakout_binary,
+                "gap_regime": regime,
+                "gap_direction": direction,
+                "gap_regime_encoded": encode_gap_direction_agnostic(regime),  # backward-compat
+                "gap_regime_encoded_a": encode_gap_direction_aware(regime, direction),  # S199 version A
+                "gap_regime_encoded_b": encode_gap_direction_agnostic(regime),  # S199 version B (control)
+                "gap_confidence": gap.get("confidence", 0.0),
+                "gap_type": gap.get("type"),
+            }
+        )
 
     print(json.dumps(out, ensure_ascii=False, indent=2))
-    print(f"# reconstructed {len(out)}/{len(cases)} (skip no_bar={skipped_no_bar} no_idx={skipped_no_idx})",
-          file=sys.stderr)
+    print(
+        f"# reconstructed {len(out)}/{len(cases)} (skip no_bar={skipped_no_bar} no_idx={skipped_no_idx})",
+        file=sys.stderr,
+    )
 
 
 if __name__ == "__main__":

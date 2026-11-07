@@ -21,18 +21,18 @@ class SectorDivergence:
 
     sector: str
     date: str
-    divergence_score: float = 0.0          # 分化度 (0-100)，越高分化越严重
-    rotation_speed: float = 0.0            # 轮动速度 (0-100)，越高轮动越快
+    divergence_score: float = 0.0  # 分化度 (0-100)，越高分化越严重
+    rotation_speed: float = 0.0  # 轮动速度 (0-100)，越高轮动越快
     up_count: int = 0
     down_count: int = 0
     avg_change_pct: float = 0.0
-    std_change_pct: float = 0.0            # 板块内涨跌幅标准差
+    std_change_pct: float = 0.0  # 板块内涨跌幅标准差
     leader_code: str = ""
     leader_name: str = ""
     leader_change_pct: float = 0.0
     interpretation: str = ""
     last_updated: str = ""
-    data_status: str = "ok"               # ok | missing | degraded（数据诚实标记，对齐 S111 R4）
+    data_status: str = "ok"  # ok | missing | degraded（数据诚实标记，对齐 S111 R4）
 
 
 @dataclass
@@ -46,12 +46,13 @@ class SectorRotation:
     cold_sectors: list[str] = field(default_factory=list)
     interpretation: str = ""
     last_updated: str = ""
-    data_status: str = "ok"               # ok | missing | degraded（数据诚实标记，对齐 S111 R4）
+    data_status: str = "ok"  # ok | missing | degraded（数据诚实标记，对齐 S111 R4）
 
 
 # ===========================================================================
 # 板块分化度计算
 # ===========================================================================
+
 
 def _compute_divergence_score(std_change: float, up_ratio: float) -> float:
     """计算分化度评分 (0-100)。"""
@@ -126,6 +127,7 @@ def _resolve_sector_provenance(meta: dict[str, Any], sectors_empty: bool) -> tup
 # 主计算函数
 # ===========================================================================
 
+
 async def calculate_sector_divergence(date: str | None = None) -> list[SectorDivergence]:
     """计算全市场板块分化度。
 
@@ -145,6 +147,7 @@ async def calculate_sector_divergence(date: str | None = None) -> list[SectorDiv
 
         # 获取行业板块数据（带降级 + 诚实元数据，S112 R4）
         from fallback import get_with_fallback_meta
+
         cache_key = f"industry_comparison:{target_date}"
         sector_data, meta = get_with_fallback_meta(
             cache_key,
@@ -162,12 +165,14 @@ async def calculate_sector_divergence(date: str | None = None) -> list[SectorDiv
                 "calculate_sector_divergence industry_comparison 源断且缓存失效 date=%s，标 missing",
                 display_date,
             )
-            return [SectorDivergence(
-                sector="",
-                date=display_date,
-                data_status=data_status,
-                last_updated=last_updated,
-            )]
+            return [
+                SectorDivergence(
+                    sector="",
+                    date=display_date,
+                    data_status=data_status,
+                    last_updated=last_updated,
+                )
+            ]
 
         # 计算每个板块的分化度
         results = []
@@ -186,18 +191,20 @@ async def calculate_sector_divergence(date: str | None = None) -> list[SectorDiv
 
             divergence_score = _compute_divergence_score(std_estimate, up_ratio)
 
-            results.append(SectorDivergence(
-                sector=name,
-                date=display_date,
-                divergence_score=divergence_score,
-                up_count=up_count,
-                down_count=down_count,
-                avg_change_pct=round(change_pct, 2),
-                std_change_pct=round(std_estimate, 2),
-                interpretation=_interpret_divergence(divergence_score, 0.0),
-                last_updated=last_updated,
-                data_status=data_status,
-            ))
+            results.append(
+                SectorDivergence(
+                    sector=name,
+                    date=display_date,
+                    divergence_score=divergence_score,
+                    up_count=up_count,
+                    down_count=down_count,
+                    avg_change_pct=round(change_pct, 2),
+                    std_change_pct=round(std_estimate, 2),
+                    interpretation=_interpret_divergence(divergence_score, 0.0),
+                    last_updated=last_updated,
+                    data_status=data_status,
+                )
+            )
 
         # 按分化度降序
         results.sort(key=lambda x: x.divergence_score, reverse=True)
@@ -227,6 +234,7 @@ async def calculate_sector_rotation(date: str | None = None) -> SectorRotation |
 
         # 获取当日板块排名（带降级 + 诚实元数据，S112 R4）
         from fallback import get_with_fallback_meta
+
         cache_key = f"industry_comparison:{target_date}"
         today_data, meta = get_with_fallback_meta(
             cache_key,
@@ -234,7 +242,9 @@ async def calculate_sector_rotation(date: str | None = None) -> SectorRotation |
             ttl=600,  # 10 分钟缓存
             fallback_value={"top": [], "bottom": []},
         )
-        today_sectors = [industry_sector_from_dict(s) for s in (today_data.get("top", []) + today_data.get("bottom", []))]
+        today_sectors = [
+            industry_sector_from_dict(s) for s in (today_data.get("top", []) + today_data.get("bottom", []))
+        ]
 
         # 数据诚实性：源断不戳 now，空板块标 missing（对齐 S111 R4）
         data_status, last_updated = _resolve_sector_provenance(meta, not today_sectors)
@@ -331,7 +341,6 @@ async def get_sector_divergence_history(days: int = 30) -> list[dict]:
     降级：计算失败时返回已缓存的历史数据或空列表。
     """
     try:
-
         history: list[dict] = []
         # 获取最近 N 个交易日（简化：按自然日回溯，实际应使用交易日历）
         # 这里用缓存避免重复计算
@@ -347,7 +356,7 @@ async def get_sector_divergence_history(days: int = 30) -> list[dict]:
                 # 回溯 i 天
                 target_date = (datetime.now() - timedelta(days=i)).strftime("%Y%m%d")
                 display_date = f"{target_date[:4]}-{target_date[4:6]}-{target_date[6:8]}"
-                
+
                 # 尝试获取该日期的分化度
                 result = await get_sector_divergence(target_date)
                 # 跳过 missing 哨兵：源断日不应伪造"平静"历史点（S112 R4）
@@ -355,12 +364,14 @@ async def get_sector_divergence_history(days: int = 30) -> list[dict]:
                     avg_divergence = sum(r.divergence_score for r in result) / len(result)
                     avg_rotation = sum(r.rotation_speed for r in result) / len(result) if result else 0.0
                     interpretation = _interpret_divergence(avg_divergence)
-                    history.append({
-                        "date": display_date,
-                        "divergence_score": round(avg_divergence, 2),
-                        "rotation_speed": round(avg_rotation, 2),
-                        "interpretation": interpretation,
-                    })
+                    history.append(
+                        {
+                            "date": display_date,
+                            "divergence_score": round(avg_divergence, 2),
+                            "rotation_speed": round(avg_rotation, 2),
+                            "interpretation": interpretation,
+                        }
+                    )
             except Exception as e:  # S112 R4：补 logger
                 _logger.warning("get_sector_divergence_history 日 %s 计算失败: %s", display_date, e)
                 continue

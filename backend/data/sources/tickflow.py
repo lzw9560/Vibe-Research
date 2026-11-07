@@ -29,6 +29,7 @@ def _get_client():
         return None
     try:
         from tickflow import TickFlow
+
         _client = TickFlow(api_key=api_key, timeout=15)
         return _client
     except ImportError:
@@ -72,15 +73,17 @@ def fetch_klines(code: str, count: int = 300) -> list[dict]:
             trade_date = str(row.get("trade_date", "") or "")[:10]
             if not trade_date:
                 continue
-            bars.append({
-                "date": trade_date,
-                "open": float(row.get("open", 0) or 0),
-                "close": float(row.get("close", 0) or 0),
-                "high": float(row.get("high", 0) or 0),
-                "low": float(row.get("low", 0) or 0),
-                "vol": float(row.get("volume", 0) or 0),
-                "amount": float(row.get("amount", 0) or 0),
-            })
+            bars.append(
+                {
+                    "date": trade_date,
+                    "open": float(row.get("open", 0) or 0),
+                    "close": float(row.get("close", 0) or 0),
+                    "high": float(row.get("high", 0) or 0),
+                    "low": float(row.get("low", 0) or 0),
+                    "vol": float(row.get("volume", 0) or 0),
+                    "amount": float(row.get("amount", 0) or 0),
+                }
+            )
         return bars
     except Exception as exc:
         logger.warning("[tickflow] %s K线获取失败: %s", code, exc)
@@ -94,6 +97,7 @@ def fetch_klines_as_bars(code: str, count: int = 300) -> list[Any]:
     可直接喂给 kline_rebuild._get_kline_bars 的调用方。
     """
     from data.mappers import kline_from_mootdx
+
     raw = fetch_klines(code, count)
     if not raw:
         return []

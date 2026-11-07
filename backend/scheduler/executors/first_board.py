@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """first_board executors——首板筛选/T+1 复盘/行情探查。"""
+
 from __future__ import annotations
 
 import logging
@@ -17,11 +18,16 @@ def first_board_filter(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         from strategies.first_board_filter import run_first_board_filter
         from vr_paths import last_trading_date_str
+
         target = payload.get("date") or last_trading_date_str()
         result = run_first_board_filter(target)
-        logger.info("[first_board_filter] %s 首板流筛选完成：涨停%s/首板%s/候选%s",
-                    target, result["zt_pool_count"], result["first_board_count"],
-                    len(result["candidates"]))
+        logger.info(
+            "[first_board_filter] %s 首板流筛选完成：涨停%s/首板%s/候选%s",
+            target,
+            result["zt_pool_count"],
+            result["first_board_count"],
+            len(result["candidates"]),
+        )
         return {
             "date": target,
             "status": "ok",
@@ -105,7 +111,11 @@ def first_board_quote_probe(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     try:
         from tools.first_board_quote_source_probe import (
-            probe_once, _append_row, OUT_DIR, EM_PUSH2_MIN_INTERVAL_S, DEFAULT_CODES,
+            probe_once,
+            _append_row,
+            OUT_DIR,
+            EM_PUSH2_MIN_INTERVAL_S,
+            DEFAULT_CODES,
         )
         import time as _time
         import json as _json
@@ -117,9 +127,7 @@ def first_board_quote_probe(payload: Dict[str, Any]) -> Dict[str, Any]:
         last_push2 = 0.0
         try:
             if state_path.exists():
-                last_push2 = float(
-                    _json.loads(state_path.read_text(encoding="utf-8")).get("last_push2_ts", 0.0)
-                )
+                last_push2 = float(_json.loads(state_path.read_text(encoding="utf-8")).get("last_push2_ts", 0.0))
         except Exception:
             last_push2 = 0.0
 
@@ -133,9 +141,7 @@ def first_board_quote_probe(payload: Dict[str, Any]) -> Dict[str, Any]:
         if "em_push2" in srcs:
             try:
                 OUT_DIR.mkdir(parents=True, exist_ok=True)
-                state_path.write_text(
-                    _json.dumps({"last_push2_ts": _time.time()}), encoding="utf-8"
-                )
+                state_path.write_text(_json.dumps({"last_push2_ts": _time.time()}), encoding="utf-8")
             except Exception as e:
                 logger.warning("[first_board_quote_probe] push2 状态写失败: %s", e)
 

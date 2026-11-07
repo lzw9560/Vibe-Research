@@ -11,6 +11,7 @@
 
 用法：cd backend && ../.venv/bin/python tools/backfill_industry.py [--dry-run]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -44,12 +45,10 @@ _SAMPLES_JSON = Path(GENE_SCORES_DB_PATH).parent / "backtest_samples.json"
 
 def _fetch_page(pn: int) -> list[dict]:
     """拉一页 clist，push2→push2delay 回退；返 diff list（空则 []）。"""
-    params = {"pn": pn, "pz": _PZ, "po": 1, "np": 1, "fltt": 2, "invt": 2,
-              "fid": "f6", "fs": _FS, "fields": _FIELDS}
+    params = {"pn": pn, "pz": _PZ, "po": 1, "np": 1, "fltt": 2, "invt": 2, "fid": "f6", "fs": _FS, "fields": _FIELDS}
     for host in _HOSTS:
         try:
-            r = em_get(f"https://{host}/api/qt/clist/get", params=params,
-                       headers={"User-Agent": UA}, timeout=12)
+            r = em_get(f"https://{host}/api/qt/clist/get", params=params, headers={"User-Agent": UA}, timeout=12)
             diff = (r.json().get("data") or {}).get("diff") or []
             if diff:
                 return diff
@@ -71,8 +70,7 @@ def fetch_all_industries() -> list[dict]:
             if not code or code in seen:
                 continue
             seen.add(code)
-            out.append({"code": code, "name": d.get("f14", ""),
-                        "industry": d.get("f100", "") or ""})
+            out.append({"code": code, "name": d.get("f14", ""), "industry": d.get("f100", "") or ""})
         if len(diff) < _PZ:
             break
         time.sleep(_PAGE_SLEEP)
@@ -97,9 +95,7 @@ def backfill_gene_scores(conn: sqlite3.Connection) -> tuple[int, int]:
             ''
         )
     """)
-    hit = conn.execute(
-        "SELECT COUNT(*) FROM gene_scores WHERE industry IS NOT NULL AND industry != ''"
-    ).fetchone()[0]
+    hit = conn.execute("SELECT COUNT(*) FROM gene_scores WHERE industry IS NOT NULL AND industry != ''").fetchone()[0]
     return total, hit
 
 

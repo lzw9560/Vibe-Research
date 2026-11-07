@@ -5,6 +5,7 @@
 - 005 数据层：extract_chip_structure / _get_kline_cache
 - 006 数据层：extract_sector
 """
+
 from __future__ import annotations
 
 import logging
@@ -57,6 +58,7 @@ def extract_chip_structure(code: str, date: str | None = None) -> dict:
     d = date if "-" in date else f"{date[:4]}-{date[4:6]}-{date[6:8]}"
     try:
         from engine.kline_cache_store import get_bars
+
         bars = get_bars(code)
         if not bars:
             return {}
@@ -104,6 +106,7 @@ def _get_kline_cache() -> dict[str, list[dict]]:
     保留接口防 break 外部 import。从 SQLite 全量读（2.19GB 峰值一次性 local，非常驻）。
     """
     from engine.kline_cache_store import load_all
+
     return load_all()
 
 

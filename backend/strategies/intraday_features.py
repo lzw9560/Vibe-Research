@@ -19,6 +19,7 @@ R7：战法因子派生（last_lock_time / broken_duration_min / max_drop_pct，
 - 缺数据标 None，不臆造（data_status=missing/degraded）
 - 60s 粒度近似标注（broken_duration_min 可能漏 <60s 短时炸板，AC7）
 """
+
 from __future__ import annotations
 
 import logging
@@ -37,6 +38,7 @@ _GRANULARITY_NOTE = "60s粒度近似"
 # ---------------------------------------------------------------------------
 # R1 / R7 纯函数（plan §2 设计，输入 snapshots 列表，不依赖网络/DB）
 # ---------------------------------------------------------------------------
+
 
 def _linear_regression_slope(ys: list[float]) -> float:
     """简单线性回归 slope（y = a + b*x，返 b）。n<2 返 0.0。
@@ -68,13 +70,25 @@ def compute_trajectory(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
     - 空/全缺 seal_amount → data_status=missing，各因子 None
     """
     if not snapshots:
-        return {"seal_delta": None, "seal_max": None, "seal_min": None,
-                "seal_slope": None, "snapshot_count": 0, "data_status": "missing"}
+        return {
+            "seal_delta": None,
+            "seal_max": None,
+            "seal_min": None,
+            "seal_slope": None,
+            "snapshot_count": 0,
+            "data_status": "missing",
+        }
 
     amounts = [s.get("seal_amount") for s in snapshots if s.get("seal_amount") is not None]
     if not amounts:
-        return {"seal_delta": None, "seal_max": None, "seal_min": None,
-                "seal_slope": None, "snapshot_count": len(snapshots), "data_status": "missing"}
+        return {
+            "seal_delta": None,
+            "seal_max": None,
+            "seal_min": None,
+            "seal_slope": None,
+            "snapshot_count": len(snapshots),
+            "data_status": "missing",
+        }
 
     seal_delta = amounts[-1] - amounts[0] if len(amounts) >= 2 else 0.0
     seal_max = max(amounts)
@@ -83,9 +97,14 @@ def compute_trajectory(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
     # <10 快照标 degraded（数据不充分）
     data_status = "ok" if len(snapshots) >= 10 else "degraded"
 
-    return {"seal_delta": seal_delta, "seal_max": seal_max, "seal_min": seal_min,
-            "seal_slope": seal_slope, "snapshot_count": len(snapshots),
-            "data_status": data_status}
+    return {
+        "seal_delta": seal_delta,
+        "seal_max": seal_max,
+        "seal_min": seal_min,
+        "seal_slope": seal_slope,
+        "snapshot_count": len(snapshots),
+        "data_status": data_status,
+    }
 
 
 def compute_derived_features(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
@@ -116,10 +135,7 @@ def compute_derived_features(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
             last_lock_time = s.get("ts")  # 不断覆盖，取最后一个
 
     # broken_duration_min：open_count>0 的快照数 × 1 分钟（60s 粒度）
-    broken_count = sum(
-        1 for s in snapshots
-        if s.get("open_count") is not None and s["open_count"] > 0
-    )
+    broken_count = sum(1 for s in snapshots if s.get("open_count") is not None and s["open_count"] > 0)
     broken_duration_min = float(broken_count)  # 每快照 60s = 1 分钟
 
     # limit_price：优先 limit_pct 反推，缺则退回首快照 price 近似
@@ -134,10 +150,7 @@ def compute_derived_features(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
         limit_price_degraded = True
 
     # max_drop_pct：(涨停价 - min(low_price)) / 涨停价 * 100
-    low_prices = [
-        s.get("low_price") for s in snapshots
-        if s.get("low_price") is not None
-    ]
+    low_prices = [s.get("low_price") for s in snapshots if s.get("low_price") is not None]
     max_drop_pct = None
     if low_prices and limit_price and limit_price > 0:
         min_low = min(low_prices)
@@ -172,8 +185,7 @@ def _empty_derived() -> dict[str, Any]:
     }
 
 
-def persist_trajectory(date: str, code: str, name: str | None,
-                       traj: dict[str, Any], conn: sqlite3.Connection) -> None:
+def persist_trajectory(date: str, code: str, name: str | None, traj: dict[str, Any], conn: sqlite3.Connection) -> None:
     """R1：trajectory 写入 intraday_features 表（UPSERT）。
 
     conn 由调用方管理（executor 批量写时复用连接，避免逐只开闭）。
@@ -183,15 +195,24 @@ def persist_trajectory(date: str, code: str, name: str | None,
         (date, code, name, seal_delta, seal_max, seal_min, seal_slope,
          snapshot_count, computed_at, data_status)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (date, code, name, traj["seal_delta"], traj["seal_max"], traj["seal_min"],
-         traj["seal_slope"], traj["snapshot_count"], datetime.now().isoformat(),
-         traj["data_status"]),
+        (
+            date,
+            code,
+            name,
+            traj["seal_delta"],
+            traj["seal_max"],
+            traj["seal_min"],
+            traj["seal_slope"],
+            traj["snapshot_count"],
+            datetime.now().isoformat(),
+            traj["data_status"],
+        ),
     )
 
 
-def persist_derived_features(date: str, code: str, name: str | None,
-                             derived: dict[str, Any],
-                             conn: sqlite3.Connection) -> None:
+def persist_derived_features(
+    date: str, code: str, name: str | None, derived: dict[str, Any], conn: sqlite3.Connection
+) -> None:
     """R7：派生结果写入 seal_derived_features 表（INSERT OR REPLACE）。
 
     conn 由调用方管理（executor 批量写时复用连接）。
@@ -201,9 +222,18 @@ def persist_derived_features(date: str, code: str, name: str | None,
         (date, code, name, last_lock_time, broken_duration_min, max_drop_pct,
          limit_price, granularity_note, computed_at, data_status)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (date, code, name, derived["last_lock_time"], derived["broken_duration_min"],
-         derived["max_drop_pct"], derived["limit_price"], derived["granularity_note"],
-         datetime.now().isoformat(), derived["data_status"]),
+        (
+            date,
+            code,
+            name,
+            derived["last_lock_time"],
+            derived["broken_duration_min"],
+            derived["max_drop_pct"],
+            derived["limit_price"],
+            derived["granularity_note"],
+            datetime.now().isoformat(),
+            derived["data_status"],
+        ),
     )
 
 
@@ -211,20 +241,22 @@ def persist_derived_features(date: str, code: str, name: str | None,
 # 遗留 DB 便利函数（向后兼容，内部委托纯函数）
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class SealTrajectory:
     """某日某股的封单 trajectory 特征（遗留 dataclass，向后兼容）。"""
+
     code: str
     date: str
     n_snapshots: int
-    first_seal: float       # 开盘附近首值
-    last_seal: float        # 收盘附近末值
-    delta: float            # last - first（衰减为负）
+    first_seal: float  # 开盘附近首值
+    last_seal: float  # 收盘附近末值
+    delta: float  # last - first（衰减为负）
     max_seal: float
     min_seal: float
     mean_seal: float
-    slope: float            # 线性回归斜率（seal_amount over ts-minutes，负=衰减）
-    break_count: int       # seal→0 跳变次数（炸板）
+    slope: float  # 线性回归斜率（seal_amount over ts-minutes，负=衰减）
+    break_count: int  # seal→0 跳变次数（炸板）
 
 
 def _parse_ts_minute(ts: str) -> float:
@@ -238,8 +270,7 @@ def _parse_ts_minute(ts: str) -> float:
         return 0.0
 
 
-def compute_seal_trajectory(date: str, code: str,
-                            db_path: Path | str | None = None) -> SealTrajectory | None:
+def compute_seal_trajectory(date: str, code: str, db_path: Path | str | None = None) -> SealTrajectory | None:
     """从 seal_intraday_snapshots 分表算 (date,code) 的封单 trajectory（DB 便利函数）。
 
     遗留接口，内部委托纯函数 compute_trajectory 计算 core 特征，
@@ -250,6 +281,7 @@ def compute_seal_trajectory(date: str, code: str,
     仅在分库存在时覆盖（遗留调用方传单库路径场景）；分表不存在返 None。
     """
     from db_partition_router import resolve_partition
+
     resolved_db, table = resolve_partition(date)
     # 调用方显式传 db_path 时优先用之（遗留兼容），否则用路由结果
     db = Path(db_path) if db_path else Path(resolved_db)
@@ -289,30 +321,35 @@ def compute_seal_trajectory(date: str, code: str,
     # 炸板次数：seal→0 跳变（从 >0 到 0）
     break_count = sum(1 for i in range(1, n) if seals[i - 1] > 0 and seals[i] == 0)
     return SealTrajectory(
-        code=code, date=date, n_snapshots=n,
-        first_seal=round(first_seal, 2), last_seal=round(last_seal, 2),
-        delta=round(delta, 2), max_seal=round(max_seal, 2),
-        min_seal=round(min_seal, 2), mean_seal=round(mean_seal, 2),
-        slope=round(slope, 2), break_count=break_count,
+        code=code,
+        date=date,
+        n_snapshots=n,
+        first_seal=round(first_seal, 2),
+        last_seal=round(last_seal, 2),
+        delta=round(delta, 2),
+        max_seal=round(max_seal, 2),
+        min_seal=round(min_seal, 2),
+        mean_seal=round(mean_seal, 2),
+        slope=round(slope, 2),
+        break_count=break_count,
     )
 
 
-def compute_all_trajectories(date: str,
-                             db_path: Path | str | None = None) -> list[SealTrajectory]:
+def compute_all_trajectories(date: str, db_path: Path | str | None = None) -> list[SealTrajectory]:
     """某日全部 code 的 trajectory（从 snapshots distinct code）。遗留便利函数。
 
     S089 C7：调 ``resolve_partition(date)`` 路由到对应月分表。``db_path`` 入参
     仅在分库存在时覆盖（遗留兼容）；分表不存在返 []。
     """
     from db_partition_router import resolve_partition
+
     resolved_db, table = resolve_partition(date)
     db = Path(db_path) if db_path else Path(resolved_db)
     if not db.exists():
         return []
     conn = sqlite3.connect(str(db), timeout=10)
     try:
-        codes = [r[0] for r in conn.execute(
-            f"SELECT DISTINCT code FROM {table} WHERE date=?", (date,)).fetchall()]
+        codes = [r[0] for r in conn.execute(f"SELECT DISTINCT code FROM {table} WHERE date=?", (date,)).fetchall()]
     except sqlite3.OperationalError:
         # 分表不存在 → 空集（不臆造）
         return []
@@ -325,6 +362,7 @@ def compute_all_trajectories(date: str,
 # S176 R3 — 封单诚意补全 3 纯函数（复用 compute_trajectory 输入 snapshots）
 # 诚意强=slope>0 ∧ delta_ratio>0 ∧ volatility<0.2 ∧ break=0 ∧ drawdown<0.1（KG 因子 2）
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def compute_seal_delta_ratio(snapshots: list[dict[str, Any]]) -> float | None:
     """净增减比 = (last - first) / first（正=封单增强，负=衰减）。
@@ -350,7 +388,7 @@ def compute_seal_volatility(snapshots: list[dict[str, Any]]) -> float | None:
     if not mean:
         return None
     var = sum((a - mean) ** 2 for a in amounts) / n
-    return (var ** 0.5) / mean
+    return (var**0.5) / mean
 
 
 def compute_seal_drawdown(snapshots: list[dict[str, Any]]) -> float | None:
@@ -370,11 +408,14 @@ def compute_seal_drawdown(snapshots: list[dict[str, Any]]) -> float | None:
 
 if __name__ == "__main__":
     import sys
+
     d = sys.argv[1] if len(sys.argv) > 1 else "2026-08-14"
     ts = compute_all_trajectories(d)
     print(f"=== {d} 封单 trajectory（{len(ts)} 股）===")
     for t in ts[:5]:
-        print(f"  {t.code}: n={t.n_snapshots} first={t.first_seal} last={t.last_seal} "
-              f"delta={t.delta} max={t.max_seal} slope={t.slope} break={t.break_count}")
+        print(
+            f"  {t.code}: n={t.n_snapshots} first={t.first_seal} last={t.last_seal} "
+            f"delta={t.delta} max={t.max_seal} slope={t.slope} break={t.break_count}"
+        )
     if len(ts) > 5:
         print(f"  ... ({len(ts) - 5} more)")

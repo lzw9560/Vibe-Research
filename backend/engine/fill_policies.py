@@ -13,6 +13,7 @@ R5 gap bypasses engine：IntradayConditionalFill deferred stub 主动返 untrade
 （活哨兵非死代码，治 grill yagni refuted）。gap §44v2 run 绕过 engine 直接算
 D close→D+1 open——engine 拒绝对未建模 fill 的隔夜捕获。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -65,8 +66,7 @@ class T1OpenFill:
         if not bars:
             return FillResult(None, FILL_UNTRADEABLE, "empty_bars")
         idx = next(
-            (i for i, b in enumerate(bars)
-             if str(_bar_get(b, "date", ""))[:10] == signal_date),
+            (i for i, b in enumerate(bars) if str(_bar_get(b, "date", ""))[:10] == signal_date),
             None,
         )
         if idx is None:

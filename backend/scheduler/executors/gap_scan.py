@@ -11,6 +11,7 @@
 复用 NotificationService.send + KlineCacheBarsProvider + _classify_gap_from_bars（cache bars 无网络）。
 不直接触发买卖（§1 弱合规半自动化助手，缺口 regime 喂 AI 研判 + 用户决策）。
 """
+
 from __future__ import annotations
 
 import logging
@@ -38,9 +39,7 @@ def _build_gap_alert_content(alerts: list[dict], date_str: str) -> str:
             note = "趋势启动信号"
         else:  # 衰竭
             note = "continuation 信号（label 疑误，实际延续非反转）"
-        lines.append(
-            f"- {emoji} **{code}** {gtype}缺口（{direction}，{regime}，置信 {conf}）— {note}"
-        )
+        lines.append(f"- {emoji} **{code}** {gtype}缺口（{direction}，{regime}，置信 {conf}）— {note}")
     lines.append("")
     lines.append("> ⚠️ 历史统计特征，不代表未来行为。仅作研究参考，不构成投资建议。")
     return "\n".join(lines)
@@ -86,14 +85,16 @@ def scan_watchlist_gaps(payload: dict[str, Any]) -> dict[str, Any]:
         gtype = gap.get("type")
         if gtype in ALERT_TYPES:
             actual_date = str(bars[idx].get("date", ""))[:10]
-            alerts.append({
-                "code": code,
-                "type": gtype,
-                "direction": gap.get("direction"),
-                "regime": gap.get("regime"),
-                "confidence": gap.get("confidence"),
-                "date": actual_date,
-            })
+            alerts.append(
+                {
+                    "code": code,
+                    "type": gtype,
+                    "direction": gap.get("direction"),
+                    "regime": gap.get("regime"),
+                    "confidence": gap.get("confidence"),
+                    "date": actual_date,
+                }
+            )
 
     alert_date = alerts[0]["date"] if alerts else (date_str or "latest")
     if not alerts:

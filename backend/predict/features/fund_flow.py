@@ -91,6 +91,7 @@ FUND_FLOW_SPECS: tuple[FeatureSpec, ...] = (
 
 # ── Registration ────────────────────────────────────────────────────
 
+
 def register_fund_flow(registry: Registry) -> None:
     """Register all fund-flow FeatureSpecs into the given Registry.
 
@@ -102,6 +103,7 @@ def register_fund_flow(registry: Registry) -> None:
 
 
 # ── Pure computation (no side effects, no network) ──────────────────
+
 
 def accumulate_main_net(daily_main_nets: list[float | None]) -> float | None:
     """Sum the non-None daily main net inflows over the last 5 days.
@@ -211,6 +213,7 @@ def sector_rotation_speed(
 
 # ── Live fetchers（S044 补 S018 R11 TODO）──────────────────────────────────
 
+
 def fetch_northbound(code: str, date: str | None = None) -> float | None:
     """个股北向净流入（万元，盘后可得）。S044 R1。
 
@@ -227,7 +230,10 @@ def fetch_northbound(code: str, date: str | None = None) -> float | None:
         rows = astock.eastmoney_datacenter(
             "RPT_MUTUAL_HOLDSTOCKNDATE_STA",
             filter_str=f'(SECURITY_CODE="{code}")(INTERVAL_TYPE="1")',
-            page_size=500, sort_columns="TRADE_DATE", sort_types="-1")
+            page_size=500,
+            sort_columns="TRADE_DATE",
+            sort_types="-1",
+        )
     except Exception:
         return None
     if not rows:
@@ -258,16 +264,17 @@ def fetch_dt_hot_money_relay(code: str, date: str | None = None, look_back: int 
     无上榜记录 → None（missing）；有上榜但无接力席位 → 0.0。availability_offset=1（T+1 盘后公布）。
     """
     from datetime import datetime, timedelta
+
     ref = date or datetime.now().strftime("%Y-%m-%d")
     start = (datetime.strptime(ref, "%Y-%m-%d") - timedelta(days=look_back)).strftime("%Y-%m-%d")
-    flt = f'(SECURITY_CODE="{code}")(TRADE_DATE>=\'{start}\')(TRADE_DATE<=\'{ref}\')'
+    flt = f"(SECURITY_CODE=\"{code}\")(TRADE_DATE>='{start}')(TRADE_DATE<='{ref}')"
     try:
         buy = astock.eastmoney_datacenter(
-            "RPT_BILLBOARD_DAILYDETAILSBUY",
-            filter_str=flt, page_size=200, sort_columns="TRADE_DATE", sort_types="-1")
+            "RPT_BILLBOARD_DAILYDETAILSBUY", filter_str=flt, page_size=200, sort_columns="TRADE_DATE", sort_types="-1"
+        )
         sell = astock.eastmoney_datacenter(
-            "RPT_BILLBOARD_DAILYDETAILSSELL",
-            filter_str=flt, page_size=200, sort_columns="TRADE_DATE", sort_types="-1")
+            "RPT_BILLBOARD_DAILYDETAILSSELL", filter_str=flt, page_size=200, sort_columns="TRADE_DATE", sort_types="-1"
+        )
     except Exception:
         return None
     rows = list(buy or []) + list(sell or [])
@@ -301,8 +308,8 @@ _EM_PUSH2_UT = "fa5fd1943c7b386f172d6893dbbd1"
 # S044-R2 收尾（2026-08-10 live 修复）：板块 clist 缓存（TTL 10 分钟）。
 # 同日板块资金流对每候选相同——漏斗循环内复用单次 clist，避免逐候选重复探测触发东财限流。
 _SECTOR_CACHE_TTL = 600
-_SECTOR_PAGE_SIZE = 100   # 东财该 fs 单页上限 100（pz=200 实测仍返 100）
-_SECTOR_MAX_PAGES = 8     # 496 板块 ≈ 5 页，留余量防异常翻页
+_SECTOR_PAGE_SIZE = 100  # 东财该 fs 单页上限 100（pz=200 实测仍返 100）
+_SECTOR_MAX_PAGES = 8  # 496 板块 ≈ 5 页，留余量防异常翻页
 _sector_cache: dict[str, tuple[float, dict]] = {}  # "flows" → (ts, {归一化板块名: f62(元)})
 
 
@@ -313,6 +320,7 @@ def _load_industry_map() -> dict[str, str]:
     """从 gene_scores.db code_industry 表 load {code: industry}（静态映射，5896 行全 A）。"""
     import sqlite3
     from vr_paths import resolve_data_dir
+
     try:
         conn = sqlite3.connect(str(resolve_data_dir() / "gene_scores.db"))
         try:
@@ -384,8 +392,15 @@ def _sector_board_flows() -> dict[str, float]:
             for pn in range(1, _SECTOR_MAX_PAGES + 1):
                 r = astock.em_get(
                     f"https://{host}/api/qt/clist/get",
-                    params={"fid": "f62", "po": "1", "pz": str(_SECTOR_PAGE_SIZE), "pn": str(pn),
-                            "fs": "m:90+t:2+f:!50", "fields": "f12,f14,f62", "ut": _EM_PUSH2_UT},
+                    params={
+                        "fid": "f62",
+                        "po": "1",
+                        "pz": str(_SECTOR_PAGE_SIZE),
+                        "pn": str(pn),
+                        "fs": "m:90+t:2+f:!50",
+                        "fields": "f12,f14,f62",
+                        "ut": _EM_PUSH2_UT,
+                    },
                     timeout=15,
                 )
                 diff = (r.json().get("data") or {}).get("diff") or {}

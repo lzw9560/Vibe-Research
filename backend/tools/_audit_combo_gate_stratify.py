@@ -27,6 +27,7 @@
 - NW-t 自相关校正（日级收益 + 5日持有重叠 → 自相关强，lag≥5）
 - 不外推（门分层是诊断非自动开关，命题A已证伪自动开关形态）
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -99,17 +100,19 @@ def build_by_date() -> dict:
             today_ret = (c - prev_c) / prev_c
             ret5 = (c - prev5_c) / prev5_c if prev5_c else 0.0
             cap = (vol / (turn / 100)) * c / 1e8 if turn else 0.0
-            by_date[dates[i]].append({
-                "code": code,
-                "gap": (o - prev_c) / prev_c,
-                "tr": today_ret,
-                "amt": amt,
-                "fwd5": (nc - c) / c,
-                "is_zt": today_ret >= thr,
-                "above60": c > ma60,
-                "ret5": ret5,
-                "cap": cap,
-            })
+            by_date[dates[i]].append(
+                {
+                    "code": code,
+                    "gap": (o - prev_c) / prev_c,
+                    "tr": today_ret,
+                    "amt": amt,
+                    "fwd5": (nc - c) / c,
+                    "is_zt": today_ret >= thr,
+                    "above60": c > ma60,
+                    "ret5": ret5,
+                    "cap": cap,
+                }
+            )
     return by_date
 
 
@@ -179,16 +182,23 @@ def group_stats(daily_means: list) -> dict:
     se = std / (len(daily_means) ** 0.5) if daily_means else 0
     t_ols = m / se if se > 0 else 0
     return {
-        "n": len(daily_means), "mean": m, "median": med, "wr": wr,
-        "net": m - COST, "t": t_ols, "t_nw": nw_t(daily_means),
+        "n": len(daily_means),
+        "mean": m,
+        "median": med,
+        "wr": wr,
+        "net": m - COST,
+        "t": t_ols,
+        "t_nw": nw_t(daily_means),
     }
 
 
 def fmt(r: dict) -> str:
     if r["n"] == 0:
         return f"{'(n=0)':<46}"
-    return (f"{r['mean']*100:>+8.4f}%{r['median']*100:>+8.4f}%{r['wr']*100:>6.1f}%"
-            f"{r['net']*100:>+8.4f}%{r['t']:>6.2f}{r['t_nw']:>7.2f}{r['n']:>6}")
+    return (
+        f"{r['mean'] * 100:>+8.4f}%{r['median'] * 100:>+8.4f}%{r['wr'] * 100:>6.1f}%"
+        f"{r['net'] * 100:>+8.4f}%{r['t']:>6.2f}{r['t_nw']:>7.2f}{r['n']:>6}"
+    )
 
 
 def main() -> None:
@@ -240,8 +250,12 @@ def main() -> None:
         off_y = [r[4] for r in yr_rows if not r[3]]
         rs_on = group_stats(on_y)
         rs_off = group_stats(off_y)
-        print(f"{yr:<6}{'ON':<8}{rs_on['mean']*100:>+9.4f}%{rs_on['t_nw']:>7.2f}{rs_on['wr']*100:>6.1f}%{rs_on['n']:>6}")
-        print(f"{'':<6}{'OFF':<8}{rs_off['mean']*100:>+9.4f}%{rs_off['t_nw']:>7.2f}{rs_off['wr']*100:>6.1f}%{rs_off['n']:>6}")
+        print(
+            f"{yr:<6}{'ON':<8}{rs_on['mean'] * 100:>+9.4f}%{rs_on['t_nw']:>7.2f}{rs_on['wr'] * 100:>6.1f}%{rs_on['n']:>6}"
+        )
+        print(
+            f"{'':<6}{'OFF':<8}{rs_off['mean'] * 100:>+9.4f}%{rs_off['t_nw']:>7.2f}{rs_off['wr'] * 100:>6.1f}%{rs_off['n']:>6}"
+        )
     print()
 
     # 3. cap-decile 对照（2024+，看 amount-decile 代理是否扭曲）
@@ -253,30 +267,40 @@ def main() -> None:
         print("-" * 46)
         rc_on = group_stats(on_c)
         rc_off = group_stats(off_c)
-        print(f"{'cap-ON':<10}{rc_on['mean']*100:>+9.4f}%{rc_on['t_nw']:>7.2f}{rc_on['wr']*100:>6.1f}%{rc_on['n']:>6}")
-        print(f"{'cap-OFF':<10}{rc_off['mean']*100:>+9.4f}%{rc_off['t_nw']:>7.2f}{rc_off['wr']*100:>6.1f}%{rc_off['n']:>6}")
+        print(
+            f"{'cap-ON':<10}{rc_on['mean'] * 100:>+9.4f}%{rc_on['t_nw']:>7.2f}{rc_on['wr'] * 100:>6.1f}%{rc_on['n']:>6}"
+        )
+        print(
+            f"{'cap-OFF':<10}{rc_off['mean'] * 100:>+9.4f}%{rc_off['t_nw']:>7.2f}{rc_off['wr'] * 100:>6.1f}%{rc_off['n']:>6}"
+        )
         # 同日期 amount-decile 对照
         cap_dates = {r[0] for r in rows_cap}
         on_a_match = [r[4] for r in rows_amt if r[0] in cap_dates and r[3]]
         off_a_match = [r[4] for r in rows_amt if r[0] in cap_dates and not r[3]]
         ra_on = group_stats(on_a_match)
         ra_off = group_stats(off_a_match)
-        print(f"{'amt-ON*':<10}{ra_on['mean']*100:>+9.4f}%{ra_on['t_nw']:>7.2f}{ra_on['wr']*100:>6.1f}%{ra_on['n']:>6}")
-        print(f"{'amt-OFF*':<10}{ra_off['mean']*100:>+9.4f}%{ra_off['t_nw']:>7.2f}{ra_off['wr']*100:>6.1f}%{ra_off['n']:>6}")
+        print(
+            f"{'amt-ON*':<10}{ra_on['mean'] * 100:>+9.4f}%{ra_on['t_nw']:>7.2f}{ra_on['wr'] * 100:>6.1f}%{ra_on['n']:>6}"
+        )
+        print(
+            f"{'amt-OFF*':<10}{ra_off['mean'] * 100:>+9.4f}%{ra_off['t_nw']:>7.2f}{ra_off['wr'] * 100:>6.1f}%{ra_off['n']:>6}"
+        )
         print("  *amt 同日期子集对照 cap（看两口径在相同日判 gate 是否一致）")
         # gate 判定一致性
         amt_map = {r[0]: r[3] for r in rows_amt}
         cap_map = {r[0]: r[3] for r in rows_cap}
         common = set(amt_map) & set(cap_map)
         agree = sum(1 for d in common if amt_map[d] == cap_map[d])
-        print(f"  gate 判定一致率：{agree}/{len(common)} = {agree/len(common)*100:.1f}%")
+        print(f"  gate 判定一致率：{agree}/{len(common)} = {agree / len(common) * 100:.1f}%")
         print()
 
     # 4. 判定
     print("【4】判定（amount-decile 8年全量）")
     rs_off_full = group_stats(off)
     if rs_off_full["n"] > 0:
-        print(f"  gate=OFF: mean={rs_off_full['mean']*100:+.4f}% t_nw={rs_off_full['t_nw']:.2f} WR={rs_off_full['wr']*100:.1f}% n={rs_off_full['n']}")
+        print(
+            f"  gate=OFF: mean={rs_off_full['mean'] * 100:+.4f}% t_nw={rs_off_full['t_nw']:.2f} WR={rs_off_full['wr'] * 100:.1f}% n={rs_off_full['n']}"
+        )
         if rs_off_full["t_nw"] > 2 and rs_off_full["mean"] > 0:
             print("  → ✅ 门是梯度非 kill switch（OFF 仍显著正）→ combo 该梯度加权（OFF 用 0.3-0.5）")
         elif rs_off_full["mean"] > 0 and rs_off_full["t_nw"] <= 2:

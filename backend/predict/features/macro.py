@@ -132,6 +132,7 @@ def get_fred_api_key() -> str | None:
     v4 H3 安全卫生：env 变量优先（明文文件级隔离弱），文件 fallback 兼容现有。
     """
     import os  # noqa: PLC0415
+
     env_key = os.environ.get("FRED_API_KEY")
     if env_key:
         return env_key.strip() or None

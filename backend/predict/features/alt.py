@@ -11,6 +11,7 @@ cross-check Fred dxy，不作主源。
 按 S020 R10 纪律：**live 冒烟通过前不加入** ``HEAD_FEATURE_SUBSETS``。``availability_offset``
 占位 1（s2），待 live 冒烟后定（先注册存在性，不影响模型栈）。
 """
+
 from __future__ import annotations
 
 from predict.features.registry import FeatureSpec, Registry

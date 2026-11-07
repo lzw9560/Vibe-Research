@@ -7,6 +7,7 @@ FE-2（backlog）：classify_gap + ta_signals(MACD/RSI) 进 chat.TOOLS（声明�
 方向性研判由 LLM 在 SYSTEM_PROMPT 约束下给出，工具不越权。三信号作 regime 判断不直接买卖
 （spec S193/S196：缺口/MACD/RSI 是 regime 信号，喂 AI 综合研判 + 融合消融验）。
 """
+
 from __future__ import annotations
 
 from engine.gap_classifier import classify_gap
@@ -65,9 +66,9 @@ def query_tech_score(code: str) -> dict:
     """S215 通用技术评分——6 维 100 分 + 信号映射。"""
     from engine.bars_provider import KlineCacheBarsProvider
     from strategies.tech_score import compute_tech_score
+
     bars = KlineCacheBarsProvider()(str(code))
     if not bars or len(bars) < 60:
-        return {"available": False, "code": str(code),
-                "reason": f"bars 不足（{len(bars) if bars else 0} < 60）"}
+        return {"available": False, "code": str(code), "reason": f"bars 不足（{len(bars) if bars else 0} < 60）"}
     result = compute_tech_score(bars)
     return {"available": True, "code": str(code), **result}

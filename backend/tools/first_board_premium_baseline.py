@@ -21,6 +21,7 @@
 
 用法：cd backend && .venv/bin/python tools/first_board_premium_baseline.py
 """
+
 from __future__ import annotations
 
 import json
@@ -58,10 +59,10 @@ RELOGIN_BATCH = 50
 #   - 活跃（60-100）：题材活跃，连板梯队成形
 #   - 亢奋（zt≥100）：情绪过热，警惕高位分歧
 MARKET_CONDITION_THRESHOLDS = [
-    ("冰点", -1, 30),        # zt_count < 30
-    ("普通", 30, 60),         # 30 ≤ zt < 60
-    ("活跃", 60, 100),        # 60 ≤ zt < 100
-    ("亢奋", 100, 10**9),    # zt ≥ 100
+    ("冰点", -1, 30),  # zt_count < 30
+    ("普通", 30, 60),  # 30 ≤ zt < 60
+    ("活跃", 60, 100),  # 60 ≤ zt < 100
+    ("亢奋", 100, 10**9),  # zt ≥ 100
 ]
 EXPLORATORY_N = 30  # 分层样本量<此值标"探索性"（AGENTS.md 数据支撑优先）
 
@@ -80,10 +81,10 @@ def _stats_block(arr_slice) -> dict:
     """统一统计口径（N/mean/median/pos_ratio/net_mean/net_pos_ratio）。
     空切片返回零值占位，调用方据此标"探索性"。"""
     import numpy as np
+
     n = len(arr_slice)
     if n == 0:
-        return {"N": 0, "mean_pct": 0.0, "median_pct": 0.0, "pos_ratio": 0.0,
-                "net_mean_pct": 0.0, "net_pos_ratio": 0.0}
+        return {"N": 0, "mean_pct": 0.0, "median_pct": 0.0, "pos_ratio": 0.0, "net_mean_pct": 0.0, "net_pos_ratio": 0.0}
     pos = int((arr_slice > 0).sum())
     net_arr = arr_slice - COST_PCT
     net_pos = int((net_arr > 0).sum())
@@ -144,6 +145,7 @@ def _load_kline_cache() -> dict[str, list[dict]]:
         except Exception:
             return {}
         from engine.pctchg_injector import enrich_pctchg
+
         enriched = {code: enrich_pctchg(bars) for code, bars in cache.items()}
         _KLINE_CACHE_MEMO = (mtime, enriched)
         return enriched
@@ -157,7 +159,11 @@ def _fetch_baostock_bars(code: str, start_date: str, end_date: str, bs) -> list[
     fields = "date,open,high,low,close,volume,amount,turn,pctChg,isST"
     try:
         rs = bs.query_history_k_data_plus(
-            bsc, fields, start_date=start_date, end_date=end_date, adjustflag="2",
+            bsc,
+            fields,
+            start_date=start_date,
+            end_date=end_date,
+            adjustflag="2",
         )
     except Exception:
         return []
@@ -167,11 +173,13 @@ def _fetch_baostock_bars(code: str, start_date: str, end_date: str, bs) -> list[
     while rs.error_code == "0" and rs.next():
         d = rs.get_row_data()
         try:
-            bars.append({
-                "date": d[0],
-                "open": float(d[1]) if d[1] else 0.0,
-                "close": float(d[4]) if d[4] else 0.0,
-            })
+            bars.append(
+                {
+                    "date": d[0],
+                    "open": float(d[1]) if d[1] else 0.0,
+                    "close": float(d[4]) if d[4] else 0.0,
+                }
+            )
         except (ValueError, IndexError):
             continue
     return bars
@@ -244,12 +252,13 @@ def main(days_back: int = 120):
     cutoff = (datetime.strptime(max_cache_date, "%Y-%m-%d") - timedelta(days=days_back)).strftime("%Y-%m-%d")
     dates = [d for d in all_em_dates if d < max_cache_date and d >= cutoff]
     if not dates:
-        print(f"[baseline] 无满足条件的交易日（em_dates={len(all_em_dates)}, "
-              f"max_cache_date={max_cache_date}, cutoff={cutoff}）")
+        print(
+            f"[baseline] 无满足条件的交易日（em_dates={len(all_em_dates)}, "
+            f"max_cache_date={max_cache_date}, cutoff={cutoff}）"
+        )
         return 1
 
-    print(f"[baseline] 交易日：{len(dates)}（{dates[0]} ~ {dates[-1]}），"
-          f"cache max_date={max_cache_date}")
+    print(f"[baseline] 交易日：{len(dates)}（{dates[0]} ~ {dates[-1]}），cache max_date={max_cache_date}")
 
     # ---------- 市场状态分层：每 T 取 _emotion(date) ----------
     # market._emotion(date) 失败降级：标"未知"/zt_count=None，不崩
@@ -304,7 +313,9 @@ def main(days_back: int = 120):
             t1_open = _t1_open_from_cache(bars, t_date) if bars else None
 
             sample_common = {
-                "date": t_date, "code": code, "name": it.get("n", ""),
+                "date": t_date,
+                "code": code,
+                "name": it.get("n", ""),
                 "t_close": t_close,
                 "zt_count": zt_count_t,
                 "market_condition": market_cond_t,
@@ -313,23 +324,30 @@ def main(days_back: int = 120):
                 # 缓存无此股或无 T+1，标记需 baostock 补
                 miss_codes.add(code)
                 # 先记录，T+1 留 None
-                first_boards.append({
-                    **sample_common,
-                    "t1_open": None,
-                    "source": "cache_miss",
-                })
+                first_boards.append(
+                    {
+                        **sample_common,
+                        "t1_open": None,
+                        "source": "cache_miss",
+                    }
+                )
             else:
                 # 口径校验（弱）：T 日缓存 close vs 涨停池 p÷1000
                 ok = _t1_close_check(bars, t_date, t_close)
-                first_boards.append({
-                    **sample_common,
-                    "t1_open": t1_open,
-                    "source": "cache" if ok else "cache_mismatch",
-                })
+                first_boards.append(
+                    {
+                        **sample_common,
+                        "t1_open": t1_open,
+                        "source": "cache" if ok else "cache_mismatch",
+                    }
+                )
             n_fb += 1
-        print(f"[baseline] T={t_date} 涨停池={len(pool)} 首板={n_fb} "
-              f"zt_count={zt_count_t} 档={market_cond_t} "
-              f"累计首板={len(first_boards)}", flush=True)
+        print(
+            f"[baseline] T={t_date} 涨停池={len(pool)} 首板={n_fb} "
+            f"zt_count={zt_count_t} 档={market_cond_t} "
+            f"累计首板={len(first_boards)}",
+            flush=True,
+        )
 
     # ---------- baostock 补 cache_miss ----------
     need_bs = [fb for fb in first_boards if fb["t1_open"] is None]
@@ -344,6 +362,7 @@ def main(days_back: int = 120):
             bs = None
 
         if bs:
+
             def _login():
                 lg = bs.login()
                 return getattr(lg, "error_code", "0") == "0"
@@ -362,12 +381,16 @@ def main(days_back: int = 120):
                             bs.logout()
                         except Exception as e:  # noqa: BLE001
                             import logging
-                            logging.getLogger(__name__).warning("first_board_premium_baseline 失败（降级，不阻塞）: %s", e)
+
+                            logging.getLogger(__name__).warning(
+                                "first_board_premium_baseline 失败（降级，不阻塞）: %s", e
+                            )
                         if not _login():
                             print(f"[baseline] re-login 失败 @ {i}")
                             break
-                        print(f"[baseline] re-login @ {i}/{len(uniq_codes)} "
-                              f"elapsed={time.time()-t0:.0f}s", flush=True)
+                        print(
+                            f"[baseline] re-login @ {i}/{len(uniq_codes)} elapsed={time.time() - t0:.0f}s", flush=True
+                        )
                     # 取该股所有首板日期的最小 T 和最大 T+1 窗口
                     fbs_for_code = [fb for fb in need_bs if fb["code"] == code]
                     if not fbs_for_code:
@@ -394,6 +417,7 @@ def main(days_back: int = 120):
                     bs.logout()
                 except Exception as e:  # noqa: BLE001
                     import logging
+
                     logging.getLogger(__name__).warning("first_board_premium_baseline 失败（降级，不阻塞）: %s", e)
 
     # ---------- 计算溢价 ----------
@@ -442,19 +466,13 @@ def main(days_back: int = 120):
     #   探索性结论不作为定稿依据，仅记录观察值
     by_market_condition: dict[str, dict] = {}
     for name, lo, hi in MARKET_CONDITION_THRESHOLDS:
-        slice_idx = [
-            i for i, fb in enumerate(valid_boards)
-            if fb.get("market_condition") == name
-        ]
+        slice_idx = [i for i, fb in enumerate(valid_boards) if fb.get("market_condition") == name]
         sub_arr = arr[slice_idx] if slice_idx else np.array([], dtype=float)
         blk = _stats_block(sub_arr)
         blk["exploratory"] = blk["N"] < EXPLORATORY_N
         by_market_condition[name] = blk
     # "未知"层（_emotion 失败降级）
-    unk_idx = [
-        i for i, fb in enumerate(valid_boards)
-        if fb.get("market_condition") == "未知"
-    ]
+    unk_idx = [i for i, fb in enumerate(valid_boards) if fb.get("market_condition") == "未知"]
     if unk_idx:
         unk_arr = arr[unk_idx]
         unk_blk = _stats_block(unk_arr)
@@ -479,16 +497,16 @@ def main(days_back: int = 120):
     report.append("=== 首板次日溢价基线验证 ===")
     report.append(f"样本：{N} 只首板涨停股，覆盖 {n_days} 个交易日（{date_min} ~ {date_max}）")
     report.append("")
-    report.append(f"平均溢价：{'+' if mean_pct>=0 else ''}{mean_pct:.2f}%（±{std_pct:.2f}%）")
-    report.append(f"中位数溢价：{'+' if median_pct>=0 else ''}{median_pct:.2f}%")
-    report.append(f"正溢价占比：{pos_ratio*100:.1f}%（{pos_count}/{N}）")
+    report.append(f"平均溢价：{'+' if mean_pct >= 0 else ''}{mean_pct:.2f}%（±{std_pct:.2f}%）")
+    report.append(f"中位数溢价：{'+' if median_pct >= 0 else ''}{median_pct:.2f}%")
+    report.append(f"正溢价占比：{pos_ratio * 100:.1f}%（{pos_count}/{N}）")
     report.append("")
     report.append(f"t 统计量：{t_stat:.2f}")
     report.append(f"p 值（单侧）：{p_one:.4f}")
     report.append("")
     report.append(f"成本后（扣{COST_PCT}%）：")
-    report.append(f"  平均净溢价：{'+' if net_mean>=0 else ''}{net_mean:.2f}%")
-    report.append(f"  正净溢价占比：{net_pos_ratio*100:.1f}%（{net_pos_count}/{N}）")
+    report.append(f"  平均净溢价：{'+' if net_mean >= 0 else ''}{net_mean:.2f}%")
+    report.append(f"  正净溢价占比：{net_pos_ratio * 100:.1f}%（{net_pos_count}/{N}）")
     report.append("")
     report.append("结论：")
     report.append(f"  {verdict}")
@@ -499,8 +517,7 @@ def main(days_back: int = 120):
 
     # 溢价分布（粗略分位）
     q_lo, q_25, q_50, q_75, q_hi = np.percentile(arr, [0, 25, 50, 75, 100])
-    print(f"\n[分布分位] P0={q_lo:.2f} P25={q_25:.2f} P50={q_50:.2f} "
-          f"P75={q_75:.2f} P100={q_hi:.2f}")
+    print(f"\n[分布分位] P0={q_lo:.2f} P25={q_25:.2f} P50={q_50:.2f} P75={q_75:.2f} P100={q_hi:.2f}")
 
     # 数据来源占比
     src_counts: dict[str, int] = {}
@@ -519,16 +536,20 @@ def main(days_back: int = 120):
         pr = s.get("pos_ratio", 0.0)
         nm = s.get("net_mean_pct", 0.0)
         tag = "  （探索性，N<30）" if s.get("exploratory") else ""
-        print(f"  {_condition_label(name, lo, hi):<16} "
-              f"N={n:<4d} mean={m:+.2f}%  正占比={pr*100:.1f}%  "
-              f"成本后净={nm:+.2f}%{tag}")
+        print(
+            f"  {_condition_label(name, lo, hi):<16} "
+            f"N={n:<4d} mean={m:+.2f}%  正占比={pr * 100:.1f}%  "
+            f"成本后净={nm:+.2f}%{tag}"
+        )
     if "未知" in by_market_condition:
         s = by_market_condition["未知"]
         tag = "  （探索性，N<30）" if s.get("exploratory") else ""
-        print(f"  {'未知':<16} "
-              f"N={s['N']:<4d} mean={s['mean_pct']:+.2f}%  "
-              f"正占比={s['pos_ratio']*100:.1f}%  "
-              f"成本后净={s['net_mean_pct']:+.2f}%{tag}")
+        print(
+            f"  {'未知':<16} "
+            f"N={s['N']:<4d} mean={s['mean_pct']:+.2f}%  "
+            f"正占比={s['pos_ratio'] * 100:.1f}%  "
+            f"成本后净={s['net_mean_pct']:+.2f}%{tag}"
+        )
 
     # ---------- 存 JSON ----------
     out = {
@@ -563,19 +584,27 @@ def main(days_back: int = 120):
             "by_market_condition": by_market_condition,
         },
         "distribution": {
-            "P0": round(float(q_lo), 4), "P25": round(float(q_25), 4),
-            "P50": round(float(q_50), 4), "P75": round(float(q_75), 4),
+            "P0": round(float(q_lo), 4),
+            "P25": round(float(q_25), 4),
+            "P50": round(float(q_50), 4),
+            "P75": round(float(q_75), 4),
             "P100": round(float(q_hi), 4),
         },
         "source_counts": src_counts,
         "verdict": verdict,
-        "samples": [{"date": fb["date"], "code": fb["code"], "name": fb.get("name", ""),
-                      "t_close": round(fb["t_close"], 4),
-                      "t1_open": round(fb["t1_open"], 4) if fb["t1_open"] else None,
-                      "premium": round(fb["premium"], 4),
-                      "zt_count": fb.get("zt_count"),
-                      "market_condition": fb.get("market_condition", "未知")}
-                     for fb in valid_boards],
+        "samples": [
+            {
+                "date": fb["date"],
+                "code": fb["code"],
+                "name": fb.get("name", ""),
+                "t_close": round(fb["t_close"], 4),
+                "t1_open": round(fb["t1_open"], 4) if fb["t1_open"] else None,
+                "premium": round(fb["premium"], 4),
+                "zt_count": fb.get("zt_count"),
+                "market_condition": fb.get("market_condition", "未知"),
+            }
+            for fb in valid_boards
+        ],
     }
     try:
         OUT_JSON.parent.mkdir(parents=True, exist_ok=True)

@@ -8,6 +8,7 @@
 数据：intraday_ranking_snapshots anomaly（14 天 <60 → exploratory）
 跑法：cd backend && .venv/bin/python tools/explore_ranking_anomaly.py
 """
+
 import json
 import sqlite3
 import statistics
@@ -38,9 +39,15 @@ def load_kline_bars(code):
         bars = json.loads(row[0])
     except Exception:
         return []
-    out = [{"date": str(b.get("date",""))[:10], "open": float(b.get("open",0) or 0),
-            "close": float(b.get("close",0) or 0)}
-           for b in bars if b.get("date") and float(b.get("open",0) or 0)>0]
+    out = [
+        {
+            "date": str(b.get("date", ""))[:10],
+            "open": float(b.get("open", 0) or 0),
+            "close": float(b.get("close", 0) or 0),
+        }
+        for b in bars
+        if b.get("date") and float(b.get("open", 0) or 0) > 0
+    ]
     out.sort(key=lambda x: x["date"])
     return out
 
@@ -70,16 +77,20 @@ def main():
         idx = next((i for i, b in enumerate(bars) if b["date"] == date), None)
         if idx is None or idx + 2 >= len(bars):
             continue
-        d1_open = bars[idx+1]["open"]
-        d2_open = bars[idx+2]["open"]
+        d1_open = bars[idx + 1]["open"]
+        d2_open = bars[idx + 2]["open"]
         edge = (d2_open - d1_open) / d1_open
         # R4: 涨停股 filter（D 日涨停过？join quote price>=limit_up）
         if (date, code) not in quote_cache:
-            q = db.execute("SELECT price, limit_up FROM intraday_quote_snapshots WHERE date=? AND code=? AND limit_up IS NOT NULL", (date, code)).fetchall()
+            q = db.execute(
+                "SELECT price, limit_up FROM intraday_quote_snapshots WHERE date=? AND code=? AND limit_up IS NOT NULL",
+                (date, code),
+            ).fetchall()
             quote_cache[(date, code)] = any(p >= lu for p, lu in q if lu and lu > 0)
         is_zt = quote_cache[(date, code)]
-        obs.append({"date": date, "code": code, "edge": edge, "win": 1 if edge > 0 else 0,
-                    "rank": rank, "is_zt": is_zt})
+        obs.append(
+            {"date": date, "code": code, "edge": edge, "win": 1 if edge > 0 else 0, "rank": rank, "is_zt": is_zt}
+        )
 
     n = len(obs)
     days = len(set(o["date"] for o in obs))
@@ -90,17 +101,24 @@ def main():
 
     rets = [o["edge"] for o in obs]
     print(f"\n=== anomaly 异动 T+1 edge（全样本）===")
-    print(f"n={n} days={days} net_mean={statistics.mean(rets)*100:.2f}% WR={sum(o['win'] for o in obs)/n*100:.2f}%")
+    print(
+        f"n={n} days={days} net_mean={statistics.mean(rets) * 100:.2f}% WR={sum(o['win'] for o in obs) / n * 100:.2f}%"
+    )
 
     # 按 rank 分位（rank 小=异动大）
-    groups = {"rank 1-10（异动大）": [o for o in obs if o["rank"]<=10],
-              "rank 11-20": [o for o in obs if 10<o["rank"]<=20],
-              "rank 21-30（异动小）": [o for o in obs if o["rank"]>20]}
+    groups = {
+        "rank 1-10（异动大）": [o for o in obs if o["rank"] <= 10],
+        "rank 11-20": [o for o in obs if 10 < o["rank"] <= 20],
+        "rank 21-30（异动小）": [o for o in obs if o["rank"] > 20],
+    }
     print(f"\n=== 按 rank 分组 ===")
     for name, g in groups.items():
-        if not g: continue
+        if not g:
+            continue
         gr = [o["edge"] for o in g]
-        print(f"  {name}: n={len(g)} net_mean={statistics.mean(gr)*100:.2f}% WR={sum(o['win'] for o in g)/len(g)*100:.2f}%")
+        print(
+            f"  {name}: n={len(g)} net_mean={statistics.mean(gr) * 100:.2f}% WR={sum(o['win'] for o in g) / len(g) * 100:.2f}%"
+        )
 
     # §44 v3 R4: 涨停 vs 未涨停对比
     obs_zt = [o for o in obs if o["is_zt"]]
@@ -108,14 +126,21 @@ def main():
     print(f"\n=== R4 涨停 vs 未涨停（survivorship）===")
     if obs_zt:
         r = [o["edge"] for o in obs_zt]
-        print(f"  涨停股: n={len(obs_zt)} net_mean={statistics.mean(r)*100:.2f}% WR={sum(o['win'] for o in obs_zt)/len(obs_zt)*100:.2f}%")
+        print(
+            f"  涨停股: n={len(obs_zt)} net_mean={statistics.mean(r) * 100:.2f}% WR={sum(o['win'] for o in obs_zt) / len(obs_zt) * 100:.2f}%"
+        )
     if obs_nonzt:
         r = [o["edge"] for o in obs_nonzt]
-        print(f"  未涨停股: n={len(obs_nonzt)} net_mean={statistics.mean(r)*100:.2f}% WR={sum(o['win'] for o in obs_nonzt)/len(obs_nonzt)*100:.2f}%")
+        print(
+            f"  未涨停股: n={len(obs_nonzt)} net_mean={statistics.mean(r) * 100:.2f}% WR={sum(o['win'] for o in obs_nonzt) / len(obs_nonzt) * 100:.2f}%"
+        )
         # R4 helper
         from s44_verifier.verifier import compare_filtered_vs_unfiltered_edge
+
         res = compare_filtered_vs_unfiltered_edge(obs, lambda o: o["is_zt"], dates=[o["date"] for o in obs])
-        print(f"  R4 helper: filter_pct={res['filter_pct']}% contrib_pct={res['contrib_pct']}% is_fake_edge={res['is_fake_edge']} is_underpowered={res['is_underpowered']}")
+        print(
+            f"  R4 helper: filter_pct={res['filter_pct']}% contrib_pct={res['contrib_pct']}% is_fake_edge={res['is_fake_edge']} is_underpowered={res['is_underpowered']}"
+        )
 
     print(f"\n=== §44 v3 审 ===")
     print(f"  ✓ R4 filter 涨停股 survivorship 审")

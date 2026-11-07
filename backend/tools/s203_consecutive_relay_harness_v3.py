@@ -9,6 +9,7 @@ V1 compute_obs（D close→D+1 open）+ §44 v3 filter：
 验收：R3+R1 filter 后 V1 edge < +0.3% + R4 标 filter 掉的 picks 贡献 >70%
 跑法：cd backend && .venv/bin/python tools/s203_consecutive_relay_harness_v3.py
 """
+
 import sqlite3
 import sys
 from pathlib import Path
@@ -59,35 +60,40 @@ def compute_obs_v3(cache, picks):
         # V1 unbuyable: D 日一字涨停（is_unbuyable_next_bar 判四价相等+涨停）
         if _is_unbuyable_next_bar(bars[d_idx], code=code):
             continue
-        prev_close = float(bars[d_idx-1].get("close", 0) or 0) if d_idx > 0 else 0.0
+        prev_close = float(bars[d_idx - 1].get("close", 0) or 0) if d_idx > 0 else 0.0
         close_d = float(bars[d_idx].get("close", 0) or 0)
-        open_d1 = float(bars[d_idx+1].get("open", 0) or 0)
+        open_d1 = float(bars[d_idx + 1].get("open", 0) or 0)
         if close_d <= 0 or open_d1 <= 0:
             continue
         gap_ret = (open_d1 - close_d) / close_d  # V1 edge
         # R1: D close 涨停价（非一字，close vs prev_close>=board）
         r1_close_limit = _close_is_limit_up(bars[d_idx], prev_close, code)
         # R3: D+1 一字跌停（exit 卖不掉）
-        r3_onesell = is_onesell_locked_next_bar(bars[d_idx+1], code=code)
+        r3_onesell = is_onesell_locked_next_bar(bars[d_idx + 1], code=code)
         # R4: 涨停股（D close=涨停价 或 D 日 price>=limit_up）——survivorship flag
         r4_zt = r1_close_limit  # close 涨停 = 涨停股
-        obs.append({
-            "D": D, "code": code,
-            "edge": gap_ret, "win": 1 if gap_ret > 0 else 0,
-            "r1_close_limit": r1_close_limit,  # R1 filter（entry close 涨停）
-            "r3_onesell": r3_onesell,          # R3 filter（exit 一字跌停）
-            "r4_zt": r4_zt,                    # R4 flag（涨停股 survivorship）
-        })
+        obs.append(
+            {
+                "D": D,
+                "code": code,
+                "edge": gap_ret,
+                "win": 1 if gap_ret > 0 else 0,
+                "r1_close_limit": r1_close_limit,  # R1 filter（entry close 涨停）
+                "r3_onesell": r3_onesell,  # R3 filter（exit 一字跌停）
+                "r4_zt": r4_zt,  # R4 flag（涨停股 survivorship）
+            }
+        )
     return obs
 
 
 def _stats(obs):
     import statistics
+
     if not obs:
         return None
     rets = [o["edge"] for o in obs]
     wr = sum(o["win"] for o in obs) / len(obs)
-    return {"n": len(obs), "mean": statistics.mean(rets)*100, "wr": wr*100}
+    return {"n": len(obs), "mean": statistics.mean(rets) * 100, "wr": wr * 100}
 
 
 def main():
@@ -108,13 +114,17 @@ def main():
     obs_r3 = [o for o in obs if not o["r3_onesell"]]
     s_r3 = _stats(obs_r3)
     print(f"\n=== +R3 filter（exit 一字跌停）===")
-    print(f"  n={s_r3['n']} net_mean={s_r3['mean']:.2f}% WR={s_r3['wr']:.2f}% (衰减 {s_all['mean']-s_r3['mean']:.2f}%)")
+    print(
+        f"  n={s_r3['n']} net_mean={s_r3['mean']:.2f}% WR={s_r3['wr']:.2f}% (衰减 {s_all['mean'] - s_r3['mean']:.2f}%)"
+    )
 
     # R1 filter（entry close 涨停价）
     obs_r1r3 = [o for o in obs_r3 if not o["r1_close_limit"]]
     s_r1r3 = _stats(obs_r1r3)
     print(f"\n=== +R1 filter（entry close 涨停价）===")
-    print(f"  n={s_r1r3['n']} net_mean={s_r1r3['mean']:.2f}% WR={s_r1r3['wr']:.2f}% (衰减 {s_r3['mean']-s_r1r3['mean']:.2f}%)")
+    print(
+        f"  n={s_r1r3['n']} net_mean={s_r1r3['mean']:.2f}% WR={s_r1r3['wr']:.2f}% (衰减 {s_r3['mean'] - s_r1r3['mean']:.2f}%)"
+    )
 
     # R4 涨停 vs 未涨停对比
     obs_zt = [o for o in obs if o["r4_zt"]]
@@ -143,16 +153,22 @@ def main():
     print(f"  R1 filter 掉涨停 entry close 比例: {filter_pct:.1f}%")
     # 验收：R1 filter 掉 >70% picks → V1 假 edge 是涨停封板溢价（99.4% 涨停 entry）
     if filter_pct > 70:
-        print(f"  ✓ A5 验收通过：R1 filter 掉 {filter_pct:.1f}% > 70% picks（V1 假 edge 是涨停封板溢价——99.4% 涨停 entry close）")
+        print(
+            f"  ✓ A5 验收通过：R1 filter 掉 {filter_pct:.1f}% > 70% picks（V1 假 edge 是涨停封板溢价——99.4% 涨停 entry close）"
+        )
     else:
         print(f"  ✗ A5 验收未过：R1 filter 只掉 {filter_pct:.1f}% < 70%（V1 假 edge 非纯涨停封板溢价）")
     # R1 filter 后剩余 n<60 → underpowered（非 definitive edge）
     if n_r1r3 < 60:
-        print(f"  ✓ R1 filter 后 n={n_r1r3}<60 → underpowered（标 V1 假 edge 是涨停封板溢价，filter 后无 picks 可判 edge）")
+        print(
+            f"  ✓ R1 filter 后 n={n_r1r3}<60 → underpowered（标 V1 假 edge 是涨停封板溢价，filter 后无 picks 可判 edge）"
+        )
     # R4 survivorship（涨停 vs 未涨停）——但 consecutive_relay 99.4% 涨停，R4 无意义
     if s_zt and s_nonzt:
         contrib_pct = (s_all["mean"] - s_nonzt["mean"]) / s_all["mean"] * 100 if s_all["mean"] != 0 else 0
-        print(f"  R4 涨停股贡献: {contrib_pct:.1f}%（consecutive_relay 99.4% 涨停——R4 survivorship 对比无意义，须用 OFI 等非 lbc 战法验）")
+        print(
+            f"  R4 涨停股贡献: {contrib_pct:.1f}%（consecutive_relay 99.4% 涨停——R4 survivorship 对比无意义，须用 OFI 等非 lbc 战法验）"
+        )
 
 
 if __name__ == "__main__":

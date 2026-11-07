@@ -17,6 +17,7 @@ alpha来源：
 - 当日跌<-3%=可能错杀(情绪性抛售)
 - 止损-5%=控制尾部风险(熊市里-5%比-10%更保守)
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,44 +27,46 @@ logger = logging.getLogger("low_volume_dip")
 
 #: 策略参数（回测验证最优值）
 LVD_PARAMS = {
-    "amount_percentile": 10,      # 成交额最低10%
-    "min_drop_pct": -3.0,         # 当日跌幅<-3%
-    "max_drop_pct": -10.0,        # 排除跌停（<-10%不接）
-    "hold_days": 10,              # 持有10个交易日(2周)
-    "stop_loss_pct": -0.05,       # 止损-5%
-    "take_profit_pct": None,      # 不设止盈（让尾部兑现）
-    "min_price": 2.0,             # 价格下限
-    "max_price": 100.0,           # 价格上限（排除高价股流动性差）
-    "min_stocks": 1,              # 最少选1只
-    "max_stocks": 5,              # 最多选5只（组合分散）
+    "amount_percentile": 10,  # 成交额最低10%
+    "min_drop_pct": -3.0,  # 当日跌幅<-3%
+    "max_drop_pct": -10.0,  # 排除跌停（<-10%不接）
+    "hold_days": 10,  # 持有10个交易日(2周)
+    "stop_loss_pct": -0.05,  # 止损-5%
+    "take_profit_pct": None,  # 不设止盈（让尾部兑现）
+    "min_price": 2.0,  # 价格下限
+    "max_price": 100.0,  # 价格上限（排除高价股流动性差）
+    "min_stocks": 1,  # 最少选1只
+    "max_stocks": 5,  # 最多选5只（组合分散）
 }
 
 
 @dataclass
 class LVDCandidate:
     """小成交额错杀候选。"""
+
     code: str
     name: str = ""
     close: float = 0.0
     change_pct: float = 0.0
-    amount: float = 0.0           # 成交额(元)
-    amount_percentile: int = 0    # 成交额分位数(1=最低)
-    entry_price: float = 0.0      # 入场价(次日开盘)
-    stop_loss: float = 0.0        # 止损价
-    hold_days: int = 10           # 持有天数
-    score: float = 0.0            # 综合评分(跌幅深+成交额低=高分)
+    amount: float = 0.0  # 成交额(元)
+    amount_percentile: int = 0  # 成交额分位数(1=最低)
+    entry_price: float = 0.0  # 入场价(次日开盘)
+    stop_loss: float = 0.0  # 止损价
+    hold_days: int = 10  # 持有天数
+    score: float = 0.0  # 综合评分(跌幅深+成交额低=高分)
     detail: str = ""
 
 
 @dataclass
 class LVDResult:
     """策略扫描结果。"""
+
     candidates: list[LVDCandidate] = field(default_factory=list)
     total_scanned: int = 0
     sector_median_pct: float = 0.0
     sector_source: str = ""
     params: dict = field(default_factory=dict)
-    edge_stats: str = ""          # 回测统计摘要
+    edge_stats: str = ""  # 回测统计摘要
 
 
 def screen_low_volume_dip(
@@ -88,7 +91,8 @@ def screen_low_volume_dip(
     result = LVDResult(params=LVD_PARAMS.copy())
 
     valid = [
-        s for s in all_stocks
+        s
+        for s in all_stocks
         if s.get("price_change_ratio_pct") is not None
         and s.get("turnover") is not None
         and s.get("last_price") is not None
@@ -143,19 +147,21 @@ def screen_low_volume_dip(
 
         stop_loss = round(price * (1 + LVD_PARAMS["stop_loss_pct"]), 2)
 
-        candidates.append(LVDCandidate(
-            code=s.get("thscode", ""),
-            name=s.get("name", ""),
-            close=price,
-            change_pct=round(chg, 2),
-            amount=turnover,
-            amount_percentile=amount_pct,
-            entry_price=0.0,  # 次日开盘填
-            stop_loss=stop_loss,
-            hold_days=LVD_PARAMS["hold_days"],
-            score=round(score, 4),
-            detail=f"跌{chg:+.1f}% 成交额分位{amount_pct}% 止损{stop_loss}",
-        ))
+        candidates.append(
+            LVDCandidate(
+                code=s.get("thscode", ""),
+                name=s.get("name", ""),
+                close=price,
+                change_pct=round(chg, 2),
+                amount=turnover,
+                amount_percentile=amount_pct,
+                entry_price=0.0,  # 次日开盘填
+                stop_loss=stop_loss,
+                hold_days=LVD_PARAMS["hold_days"],
+                score=round(score, 4),
+                detail=f"跌{chg:+.1f}% 成交额分位{amount_pct}% 止损{stop_loss}",
+            )
+        )
 
     # 按score降序
     candidates.sort(key=lambda x: x.score, reverse=True)

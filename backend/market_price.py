@@ -5,6 +5,7 @@
 S034 既有"缺价跳过"路径。行情源走 astock.tencent_quote（腾讯源，非
 em_get，无封 IP 风险）。
 """
+
 from __future__ import annotations
 
 import logging

@@ -1,6 +1,7 @@
 """
 Bidding monitor router.
 """
+
 from fastapi import APIRouter, HTTPException
 from typing import Any, Dict
 

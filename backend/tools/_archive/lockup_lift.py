@@ -14,6 +14,7 @@
 
 cost=0（risk filter 规避非入场，不产生交易成本）。
 """
+
 from __future__ import annotations
 
 import json
@@ -85,8 +86,7 @@ def simulate_path(bars: list[dict], idx: int, entry: float) -> dict | None:
     return {"won": ret > 0, "return_pct": ret}
 
 
-def day_cluster_permutation_fast(surv_by_day, raw_stats_by_day,
-                                 n_perm=N_PERM, seed=PERM_SEED):
+def day_cluster_permutation_fast(surv_by_day, raw_stats_by_day, n_perm=N_PERM, seed=PERM_SEED):
     """Within-day survivor resampling null (optimized).
 
     Pre-computes raw winrate per day once; per-perm only computes sampled subset winrate.
@@ -135,13 +135,15 @@ def main() -> int:
         for b in bars:
             d = b.get("date", "")
             all_dates_set.add(d)
-            fb.append({
-                "d": d,
-                "o": _f(b.get("open")),
-                "c": _f(b.get("close")),
-                "h": _f(b.get("high")),
-                "l": _f(b.get("low")),
-            })
+            fb.append(
+                {
+                    "d": d,
+                    "o": _f(b.get("open")),
+                    "c": _f(b.get("close")),
+                    "h": _f(b.get("high")),
+                    "l": _f(b.get("low")),
+                }
+            )
         fast_bars[code] = fb
     all_dates = sorted(all_dates_set)
     print(f"trading dates: {len(all_dates)} ({all_dates[0]}→{all_dates[-1]})", flush=True)
@@ -240,12 +242,18 @@ def main() -> int:
 
     print(f"unlock matched: {n_matched}, path sim OK: {n_sim_ok}", flush=True)
     print(f"unlock days: {len(unlock_by_day)}", flush=True)
-    print(f"  high(>5%): {sum(len(v) for v in unlock_by_day_high.values())} events, "
-          f"{len(unlock_by_day_high)} days", flush=True)
-    print(f"  mid(1-5%): {sum(len(v) for v in unlock_by_day_mid.values())} events, "
-          f"{len(unlock_by_day_mid)} days", flush=True)
-    print(f"  low(<1%):  {sum(len(v) for v in unlock_by_day_low.values())} events, "
-          f"{len(unlock_by_day_low)} days", flush=True)
+    print(
+        f"  high(>5%): {sum(len(v) for v in unlock_by_day_high.values())} events, {len(unlock_by_day_high)} days",
+        flush=True,
+    )
+    print(
+        f"  mid(1-5%): {sum(len(v) for v in unlock_by_day_mid.values())} events, {len(unlock_by_day_mid)} days",
+        flush=True,
+    )
+    print(
+        f"  low(<1%):  {sum(len(v) for v in unlock_by_day_low.values())} events, {len(unlock_by_day_low)} days",
+        flush=True,
+    )
 
     # ── §44 v2 Step ①: Front window sanity ──
     all_universe_returns = [r for rs in raw_by_day.values() for r in rs]
@@ -323,7 +331,8 @@ def main() -> int:
             neg_verdict = "未validated"
 
         results[name] = {
-            "n": n, "n_days": obs["n_days"],
+            "n": n,
+            "n_days": obs["n_days"],
             "winrate_lift": obs_lift,
             "mean_lift": obs_mean_lift,
             "p_value_neg": round(p_neg, 4),
@@ -373,11 +382,13 @@ def main() -> int:
             "ic_effect_size": round(ic, 4),
         },
         "results": results,
-        "note": ("§44 v2: day_paired non-pooled + within-day permutation null + Bonferroni K=4. "
-                 "Negative edge = lift < 1 (unlock stocks underperform universe). "
-                 "Cost=0 (risk filter avoids, not entry). "
-                 "Simple return used for both groups (apples-to-apples); "
-                 "path-winrate computed for unlock stocks only as secondary."),
+        "note": (
+            "§44 v2: day_paired non-pooled + within-day permutation null + Bonferroni K=4. "
+            "Negative edge = lift < 1 (unlock stocks underperform universe). "
+            "Cost=0 (risk filter avoids, not entry). "
+            "Simple return used for both groups (apples-to-apples); "
+            "path-winrate computed for unlock stocks only as secondary."
+        ),
     }
     out_path = out_dir / "matrix.json"
     out_path.write_text(json.dumps(matrix, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -392,8 +403,7 @@ def main() -> int:
     print(f"unlock winrate: {u_wr:.4f} vs universe winrate: {x_wr:.4f}", flush=True)
     print(f"IC (effect size): {ic:.4f}", flush=True)
     for name, r in results.items():
-        print(f"  {name}: lift={r['winrate_lift']} p={r['p_value_neg']} "
-              f"verdict={r['verdict']}", flush=True)
+        print(f"  {name}: lift={r['winrate_lift']} p={r['p_value_neg']} verdict={r['verdict']}", flush=True)
 
     # ── S168 接线：4 verdict（4 stratum × 1 regime）落 Recorder + lineage ──
     _FROZEN_S168 = "70a68f9"  # pre-registration commit（七重收敛证据脚本归档到 develop）
@@ -424,14 +434,24 @@ def main() -> int:
             n_comparisons=4,  # Bonferroni K=4 pre-registered
             round_trip_cost=COST_PCT,  # risk filter 规避非入场，cost=0
             script="tools/lockup_lift.py",
-            params={"arm": _arm_name, "ratio_high": RATIO_HIGH, "ratio_mid": RATIO_MID,
-                    "stop": STOP_PCT, "take": TAKE_PCT, "max_hold": MAX_HOLD,
-                    "cost_pct": COST_PCT, "alpha_adj": ALPHA_ADJ,
-                    "return_metric": "(D+2 close - D+1 open) / D+1 open * 100"},
+            params={
+                "arm": _arm_name,
+                "ratio_high": RATIO_HIGH,
+                "ratio_mid": RATIO_MID,
+                "stop": STOP_PCT,
+                "take": TAKE_PCT,
+                "max_hold": MAX_HOLD,
+                "cost_pct": COST_PCT,
+                "alpha_adj": ALPHA_ADJ,
+                "return_metric": "(D+2 close - D+1 open) / D+1 open * 100",
+            },
         )
         s168_verdicts[_arm_name] = {
-            "status": _v.status, "selection_lift": _v.selection_lift,
-            "n": _v.n, "days_robust": _v.days_robust, "note": _v.note,
+            "status": _v.status,
+            "selection_lift": _v.selection_lift,
+            "n": _v.n,
+            "days_robust": _v.days_robust,
+            "note": _v.note,
         }
     matrix["s168_verdicts"] = s168_verdicts
 

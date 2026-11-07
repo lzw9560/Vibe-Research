@@ -26,9 +26,11 @@ try:
     sys.stderr.reconfigure(encoding="utf-8")
 except Exception as e:  # noqa: BLE001
     import logging
+
     logging.getLogger(__name__).warning("financial_rigor 失败（降级，不阻塞）: %s", e)
 
 # ---------- 工具函数 ----------
+
 
 def to_decimal(x, name="value"):
     """安全转 Decimal，容忍千分位逗号与百分号。"""
@@ -60,6 +62,7 @@ def fmt(x, places=4):
 
 # ---------- 1. verify-market-cap ----------
 
+
 def cmd_verify_market_cap(args):
     price = to_decimal(args.price, "price")
     reported = to_decimal(args.reported, "reported")
@@ -75,17 +78,21 @@ def cmd_verify_market_cap(args):
     threshold = Decimal(args.threshold)
     verdict = "✅ 一致" if dev is not None and dev <= threshold else "❌ 偏差过大"
     out = {
-        "command": "verify-market-cap", "currency": args.currency,
+        "command": "verify-market-cap",
+        "currency": args.currency,
         "price": str(price),
         "shares": {"raw": str(shares_raw), "unit": args.shares_unit, "actual": str(shares_actual)},
         "computed_market_cap_yi": fmt(computed_mc_yi, 4),
         "reported_market_cap_yi": fmt(reported_yi, 4),
-        "deviation_pct": fmt(dev, 4), "threshold_pct": str(threshold), "verdict": verdict,
+        "deviation_pct": fmt(dev, 4),
+        "threshold_pct": str(threshold),
+        "verdict": verdict,
     }
     print(json.dumps(out, ensure_ascii=False, indent=2))
 
 
 # ---------- 2. cross-validate ----------
+
 
 def cmd_cross_validate(args):
     values = json.loads(args.values)
@@ -94,16 +101,22 @@ def cmd_cross_validate(args):
     parsed = {s: to_decimal(v, s) for s, v in values.items()}
     items = [(s, v) for s, v in parsed.items() if v is not None]
     if len(items) < 2:
-        print(json.dumps({"command": "cross-validate", "field": field,
-                          "error": "至少需要 2 个有效数值"}, ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                {"command": "cross-validate", "field": field, "error": "至少需要 2 个有效数值"},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         sys.exit(2)
     base_src, base_val = items[0]
     deviations = []
     for src, val in items[1:]:
         dev = pct_deviation(base_val, val)
         deviations.append({"vs": src, "value": fmt(val, 6), "deviation_pct": fmt(dev, 4)})
-    max_dev = max((Decimal(d["deviation_pct"]) for d in deviations if d["deviation_pct"] is not None),
-                  default=Decimal(0))
+    max_dev = max(
+        (Decimal(d["deviation_pct"]) for d in deviations if d["deviation_pct"] is not None), default=Decimal(0)
+    )
     if max_dev <= Decimal(1):
         verdict = "✅ 一致（≤1%）"
     elif max_dev <= Decimal(5):
@@ -111,15 +124,20 @@ def cmd_cross_validate(args):
     else:
         verdict = "❌ 数据存在重大差异（>5%），须查原始财报"
     out = {
-        "command": "cross-validate", "field": field, "unit": unit,
+        "command": "cross-validate",
+        "field": field,
+        "unit": unit,
         "sources": {s: fmt(v, 6) for s, v in parsed.items()},
-        "deviations": deviations, "max_deviation_pct": fmt(max_dev, 4),
-        "adopted_value": fmt(base_val, 6), "verdict": verdict,
+        "deviations": deviations,
+        "max_deviation_pct": fmt(max_dev, 4),
+        "adopted_value": fmt(base_val, 6),
+        "verdict": verdict,
     }
     print(json.dumps(out, ensure_ascii=False, indent=2))
 
 
 # ---------- 3. verify-valuation ----------
+
 
 def cmd_verify_valuation(args):
     price = to_decimal(args.price, "price")
@@ -136,15 +154,18 @@ def cmd_verify_valuation(args):
         metrics["FCF_yield_pct"] = fmt(fcfps / price * Decimal(100), 4)
     if div:
         metrics["dividend_yield_pct"] = fmt(div / price * Decimal(100), 4)
-    out = {"command": "verify-valuation", "currency": args.currency,
-           "price": str(price),
-           "inputs": {"eps": str(eps), "bvps": str(bvps),
-                      "fcf_per_share": str(fcfps), "dividend": str(div)},
-           "metrics": metrics}
+    out = {
+        "command": "verify-valuation",
+        "currency": args.currency,
+        "price": str(price),
+        "inputs": {"eps": str(eps), "bvps": str(bvps), "fcf_per_share": str(fcfps), "dividend": str(div)},
+        "metrics": metrics,
+    }
     print(json.dumps(out, ensure_ascii=False, indent=2))
 
 
 # ---------- 4. three-scenario ----------
+
 
 def cmd_three_scenario(args):
     price = to_decimal(args.price, "price")
@@ -169,8 +190,10 @@ def cmd_three_scenario(args):
         target_price = future_mc_yi / shares_yi
         ann_return = (target_price / price) ** (Decimal(1) / Decimal(years)) - Decimal(1)
         entry = {
-            "label": labels[i], "growth_cagr_pct": fmt(g * 100, 2),
-            "target_pe": str(pe), "future_eps": fmt(future_eps, 4),
+            "label": labels[i],
+            "growth_cagr_pct": fmt(g * 100, 2),
+            "target_pe": str(pe),
+            "future_eps": fmt(future_eps, 4),
             "future_net_profit_yi": fmt(future_net_profit_yi, 4),
             "future_market_cap_yi": fmt(future_mc_yi, 4),
             "target_price": fmt(target_price, 2),
@@ -183,18 +206,34 @@ def cmd_three_scenario(args):
             entry["fair_value_now_yi"] = fmt(fair_value_now, 4)
             entry["fair_value_price_now"] = fmt(fair_value_now / shares_yi, 2)
         scenarios.append(entry)
-    out = {"command": "three-scenario", "currency": args.currency,
-           "price": str(price), "eps": str(eps), "shares_yi": str(shares_yi),
-           "current_market_cap_yi": fmt(current_mc_yi, 4), "years": years,
-           "scenarios": scenarios}
+    out = {
+        "command": "three-scenario",
+        "currency": args.currency,
+        "price": str(price),
+        "eps": str(eps),
+        "shares_yi": str(shares_yi),
+        "current_market_cap_yi": fmt(current_mc_yi, 4),
+        "years": years,
+        "scenarios": scenarios,
+    }
     print(json.dumps(out, ensure_ascii=False, indent=2))
 
 
 # ---------- 5. verify-activity-tier (S002 AC5) ----------
 
-def verify_activity_tier(turnover, vol_ratio, amount_yi, amplitude,
-                         turnover_cold, turnover_hot, vol_ratio_active,
-                         amount_yi_min, amplitude_high, reported_tier):
+
+def verify_activity_tier(
+    turnover,
+    vol_ratio,
+    amount_yi,
+    amplitude,
+    turnover_cold,
+    turnover_hot,
+    vol_ratio_active,
+    amount_yi_min,
+    amplitude_high,
+    reported_tier,
+):
     """独立重算活跃度分档（Decimal，spec §5.2 规则），对照系统报告 tier。
 
     规则：换手 >= hot → 热；>= cold → 活跃；< cold → 冷；缺失 → 冷。
@@ -228,15 +267,17 @@ def verify_activity_tier(turnover, vol_ratio, amount_yi, amplitude,
     if amp is not None and amp >= to_decimal(amplitude_high):
         rules.append("振幅>={}%".format(amplitude_high))
 
-    consistent = (recomputed == reported_tier)
+    consistent = recomputed == reported_tier
     return {
         "command": "verify-activity-tier",
-        "inputs": {"turnover": str(t), "vol_ratio": str(vr),
-                   "amount_yi": str(amt), "amplitude": str(amp)},
-        "thresholds": {"turnover_cold": str(cold), "turnover_hot": str(hot),
-                       "vol_ratio_active": str(vol_ratio_active),
-                       "amount_yi_min": str(amount_yi_min),
-                       "amplitude_high": str(amplitude_high)},
+        "inputs": {"turnover": str(t), "vol_ratio": str(vr), "amount_yi": str(amt), "amplitude": str(amp)},
+        "thresholds": {
+            "turnover_cold": str(cold),
+            "turnover_hot": str(hot),
+            "vol_ratio_active": str(vol_ratio_active),
+            "amount_yi_min": str(amount_yi_min),
+            "amplitude_high": str(amplitude_high),
+        },
         "recomputed_tier": recomputed,
         "reported_tier": reported_tier,
         "rules": rules,
@@ -247,19 +288,23 @@ def verify_activity_tier(turnover, vol_ratio, amount_yi, amplitude,
 
 def cmd_verify_activity_tier(args):
     r = verify_activity_tier(
-        turnover=args.turnover, vol_ratio=args.vol_ratio,
-        amount_yi=args.amount_yi, amplitude=args.amplitude,
-        turnover_cold=args.turnover_cold, turnover_hot=args.turnover_hot,
+        turnover=args.turnover,
+        vol_ratio=args.vol_ratio,
+        amount_yi=args.amount_yi,
+        amplitude=args.amplitude,
+        turnover_cold=args.turnover_cold,
+        turnover_hot=args.turnover_hot,
         vol_ratio_active=args.vol_ratio_active,
-        amount_yi_min=args.amount_yi_min, amplitude_high=args.amplitude_high,
+        amount_yi_min=args.amount_yi_min,
+        amplitude_high=args.amplitude_high,
         reported_tier=args.reported_tier,
     )
     print(json.dumps(r, ensure_ascii=False, indent=2))
-    print("\n[活跃度复算] 重算 {} vs 报告 {} → {}".format(
-        r["recomputed_tier"], r["reported_tier"], r["verdict"]))
+    print("\n[活跃度复算] 重算 {} vs 报告 {} → {}".format(r["recomputed_tier"], r["reported_tier"], r["verdict"]))
 
 
 # ---------- main ----------
+
 
 def main():
     p = argparse.ArgumentParser(description="金融数据程序化验算工具")

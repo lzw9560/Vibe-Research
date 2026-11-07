@@ -45,9 +45,7 @@ def _check_hithink_key() -> list[str]:
     warnings: list[str] = []
     key = os.environ.get("HITHINK_FINANCE_API_KEY", "").strip()
     if not key:
-        warnings.append(
-            "HITHINK_FINANCE_API_KEY 未设置——hithink 估值(PS/PCF)/异动/涨停池数据将不可用"
-        )
+        warnings.append("HITHINK_FINANCE_API_KEY 未设置——hithink 估值(PS/PCF)/异动/涨停池数据将不可用")
     elif _LEAKED_KEY_MARKER in key:
         warnings.append(
             "HITHINK_FINANCE_API_KEY 疑似泄漏 key（sk-fuyaro- 前缀）——"
@@ -62,9 +60,7 @@ def _check_llm_key() -> list[str]:
     key = os.environ.get("VR_LLM_API_KEY", "").strip()
     base_url = os.environ.get("VR_LLM_BASE_URL", "").strip()
     if not key and base_url:
-        warnings.append(
-            "VR_LLM_BASE_URL 已设但 VR_LLM_API_KEY 未设——AI 对话/预测功能将不可用"
-        )
+        warnings.append("VR_LLM_BASE_URL 已设但 VR_LLM_API_KEY 未设——AI 对话/预测功能将不可用")
     return warnings
 
 

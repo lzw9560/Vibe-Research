@@ -13,6 +13,7 @@
 合规：只按用户传入代码返回客观数据，不预置标的、不排名、不建议。
 NO-LOOK-AHEAD：日K线是已实现历史收盘，不涉及未来数据。
 """
+
 from __future__ import annotations
 
 import json
@@ -23,8 +24,7 @@ from circuit_breaker import get_breaker
 from ._common import UA
 from .tencent import get_prefix
 
-_SINA_KLINE_URL = ("https://money.finance.sina.com.cn/quotes_service/api/"
-                   "json_v2.php/CN_MarketData.getKLineData")
+_SINA_KLINE_URL = "https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData"
 
 # S134：新浪日K熔断（默认 config——kline_resolver 有 mootdx/akshare 回退，
 # 降 threshold 反易误 trip 抖动；default 足够）。first-write-wins 注入。
@@ -35,9 +35,10 @@ def _fetch_json(code: str, datalen: int = 1023) -> list[dict]:
     """新浪日K线原始 JSON（list[dict]，字段为字符串）。urllib 不封 IP；timeout 30s。"""
     prefix = get_prefix(code)
     from urllib.parse import urlencode
+
     params = {
         "symbol": f"{prefix}{code}",
-        "scale": "240",     # 240 分钟 = 日线
+        "scale": "240",  # 240 分钟 = 日线
         "ma": "no",
         "datalen": str(datalen),
     }
@@ -64,16 +65,20 @@ def _parse(raw_rows: list[dict]) -> list[dict]:
     bars: list[dict] = []
     for r in raw_rows or []:
         vnum = _num(r.get("volume"))
-        bars.append({
-            "date": (str(r.get("day")).strip() if r.get("day") else None),
-            "open": _num(r.get("open")),
-            "high": _num(r.get("high")),
-            "low": _num(r.get("low")),
-            "close": _num(r.get("close")),
-            "volume": int(vnum) if vnum is not None else None,
-            "amount": None,            # 新浪日K不带成交额
-            "ma5": None, "ma10": None, "ma20": None,  # 新浪不带 MA
-        })
+        bars.append(
+            {
+                "date": (str(r.get("day")).strip() if r.get("day") else None),
+                "open": _num(r.get("open")),
+                "high": _num(r.get("high")),
+                "low": _num(r.get("low")),
+                "close": _num(r.get("close")),
+                "volume": int(vnum) if vnum is not None else None,
+                "amount": None,  # 新浪日K不带成交额
+                "ma5": None,
+                "ma10": None,
+                "ma20": None,  # 新浪不带 MA
+            }
+        )
     return bars
 
 
@@ -89,9 +94,7 @@ def fetch_raw(code: str, datalen: int = 1023) -> list[dict]:
     """
     breaker = get_breaker("sina_kline")
     if not breaker.allow_request():
-        raise RuntimeError(
-            f"[CircuitBreaker:sina_kline] 新浪日K线源熔断中，快速失败（{code}）"
-        )
+        raise RuntimeError(f"[CircuitBreaker:sina_kline] 新浪日K线源熔断中，快速失败（{code}）")
     try:
         raw_rows = _fetch_json(code, datalen)
         breaker.record_success()

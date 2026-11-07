@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """intraday executors——封单采集/微结构快照/竞价密集/5min 冻结。"""
+
 from __future__ import annotations
 
 import logging
@@ -23,6 +24,7 @@ def _instrumented(call_name: str, task_type: str, fn, *args, **kwargs):
     哪个 call 慢/卡，开盘后跑一天看 09:28-10:44 簇卡在哪个 call。
     """
     import time as _t
+
     t0 = _t.monotonic()
     logger.info("[instrumented] ENTER %s task=%s", call_name, task_type)
     try:
@@ -33,8 +35,14 @@ def _instrumented(call_name: str, task_type: str, fn, *args, **kwargs):
         return result
     except Exception as e:
         dt = (_t.monotonic() - t0) * 1000
-        logger.warning("[instrumented] FAIL  %s task=%s dur=%.0fms err=%s: %s",
-                       call_name, task_type, dt, type(e).__name__, str(e)[:120])
+        logger.warning(
+            "[instrumented] FAIL  %s task=%s dur=%.0fms err=%s: %s",
+            call_name,
+            task_type,
+            dt,
+            type(e).__name__,
+            str(e)[:120],
+        )
         raise
 
 
@@ -57,18 +65,23 @@ def seal_intraday_collect(payload: Dict[str, Any]) -> Dict[str, Any]:
         proc = subprocess.run(
             [sys.executable, "-m", "risk.seal_intraday_collect_cli"],
             input=_json.dumps(payload, ensure_ascii=False),
-            capture_output=True, text=True, timeout=_SEAL_COLLECT_SUBPROCESS_TIMEOUT, cwd=backend_dir,
+            capture_output=True,
+            text=True,
+            timeout=_SEAL_COLLECT_SUBPROCESS_TIMEOUT,
+            cwd=backend_dir,
         )
     except subprocess.TimeoutExpired:
-        return {"error": f"collect subprocess timeout {_SEAL_COLLECT_SUBPROCESS_TIMEOUT}s (SIGKILL, no orphan thread)",
-                "timeout": True, "date": _dt.now().strftime("%Y-%m-%d")}
+        return {
+            "error": f"collect subprocess timeout {_SEAL_COLLECT_SUBPROCESS_TIMEOUT}s (SIGKILL, no orphan thread)",
+            "timeout": True,
+            "date": _dt.now().strftime("%Y-%m-%d"),
+        }
     try:
         result = _json.loads(proc.stdout) if proc.stdout.strip() else {}
     except _json.JSONDecodeError:
         result = {"error": f"subprocess stdout not JSON: {(proc.stdout or '')[-200:]}"}
     if proc.returncode != 0:
-        result.setdefault(
-            "error", f"subprocess exit {proc.returncode}: {(proc.stderr or '')[-200:]}")
+        result.setdefault("error", f"subprocess exit {proc.returncode}: {(proc.stderr or '')[-200:]}")
     return result
 
 
@@ -81,6 +94,7 @@ def _load_intraday_ranking_codes(limit: int = 50) -> list[str]:
     """
     import sqlite3  # noqa: PLC0415
     from vr_paths import resolve_data_dir, last_trading_date_str  # noqa: PLC0415
+
     db = resolve_data_dir() / "intraday_accumulation" / "intraday_microstructure.db"
     if not db.exists():
         return []
@@ -125,8 +139,7 @@ def ofi_collect(payload: Dict[str, Any]) -> Dict[str, Any]:
         codes = _load_intraday_ranking_codes(limit=50)
         source_note = "intraday_ranking_snapshots（今日飙升/热门/异常）" if codes else "无候选 codes"
     if not codes:
-        return {"n_codes": 0, "n_collected": 0, "n_skipped": 0,
-                "note": f"no codes（{source_note}）"}
+        return {"n_codes": 0, "n_collected": 0, "n_skipped": 0, "note": f"no codes（{source_note}）"}
     date = last_trading_date_str()
     ts = _dt.now().strftime("%H:%M")
     regime = payload.get("regime")
@@ -153,6 +166,7 @@ def intraday_microstructure_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
     ``last_trading_date``（今日 forming 涨停池，今日空属正常）。
     """
     from vr_paths import is_intraday_time, is_auction_time, last_trading_date_str, prev_trading_date_str
+
     now = _dt.now()
     intraday = is_intraday_time(now)
     auction = is_auction_time(now)
@@ -162,7 +176,9 @@ def intraday_microstructure_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
     from data.sources import hithink_src
     from data.sources.tencent import fetch_raw
     from data.intraday_accumulation_store import (
-        save_ranking_snapshots, save_quote_snapshots, save_auction_snapshots,
+        save_ranking_snapshots,
+        save_quote_snapshots,
+        save_auction_snapshots,
         has_auction_snapshot,
     )
 
@@ -196,7 +212,11 @@ def intraday_microstructure_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
     zt_codes: list[str] = []
     if intraday:
         try:
-            zt_codes = [r["code"] for r in _instrumented("hithink.limit_up_pool", "microstructure", hithink_src.limit_up_pool, date) if r.get("code")]
+            zt_codes = [
+                r["code"]
+                for r in _instrumented("hithink.limit_up_pool", "microstructure", hithink_src.limit_up_pool, date)
+                if r.get("code")
+            ]
         except Exception:  # noqa: BLE001 — hithink 涨停池失败不影响排名快照
             pass
         rank_codes = {it["code"] for items in ranking_items.values() for it in items if it.get("code")}
@@ -214,8 +234,7 @@ def intraday_microstructure_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
         # 竞价 codes：prev_trading_date 涨停池（昨日涨停 = 今日竞价 continuation 候选）
         auction_codes: list[str] = []
         try:
-            auction_codes = [r["code"] for r in hithink_src.limit_up_pool(prev_trading_date_str())
-                             if r.get("code")]
+            auction_codes = [r["code"] for r in hithink_src.limit_up_pool(prev_trading_date_str()) if r.get("code")]
         except Exception as e:  # noqa: BLE001 — 涨停池失败则竞价 codes 空，跳过竞价
             degraded.append(f"auction_pool: {type(e).__name__}")
         if auction_codes:
@@ -227,9 +246,11 @@ def intraday_microstructure_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     ok = any(ranking_items.values()) or bool(quotes) or bool(auction_items)
     return {
-        "date": date, "ts": ts,
+        "date": date,
+        "ts": ts,
         "rankings": {s: len(v) for s, v in ranking_items.items()},
-        "quotes": len(quotes), "zt_codes": len(zt_codes),
+        "quotes": len(quotes),
+        "zt_codes": len(zt_codes),
         "auction": {"stage": auction_stage, "count": len(auction_items)},
         "data_status": "degraded" if degraded else ("ok" if ok else "empty"),
         "degraded_sources": degraded,
@@ -251,6 +272,7 @@ def intraday_auction_dense(payload: Dict[str, Any]) -> Dict[str, Any]:
     hithink 端点走 circuit_breaker，失败记 degraded 不抛（与 microstructure 同范式）。
     """
     from vr_paths import is_auction_time, last_trading_date_str, prev_trading_date_str
+
     now = _dt.now()
     if not is_auction_time(now):
         return {"status": "skipped", "reason": "非竞价时段（09:15-09:25 交易日）"}
@@ -265,8 +287,7 @@ def intraday_auction_dense(payload: Dict[str, Any]) -> Dict[str, Any]:
     # 竞价 codes：prev_trading_date 涨停池（昨日涨停 = 今日竞价 continuation 候选）
     auction_codes: list[str] = []
     try:
-        auction_codes = [r["code"] for r in hithink_src.limit_up_pool(prev_trading_date_str())
-                         if r.get("code")]
+        auction_codes = [r["code"] for r in hithink_src.limit_up_pool(prev_trading_date_str()) if r.get("code")]
     except Exception as e:  # noqa: BLE001 — 涨停池失败则竞价 codes 空，跳过竞价
         degraded.append(f"auction_pool: {type(e).__name__}")
 
@@ -279,7 +300,8 @@ def intraday_auction_dense(payload: Dict[str, Any]) -> Dict[str, Any]:
     save_auction_snapshots(date, ts, "live", auction_items)
 
     return {
-        "date": date, "ts": ts,
+        "date": date,
+        "ts": ts,
         "auction": {"stage": "live", "count": len(auction_items)},
         "codes": len(auction_codes),
         "data_status": "degraded" if degraded else ("ok" if auction_items else "empty"),
@@ -296,6 +318,7 @@ def baostock_5min_freeze(payload: Dict[str, Any]) -> Dict[str, Any]:
     幂等：INSERT OR REPLACE，重跑覆盖不翻倍。空 bars 仍写（bar_count=0 诚实记录）。
     """
     from vr_paths import is_trading_day, prev_trading_date_str
+
     if not is_trading_day():
         return {"status": "skipped", "reason": "非交易日（节假日跳，prev 由下交易日补）"}
 
@@ -324,6 +347,9 @@ def baostock_5min_freeze(payload: Dict[str, Any]) -> Dict[str, Any]:
         if not bars:
             empty += 1
     return {
-        "date": prev_date, "frozen": frozen, "empty_bars": empty,
-        "pool_size": len(pool), "status": "ok",
+        "date": prev_date,
+        "frozen": frozen,
+        "empty_bars": empty,
+        "pool_size": len(pool),
+        "status": "ok",
     }

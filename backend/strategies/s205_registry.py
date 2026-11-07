@@ -11,6 +11,7 @@ leader_identity/pullback_rhythm/reversal_confirm（data_source 声明现有或�
 auction_signal BLOCKER：A 股竞价历史数据无免费源（Tushare/hithink 付费；
 akshare/腾讯/新浪 实时竞价无历史）→ compute_auction_signal 标 BLOCKER skipif。
 """
+
 from __future__ import annotations
 
 from strategies.dimension_registry import (  # noqa: F401
@@ -170,28 +171,64 @@ _S205_CONFIGS: dict[str, 战法ScoreConfig] = {
     "弱转强": 战法ScoreConfig(
         战法="弱转强",
         dimensions=("expectation_gap_reversal", "volume_confirm", "emotion_cycle", "tech_pattern", "sector_strength"),
-        weights={"expectation_gap_reversal": 0.25, "volume_confirm": 0.20, "emotion_cycle": 0.25, "tech_pattern": 0.20, "sector_strength": 0.10},
+        weights={
+            "expectation_gap_reversal": 0.25,
+            "volume_confirm": 0.20,
+            "emotion_cycle": 0.25,
+            "tech_pattern": 0.20,
+            "sector_strength": 0.10,
+        },
         edge_type="待验(overnight_gap 候选)",
         sweep_params={"auction_vol_ratio": [1.0, 1.5, 2.0, 2.5, 3.0], "turnover_pct": [5.0, 10.0, 15.0, 20.0]},
     ),
     "N字反击": 战法ScoreConfig(
         战法="N字反击",
         dimensions=("volume_rhythm", "pullback_structure", "tech_pattern", "emotion_cycle", "sector_strength"),
-        weights={"volume_rhythm": 0.30, "pullback_structure": 0.25, "tech_pattern": 0.25, "emotion_cycle": 0.10, "sector_strength": 0.10},
+        weights={
+            "volume_rhythm": 0.30,
+            "pullback_structure": 0.25,
+            "tech_pattern": 0.25,
+            "emotion_cycle": 0.10,
+            "sector_strength": 0.10,
+        },
         edge_type="待验(selection 候选)",
-        sweep_params={"three_stage_vol_ratio": [1.0, 1.5, 2.0, 2.5], "pullback_depth": [10.0, 20.0, 30.0], "pullback_days": [1.0, 2.0, 3.0]},
+        sweep_params={
+            "three_stage_vol_ratio": [1.0, 1.5, 2.0, 2.5],
+            "pullback_depth": [10.0, 20.0, 30.0],
+            "pullback_days": [1.0, 2.0, 3.0],
+        },
     ),
     "低吸龙头": 战法ScoreConfig(
         战法="低吸龙头",
-        dimensions=("tech_pattern", "leader_identity", "pullback_rhythm", "volume_reversal", "emotion_cycle", "sector_strength_alt"),
-        weights={"tech_pattern": 0.30, "leader_identity": 0.20, "pullback_rhythm": 0.20, "volume_reversal": 0.15, "emotion_cycle": 0.10, "sector_strength_alt": 0.05},
+        dimensions=(
+            "tech_pattern",
+            "leader_identity",
+            "pullback_rhythm",
+            "volume_reversal",
+            "emotion_cycle",
+            "sector_strength_alt",
+        ),
+        weights={
+            "tech_pattern": 0.30,
+            "leader_identity": 0.20,
+            "pullback_rhythm": 0.20,
+            "volume_reversal": 0.15,
+            "emotion_cycle": 0.10,
+            "sector_strength_alt": 0.05,
+        },
         edge_type="待验(path 候选)",
         sweep_params={"ma_pullback": [5.0, 10.0, 20.0], "pullback_amplitude": [10.0, 20.0, 30.0]},
     ),
     "形态反包": 战法ScoreConfig(
         战法="形态反包",
         dimensions=("tech_pattern", "volume_confirm", "reversal_confirm", "emotion_cycle", "sector_strength"),
-        weights={"tech_pattern": 0.25, "volume_confirm": 0.20, "reversal_confirm": 0.25, "emotion_cycle": 0.15, "sector_strength": 0.15},
+        weights={
+            "tech_pattern": 0.25,
+            "volume_confirm": 0.20,
+            "reversal_confirm": 0.25,
+            "emotion_cycle": 0.15,
+            "sector_strength": 0.15,
+        },
         edge_type="待验(event 候选)",
         sweep_params={"upper_shadow_pct": [3.0, 4.0, 5.0, 6.0], "volume_mult": [1.0, 1.5, 2.0, 2.5]},
     ),

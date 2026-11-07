@@ -9,6 +9,7 @@ GET /api/earnings-calendar?codes=600519,000001&forward_days=90
 - 私有数据隔离（codes 由用户提供，不读持仓/研报）
 - 东财走 em_get 不裸调 requests（astock.announcements/lockup_expiry 已走 em_get）
 """
+
 from __future__ import annotations
 
 import logging
@@ -45,6 +46,7 @@ def _validate_codes(codes_str: str) -> list[str]:
 def _aggregate_per_code(code: str, forward_days: int) -> dict:
     """单 code 聚合 announcements + lockup_expiry。缺数据标 missing 不臆造。"""
     import astock  # noqa: PLC0415
+
     announcements: list[dict] = []
     lockup_expiries: list[dict] = []
     status = "ok"
@@ -127,6 +129,7 @@ def is_earnings_season_unsafe(code: str, target_date: str) -> bool:
     """
     try:
         from datetime import datetime  # noqa: PLC0415
+
         month = datetime.strptime(target_date[:10], "%Y-%m-%d").month
     except (ValueError, TypeError):
         return False
@@ -134,16 +137,14 @@ def is_earnings_season_unsafe(code: str, target_date: str) -> bool:
         return False  # 非财报季月，不拦
     try:
         import astock  # noqa: PLC0415
+
         announcements = astock.announcements(code, limit=15)
     except Exception:
         return False  # 数据取得失败不拦（不臆造）
     # H2 fix：过滤财报披露公告（title 含年报/中报/季报/业绩预告/快报），非任意公告
     # 避免有回购/分红/股东大会公告但不披露财报 → 误判已披露 → 漏拉黑
     earnings_keywords = ("年报", "中报", "季报", "一季报", "半年报", "业绩预告", "业绩快报", "年度业绩", "半年度业绩")
-    has_earnings = any(
-        any(kw in (a.get("title") or "") for kw in earnings_keywords)
-        for a in announcements
-    )
+    has_earnings = any(any(kw in (a.get("title") or "") for kw in earnings_keywords) for a in announcements)
     return not has_earnings  # 无财报披露公告 → 未披露 → 拉黑
 
 

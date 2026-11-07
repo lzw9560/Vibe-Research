@@ -5,6 +5,7 @@ datacenter direct fetch（绕 em_get，spec §8.1）；60 日 × 2 report/日（
 画像建成 → compute_seat_risk_factor modifier 真扣分（§9.4）；不可达 → 降级 modifier 1.0。
 周更为主（spec §9.3），行为突变检测 5 日增量。
 """
+
 import sys
 from pathlib import Path
 
@@ -59,7 +60,9 @@ def main() -> None:
     for p in merged:
         by_type[p.seat_type] = by_type.get(p.seat_type, 0) + 1
     print(f"分类：{by_type}")
-    print(f"source 分布：data={sum(1 for p in merged if p.source == 'data')}, preset={sum(1 for p in merged if p.source == 'preset')}")
+    print(
+        f"source 分布：data={sum(1 for p in merged if p.source == 'data')}, preset={sum(1 for p in merged if p.source == 'preset')}"
+    )
 
 
 if __name__ == "__main__":

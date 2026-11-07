@@ -9,6 +9,7 @@ inst_dominant walk-forward OOS edge-confirmed（train+0.426%/test+0.345% 都 PAS
 原版 per-bar slice [-20:] 是 O(N×20)，5248 codes × 2123 days = 1100万 × 20 = 2.2亿 ops ~50分钟。
 优化版 O(N) per code = 1100万 ops ~10秒。
 """
+
 import json
 import sqlite3
 import statistics
@@ -37,8 +38,7 @@ ALPHA = 0.05
 def load_inst_dominant_picks() -> list:
     conn = sqlite3.connect(str(DT_DB))
     rows = conn.execute(
-        "SELECT trade_date, security_code, dept_name, buy, net "
-        "FROM dragon_tiger_rows WHERE side='buy' AND buy > 0"
+        "SELECT trade_date, security_code, dept_name, buy, net FROM dragon_tiger_rows WHERE side='buy' AND buy > 0"
     ).fetchall()
     conn.close()
     picks_by_dc: dict = defaultdict(list)
@@ -94,7 +94,7 @@ def compute_all_size_bhar(bars: list) -> tuple[dict, dict]:
 
 
 def normal_p(t: float) -> float:
-    return 2 * (1 - 0.5 * (1 + erf(abs(t) / (2 ** 0.5))))
+    return 2 * (1 - 0.5 * (1 + erf(abs(t) / (2**0.5))))
 
 
 def audit_r12() -> None:
@@ -176,7 +176,7 @@ def audit_r12() -> None:
     day_means = [statistics.mean(rs) for rs in alphas_by_date.values() if rs]
     mean = statistics.mean(day_means)
     n_days = len(day_means)
-    se = statistics.stdev(day_means) / (n_days ** 0.5) if n_days > 1 else 0
+    se = statistics.stdev(day_means) / (n_days**0.5) if n_days > 1 else 0
     t = mean / se if se > 0 else 0
     n = len(all_alphas)
     wr = sum(1 for a in all_alphas if a > 0) / n * 100 if n else 0
@@ -185,8 +185,12 @@ def audit_r12() -> None:
     p = normal_p(t)
     verdict = "PASS" if p < ALPHA else "FAIL"
     print(f"\nR12 size-matched alpha (inst_bhar - peers_median, 同日同 decile):")
-    print(f"  n={n} days={n_days} mean_alpha={mean:.4f}% median={median:.4f}% WR={wr:.1f}% day_t={t:.2f} p={p:.4f} {verdict}")
-    print(f"\n  → {'size-matched edge-confirmed（alpha 非 size premium）' if p < ALPHA and mean > 0 else 'alpha 被 size premium 解释（非真 edge，或 underpowered）'}")
+    print(
+        f"  n={n} days={n_days} mean_alpha={mean:.4f}% median={median:.4f}% WR={wr:.1f}% day_t={t:.2f} p={p:.4f} {verdict}"
+    )
+    print(
+        f"\n  → {'size-matched edge-confirmed（alpha 非 size premium）' if p < ALPHA and mean > 0 else 'alpha 被 size premium 解释（非真 edge，或 underpowered）'}"
+    )
     print(f"  对比 inst_dominant raw BHAR +0.390%（如 alpha 显著正→真 edge 非 size）")
 
 

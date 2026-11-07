@@ -17,6 +17,7 @@ from enum import Enum
 
 class ReportType(str, Enum):
     """报告类型（通知分类）。"""
+
     DAILY = "daily"
     WEEKLY = "weekly"
     MONTHLY = "monthly"

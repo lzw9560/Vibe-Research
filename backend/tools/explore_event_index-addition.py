@@ -30,6 +30,7 @@
 - post-inclusion 测的是 effective 后漂移, 非 Shleifer announcement→effective run-up
   (后者须 announcement 日, 无数据)。若 post-inclusion 漂移为负 (reversal), 仍是有意义发现。
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -45,9 +46,15 @@ import baostock as bs
 
 # import shared helpers (DRY)
 import sys
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tools._factor_helpers import (  # noqa: E402
-    ev_stats, day_paired_t, bonferroni_p, norm_sf_positive, ALPHA, COST,
+    ev_stats,
+    day_paired_t,
+    bonferroni_p,
+    norm_sf_positive,
+    ALPHA,
+    COST,
 )
 
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
@@ -77,14 +84,15 @@ INDEX_QUERY = {
 
 # 事件窗口 (relative to effective date, in trading days)
 WINDOWS = [
-    ("T5", 5),   # entry=eff+1 open, exit=eff+5 close  (4 trading-day hold)
-    ("T10", 10), # entry=eff+1 open, exit=eff+10 close (9 trading-day hold)
+    ("T5", 5),  # entry=eff+1 open, exit=eff+5 close  (4 trading-day hold)
+    ("T10", 10),  # entry=eff+1 open, exit=eff+10 close (9 trading-day hold)
 ]
 
 CROSS_STRATEGY_N = 4  # Bonferroni ×4 (index-addition × dividend × basic+regime)
 
 
 # ---------- baostock constituent queries ----------
+
 
 def _login() -> None:
     lg = bs.login()
@@ -105,8 +113,7 @@ def query_constituents(index_key: str, d: str) -> set[str]:
 
 def second_friday(year: int, month: int) -> str:
     c = calendar.Calendar()
-    fridays = [d for d in c.itermonthdates(year, month)
-               if d.weekday() == 4 and d.month == month]
+    fridays = [d for d in c.itermonthdates(year, month) if d.weekday() == 4 and d.month == month]
     return fridays[1].isoformat()
 
 
@@ -148,17 +155,21 @@ def get_additions(index_key: str, do_fetch_missing: bool = True) -> list[dict]:
             added = new - old
             removed = old - new
             for c in added:
-                additions.append({
-                    "code": c, "code6": c.split(".")[1],
-                    "effective_date": eff, "index_key": index_key,
-                    "direction": "add",
-                })
-            print(f"  [{index_key} {year}-{month:02d}] eff={eff} "
-                  f"added={len(added)} removed={len(removed)}")
+                additions.append(
+                    {
+                        "code": c,
+                        "code6": c.split(".")[1],
+                        "effective_date": eff,
+                        "index_key": index_key,
+                        "direction": "add",
+                    }
+                )
+            print(f"  [{index_key} {year}-{month:02d}] eff={eff} added={len(added)} removed={len(removed)}")
     return additions
 
 
 # ---------- kline (cache + baostock fetch) ----------
+
 
 def load_kline_cache() -> dict[str, dict[str, dict]]:
     conn = sqlite3.connect(str(KLINE_DB))
@@ -193,8 +204,13 @@ def save_fetch_cache(fc: dict) -> None:
 def fetch_kline_baostock(code: str, start: str, end: str) -> dict[str, dict]:
     """Fetch daily kline for one code from baostock. Returns {date: bar}."""
     rs = bs.query_history_k_data_plus(
-        code, "date,open,high,low,close,volume,amount,turn,pctChg",
-        start_date=start, end_date=end, frequency="d", adjustflag="3")
+        code,
+        "date,open,high,low,close,volume,amount,turn,pctChg",
+        start_date=start,
+        end_date=end,
+        frequency="d",
+        adjustflag="3",
+    )
     if rs.error_code != "0":
         return {}
     dmap: dict[str, dict] = {}
@@ -204,8 +220,11 @@ def fetch_kline_baostock(code: str, start: str, end: str) -> dict[str, dict]:
             continue
         try:
             dmap[r[0]] = {
-                "date": r[0], "open": float(r[1]), "high": float(r[2]),
-                "low": float(r[3]), "close": float(r[4]),
+                "date": r[0],
+                "open": float(r[1]),
+                "high": float(r[2]),
+                "low": float(r[3]),
+                "close": float(r[4]),
                 "volume": float(r[5]) if r[5] else 0.0,
                 "turn": float(r[7]) if r[7] else 0.0,
                 "pctChg": float(r[8]) if r[8] else 0.0,
@@ -215,8 +234,9 @@ def fetch_kline_baostock(code: str, start: str, end: str) -> dict[str, dict]:
     return dmap
 
 
-def get_kline_for_addition(add: dict, code_map: dict, fetch_cache: dict,
-                           do_fetch: bool = True) -> dict[str, dict] | None:
+def get_kline_for_addition(
+    add: dict, code_map: dict, fetch_cache: dict, do_fetch: bool = True
+) -> dict[str, dict] | None:
     """Get kline bars around effective date. Cache first, then baostock fetch if gap.
     Returns {date: bar} covering effective-3 .. effective+15, or None."""
     code6 = add["code6"]
@@ -257,16 +277,23 @@ def get_kline_for_addition(add: dict, code_map: dict, fetch_cache: dict,
 def fetch_index_kline(index_code: str) -> tuple[dict[str, dict], list[str]]:
     """Full-period index kline (2018-01 to 2026-09). Returns (date->bar, sorted trading days)."""
     rs = bs.query_history_k_data_plus(
-        index_code, "date,open,high,low,close,volume,amount,turn,pctChg",
-        start_date="2018-01-01", end_date="2026-09-30",
-        frequency="d", adjustflag="3")
+        index_code,
+        "date,open,high,low,close,volume,amount,turn,pctChg",
+        start_date="2018-01-01",
+        end_date="2026-09-30",
+        frequency="d",
+        adjustflag="3",
+    )
     dmap: dict[str, dict] = {}
     while rs.error_code == "0" and rs.next():
         r = rs.get_row_data()
         try:
             dmap[r[0]] = {
-                "date": r[0], "open": float(r[1]), "high": float(r[2]),
-                "low": float(r[3]), "close": float(r[4]),
+                "date": r[0],
+                "open": float(r[1]),
+                "high": float(r[2]),
+                "low": float(r[3]),
+                "close": float(r[4]),
             }
         except (ValueError, IndexError):
             continue
@@ -275,13 +302,14 @@ def fetch_index_kline(index_code: str) -> tuple[dict[str, dict], list[str]]:
 
 # ---------- BHAR computation ----------
 
+
 def trading_day_index(dates: list[str]) -> dict[str, int]:
     return {d: i for i, d in enumerate(dates)}
 
 
-def compute_bhar(add: dict, bars: dict[str, dict],
-                 idx_bars: dict[str, dict], idx_dates: list[str],
-                 window_n: int) -> dict | None:
+def compute_bhar(
+    add: dict, bars: dict[str, dict], idx_bars: dict[str, dict], idx_dates: list[str], window_n: int
+) -> dict | None:
     """BHAR for one addition.
     entry = effective+1 open, exit = effective+N close (N=window_n).
     stock_ret = (close_N - open_1) / open_1
@@ -295,6 +323,7 @@ def compute_bhar(add: dict, bars: dict[str, dict],
     if eff_idx is None:
         # map to nearest trading day on_or_after eff
         import bisect
+
         i = bisect.bisect_left(idx_dates, eff)
         eff_idx = i if i < len(idx_dates) else None
     if eff_idx is None:
@@ -330,15 +359,20 @@ def compute_bhar(add: dict, bars: dict[str, dict],
 
     bhar = stock_ret - index_ret
     return {
-        "bhar": round(bhar, 4), "stock_ret": round(stock_ret, 4),
+        "bhar": round(bhar, 4),
+        "stock_ret": round(stock_ret, 4),
         "index_ret": round(index_ret, 4),
-        "entry_date": entry_date, "exit_date": exit_date,
-        "effective_date": eff, "code": add["code"], "code6": add["code6"],
+        "entry_date": entry_date,
+        "exit_date": exit_date,
+        "effective_date": eff,
+        "code": add["code"],
+        "code6": add["code6"],
         "index_key": add["index_key"],
     }
 
 
 # ---------- regime ----------
+
 
 def load_regime() -> dict[str, str]:
     """date -> regime ('strong'/'weak'/'range')."""
@@ -357,6 +391,7 @@ def load_regime() -> dict[str, str]:
 
 # ---------- per-event t (secondary, descriptive) ----------
 
+
 def per_event_t(rets: list[float]) -> dict:
     n = len(rets)
     if n == 0:
@@ -366,11 +401,11 @@ def per_event_t(rets: list[float]) -> dict:
     se = std / sqrt(n) if n > 0 else 0.0
     t = mean / se if se > 0 else 0.0
     p = norm_sf_positive(t)
-    return {"n": n, "mean": round(mean, 4), "std": round(std, 4),
-            "t": round(t, 2), "p_one_sided": round(p, 6)}
+    return {"n": n, "mean": round(mean, 4), "std": round(std, 4), "t": round(t, 2), "p_one_sided": round(p, 6)}
 
 
 # ---------- main ----------
+
 
 def main() -> None:
     _login()
@@ -400,10 +435,14 @@ def main() -> None:
         all_additions.extend(adds)
     print(f"\n  TOTAL additions (all indices, all rebalances): {len(all_additions)}")
     eff_dates_all = sorted(set(a["effective_date"] for a in all_additions))
-    print(f"  distinct effective dates: {len(eff_dates_all)} "
-          f"({eff_dates_all[0] if eff_dates_all else '-'}~{eff_dates_all[-1] if eff_dates_all else '-'})")
-    print(f"  ⚠ 结构性限制: 半年一次 rebalance → per-day-mean t N_days={len(eff_dates_all)} "
-          f"< 60 → 预期 underpowered (诚实标注)")
+    print(
+        f"  distinct effective dates: {len(eff_dates_all)} "
+        f"({eff_dates_all[0] if eff_dates_all else '-'}~{eff_dates_all[-1] if eff_dates_all else '-'})"
+    )
+    print(
+        f"  ⚠ 结构性限制: 半年一次 rebalance → per-day-mean t N_days={len(eff_dates_all)} "
+        f"< 60 → 预期 underpowered (诚实标注)"
+    )
 
     # ---- 3. kline for additions (cache + fetch) ----
     print("\n[3/5] loading kline cache + fetching missing bars (effective-3..effective+15)...")
@@ -423,15 +462,17 @@ def main() -> None:
         else:
             n_cached += 1
     save_fetch_cache(fetch_cache)
-    print(f"  usable additions: {len(addition_bars)}/{len(all_additions)} "
-          f"(cached={n_cached} fetched={n_fetched} missing={n_missing})")
+    print(
+        f"  usable additions: {len(addition_bars)}/{len(all_additions)} "
+        f"(cached={n_cached} fetched={n_fetched} missing={n_missing})"
+    )
 
     # ---- 4. BHAR per window ----
     print("\n[4/5] computing BHAR (T+5 / T+10)...")
     for wname, wn in WINDOWS:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"窗口: {wname} (entry=eff+1 open, exit=eff+{wn} close)")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         bhars: list[float] = []
         picks: list[dict] = []
         by_date: dict[str, list[float]] = defaultdict(list)
@@ -458,20 +499,24 @@ def main() -> None:
         ev = ev_stats(bhars)
         pet = per_event_t(bhars)
         net_ev = ev["ev"] - COST * 100
-        print(f"\n  per-event: n={ev['n']} BHAR_mean={ev['ev']}% std={ev['std']}% "
-              f"WR={ev['wr']}% t={ev['t']} CI[{ev['ci_lo']},{ev['ci_hi']}]")
+        print(
+            f"\n  per-event: n={ev['n']} BHAR_mean={ev['ev']}% std={ev['std']}% "
+            f"WR={ev['wr']}% t={ev['t']} CI[{ev['ci_lo']},{ev['ci_hi']}]"
+        )
         print(f"  per-event t: mean={pet['mean']}% t={pet['t']} p_one_sided={pet['p_one_sided']}")
-        print(f"  net BHAR (after {COST*100:.1f}% cost): {net_ev:.3f}%")
+        print(f"  net BHAR (after {COST * 100:.1f}% cost): {net_ev:.3f}%")
 
         # per-day-mean t (PRIMARY inferential, clustered by effective date)
         dt = day_paired_t(by_date)
         print(f"\n  per-day-mean t (PRIMARY, cluster by effective date):")
-        print(f"    n_days={dt['n_days']} mean={dt['mean']}% std={dt['std']}% "
-              f"t={dt['t']} p_one_sided={dt['p_one_sided']}")
+        print(
+            f"    n_days={dt['n_days']} mean={dt['mean']}% std={dt['std']}% t={dt['t']} p_one_sided={dt['p_one_sided']}"
+        )
         p_raw = dt["p_one_sided"]
         p_bonf = bonferroni_p(p_raw, CROSS_STRATEGY_N)
-        print(f"    Bonferroni ×{CROSS_STRATEGY_N}: p={p_bonf:.6f} "
-              f"({'PASS' if p_bonf < ALPHA else 'FAIL'} @ α={ALPHA})")
+        print(
+            f"    Bonferroni ×{CROSS_STRATEGY_N}: p={p_bonf:.6f} ({'PASS' if p_bonf < ALPHA else 'FAIL'} @ α={ALPHA})"
+        )
 
         # per-index breakdown
         print(f"\n  per-index BHAR:")
@@ -483,8 +528,7 @@ def main() -> None:
         regime_map = load_regime()
         print(f"\n  --- regime stratification (by entry_date regime) ---")
         for rname in ("strong", "weak", "range"):
-            r_rets = [p["bhar"] for p in picks
-                      if regime_map.get(p["entry_date"]) == rname]
+            r_rets = [p["bhar"] for p in picks if regime_map.get(p["entry_date"]) == rname]
             if not r_rets:
                 continue
             s = ev_stats(r_rets)
@@ -505,12 +549,14 @@ def main() -> None:
             te_ev = ev_stats(test_rets)
             tr_dt = day_paired_t(tr_by_d)
             te_dt = day_paired_t(te_by_d)
-            print(f"    train: n_dates={len(train_dates)} n={tr_ev['n']} "
-                  f"BHAR={tr_ev['ev']}% t={tr_dt['t']} (day-paired)")
-            print(f"    test:  n_dates={len(test_dates)} n={te_ev['n']} "
-                  f"BHAR={te_ev['ev']}% t={te_dt['t']} p={te_dt['p_one_sided']}")
-            decay = ((tr_ev["ev"] - te_ev["ev"]) / abs(tr_ev["ev"]) * 100
-                     if tr_ev["ev"] != 0 else 0)
+            print(
+                f"    train: n_dates={len(train_dates)} n={tr_ev['n']} BHAR={tr_ev['ev']}% t={tr_dt['t']} (day-paired)"
+            )
+            print(
+                f"    test:  n_dates={len(test_dates)} n={te_ev['n']} "
+                f"BHAR={te_ev['ev']}% t={te_dt['t']} p={te_dt['p_one_sided']}"
+            )
+            decay = (tr_ev["ev"] - te_ev["ev"]) / abs(tr_ev["ev"]) * 100 if tr_ev["ev"] != 0 else 0
             print(f"    decay: {decay:.0f}% (train→test)")
             wf_status = "ok"
             wf_train_ev = tr_ev["ev"]
@@ -530,8 +576,7 @@ def main() -> None:
             print(f"    gross BHAR={ev['ev']}% < 0 → no positive post-inclusion effect")
             verdict = "edge-falsified" if dt["n_days"] >= 30 else "underpowered"
         elif dt["n_days"] < 60:
-            print(f"    n_days={dt['n_days']} < 60 → UNDERPOWERED "
-                  f"(结构性: 半年 rebalance, 8 年仅 ~13-16 event dates)")
+            print(f"    n_days={dt['n_days']} < 60 → UNDERPOWERED (结构性: 半年 rebalance, 8 年仅 ~13-16 event dates)")
             verdict = "underpowered"
         elif p_bonf >= ALPHA:
             print(f"    Bonferroni p={p_bonf} >= {ALPHA} → not significant")
@@ -549,8 +594,10 @@ def main() -> None:
             else:
                 wf_p_bonf = bonferroni_p(wf_test_p, CROSS_STRATEGY_N)
                 if wf_p_bonf >= ALPHA:
-                    print(f"    OOS BHAR>0 but test p={wf_test_p} Bonf×{CROSS_STRATEGY_N}"
-                          f"={wf_p_bonf} >= {ALPHA} → not significant OOS")
+                    print(
+                        f"    OOS BHAR>0 but test p={wf_test_p} Bonf×{CROSS_STRATEGY_N}"
+                        f"={wf_p_bonf} >= {ALPHA} → not significant OOS"
+                    )
                     verdict = "exploratory"
                 else:
                     print(f"    → EDGE-CONFIRMED: BHAR>0, Bonf PASS, OOS significant")
@@ -562,29 +609,39 @@ def main() -> None:
 
         # store for final summary
         globals()[f"_last_{wname}"] = {
-            "n_events": ev["n"], "n_dates": dt["n_days"], "bhar": ev["ev"],
-            "net_ev": net_ev, "p_raw": p_raw, "p_bonf": p_bonf,
-            "wf_status": wf_status, "wf_train_ev": wf_train_ev,
-            "wf_test_ev": wf_test_ev, "wf_test_p": wf_test_p,
-            "wf_n_test_dates": wf_n_test_dates, "verdict": verdict,
+            "n_events": ev["n"],
+            "n_dates": dt["n_days"],
+            "bhar": ev["ev"],
+            "net_ev": net_ev,
+            "p_raw": p_raw,
+            "p_bonf": p_bonf,
+            "wf_status": wf_status,
+            "wf_train_ev": wf_train_ev,
+            "wf_test_ev": wf_test_ev,
+            "wf_test_p": wf_test_p,
+            "wf_n_test_dates": wf_n_test_dates,
+            "verdict": verdict,
             "day_t": dt["t"],
         }
 
     # ---- 5. DSR/PBO + summary ----
-    print(f"\n{'='*72}\n[5/5] overfitting check + summary")
-    print(f"{'='*72}")
+    print(f"\n{'=' * 72}\n[5/5] overfitting check + summary")
+    print(f"{'=' * 72}")
     # use T5 as primary
     primary = globals().get("_last_T5")
     if primary:
         print(f"\n  primary window: T5")
-        print(f"    n_events={primary['n_events']} n_dates={primary['n_dates']} "
-              f"BHAR={primary['bhar']}% net={primary['net_ev']}%")
-        print(f"    day_t={primary['day_t']} p_raw={primary['p_raw']} "
-              f"Bonf×{CROSS_STRATEGY_N}={primary['p_bonf']}")
+        print(
+            f"    n_events={primary['n_events']} n_dates={primary['n_dates']} "
+            f"BHAR={primary['bhar']}% net={primary['net_ev']}%"
+        )
+        print(f"    day_t={primary['day_t']} p_raw={primary['p_raw']} Bonf×{CROSS_STRATEGY_N}={primary['p_bonf']}")
         if primary["wf_status"] == "ok":
-            print(f"    walk-forward: train={primary['wf_train_ev']}% "
-                  f"test={primary['wf_test_ev']}% test_p={primary['wf_test_p']} "
-                  f"(n_test_dates={primary['wf_n_test_dates']})")
+            print(
+                f"    walk-forward: train={primary['wf_train_ev']}% "
+                f"test={primary['wf_test_ev']}% test_p={primary['wf_test_p']} "
+                f"(n_test_dates={primary['wf_n_test_dates']})"
+            )
         print(f"    verdict: {primary['verdict']}")
 
     print(f"\n  --- DSR/PBO 适用性 ---")
@@ -594,17 +651,18 @@ def main() -> None:
     print(f"  本设计 n_events~{primary['n_events'] if primary else 0}, walk-forward 半 ~6 dates → PBO 不可行。")
     print(f"  → 多重检验校正已通过 Bonferroni ×{CROSS_STRATEGY_N} 体现 (覆盖 2 策略 × 2 变体)。")
 
-    print(f"\n{'='*72}\n[FINAL SUMMARY]")
-    print(f"{'='*72}")
+    print(f"\n{'=' * 72}\n[FINAL SUMMARY]")
+    print(f"{'=' * 72}")
     print(f"策略: 指数调入 post-inclusion 漂移 (hs300/sz50/zz500 additions)")
     print(f"数据: baostock 历史成份股 (2018-2026, 3 个 rebalance baostock gap) + ")
     print(f"      kline cache + baostock 补缺 fetch + matched index kline")
     if primary:
-        print(f"primary T5: n_events={primary['n_events']} BHAR={primary['bhar']}% "
-              f"n_dates={primary['n_dates']} day_t={primary['day_t']} "
-              f"Bonf×{CROSS_STRATEGY_N}={primary['p_bonf']:.4f}")
-        print(f"           net_BHAR={primary['net_ev']}% "
-              f"wf[test_ev={primary['wf_test_ev']}% p={primary['wf_test_p']}]")
+        print(
+            f"primary T5: n_events={primary['n_events']} BHAR={primary['bhar']}% "
+            f"n_dates={primary['n_dates']} day_t={primary['day_t']} "
+            f"Bonf×{CROSS_STRATEGY_N}={primary['p_bonf']:.4f}"
+        )
+        print(f"           net_BHAR={primary['net_ev']}% wf[test_ev={primary['wf_test_ev']}% p={primary['wf_test_p']}]")
         print(f"verdict: {primary['verdict']}")
     print(f"诚实约束: post-inclusion 口径 (非 announcement run-up); n_dates<60 结构性 underpowered;")
     print(f"          调入含 selection (指数公司选定, 非 winner 但可能含 momentum) — 已审。")

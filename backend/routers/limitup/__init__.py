@@ -1,6 +1,7 @@
 """
 LimitUp router package.
 """
+
 from fastapi import APIRouter
 
 from . import screener, analysis, auction, seats

@@ -3,6 +3,7 @@
 
 打板工作流操作建议（T 日 watchlist + T+1 二次确认 + -3% stop exit 规则）。
 """
+
 from __future__ import annotations
 
 import logging

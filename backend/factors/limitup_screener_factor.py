@@ -87,13 +87,19 @@ class LimitupScreenerFactor:
         elif report.warnings:
             l1_status, l1_reason = "未取得", "涨停基因选股数据未取得（预计算可能未执行或超时）"
         elif report.filtered_out:
-            l1_status, l1_reason = "无合格标的", f"今日扫描 {scanned} 只涨停股，均未达合格阈值 {GENE_QUALIFY_THRESHOLD} 分"
+            l1_status, l1_reason = (
+                "无合格标的",
+                f"今日扫描 {scanned} 只涨停股，均未达合格阈值 {GENE_QUALIFY_THRESHOLD} 分",
+            )
         else:
             l1_status, l1_reason = "未取得", "今日无涨停股数据"
 
         l1 = FunnelLayer(
-            layer_id="LS-1", name="涨停基因打分", as_of=datetime.now(),
-            input_count=scanned, output_count=len(qualified),
+            layer_id="LS-1",
+            name="涨停基因打分",
+            as_of=datetime.now(),
+            input_count=scanned,
+            output_count=len(qualified),
             filtered_out=l1_filtered,
             output_codes=[g.code for g in qualified],
             conditions=[
@@ -103,7 +109,8 @@ class LimitupScreenerFactor:
                 f"扫描 {scanned} 只涨停股",
             ],
             passed=[{"code": g.code, "name": g.name, "gene_score": getattr(g, "total_score", None)} for g in qualified],
-            data_status=l1_status, data_reason=l1_reason,
+            data_status=l1_status,
+            data_reason=l1_reason,
         )
 
         # L2 战法匹配（passed 携 best_strategy + confidence_value 供 R19 反筛 / R22 合成胜率）
@@ -114,19 +121,25 @@ class LimitupScreenerFactor:
             sm = match_map.get(g.code)
             if sm:
                 best_signal = sm.matched_strategies[0] if sm.matched_strategies else None
-                l2_passed.append({
-                    "code": g.code, "name": g.name,
-                    "best_strategy": sm.best_strategy,
-                    "confidence": sm.confidence,  # 高/中/低 文案
-                    "confidence_value": float(best_signal.confidence) if best_signal else 0.0,  # 合成胜率用
-                    "reasons": sm.reasons[:3],
-                })
+                l2_passed.append(
+                    {
+                        "code": g.code,
+                        "name": g.name,
+                        "best_strategy": sm.best_strategy,
+                        "confidence": sm.confidence,  # 高/中/低 文案
+                        "confidence_value": float(best_signal.confidence) if best_signal else 0.0,  # 合成胜率用
+                        "reasons": sm.reasons[:3],
+                    }
+                )
             else:
                 l2_filtered.append(FilterRecord(code=g.code, name=g.name, reason="未匹配任何战法"))
 
         l2 = FunnelLayer(
-            layer_id="LS-2", name="战法匹配", as_of=datetime.now(),
-            input_count=len(qualified), output_count=len(l2_passed),
+            layer_id="LS-2",
+            name="战法匹配",
+            as_of=datetime.now(),
+            input_count=len(qualified),
+            output_count=len(l2_passed),
             filtered_out=l2_filtered,
             output_codes=[p["code"] for p in l2_passed],
             conditions=["8大战法自动匹配", "取置信度最高"],
@@ -139,19 +152,25 @@ class LimitupScreenerFactor:
         for p in l2_passed:
             ps = ps_by_code.get(p["code"])
             if ps:
-                l3_passed.append({
-                    "code": ps.code, "name": ps.name,
-                    "suggested_pct": ps.suggested_pct,
-                    "confidence": ps.confidence,
-                    "matched_strategy": ps.matched_strategy,
-                    "reasons": ps.reasons[:3],
-                })
+                l3_passed.append(
+                    {
+                        "code": ps.code,
+                        "name": ps.name,
+                        "suggested_pct": ps.suggested_pct,
+                        "confidence": ps.confidence,
+                        "matched_strategy": ps.matched_strategy,
+                        "reasons": ps.reasons[:3],
+                    }
+                )
             else:
                 l3_filtered.append(FilterRecord(code=p["code"], name=p["name"], reason="未给仓位建议"))
 
         l3 = FunnelLayer(
-            layer_id="LS-3", name="仓位建议", as_of=datetime.now(),
-            input_count=len(l2_passed), output_count=len(l3_passed),
+            layer_id="LS-3",
+            name="仓位建议",
+            as_of=datetime.now(),
+            input_count=len(l2_passed),
+            output_count=len(l3_passed),
             filtered_out=l3_filtered,
             output_codes=[p["code"] for p in l3_passed],
             conditions=["仓位建议（PositionAdvisor）"],

@@ -9,6 +9,7 @@ from realtime_workflow import PositionAdjustment
 @dataclass
 class PositionLimit:
     """个股仓位限制"""
+
     max_single_position: float = 0.3
     max_sector_position: float = 0.6
     min_cash_reserve: float = 0.2
@@ -17,6 +18,7 @@ class PositionLimit:
 @dataclass
 class PositionSnapshot:
     """当前仓位快照"""
+
     code: str
     name: str
     weight: float

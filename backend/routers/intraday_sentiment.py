@@ -18,6 +18,7 @@ S093：采样快照透传 zb_count/ladder/dt_count（C8 规则要用 zt_count/zb
   采样间隔不低于 5 分钟（黄金窗口最低频即 5min）
 - CC4 私有数据隔离：持仓联动只读 workflow_state_repo，不输出个股推荐
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -40,6 +41,7 @@ router = APIRouter(tags=["intraday-sentiment"])
 # T10：采样器 ring buffer + asyncio task
 # ============================================================================
 
+
 class _IntradaySampler:
     """盘中情绪采样器：内存 ring buffer + 定时采样。
 
@@ -48,9 +50,7 @@ class _IntradaySampler:
     """
 
     def __init__(self) -> None:
-        self.buffer: deque[dict[str, Any]] = deque(
-            maxlen=default_config.INTRADAY_RING_BUFFER_SIZE
-        )
+        self.buffer: deque[dict[str, Any]] = deque(maxlen=default_config.INTRADAY_RING_BUFFER_SIZE)
         self._task: asyncio.Task | None = None
         self._last_sample_time: str | None = None  # 防同分钟重复采样
 
@@ -65,9 +65,7 @@ class _IntradaySampler:
         for start, end, interval_min in default_config.INTRADAY_SAMPLE_INTERVALS:
             if start <= hh_mm < end:
                 # 计算距下次采样点的秒数：当前分钟在窗口内的偏移
-                start_dt = datetime.strptime(
-                    f"{now.strftime('%Y-%m-%d')} {start}", "%Y-%m-%d %H:%M"
-                )
+                start_dt = datetime.strptime(f"{now.strftime('%Y-%m-%d')} {start}", "%Y-%m-%d %H:%M")
                 elapsed = (now - start_dt).total_seconds()
                 interval_sec = interval_min * 60
                 # 已过的完整间隔数
@@ -98,10 +96,15 @@ class _IntradaySampler:
             snapshot = {
                 "date": self.today,
                 "time": time_str,
-                "zt_count": None, "seal_rate": None,
-                "break_rate": None, "ad_ratio": None,
-                "zb_count": None, "dt_count": None, "ladder": None,
-                "score": None, "trend": self._last_trend(),
+                "zt_count": None,
+                "seal_rate": None,
+                "break_rate": None,
+                "ad_ratio": None,
+                "zb_count": None,
+                "dt_count": None,
+                "ladder": None,
+                "score": None,
+                "trend": self._last_trend(),
                 "t1_baseline": self._t1_baseline(),
             }
             self.buffer.append(snapshot)
@@ -121,8 +124,8 @@ class _IntradaySampler:
         lianban = float(emo.get("lianban_count") or 0)
         ad_ratio = lianban / max(dt_count, 1) if dt_count > 0 else lianban
         # S093 R11：透传 zb_count/ladder/dt_count 供 C8/C9 规则用（不臆造，取不到标 None）
-        zb_count = emo.get("zb_count")   # int or None（THS 降级时 None）
-        ladder = emo.get("ladder")       # list[dict] or None（连板梯队）
+        zb_count = emo.get("zb_count")  # int or None（THS 降级时 None）
+        ladder = emo.get("ladder")  # list[dict] or None（连板梯队）
         dt_count_raw = emo.get("dt_count")  # int or None（原始值，保留 None 语义）
 
         score = _compute_score(zt_count, seal_rate, break_rate, ad_ratio)
@@ -138,9 +141,9 @@ class _IntradaySampler:
             "seal_rate": seal_rate,
             "break_rate": break_rate,
             "ad_ratio": round(ad_ratio, 2),
-            "zb_count": zb_count,        # S093 透传：炸板数（C8 规则用）
-            "dt_count": dt_count_raw,   # S093 透传：跌停数（保留 None 语义）
-            "ladder": ladder,            # S093 透传：连板梯队（C9 规则用）
+            "zb_count": zb_count,  # S093 透传：炸板数（C8 规则用）
+            "dt_count": dt_count_raw,  # S093 透传：跌停数（保留 None 语义）
+            "ladder": ladder,  # S093 透传：连板梯队（C9 规则用）
             "score": score,
             "trend": trend,
             "t1_baseline": t1_baseline,
@@ -150,7 +153,11 @@ class _IntradaySampler:
         save_intraday(snapshot)
         logger.info(
             "[intraday] 采样 %s %s score=%.1f trend=%s zone=%s",
-            self.today, time_str, score, trend, zone,
+            self.today,
+            time_str,
+            score,
+            trend,
+            zone,
         )
         return snapshot
 
@@ -176,11 +183,13 @@ class _IntradaySampler:
         """
         try:
             from sentiment_context import build_context  # noqa: PLC0415
+
             ctx = build_context(self.today)
             if ctx.sti_score is None:
                 logger.warning(
                     "[intraday] T-1 baseline 为 None（data_status=%s source_date=%s）",
-                    ctx.data_status, ctx.source_date,
+                    ctx.data_status,
+                    ctx.source_date,
                 )
             return ctx.sti_score
         except Exception as exc:
@@ -200,6 +209,7 @@ class _IntradaySampler:
     async def _loop(self) -> None:
         """采样主循环：交易时段按黄金窗口采样，非交易时段空转。"""
         from vr_paths import is_trading_day  # noqa: PLC0415
+
         while True:
             try:
                 now = datetime.now()
@@ -251,6 +261,7 @@ _sampler = _IntradaySampler()
 # T11：盘中评分模型（4 维度固定阈值）
 # ============================================================================
 
+
 def _score_dimension(value: float, thresholds: tuple[float, float, float]) -> float:
     """固定阈值映射 → 0-100 分。
 
@@ -267,9 +278,7 @@ def _score_dimension(value: float, thresholds: tuple[float, float, float]) -> fl
     return 60.0
 
 
-def _compute_score(
-    zt_count: float, seal_rate: float | None, break_rate: float | None, ad_ratio: float
-) -> float:
+def _compute_score(zt_count: float, seal_rate: float | None, break_rate: float | None, ad_ratio: float) -> float:
     """4 维度固定阈值加权平均（spec §2.4）。
 
     权重：涨停家数 0.4 / 封板率 0.2 / 炸板率 0.2 / 涨跌比 0.1。
@@ -282,7 +291,11 @@ def _compute_score(
     zt_score = _score_dimension(zt_count, (80, 50, 30))
     seal_score = _score_dimension(seal_rate * 100, (70, 50, 0)) if seal_rate is not None else 50.0  # 0-1→0-100
     # 炸板率反向：<15%=100，15-30%=60，>30%=20；None→neutral 50（非 100 假看涨）
-    break_score = 100.0 if break_rate is not None and break_rate < 0.15 else (60.0 if break_rate is not None and break_rate < 0.30 else (20.0 if break_rate is not None else 50.0))
+    break_score = (
+        100.0
+        if break_rate is not None and break_rate < 0.15
+        else (60.0 if break_rate is not None and break_rate < 0.30 else (20.0 if break_rate is not None else 50.0))
+    )
     ad_score = _score_dimension(ad_ratio, (2, 0.7, 0))
 
     weights = {"zt": 0.4, "seal": 0.2, "break": 0.2, "ad": 0.1}
@@ -322,6 +335,7 @@ def _compute_zone(score: float | None, t1_baseline: float | None) -> str:
 # ============================================================================
 # T12：Layer 1 端点（分数+色带）
 # ============================================================================
+
 
 @router.get("/api/intraday/sentiment/latest")
 async def get_intraday_latest() -> dict[str, Any]:
@@ -364,6 +378,7 @@ async def trigger_snapshot() -> dict[str, Any]:
 # ============================================================================
 # T13：Layer 2 端点（持仓×情绪联动）
 # ============================================================================
+
 
 @router.get("/api/intraday/sentiment/holdings")
 async def get_intraday_holdings() -> dict[str, Any]:
@@ -415,7 +430,7 @@ async def get_intraday_holdings() -> dict[str, Any]:
                 "current_zone": current_zone,
                 # S206 T2: dual_pressure 诚实降级——三态（unavailable/no_pressure/pressure）。
                 # 原 boolean `seal_status == "炸板未回封" and current_zone == "red"` 恒 False
-                #（_judge_seal_status 结构性无法返回"炸板未回封"，:453 注释自承降级）。
+                # （_judge_seal_status 结构性无法返回"炸板未回封"，:453 注释自承降级）。
                 # 字段保留 hook 待 P2 5min 分时重建（不删字段结构）。
                 "dual_pressure": _compute_dual_pressure(seal_status, code, current_zone),
             }
@@ -432,9 +447,7 @@ async def get_intraday_holdings() -> dict[str, Any]:
                 "current_zone": current_zone,
                 # S206 T2 deprecated: dual_pressure_count——当前恒 0
                 # （"pressure" 不可达）。P2 TODO: 5min 重建后恢复计数。
-                "dual_pressure_count": sum(
-                    1 for r in rows if r["dual_pressure"] == "pressure"
-                ),
+                "dual_pressure_count": sum(1 for r in rows if r["dual_pressure"] == "pressure"),
             }
         }
     except Exception as exc:  # noqa: BLE001
@@ -469,9 +482,7 @@ def _is_seal_status_degraded(seal_status: str, code: str) -> bool:
     return True  # 未知状态，保守降级
 
 
-def _compute_dual_pressure(
-    seal_status: str, code: str, current_zone: str
-) -> str:
+def _compute_dual_pressure(seal_status: str, code: str, current_zone: str) -> str:
     """计算双重压力状态（S206 T2 诚实降级版）。
 
     返回值（三态，非 boolean）：
@@ -535,6 +546,7 @@ def _pnl_pct(entry: float | None, current: float | None) -> float | None:
 # T14：Layer 3 端点（条件场景推演）
 # ============================================================================
 
+
 @router.get("/api/intraday/sentiment/scenarios")
 async def get_intraday_scenarios() -> dict[str, Any]:
     """Layer 3：条件场景推演 if-then + 历史参照。
@@ -578,41 +590,53 @@ def _build_scenarios(score: float, trend: str, zone: str) -> list[dict[str, Any]
     scenarios: list[dict[str, Any]] = []
 
     if zone == "red" and trend == "down":
-        scenarios.append({
-            "condition": "情绪显著背离 T-1 且持续下行",
-            "impact": "市场可能进入退潮，持仓压力增大",
-            "suggestion": "提高警觉，审视持仓是否承压（看 Layer 2 双重压力行）",
-        })
+        scenarios.append(
+            {
+                "condition": "情绪显著背离 T-1 且持续下行",
+                "impact": "市场可能进入退潮，持仓压力增大",
+                "suggestion": "提高警觉，审视持仓是否承压（看 Layer 2 双重压力行）",
+            }
+        )
     elif zone == "red" and trend == "up":
-        scenarios.append({
-            "condition": "情绪显著背离 T-1 但出现反弹",
-            "impact": "可能触底反弹或技术性反抽，不确定性高",
-            "suggestion": "不急加仓，等趋势确认（连续 2 个 snapshot 上行）",
-        })
+        scenarios.append(
+            {
+                "condition": "情绪显著背离 T-1 但出现反弹",
+                "impact": "可能触底反弹或技术性反抽，不确定性高",
+                "suggestion": "不急加仓，等趋势确认（连续 2 个 snapshot 上行）",
+            }
+        )
     elif zone == "yellow":
-        scenarios.append({
-            "condition": "情绪开始走偏 T-1 基线",
-            "impact": "市场分歧加大，板块轮动可能加速",
-            "suggestion": "关注持仓封板稳定性，非双重压力行可观察",
-        })
+        scenarios.append(
+            {
+                "condition": "情绪开始走偏 T-1 基线",
+                "impact": "市场分歧加大，板块轮动可能加速",
+                "suggestion": "关注持仓封板稳定性，非双重压力行可观察",
+            }
+        )
     elif zone == "green" and trend == "up":
-        scenarios.append({
-            "condition": "情绪与 T-1 一致且持续上行",
-            "impact": "T-1 硬标准（晴天/阴天）延续，战法适配度不变",
-            "suggestion": "按 T-1 战法开关执行，持仓可继续观察",
-        })
+        scenarios.append(
+            {
+                "condition": "情绪与 T-1 一致且持续上行",
+                "impact": "T-1 硬标准（晴天/阴天）延续，战法适配度不变",
+                "suggestion": "按 T-1 战法开关执行，持仓可继续观察",
+            }
+        )
     elif zone == "green" and trend == "down":
-        scenarios.append({
-            "condition": "情绪与 T-1 一致但开始回落",
-            "impact": "T-1 硬标准仍有效，但动能在衰减",
-            "suggestion": "不急动作，观察是否跌出绿色区间",
-        })
+        scenarios.append(
+            {
+                "condition": "情绪与 T-1 一致但开始回落",
+                "impact": "T-1 硬标准仍有效，但动能在衰减",
+                "suggestion": "不急动作，观察是否跌出绿色区间",
+            }
+        )
     else:
-        scenarios.append({
-            "condition": "情绪平稳运行",
-            "impact": "T-1 硬标准主导，盘中无异常信号",
-            "suggestion": "按既定计划执行",
-        })
+        scenarios.append(
+            {
+                "condition": "情绪平稳运行",
+                "impact": "T-1 硬标准主导，盘中无异常信号",
+                "suggestion": "按既定计划执行",
+            }
+        )
 
     return scenarios
 
@@ -624,10 +648,7 @@ def _build_history_reference(trend: str, zone: str) -> dict[str, Any]:
     """
     recent = load_recent_intraday_scores(days=20)
     # 按 trend+zone 过滤类似走势
-    similar = [
-        r for r in recent
-        if r.get("trend") == trend and r.get("score") is not None
-    ]
+    similar = [r for r in recent if r.get("trend") == trend and r.get("score") is not None]
     # 统计后续走势（下一个 snapshot 的 trend）
     follow_up: dict[str, int] = {"up": 0, "flat": 0, "down": 0}
     for i, r in enumerate(similar):
@@ -642,8 +663,7 @@ def _build_history_reference(trend: str, zone: str) -> dict[str, Any]:
         "similar_count": len(similar),
         "follow_up_distribution": follow_up,
         "note": (
-            f"基于 sti_intraday 近 20 日 {len(similar)} 条类似走势（trend={trend}），"
-            f"有效后续样本 {total} 条"
+            f"基于 sti_intraday 近 20 日 {len(similar)} 条类似走势（trend={trend}），有效后续样本 {total} 条"
             if total > 0
             else "样本不足（0 日），历史参照待积累，不编准确率"
         ),
@@ -653,6 +673,7 @@ def _build_history_reference(trend: str, zone: str) -> dict[str, Any]:
 # ============================================================================
 # T15：Layer 4 端点（T+1 预判）
 # ============================================================================
+
 
 @router.get("/api/intraday/sentiment/t1-projection")
 async def get_t1_projection() -> dict[str, Any]:
@@ -702,6 +723,7 @@ async def get_t1_projection() -> dict[str, Any]:
         # S206 T12: 修 snap 原地变异（原 snap["projected_t1"] 污染 ring buffer）。
         # deepcopy 后写投影，不污染 _sampler.latest() 的原始快照。
         import copy  # noqa: PLC0415
+
         snap_copy = copy.deepcopy(snap)
         snap_copy["projected_t1_score"] = scenario_hold["projected_t1_score"]
         snap_copy["projected_t1_weather"] = scenario_hold["projected_t1_weather"]
@@ -734,6 +756,7 @@ def _score_to_weather(score: float) -> str:
 # ============================================================================
 # 生命周期：app startup/shutdown 挂钩
 # ============================================================================
+
 
 async def start_sampler() -> None:
     """app startup 调用：启动盘中采样 task。"""

@@ -36,6 +36,7 @@
   衰减后 size_mult 上限 0.5（保留风控记忆，半仓运行，非完全恢复）。
   原始 peak 数据保留在 trade_journal，衰减仅在计算层应用。
 """
+
 from __future__ import annotations
 
 import logging
@@ -47,8 +48,8 @@ from engine.trade_journal import TradeJournal, DEFAULT_INITIAL_CAPITAL
 _logger = logging.getLogger(__name__)
 
 #: drawdown 阈值（相对 initial_capital 的百分比）。
-DD_THRESHOLD_HALVE: float = 10.0   # DD_pct > 10% → size_multiplier = 0.5
-DD_THRESHOLD_STOP: float = 15.0    # DD_pct > 15% → size_multiplier = 0.0（全停）
+DD_THRESHOLD_HALVE: float = 10.0  # DD_pct > 10% → size_multiplier = 0.5
+DD_THRESHOLD_STOP: float = 15.0  # DD_pct > 15% → size_multiplier = 0.0（全停）
 
 #: underpowered gate 阈值（H4）。
 MIN_DAYS_FOR_ENFORCE: int = 60
@@ -60,15 +61,15 @@ BEAR_MARKET_FLOOR_DD_THRESHOLD: float = 25.0
 ARM_FLOOR: str = "floor"
 
 #: H7 peak 渐进衰减阈值（v9.00 用户审批后实施）。
-PEAK_DECAY_TIER1_DD: float = 30.0       # DD>30% 触发 tier1
-PEAK_DECAY_TIER1_DAYS: int = 90         # 且 days>90
-PEAK_DECAY_TIER1_FACTOR: float = 0.7    # peak×0.7
-PEAK_DECAY_TIER2_DD: float = 50.0       # DD>50% 触发 tier2
-PEAK_DECAY_TIER2_DAYS: int = 180        # 且 days>180
-PEAK_DECAY_TIER2_FACTOR: float = 0.5    # peak×0.5
-PEAK_DECAY_TIER3_DD: float = 70.0       # DD>70% 或 days>365 触发 tier3
+PEAK_DECAY_TIER1_DD: float = 30.0  # DD>30% 触发 tier1
+PEAK_DECAY_TIER1_DAYS: int = 90  # 且 days>90
+PEAK_DECAY_TIER1_FACTOR: float = 0.7  # peak×0.7
+PEAK_DECAY_TIER2_DD: float = 50.0  # DD>50% 触发 tier2
+PEAK_DECAY_TIER2_DAYS: int = 180  # 且 days>180
+PEAK_DECAY_TIER2_FACTOR: float = 0.5  # peak×0.5
+PEAK_DECAY_TIER3_DD: float = 70.0  # DD>70% 或 days>365 触发 tier3
 PEAK_DECAY_TIER3_DAYS: int = 365
-PEAK_DECAY_TIER3_FACTOR: float = 0.3    # peak×0.3
+PEAK_DECAY_TIER3_FACTOR: float = 0.3  # peak×0.3
 #: 衰减后 size_mult 上限（保留风控记忆，半仓运行）。
 PEAK_DECAY_SIZE_CAP: float = 0.5
 
@@ -96,8 +97,8 @@ class DrawdownResult:
     status: str
     days_tracked: int
     is_bear_market: bool
-    peak_original: float = 0.0       # H7：原始 peak（未衰减）
-    peak_decay_factor: float = 1.0    # H7：衰减系数（1.0=未衰减）
+    peak_original: float = 0.0  # H7：原始 peak（未衰减）
+    peak_decay_factor: float = 1.0  # H7：衰减系数（1.0=未衰减）
 
 
 class DrawdownBreaker:
@@ -108,7 +109,8 @@ class DrawdownBreaker:
     """
 
     def __init__(
-        self, journal: TradeJournal | None = None,
+        self,
+        journal: TradeJournal | None = None,
         initial_capital: float = DEFAULT_INITIAL_CAPITAL,
     ) -> None:
         self._journal = journal or TradeJournal()
@@ -133,10 +135,7 @@ class DrawdownBreaker:
         peak_original = self._initial_capital + peak_pnl
 
         # ── H7 peak 渐进衰减 ──────────────────────────────────────────────
-        raw_drawdown_pct = (
-            (peak_original - equity) / self._initial_capital * 100
-            if self._initial_capital > 0 else 0.0
-        )
+        raw_drawdown_pct = (peak_original - equity) / self._initial_capital * 100 if self._initial_capital > 0 else 0.0
         decay_factor = 1.0
         if days_tracked >= MIN_DAYS_FOR_ENFORCE and raw_drawdown_pct > DD_THRESHOLD_STOP:
             # 选择衰减 tier（取满足条件的最严格 tier）
@@ -152,10 +151,7 @@ class DrawdownBreaker:
         # ── H7 end ────────────────────────────────────────────────────────
 
         drawdown_cny = peak_equity - equity
-        drawdown_pct = (
-            drawdown_cny / self._initial_capital * 100
-            if self._initial_capital > 0 else 0.0
-        )
+        drawdown_pct = drawdown_cny / self._initial_capital * 100 if self._initial_capital > 0 else 0.0
 
         is_bear = self._detect_bear_market()
 
@@ -224,7 +220,9 @@ class DrawdownBreaker:
         return self.size_multiplier(arm=None)
 
     def final_size(
-        self, arm: str, arm_size: float,
+        self,
+        arm: str,
+        arm_size: float,
         lift_multiplier: float = 1.0,
     ) -> float:
         """H5 三层乘积：final_size = arm_size × portfolio_multiplier × lift_multiplier。
@@ -242,6 +240,7 @@ class DrawdownBreaker:
         """
         try:
             from config import CSI300_BEAR_THRESHOLD  # noqa: PLC0415
+
             return bool(CSI300_BEAR_THRESHOLD)
         except ImportError:
             pass

@@ -10,6 +10,7 @@ bid_ask_pressure → save_ofi（intraday_accumulation_store，独立 store 不�
 
 不喂 trade_journal：本模块不 import trade_journal（grep 确认），独立 intraday_accumulation_store。
 """
+
 from __future__ import annotations
 
 import json
@@ -23,7 +24,10 @@ _logger = logging.getLogger(__name__)
 
 
 def collect_ofi_for_codes(
-    codes: list[str], date: str, ts: str, regime: str | None = None,
+    codes: list[str],
+    date: str,
+    ts: str,
+    regime: str | None = None,
 ) -> dict[str, Any]:
     """批量收集 OFI 五档快照 → save_ofi（intraday_accumulation_store）。
 
@@ -35,6 +39,7 @@ def collect_ofi_for_codes(
         return {"n_codes": 0, "n_collected": 0, "n_skipped": 0}
     try:
         from data.sources.tencent import fetch_raw  # noqa: PLC0415
+
         raw = fetch_raw(codes)
     except Exception as e:  # noqa: BLE001
         _logger.warning("collect_ofi: tencent.fetch_raw 失败: %s", e)
@@ -61,8 +66,9 @@ def collect_ofi_for_codes(
         # tencent 无 seal_amount（东财 zt_pool 有），暂 None；涨停退化是未来 refinement
         seal_amount = item.get("seal_amount")
         try:
-            save_ofi(date, ts, code, ofi, ofi_abs, pressure,
-                      json.dumps(buy_vols), json.dumps(sell_vols), seal_amount, regime)
+            save_ofi(
+                date, ts, code, ofi, ofi_abs, pressure, json.dumps(buy_vols), json.dumps(sell_vols), seal_amount, regime
+            )
             n_collected += 1
         except Exception as e:  # noqa: BLE001
             _logger.warning("collect_ofi: save_ofi %s 失败: %s", code, e)

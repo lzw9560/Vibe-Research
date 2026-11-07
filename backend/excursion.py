@@ -29,6 +29,7 @@ mae_certain 是"最不坏"的那一端（可能是正数——中间那几天从
 
 S166 fresh-impl（design-agnostic）。_compute MFE/MAE 算法参考自 cb54a96 历史，非整文件复活。
 """
+
 from __future__ import annotations
 
 import json
@@ -130,8 +131,7 @@ def bars(code: str, start: str, end: str) -> Optional[list[dict]]:
         if not d or not (start <= str(d) <= end):
             continue
         try:
-            rows.append({"date": str(d), "high": float(b["high"]),
-                         "low": float(b["low"]), "close": float(b["close"])})
+            rows.append({"date": str(d), "high": float(b["high"]), "low": float(b["low"]), "close": float(b["close"])})
         except (KeyError, TypeError, ValueError):
             continue  # 坏 bar（缺 high/low/close 或非数值）→ 跳过，不 crash excursion
     if not rows:
@@ -152,8 +152,7 @@ def for_trade(trade: dict) -> dict:
     buy, sell = st.get("first_buy"), st.get("last_sell")
     realized = st.get("realized_pct")
     if not (cost and buy and sell and realized is not None):
-        return {"available": False,
-                "reason": "需要已平仓 + 有成交明细（要用加权成本与买卖日期）"}
+        return {"available": False, "reason": "需要已平仓 + 有成交明细（要用加权成本与买卖日期）"}
 
     rows = bars(trade.get("code", ""), buy, sell)
     if not rows:
@@ -169,8 +168,7 @@ def _compute(trade: dict, rows: list[dict]) -> dict:
     buy, sell = st.get("first_buy"), st.get("last_sell")
     realized = st.get("realized_pct")
     if not (cost and buy and sell and realized is not None):
-        return {"available": False,
-                "reason": "需要已平仓 + 有成交明细（要用加权成本与买卖日期）"}
+        return {"available": False, "reason": "需要已平仓 + 有成交明细（要用加权成本与买卖日期）"}
 
     highs = [r["high"] for r in rows]
     lows = [r["low"] for r in rows]
@@ -186,28 +184,39 @@ def _compute(trade: dict, rows: list[dict]) -> dict:
     same_day = buy == sell
     out = {
         "available": True,
-        "code": trade.get("code"), "name": trade.get("name"),
-        "date": buy, "exit_date": sell,
+        "code": trade.get("code"),
+        "name": trade.get("name"),
+        "date": buy,
+        "exit_date": sell,
         "realized_pct": round(float(realized), 2),
-        "mfe_pct": mfe, "mae_pct": mae,
-        "mfe_certain": mfe_certain, "mae_certain": mae_certain,
-        "certain_note": (None if mae_certain is None else
-                         ("中间完整交易日里从未浮亏（最差时仍 "
-                          f"{mae_certain:+.2f}%）" if mae_certain > 0 else
-                          f"中间完整交易日里确定浮亏过 {mae_certain:+.2f}%")),
-        "bars": len(rows), "bars_inner": len(inner),
+        "mfe_pct": mfe,
+        "mae_pct": mae,
+        "mfe_certain": mfe_certain,
+        "mae_certain": mae_certain,
+        "certain_note": (
+            None
+            if mae_certain is None
+            else (
+                f"中间完整交易日里从未浮亏（最差时仍 {mae_certain:+.2f}%）"
+                if mae_certain > 0
+                else f"中间完整交易日里确定浮亏过 {mae_certain:+.2f}%"
+            )
+        ),
+        "bars": len(rows),
+        "bars_inner": len(inner),
         "same_day": same_day,
-        "precision": "上界（同日进出，日线分不清高点在买入前还是后）" if same_day
-                     else ("买卖日两头存疑，中间完整交易日可靠" if inner
-                           else "上界（相邻两日，无完整中间交易日）"),
+        "precision": "上界（同日进出，日线分不清高点在买入前还是后）"
+        if same_day
+        else ("买卖日两头存疑，中间完整交易日可靠" if inner else "上界（相邻两日，无完整中间交易日）"),
     }
     out["give_back_pct"] = round(mfe - out["realized_pct"], 2)
-    out["capture_rate"] = (round(out["realized_pct"] / mfe, 3)
-                           if mfe >= _MEANINGFUL_MFE else None)
+    out["capture_rate"] = round(out["realized_pct"] / mfe, 3) if mfe >= _MEANINGFUL_MFE else None
     cr = out["capture_rate"]
     out["capture_note"] = (
-        "这段涨过，但最后是亏损离场 —— 比「没吃到」更差的一档" if (cr is not None and cr < 0)
-        else ("几乎没吃到这段行情" if (cr is not None and cr < _LOW_CAPTURE_HINT) else None))
+        "这段涨过，但最后是亏损离场 —— 比「没吃到」更差的一档"
+        if (cr is not None and cr < 0)
+        else ("几乎没吃到这段行情" if (cr is not None and cr < _LOW_CAPTURE_HINT) else None)
+    )
     return out
 
 
@@ -232,18 +241,19 @@ def summary(limit: int = 300) -> dict:
         else:
             failed += 1
     if not items:
-        return {"available": False, "failed": failed,
-                "reason": "还没有能算 MFE/MAE 的交易（需要已平仓 + 成交明细 + 能取到行情）"}
+        return {
+            "available": False,
+            "failed": failed,
+            "reason": "还没有能算 MFE/MAE 的交易（需要已平仓 + 成交明细 + 能取到行情）",
+        }
 
     caps = [r["capture_rate"] for r in items if r.get("capture_rate") is not None]
     gives = [r["give_back_pct"] for r in items]
     maes = [r["mae_pct"] for r in items]
     endured = [r for r in items if r["realized_pct"] > 0 and r["mae_pct"] <= -5]
-    bad_entry = [r for r in items
-                 if r["realized_pct"] < 0 and r["mfe_pct"] < _MEANINGFUL_MFE]
+    bad_entry = [r for r in items if r["realized_pct"] < 0 and r["mfe_pct"] < _MEANINGFUL_MFE]
     same_day_n = sum(1 for r in items if r["same_day"])
-    lost_with_move = sum(1 for r in items
-                         if r.get("capture_rate") is not None and r["capture_rate"] < 0)
+    lost_with_move = sum(1 for r in items if r.get("capture_rate") is not None and r["capture_rate"] < 0)
     return {
         "available": True,
         "trades": len(items),
@@ -260,13 +270,19 @@ def summary(limit: int = 300) -> dict:
         "capture_note": (
             f"其中 {lost_with_move} 笔**捕获率为负** —— 那段确实涨过，但最后是亏损离场，"
             "比「没吃到」更差的一档（所以中位数可能是负值，不是算错了）。"
-            if lost_with_move else None),
+            if lost_with_move
+            else None
+        ),
         "items": sorted(items, key=lambda r: r["date"], reverse=True),
-        "bias_note": ("MFE 取的是日线高点，含「买入之前」的那部分 → **捕获率被系统性低估**。"
-                      f"其中 {same_day_n} 笔是同日进出，整段窗口都只能给上界。"
-                      "真实 MFE 落在每笔的 mfe_certain（确定赚到过）与 mfe_pct（上界）之间。"),
-        "caveat": ("日线看不出最高点发生在盘中买入之前还是之后。跨日持有时，"
-                   "中间那些完整交易日的高低点一定在持仓期内、那部分可靠。"),
+        "bias_note": (
+            "MFE 取的是日线高点，含「买入之前」的那部分 → **捕获率被系统性低估**。"
+            f"其中 {same_day_n} 笔是同日进出，整段窗口都只能给上界。"
+            "真实 MFE 落在每笔的 mfe_certain（确定赚到过）与 mfe_pct（上界）之间。"
+        ),
+        "caveat": (
+            "日线看不出最高点发生在盘中买入之前还是之后。跨日持有时，"
+            "中间那些完整交易日的高低点一定在持仓期内、那部分可靠。"
+        ),
     }
 
 
@@ -279,16 +295,20 @@ def render(rep: dict) -> str:
         return ""
     lines = [f"· MFE/MAE（{rep['trades']} 笔已平仓）："]
     if rep.get("median_capture_rate") is not None:
-        lines.append(f"  - 捕获率中位数 {rep['median_capture_rate']:.0%}"
-                     f"（{rep['capture_samples']} 笔有讨论价值的行情）")
-    lines.append(f"  - 盈利回吐中位数 {rep['median_give_back']:+.1f}%"
-                 f"，最大浮亏中位数 {rep['median_mae']:+.1f}%")
+        lines.append(
+            f"  - 捕获率中位数 {rep['median_capture_rate']:.0%}（{rep['capture_samples']} 笔有讨论价值的行情）"
+        )
+    lines.append(f"  - 盈利回吐中位数 {rep['median_give_back']:+.1f}%，最大浮亏中位数 {rep['median_mae']:+.1f}%")
     if not rep.get("enough_samples"):
         lines.append(f"  ⚠️ 只有 {rep['trades']} 笔，样本太少，别下结论")
     return "\n".join(lines)
 
 
 __all__ = [
-    "read_cached_bars", "for_trade_cached_only", "bars", "for_trade",
-    "summary", "render",
+    "read_cached_bars",
+    "for_trade_cached_only",
+    "bars",
+    "for_trade",
+    "summary",
+    "render",
 ]

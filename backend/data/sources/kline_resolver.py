@@ -30,6 +30,7 @@ hithink_src.fetch_kline 已有 _http_get envelope 转译 + 有界重试 + 熔断
 strategies/pattern_scan.py:170-199，不依赖 kline 返 ma 字段），60 bars 够
 （:177 len<20 check）。
 """
+
 from __future__ import annotations
 
 import logging
@@ -48,6 +49,7 @@ def _baostock(code: str) -> list[dict]:
     """
     from datetime import datetime, timedelta
     from data.sources.baostock_src import fetch_daily_bars
+
     end = datetime.now().strftime("%Y-%m-%d")
     start = (datetime.now() - timedelta(days=120)).strftime("%Y-%m-%d")  # 120 天容纳周末取 60 交易日
     bars_raw = fetch_daily_bars(code, start, end)
@@ -57,14 +59,20 @@ def _baostock(code: str) -> list[dict]:
     for r in bars_raw[-60:]:
         vol = r.get("volume")
         amt = r.get("amount")
-        bars.append({
-            "date": r.get("date"),
-            "open": r.get("open"), "close": r.get("close"),
-            "high": r.get("high"), "low": r.get("low"),
-            "volume": int(vol) if vol else None,
-            "amount": float(amt) if amt else None,
-            "ma5": None, "ma10": None, "ma20": None,
-        })
+        bars.append(
+            {
+                "date": r.get("date"),
+                "open": r.get("open"),
+                "close": r.get("close"),
+                "high": r.get("high"),
+                "low": r.get("low"),
+                "volume": int(vol) if vol else None,
+                "amount": float(amt) if amt else None,
+                "ma5": None,
+                "ma10": None,
+                "ma20": None,
+            }
+        )
     return bars
 
 
@@ -92,16 +100,15 @@ def _eastmoney(code: str) -> list[dict]:
         "secid": secid,
         "fields1": "f1,f2,f3",
         "fields2": "f51,f52,f53,f54,f55,f56",  # date,open,close,high,low,volume
-        "klt": "101",   # 日K
-        "fqt": "1",     # 前复权（对齐 baostock adjustflag=2 qfq）
+        "klt": "101",  # 日K
+        "fqt": "1",  # 前复权（对齐 baostock adjustflag=2 qfq）
         "end": datetime.now().date().strftime("%Y%m%d"),
-        "lmt": "60",    # 最近 60 条（对齐 baostock 60 bars）
+        "lmt": "60",  # 最近 60 条（对齐 baostock 60 bars）
         "ut": _ZTB_UT,
     }
     headers = {"Referer": "https://quote.eastmoney.com/"}
     try:
-        r = em_get("https://push2his.eastmoney.com/api/qt/stock/kline/get",
-                   params=params, headers=headers, timeout=8)
+        r = em_get("https://push2his.eastmoney.com/api/qt/stock/kline/get", params=params, headers=headers, timeout=8)
         data = r.json()
     except Exception as e:  # noqa: BLE001 — em_get 熔断 OPEN raise / 请求异常 / JSON 失败
         log.warning("kline eastmoney em_get failed for %s: %s", code, repr(e)[:200])
@@ -123,19 +130,27 @@ def _eastmoney(code: str) -> list[dict]:
         if len(parts) < 6:
             continue  # 坏行跳过
         # f51-f56: date,open,close,high,low,volume
-        o = _to_float(parts[1]); c = _to_float(parts[2])
-        h = _to_float(parts[3]); lo = _to_float(parts[4])
+        o = _to_float(parts[1])
+        c = _to_float(parts[2])
+        h = _to_float(parts[3])
+        lo = _to_float(parts[4])
         v = _to_float(parts[5])
         if any(x is None for x in (o, c, h, lo)):
             continue  # 关键数值缺失行跳过
-        bars.append({
-            "date": parts[0],
-            "open": o, "close": c,
-            "high": h, "low": lo,
-            "volume": int(v) if v else None,
-            "amount": None,  # 东财 kline/get f56 后无 amount 字段（f57 是 amount 但未取）
-            "ma5": None, "ma10": None, "ma20": None,
-        })
+        bars.append(
+            {
+                "date": parts[0],
+                "open": o,
+                "close": c,
+                "high": h,
+                "low": lo,
+                "volume": int(v) if v else None,
+                "amount": None,  # 东财 kline/get f56 后无 amount 字段（f57 是 amount 但未取）
+                "ma5": None,
+                "ma10": None,
+                "ma20": None,
+            }
+        )
     return bars[-60:] if len(bars) > 60 else bars
 
 
@@ -164,18 +179,25 @@ def _hithink(code: str) -> list[dict]:
     for r in bars_raw[-60:]:
         vol = r.get("volume")
         amt = r.get("amount")
-        bars.append({
-            "date": r.get("date"),
-            "open": r.get("open"), "close": r.get("close"),
-            "high": r.get("high"), "low": r.get("low"),
-            "volume": int(vol) if vol else None,
-            "amount": float(amt) if amt else None,
-            "ma5": None, "ma10": None, "ma20": None,
-        })
+        bars.append(
+            {
+                "date": r.get("date"),
+                "open": r.get("open"),
+                "close": r.get("close"),
+                "high": r.get("high"),
+                "low": r.get("low"),
+                "volume": int(vol) if vol else None,
+                "amount": float(amt) if amt else None,
+                "ma5": None,
+                "ma10": None,
+                "ma20": None,
+            }
+        )
     return bars
 
 
 # --- cache fallback（三源都失败时的最后兜底）---
+
 
 def _load_cache() -> dict:
     """全量 load（deprecated；生产走 _cache_bars per-code 内部 get_bars）。
@@ -184,6 +206,7 @@ def _load_cache() -> dict:
     已删——SQLite 是源，refresh upsert 增量更新。保留接口兼容 offline 工具。
     """
     from engine.kline_cache_store import load_all
+
     return load_all()
 
 
@@ -195,6 +218,7 @@ def _cache_bars(code: str) -> list[dict]:
     code 不在 cache / cache 不存在返 []（不臆造）。
     """
     from engine.kline_cache_store import get_bars
+
     bars = get_bars(code)
     if not bars:
         return []
@@ -202,14 +226,20 @@ def _cache_bars(code: str) -> list[dict]:
     for r in bars[-60:]:
         vol = r.get("volume")
         amt = r.get("amount")
-        out.append({
-            "date": r.get("date"),
-            "open": r.get("open"), "close": r.get("close"),
-            "high": r.get("high"), "low": r.get("low"),
-            "volume": int(vol) if vol else None,
-            "amount": float(amt) if amt else None,
-            "ma5": None, "ma10": None, "ma20": None,
-        })
+        out.append(
+            {
+                "date": r.get("date"),
+                "open": r.get("open"),
+                "close": r.get("close"),
+                "high": r.get("high"),
+                "low": r.get("low"),
+                "volume": int(vol) if vol else None,
+                "amount": float(amt) if amt else None,
+                "ma5": None,
+                "ma10": None,
+                "ma20": None,
+            }
+        )
     return out
 
 
@@ -249,8 +279,9 @@ def _chain(sources: list[str] | None, adjust: str | None) -> list[str]:
     return [s for s in base if _SOURCE_ADJUST.get(s) == adjust]
 
 
-def fetch_kline(code: str, sources: list[str] | None = None,
-                adjust: str | None = None) -> tuple[list[dict], str | None]:
+def fetch_kline(
+    code: str, sources: list[str] | None = None, adjust: str | None = None
+) -> tuple[list[dict], str | None]:
     """取日K线。返 (bars, source_name)；全失败/超时返 ([], None)。
 
     顺序 fallback 链：baostock 优先 → 失败/空/黑名单 fallback 东方财富（em_get

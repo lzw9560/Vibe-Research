@@ -13,6 +13,7 @@ S193 R5 v3 用错测试（单样本全局基线非同日配对）+ permutation �
 
 flip 判定：day_paired survive + permutation p<0.05 + per-regime bull AND bear 均成立 → 翻
 """
+
 from __future__ import annotations
 
 import json
@@ -25,9 +26,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from engine.bars_provider import _load_cache
 from engine.gap_classifier import _classify_gap_from_bars
-from s44_verifier.stats import (
-    day_paired_lift, permutation_p_value, walk_forward_oos, day_clustered_t_test
-)
+from s44_verifier.stats import day_paired_lift, permutation_p_value, walk_forward_oos, day_clustered_t_test
 
 WINDOWS = (3, 5, 10)
 N_PERM = 500
@@ -64,7 +63,7 @@ def main():
     # 收集衰竭 + 普通 case（candidate 模式，S201c done 后无前视）
     # per-day：衰竭 continuation returns + 普通 continuation returns
     surv_by_day: dict[str, list[float]] = defaultdict(list)  # 衰竭 continuation（ret 延续 direction）
-    raw_by_day: dict[str, list[float]] = defaultdict(list)   # 普通 continuation
+    raw_by_day: dict[str, list[float]] = defaultdict(list)  # 普通 continuation
     # 也收集 per-type continuation for R5 重跑
     type_cont: dict[str, dict[int, dict]] = defaultdict(lambda: {n: {"hit": 0, "total": 0} for n in WINDOWS})
     # regime-stratified 需要 dates——先用 per-day 衰竭 + 普通 continuation
@@ -109,17 +108,15 @@ def main():
     # ── 1. day_paired_lift（5 日，衰竭 vs 普通 同日配对）──
     print("\n## 1. day_paired_lift（5 日，衰竭 survivors vs 普通 raw 同日配对）")
     dp = day_paired_lift(dict(surv_by_day), dict(raw_by_day))
-    print(f"  n_days={dp.n_days}, winrate_lift_avg={dp.winrate_lift_avg}, "
-          f"mean_lift_avg={dp.mean_lift_avg}")
+    print(f"  n_days={dp.n_days}, winrate_lift_avg={dp.winrate_lift_avg}, mean_lift_avg={dp.mean_lift_avg}")
     print(f"  surv_n_pooled={dp.surv_n_pooled}, raw_n_pooled={dp.raw_n_pooled}")
-    dp_survive = (dp.winrate_lift_avg is not None and dp.winrate_lift_avg > 1.0)
+    dp_survive = dp.winrate_lift_avg is not None and dp.winrate_lift_avg > 1.0
     print(f"  gate: {'PASS' if dp_survive else 'FAIL'}（winrate_lift>1.0）")
 
     # ── 2. permutation_p_value（within-day null）──
     print("\n## 2. permutation_p_value（within-day null, N=500 seed=42）")
     observed_lift = dp.winrate_lift_avg
-    p_perm = permutation_p_value(dict(surv_by_day), dict(raw_by_day), observed_lift,
-                                  n_perm=N_PERM, seed=PERM_SEED)
+    p_perm = permutation_p_value(dict(surv_by_day), dict(raw_by_day), observed_lift, n_perm=N_PERM, seed=PERM_SEED)
     print(f"  observed_lift={observed_lift}, p_permutation={p_perm}")
     perm_survive = p_perm < 0.05
     print(f"  gate: {'PASS' if perm_survive else 'FAIL'}（p<0.05）")
@@ -139,6 +136,7 @@ def main():
     try:
         sys.path.insert(0, str(ROOT / "backend" / "tools"))
         from gap_regime_stratified import compute_regime_labels
+
         regime_map = compute_regime_labels()
         if regime_map:
             surv_by_regime: dict[str, dict[str, list[float]]] = {"bull": {}, "bear": {}, "range": {}}
@@ -153,8 +151,9 @@ def main():
                 n_days = len(by_day)
                 total = sum(len(v) for v in by_day.values())
                 if n_days > 1:
-                    day_means = [sum(v)/len(v) for v in by_day.values()]
+                    day_means = [sum(v) / len(v) for v in by_day.values()]
                     import statistics
+
                     mean_cont = statistics.mean(day_means)
                     print(f"    {tag}: {n_days} 日, {total} case, continuation rate={mean_cont:.3f}")
                     regime_survive[tag] = mean_cont > 0.5  # continuation > 50%
@@ -163,7 +162,7 @@ def main():
                     regime_survive[tag] = None
             bull_ok = regime_survive.get("bull")
             bear_ok = regime_survive.get("bear")
-            regime_pass = (bull_ok is True and bear_ok is True)
+            regime_pass = bull_ok is True and bear_ok is True
             print(f"  gate: {'PASS' if regime_pass else 'FAIL'}（bull AND bear 均 continuation>50%）")
         else:
             print("  regime_map 空（index_ma20_regime.json 缺）")
@@ -176,7 +175,7 @@ def main():
     print("\n## 5. 10 日窗口（非窗口依赖检查）")
     dp10 = day_paired_lift(dict(surv_by_day_10), dict(raw_by_day_10))
     print(f"  n_days={dp10.n_days}, winrate_lift_avg={dp10.winrate_lift_avg}")
-    win10_pass = (dp10.winrate_lift_avg is not None and dp10.winrate_lift_avg > 1.0)
+    win10_pass = dp10.winrate_lift_avg is not None and dp10.winrate_lift_avg > 1.0
     print(f"  gate: {'PASS' if win10_pass else 'FAIL'}（10 日 winrate_lift>1.0）")
 
     # ── 6. R5 v3 重跑（candidate 模式，前视修复后）──
@@ -203,9 +202,12 @@ def main():
     else:
         print("\n  *** NO FLIP: 保留反转 label + gap_scan caveat ***")
         failed = []
-        if not dp_survive: failed.append("day_paired")
-        if not perm_survive: failed.append(f"permutation(p={p_perm})")
-        if not regime_pass: failed.append("regime bull+bear")
+        if not dp_survive:
+            failed.append("day_paired")
+        if not perm_survive:
+            failed.append(f"permutation(p={p_perm})")
+        if not regime_pass:
+            failed.append("regime bull+bear")
         print(f"  failed gates: {', '.join(failed)}")
 
 

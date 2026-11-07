@@ -66,9 +66,7 @@ def ensure_gene_scores_cover_index(db_path: str) -> bool:
     conn = sqlite3.connect(db_path)
     try:
         # 表不存在 → 跳过（fresh env 未跑迁移）
-        row = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='gene_scores'"
-        ).fetchone()
+        row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='gene_scores'").fetchone()
         if not row:
             _logger.info("[gene_scores_cover] gene_scores 表不存在，跳过")
             return False
@@ -76,17 +74,18 @@ def ensure_gene_scores_cover_index(db_path: str) -> bool:
         if count <= _GENE_SCORES_COVER_INDEX_THRESHOLD:
             _logger.info(
                 "[gene_scores_cover] 行数 %d <= %d，跳过覆盖索引",
-                count, _GENE_SCORES_COVER_INDEX_THRESHOLD,
+                count,
+                _GENE_SCORES_COVER_INDEX_THRESHOLD,
             )
             return False
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_gene_scores_cover "
-            "ON gene_scores(date, code, data_source, total_score)"
+            "CREATE INDEX IF NOT EXISTS idx_gene_scores_cover ON gene_scores(date, code, data_source, total_score)"
         )
         conn.commit()
         _logger.info(
             "[gene_scores_cover] 行数 %d > %d，已建覆盖索引 idx_gene_scores_cover",
-            count, _GENE_SCORES_COVER_INDEX_THRESHOLD,
+            count,
+            _GENE_SCORES_COVER_INDEX_THRESHOLD,
         )
         return True
     finally:

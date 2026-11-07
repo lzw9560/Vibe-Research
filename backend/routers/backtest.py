@@ -1,6 +1,7 @@
 """
 Backtest router.
 """
+
 from fastapi import APIRouter, HTTPException, Query
 from typing import Any, Dict
 

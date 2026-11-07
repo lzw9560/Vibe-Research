@@ -4,6 +4,7 @@
 GET /api/advisory/summary → 三场景建议汇总（推荐/自选/持仓）。
 教育研究式口吻，非交易指令（CLAUDE.md §1.1 弱合规）。
 """
+
 import asyncio
 from typing import Any, Dict
 
@@ -101,6 +102,7 @@ async def advisory_grill(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         import chat  # noqa: PLC0415
+
         cfg = chat._get_env_llm_config()
         if not cfg.get("baseURL") or not cfg.get("apiKey") or not cfg.get("model"):
             return {
@@ -114,14 +116,11 @@ async def advisory_grill(payload: Dict[str, Any]) -> Dict[str, Any]:
         messages = _build_grill_prompt(topic, context)
         result = chat._call_llm(cfg, messages, use_tools=False)
         # 解析 LLM 返 JSON——content 在 choices[0].message.content
-        content = (
-            result.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content", "")
-        )
+        content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
         # 尝试 parse JSON（LLM 可能返 markdown 包裹）
         import json  # noqa: PLC0415
         import re  # noqa: PLC0415
+
         json_match = re.search(r"\{[\s\S]*\}", content)
         parsed = None
         if json_match:

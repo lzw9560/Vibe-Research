@@ -8,6 +8,7 @@ Provides pre-market, intraday, and post-market workflow endpoints.
 - user-facing future（该接 workflow cockpit UI，标 TODO future）: realtime, signals,
   strategies, strategies/{name}/match, win-rate, adjustments
 """
+
 import asyncio
 import json
 import logging
@@ -108,6 +109,7 @@ def trigger_collect(target_date: str) -> bool:
         return False
     return True
 
+
 # ============ S048 R4：盘前快照持久化（历史不可变，纯读盘零请求） ============
 # S050：读侧（_load_snapshot/_list_snapshot_dates）抽至 snapshot_store.py 共用；
 # _save_snapshot 仍留此处（写盘是采集链路职责，settlement 只读不写）。
@@ -143,11 +145,11 @@ def _json_default(obj):
 
     防御纵深——源头已剥 dataclass（strategy_funnel_registry），此层兜未来其他混入。
     """
-    if hasattr(obj, "model_dump"):       # Pydantic v2（项目既有范式 workflow.py:418）
+    if hasattr(obj, "model_dump"):  # Pydantic v2（项目既有范式 workflow.py:418）
         return obj.model_dump(mode="json")
-    if dataclasses.is_dataclass(obj):     # 裸 dataclass（PositionParams 等）
+    if dataclasses.is_dataclass(obj):  # 裸 dataclass（PositionParams 等）
         return dataclasses.asdict(obj)
-    return str(obj)                       # 末路：防崩，schema 不可控但至少落盘
+    return str(obj)  # 末路：防崩，schema 不可控但至少落盘
 
 
 def _save_snapshot(payload: dict) -> None:
@@ -175,6 +177,7 @@ def _build_funnel_layers(date: str, ctx: "SentimentContext | None" = None) -> li
     """
     try:
         from routers.candidates import _store  # noqa: PLC0415 — lazy import 防循环，运行时取 live config
+
         result = funnel_mod.run_funnel("all", date, _store["config"], ctx)
         return [l.model_dump(mode="json") for l in result.layers]
     except Exception as exc:  # noqa: BLE001
@@ -195,6 +198,7 @@ async def _collect(run_id: str, target_date: str) -> None:
     """
     try:
         import time as _time
+
         _t0 = _time.time()
         factor_registry.register_default_factors()
         results = await factor_registry.afetch_all(target_date)
@@ -202,7 +206,9 @@ async def _collect(run_id: str, target_date: str) -> None:
         # S063 T4：管线头部一次采集 SentimentContext（T-1 硬标准）
         _t1 = _time.time()
         ctx = await asyncio.to_thread(build_context, target_date)
-        logger.info("[_collect] build_context: %.1fs weather=%s", _time.time() - _t1, ctx.weather_state if ctx else None)
+        logger.info(
+            "[_collect] build_context: %.1fs weather=%s", _time.time() - _t1, ctx.weather_state if ctx else None
+        )
         _t2 = _time.time()
         me = await asyncio.to_thread(_fetch_market_emotion, target_date, ctx)
         logger.info("[_collect] _fetch_market_emotion: %.1fs", _time.time() - _t2)
@@ -212,9 +218,8 @@ async def _collect(run_id: str, target_date: str) -> None:
         funnel_result = None
         try:
             from routers.candidates import _store  # noqa: PLC0415
-            funnel_result = await asyncio.to_thread(
-                funnel_mod.run_funnel, "all", target_date, _store["config"], ctx
-            )
+
+            funnel_result = await asyncio.to_thread(funnel_mod.run_funnel, "all", target_date, _store["config"], ctx)
             funnel_layers = [l.model_dump(mode="json") for l in funnel_result.layers]
         except Exception as exc:  # noqa: BLE001
             logger.warning("funnel_layers 构建失败 (%s): %s", target_date, exc)
@@ -234,6 +239,7 @@ async def _collect(run_id: str, target_date: str) -> None:
             _t4 = _time.time()
             from limitup_screener.data import load_gene_scores
             from strategies.strategy_funnel_registry import score_candidates
+
             genes = await asyncio.to_thread(load_gene_scores, target_date)
             logger.info("[_collect] load_gene_scores: %.1fs genes=%d", _time.time() - _t4, len(genes) if genes else 0)
             if genes:
@@ -264,9 +270,12 @@ async def _collect(run_id: str, target_date: str) -> None:
                 pool_item_map: dict[str, dict] = {}
                 try:
                     from strategies.first_board_filter import fetch_zt_pool  # noqa: PLC0415
+
                     _t5 = _time.time()
                     zt_pool = await asyncio.to_thread(fetch_zt_pool, target_date)
-                    logger.info("[_collect] fetch_zt_pool: %.1fs pool=%d", _time.time() - _t5, len(zt_pool) if zt_pool else 0)
+                    logger.info(
+                        "[_collect] fetch_zt_pool: %.1fs pool=%d", _time.time() - _t5, len(zt_pool) if zt_pool else 0
+                    )
                     for p in zt_pool or []:
                         code = str(p.get("c", "") or "").strip()
                         if code:
@@ -275,7 +284,12 @@ async def _collect(run_id: str, target_date: str) -> None:
                     logger.warning("scored 取涨停池建 pool_item_map 失败 %s: %s", target_date, exc)
                 _t6 = _time.time()
                 scored = await asyncio.to_thread(
-                    score_candidates, cand_input, weather_state, "limitup", target_date, pool_item_map,
+                    score_candidates,
+                    cand_input,
+                    weather_state,
+                    "limitup",
+                    target_date,
+                    pool_item_map,
                 )
                 logger.info("[_collect] score_candidates: %.1fs scored=%d", _time.time() - _t6, len(scored))
                 # 过滤"无符合条件标的"占位项（strategy_code="none"）
@@ -289,12 +303,14 @@ async def _collect(run_id: str, target_date: str) -> None:
         try:
             _t7 = _time.time()
             from strategies.market_scan import gather_non_limitup_candidates
+
             ms_result = await asyncio.to_thread(gather_non_limitup_candidates, target_date)
-            market_scan_scored = [
-                s for s in ms_result.get("candidates", []) if s.get("strategy_code") != "none"
-            ]
-            logger.info("[_collect] gather_non_limitup_candidates: %.1fs ms_scored=%d",
-                        _time.time() - _t7, len(market_scan_scored))
+            market_scan_scored = [s for s in ms_result.get("candidates", []) if s.get("strategy_code") != "none"]
+            logger.info(
+                "[_collect] gather_non_limitup_candidates: %.1fs ms_scored=%d",
+                _time.time() - _t7,
+                len(market_scan_scored),
+            )
         except Exception as exc:  # noqa: BLE001 — 非涨停采集失败不影响涨停 briefing 主态
             logger.warning("market_scan_scored 构建失败 %s: %s", target_date, exc)
 
@@ -311,6 +327,7 @@ async def _collect(run_id: str, target_date: str) -> None:
         # S148 Phase 2 (a)：首板 9 维评分接到 lane final_candidates（load_scores 缓存，不 live run）
         try:
             from strategies.first_board_filter import attach_first_board_analysis  # noqa: PLC0415
+
             attach_first_board_analysis(final_cards, target_date)
         except Exception as exc:  # noqa: BLE001 — 9 维接入失败不阻断 briefing
             logger.warning("attach_first_board_analysis 接入失败 %s: %s", target_date, exc)
@@ -344,31 +361,33 @@ async def _collect(run_id: str, target_date: str) -> None:
         # （原在 snapshot 前清空，进程崩溃则缓存空+快照未写→下次全量重跑）
         try:
             # S049 C4/S093 R4：final_candidates 诊断卡已提前算好（复用 funnel_result）
-            _save_snapshot({
-                "schema": _SNAPSHOT_SCHEMA,
-                "data_date": target_date,
-                "as_of": as_of,
-                "run_id": run_id,
-                "market_emotion": me,
-                "sentiment_context": ctx.to_dict(),
-                "factors": factors,
-                "funnel_layers": funnel_layers,
-                "final_candidates": final_cards,
-                "scored_candidates": scored_candidates,
-                "market_scan_scored": market_scan_scored,  # S094 T17/R28
-                # 补采标记：采集时刻 target_date 早于最近交易日
-                "is_backfill": target_date < last_trading_date_str(),
-                # S079 P2 仓位闸 + 龙虎榜风控字段（历史快照同结构）
-                "market_phase": p2_fields.get("market_phase"),
-                "market_phase_cap": p2_fields.get("market_phase_cap"),
-                "position_cap_tier": p2_fields.get("position_cap_tier"),
-                "p2_factors": p2_fields.get("p2_factors"),  # S096
-                "p2_fired_rule": p2_fields.get("p2_fired_rule"),  # S096
-                "seat_risk_flags": p2_fields.get("seat_risk_flags", {}),
-                "data_missing_flags": p2_fields.get("data_missing_flags", {}),
-                "execution_checklist": p2_fields.get("execution_checklist", []),
-                "param_disclaimer": p2_fields.get("param_disclaimer"),
-            })
+            _save_snapshot(
+                {
+                    "schema": _SNAPSHOT_SCHEMA,
+                    "data_date": target_date,
+                    "as_of": as_of,
+                    "run_id": run_id,
+                    "market_emotion": me,
+                    "sentiment_context": ctx.to_dict(),
+                    "factors": factors,
+                    "funnel_layers": funnel_layers,
+                    "final_candidates": final_cards,
+                    "scored_candidates": scored_candidates,
+                    "market_scan_scored": market_scan_scored,  # S094 T17/R28
+                    # 补采标记：采集时刻 target_date 早于最近交易日
+                    "is_backfill": target_date < last_trading_date_str(),
+                    # S079 P2 仓位闸 + 龙虎榜风控字段（历史快照同结构）
+                    "market_phase": p2_fields.get("market_phase"),
+                    "market_phase_cap": p2_fields.get("market_phase_cap"),
+                    "position_cap_tier": p2_fields.get("position_cap_tier"),
+                    "p2_factors": p2_fields.get("p2_factors"),  # S096
+                    "p2_fired_rule": p2_fields.get("p2_fired_rule"),  # S096
+                    "seat_risk_flags": p2_fields.get("seat_risk_flags", {}),
+                    "data_missing_flags": p2_fields.get("data_missing_flags", {}),
+                    "execution_checklist": p2_fields.get("execution_checklist", []),
+                    "param_disclaimer": p2_fields.get("param_disclaimer"),
+                }
+            )
         except Exception as exc:  # noqa: BLE001 — 落盘失败不影响内存态
             logger.warning("快照写盘失败 %s: %s", target_date, exc)
         # S049 D6：done 即清 funnel 缓存（防跨 run 串数据；下次 GET 走 _cache.funnel_layers 复用）
@@ -393,9 +412,14 @@ def _extract_p2_fields(results: list) -> dict[str, Any]:
         找不到 limitup_screener factor 时返回全空（不阻塞主流程）。
     """
     p2_keys = (
-        "market_phase", "market_phase_cap", "position_cap_tier",
-        "p2_factors", "p2_fired_rule",  # S096
-        "seat_risk_flags", "data_missing_flags", "execution_checklist",
+        "market_phase",
+        "market_phase_cap",
+        "position_cap_tier",
+        "p2_factors",
+        "p2_fired_rule",  # S096
+        "seat_risk_flags",
+        "data_missing_flags",
+        "execution_checklist",
         "param_disclaimer",
     )
     for fr in results or []:
@@ -431,12 +455,20 @@ def _fetch_market_emotion(date: str, ctx: "SentimentContext | None" = None) -> d
         return _market_emotion_from_ctx(date, ctx)
 
     out: dict[str, Any] = {
-        "sti_score": None, "sti_phase": None,
-        "seal_rate": None, "break_rate": None, "promotion_rate": None,
-        "ladder": [], "zt_count": None, "dt_count": None, "zt_real": None,
-        "weather_state": None, "sentiment_source": None,
+        "sti_score": None,
+        "sti_phase": None,
+        "seal_rate": None,
+        "break_rate": None,
+        "promotion_rate": None,
+        "ladder": [],
+        "zt_count": None,
+        "dt_count": None,
+        "zt_real": None,
+        "weather_state": None,
+        "sentiment_source": None,
     }
     from candidate_funnel.sources.board_ladder import get_market_emotion_raw  # noqa: PLC0415
+
     emo = get_market_emotion_raw(date)
     if emo:
         out["seal_rate"] = emo.get("seal_rate")
@@ -449,8 +481,10 @@ def _fetch_market_emotion(date: str, ctx: "SentimentContext | None" = None) -> d
     # STI 复用同一份 emotion（不重复外调），失败降级 None
     try:
         from limitup_sti.service import get_sti_engine  # noqa: PLC0415
+
         engine = get_sti_engine()
         import market
+
         sentiment = market._sentiment(date) or {}
         sti = engine.compute(emo, sentiment)
         if sti.source_ok:
@@ -471,8 +505,13 @@ def _market_emotion_from_ctx(date: str, ctx: "SentimentContext") -> dict[str, An
     out: dict[str, Any] = {
         "sti_score": ctx.sti_score,
         "sti_phase": ctx.sti_phase,
-        "seal_rate": None, "break_rate": None, "promotion_rate": None,
-        "ladder": [], "zt_count": None, "dt_count": None, "zt_real": None,
+        "seal_rate": None,
+        "break_rate": None,
+        "promotion_rate": None,
+        "ladder": [],
+        "zt_count": None,
+        "dt_count": None,
+        "zt_real": None,
         "weather_state": ctx.weather_state,
         "sentiment_source": f"T-1({ctx.source_date})" if ctx.source_date else "T-1(missing)",
     }
@@ -483,6 +522,7 @@ def _market_emotion_from_ctx(date: str, ctx: "SentimentContext") -> dict[str, An
     # 从 sti_timeline T-1 行映射三率/涨跌停家数
     try:
         from limitup_sti.data import get_db  # noqa: PLC0415
+
         db = get_db()
         row = db.execute(
             "SELECT * FROM sti_timeline WHERE date = ?",
@@ -526,9 +566,12 @@ def _serialize_factor(fr: FactorResult) -> dict[str, Any]:
         "factor_name": fr.factor_name,
         "candidates": [
             {
-                "code": c.code, "name": c.name,
-                "source_factor_id": c.source_factor_id, "source_layer": c.source_layer,
-                "hit_rules": c.hit_rules, "detail": c.detail,
+                "code": c.code,
+                "name": c.name,
+                "source_factor_id": c.source_factor_id,
+                "source_layer": c.source_layer,
+                "hit_rules": c.hit_rules,
+                "detail": c.detail,
             }
             for c in fr.candidates
         ],
@@ -538,6 +581,8 @@ def _serialize_factor(fr: FactorResult) -> dict[str, Any]:
         "data_date": fr.data_date,
         "data_status": fr.data_status,
     }
+
+
 _strategy_matcher = StrategyMatcher()
 _position_advisor = PositionAdvisor()
 _bomb_alert_system = BombAlertSystem()
@@ -590,7 +635,9 @@ def get_workflow_status() -> Dict[str, Any]:
 
 
 @router.get("/api/workflow/pre-market")
-async def get_pre_market_workflow(date: Optional[str] = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")) -> Dict[str, Any]:
+async def get_pre_market_workflow(
+    date: Optional[str] = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日"),
+) -> Dict[str, Any]:
     """盘前简报（S026 异步化 + S048 历史视角）：内存态优先，历史读盘上快照。
 
     级联（S048 R5）：
@@ -744,12 +791,15 @@ async def get_date_triplet(date: str | None = Query(None)) -> Dict[str, Any]:
     """
     from datetime import date as _date
     from vr_paths import resolve_date_triplet
+
     d = _date.fromisoformat(date) if date else None
     return resolve_date_triplet(d)
 
 
 @router.post("/api/workflow/pre-market/refresh")
-async def refresh_pre_market(date: Optional[str] = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")) -> Dict[str, Any]:
+async def refresh_pre_market(
+    date: Optional[str] = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日"),
+) -> Dict[str, Any]:
     """触发后台异步采集（S026）：立即返回 run_id+status=running，不阻塞。
 
     并发守卫：status==running 时返"已有采集在跑"+现有 run_id
@@ -767,7 +817,9 @@ async def refresh_pre_market(date: Optional[str] = Query(None, description="日�
 
 
 @router.post("/api/workflow/pre-market/run")
-async def run_pre_market_workflow(date: Optional[str] = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")) -> Dict[str, Any]:
+async def run_pre_market_workflow(
+    date: Optional[str] = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日"),
+) -> Dict[str, Any]:
     """
     Manually trigger pre-market workflow.
     """
@@ -808,6 +860,7 @@ def get_verification_card(date: str = Query(None, description="交易日 YYYY-MM
     try:
         from workflow.verification_card import get_conditions
         from vr_paths import last_trading_date_str
+
         target = date or last_trading_date_str()
         conditions = get_conditions(target)
         status_counts = {
@@ -831,12 +884,15 @@ def get_verification_card(date: str = Query(None, description="交易日 YYYY-MM
 
 
 @router.post("/api/workflow/verification-card/generate")
-def generate_verification_card(date: str = Query(None, description="生成日 YYYY-MM-DD；不传取最近交易日")) -> Dict[str, Any]:
+def generate_verification_card(
+    date: str = Query(None, description="生成日 YYYY-MM-DD；不传取最近交易日"),
+) -> Dict[str, Any]:
     """S060：手动触发条件生成（盘后调度自动跑，此端点供手动补跑）。"""
     try:
         from workflow.verification_card import generate_and_save
         from vr_paths import last_trading_date_str
         import market
+
         target = date or last_trading_date_str()
         emotion = market._emotion(target)
         if not emotion:
@@ -846,9 +902,16 @@ def generate_verification_card(date: str = Query(None, description="生成日 YY
             "data": {
                 "date": target,
                 "generated": len(conditions),
-                "conditions": [{"metric": c.metric, "baseline": c.baseline,
-                                "threshold_up": c.threshold_up, "threshold_down": c.threshold_down,
-                                "note": c.note} for c in conditions],
+                "conditions": [
+                    {
+                        "metric": c.metric,
+                        "baseline": c.baseline,
+                        "threshold_up": c.threshold_up,
+                        "threshold_down": c.threshold_down,
+                        "note": c.note,
+                    }
+                    for c in conditions
+                ],
             }
         }
     except Exception as e:  # noqa: BLE001
@@ -860,12 +923,15 @@ def verify_verification_card() -> Dict[str, Any]:
     """S060：手动触发 T+1 对账（盘后调度自动跑，此端点供手动补跑）。"""
     try:
         from workflow.verification_card import verify_and_update
+
         verified = verify_and_update()
         return {
             "data": {
                 "verified": len(verified),
-                "conditions": [{"date": c.date, "metric": c.metric, "actual": c.actual,
-                                "status": c.status, "note": c.note} for c in verified],
+                "conditions": [
+                    {"date": c.date, "metric": c.metric, "actual": c.actual, "status": c.status, "note": c.note}
+                    for c in verified
+                ],
             }
         }
     except Exception as e:  # noqa: BLE001
@@ -1008,6 +1074,7 @@ class _TransitionRequest(BaseModel):
     S033 R2：entry_price/exit_price/strategy 为用户自填操作记录
     （holding 买入价 / settled 卖出价 / 战法），可选填，None 不覆盖已有值。
     """
+
     code: str
     date: str
     target: str
@@ -1020,7 +1087,9 @@ class _TransitionRequest(BaseModel):
 
 
 @router.get("/api/workflow/state")
-def get_workflow_states(date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；默认最近交易日")) -> Dict[str, Any]:
+def get_workflow_states(
+    date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；默认最近交易日"),
+) -> Dict[str, Any]:
     """S032 R10：查询某日全部 (code) 的工作流状态 + 按态计数。"""
     try:
         d = date or last_trading_date_str()
@@ -1048,11 +1117,7 @@ def transition_workflow_state(req: _TransitionRequest) -> Dict[str, Any]:
     # 拉到价则经下方 _wf_state_repo.transition(exit_price=...) 自然落库；拉不到 req.exit_price
     # 仍为 None，_settle_on_transition 走 S034 既有"缺价跳过"路径。
     exit_price_source: Optional[str] = None
-    if (
-        req.target == "settled"
-        and req.auto_fill_exit_price
-        and req.exit_price is None
-    ):
+    if req.target == "settled" and req.auto_fill_exit_price and req.exit_price is None:
         market_price = fetch_current_price(code)
         if market_price is not None:
             req.exit_price = market_price
@@ -1061,19 +1126,27 @@ def transition_workflow_state(req: _TransitionRequest) -> Dict[str, Any]:
         exit_price_source = "manual"
     try:
         ok, detail = _wf_state_repo.transition(
-            code, req.date, req.target, req.reason,
-            entry_price=req.entry_price, exit_price=req.exit_price, strategy=req.strategy,
+            code,
+            req.date,
+            req.target,
+            req.reason,
+            entry_price=req.entry_price,
+            exit_price=req.exit_price,
+            strategy=req.strategy,
             attention_mode=req.attention_mode,
         )
     except Exception as e:
         raise HTTPException(500, f"工作流状态流转失败：{e}") from e
     if not ok:
         current = _wf_state_repo.get_state(code, req.date)
-        raise HTTPException(400, {
-            "error": detail,
-            "current": current["status"] if current else None,
-            "allowed_targets": _wf_state_repo.allowed_targets(code, req.date),
-        })
+        raise HTTPException(
+            400,
+            {
+                "error": detail,
+                "current": current["status"] if current else None,
+                "allowed_targets": _wf_state_repo.allowed_targets(code, req.date),
+            },
+        )
     state = _wf_state_repo.get_state(code, req.date)
     # S034 R3：settled 流转即结算（价齐 + settled_at 幂等锚点）
     if req.target == "settled" and state is not None:
@@ -1104,7 +1177,11 @@ def _settle_on_transition(
     （可恢复优于"先抢占 settled_at 后 record"的不可恢复漏记，见 spec §5 取舍）。
     """
     if state.get("entry_price") is None or state.get("exit_price") is None:
-        return {"recorded": False, "reason": "买入价/卖出价缺失未结算；可经 settled→candidate 重入补全流程", "exit_price_source": None}, None
+        return {
+            "recorded": False,
+            "reason": "买入价/卖出价缺失未结算；可经 settled→candidate 重入补全流程",
+            "exit_price_source": None,
+        }, None
     if state.get("settled_at"):
         return {"recorded": False, "reason": "已结算（不重复记账）", "exit_price_source": None}, None
     summary = _settlement_recorder.record_settlement(state)
@@ -1116,7 +1193,9 @@ def _settle_on_transition(
 
 
 @router.get("/api/workflow/state/{code}")
-def get_single_workflow_state(code: str, date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；默认最近交易日")) -> Dict[str, Any]:
+def get_single_workflow_state(
+    code: str, date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；默认最近交易日")
+) -> Dict[str, Any]:
     """S033 R3：单股工作流状态 + 当前态允许的目标态（无记录 404）。
 
     路由顺序注意：本端点须先于 /state/{code}/history 注册（FastAPI 按注册序匹配）。
@@ -1129,14 +1208,11 @@ def get_single_workflow_state(code: str, date: Optional[str] = Query(None, descr
     if result is None:
         raise HTTPException(404, f"该日无此股的工作流状态记录: code={code} date={d}")
     # S034 R5：已结算行附结算摘要（entry/exit + 历表 holding/settled 流转 created_at 重算，同 recorder 公式）
-    if (
-        result.get("settled_at")
-        and result.get("entry_price") is not None
-        and result.get("exit_price") is not None
-    ):
+    if result.get("settled_at") and result.get("entry_price") is not None and result.get("exit_price") is not None:
         buy_at, settle_at = _wf_state_repo.get_holding_settle_times(code, d)
         result["settlement"] = _settlement_recorder.settlement_summary(
-            result["entry_price"], result["exit_price"],
+            result["entry_price"],
+            result["exit_price"],
             buy_at or result["trade_date"],
             settle_at or result["settled_at"],
         )
@@ -1144,7 +1220,9 @@ def get_single_workflow_state(code: str, date: Optional[str] = Query(None, descr
 
 
 @router.get("/api/workflow/state/{code}/history")
-def get_workflow_state_history(code: str, date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；不传则全部")) -> Dict[str, Any]:
+def get_workflow_state_history(
+    code: str, date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；不传则全部")
+) -> Dict[str, Any]:
     """S032 R10：某股流转历史（可按日期过滤）。"""
     try:
         history = _wf_state_repo.get_history(code, date)
@@ -1197,7 +1275,9 @@ def _resolve_first_board_date(date: str | None) -> str:
 
 
 @router.get("/api/workflow/first-board/candidates")
-def get_first_board_candidates(date: str = Query(None, description="交易日 YYYY-MM-DD；不传按收盘时点取T日/T-1")) -> Dict[str, Any]:
+def get_first_board_candidates(
+    date: str = Query(None, description="交易日 YYYY-MM-DD；不传按收盘时点取T日/T-1"),
+) -> Dict[str, Any]:
     """S075：首板流候选池——返回候选+剔除原因+9维度评分，供前端pipeline展示。
 
     时序：T 日收盘前（15:00 前）取 T-1 数据（当日涨停池盘前为空），收盘后取当日。
@@ -1239,16 +1319,14 @@ def get_first_board_candidates(date: str = Query(None, description="交易日 YY
                     "candidates": [],
                     "excluded": cached.get("excluded", []),
                     "env_flags": cached.get("env_flags", {}),
-                    "note": (
-                        f"盘前数据（更新于 {cached['updated_at']}），"
-                        "盘后16:15调度更新· §44未validated仅参考"
-                    ),
+                    "note": (f"盘前数据（更新于 {cached['updated_at']}），盘后16:15调度更新· §44未validated仅参考"),
                     "from_cache": True,
                 }
             }
 
         # 无快照——盘中/盘前不实时跑（会污染 T-1 数据），收盘后可实时跑
         from datetime import datetime as _dt
+
         now_hour = _dt.now().hour
         if now_hour < 15:
             # 盘中/盘前无快照：选股只在盘后执行，不实时跑
@@ -1292,6 +1370,7 @@ def get_first_board_dates() -> Dict[str, Any]:
     """S075：首板流可用历史日期列表（有快照的日期，降序，YYYY-MM-DD）。"""
     try:
         from strategies.first_board_filter import list_score_dates
+
         dates = [_normalize_date(d) for d in list_score_dates()]
         return {"data": {"dates": dates, "count": len(dates)}}
     except Exception as e:  # noqa: BLE001

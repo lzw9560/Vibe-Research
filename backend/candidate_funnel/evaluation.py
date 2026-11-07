@@ -10,6 +10,7 @@
 days_robust<60 → provisional cap ×0.5（不能 validated 也不能证否，R6 gate，R8 接线生产）
 不硬剔（tradability 硬剔保留 R2 _filter_tradability），降权维度保留采数不参与排序。
 """
+
 from __future__ import annotations
 
 import os
@@ -20,21 +21,22 @@ from typing import Optional
 FROZEN_COMMIT = "b1aba21"  # S150/S153/S151 spec 首次 commit（2026-09-05）
 
 # §44 阈值常量（复用 forward_test.py，避免重复定义）
-PASS_LIFT_FLOOR = 2.0        # validated 门槛
-PASS_LIFT_HARD_FLOOR = 1.0   # 劣于随机 门槛
+PASS_LIFT_FLOOR = 2.0  # validated 门槛
+PASS_LIFT_HARD_FLOOR = 1.0  # 劣于随机 门槛
 
 
 @dataclass(frozen=True)
 class DimensionValidation:
     """单维度的 §44 验证结果 + 降权权重（冻结值，回溯后可更新 updated_*）。"""
+
     dimension_id: str
     label: str
-    lift: Optional[float]          # rho for gene（无方向性 → 视为 <1）
+    lift: Optional[float]  # rho for gene（无方向性 → 视为 <1）
     n: int
-    days_robust: int               # day-cluster robust 日数
-    validation_status: str         # validated/未validated/劣于随机/探索性
-    weight_multiplier: float       # ×1.0/×0.5/×0.1
-    source_script: str             # 来源脚本（可追溯，禁臆造）
+    days_robust: int  # day-cluster robust 日数
+    validation_status: str  # validated/未validated/劣于随机/探索性
+    weight_multiplier: float  # ×1.0/×0.5/×0.1
+    source_script: str  # 来源脚本（可追溯，禁臆造）
     note: str = ""
     frozen_commit: str = FROZEN_COMMIT
     frozen_at: str = "2026-09-05"
@@ -50,23 +52,35 @@ class DimensionValidation:
 # 当前降权仍基于这些值（诚实标注该窗口无 edge），但非"绝对无 edge"。详见 memory s44-quant-validation-loop。
 DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
     "gene_score": DimensionValidation(
-        dimension_id="gene_score", label="gene 综合分",
-        lift=0.030, n=2332, days_robust=38,              # rho≈0.030（Spearman，无单调→视为劣于随机）
-        validation_status="劣于随机", weight_multiplier=0.1,
+        dimension_id="gene_score",
+        label="gene 综合分",
+        lift=0.030,
+        n=2332,
+        days_robust=38,  # rho≈0.030（Spearman，无单调→视为劣于随机）
+        validation_status="劣于随机",
+        weight_multiplier=0.1,
         source_script="tools/_archive/gene_score_directionality.py (archived 2026-09-19, 劣于随机 ×0.1)",
         note="rho≈0.030 robust null，无方向预测力（52bedf8）",
     ),
     "breakout": DimensionValidation(
-        dimension_id="breakout", label="breakout_20d",
-        lift=1.363, n=43691, days_robust=42,
-        validation_status="未validated", weight_multiplier=0.5,   # §F：按梯度 ×0.5（非用户框架 ×0.1）
+        dimension_id="breakout",
+        label="breakout_20d",
+        lift=1.363,
+        n=43691,
+        days_robust=42,
+        validation_status="未validated",
+        weight_multiplier=0.5,  # §F：按梯度 ×0.5（非用户框架 ×0.1）
         source_script="tools/kline_ta_validation.py",
         note="4 方向特征里最弱，CI 不重叠非纯噪声但 <2x",
     ),
     "post_first_board": DimensionValidation(
-        dimension_id="post_first_board", label="post-首板 relay (lbc==1)",
-        lift=None, n=0, days_robust=0,              # 未测——exploratory PAPER（S209）
-        validation_status="探索性", weight_multiplier=0.5,   # underpowered cap ×0.5（days<60）
+        dimension_id="post_first_board",
+        label="post-首板 relay (lbc==1)",
+        lift=None,
+        n=0,
+        days_robust=0,  # 未测——exploratory PAPER（S209）
+        validation_status="探索性",
+        weight_multiplier=0.5,  # underpowered cap ×0.5（days<60）
         source_script="tools/s209_t10_executor_harness.py (T6 defer，未建)",
         note="S209 探索性 PAPER 臂——breakout +0.36% net 前提证否（5元佣金门+regime 假象），自证 net edge 不继承假阳性。lift_mult=0.5 until §44 walk-forward ≥120 天。",
     ),
@@ -87,159 +101,226 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
     # regime_caps: bull ×0.75 / bear+range ×0.5（bear 71 天 robust 但 chrono n_test=23 underpowered；range underpowered）。
     # regime=None → 保守 ×0.5（weight_multiplier，不误放全权重）。
     "consecutive_relay": DimensionValidation(
-        dimension_id="consecutive_relay", label="连板接力臂(lbc>=2, overnight gap) 【ARCHIVED 2026-09-24】",
-        lift=None, n=5228, days_robust=558,   # V2 offline 量化（s203_harness_v2.py），全 regime falsified
-        validation_status="falsified", weight_multiplier=0.0,  # 2026-09-24 archive: V2 falsified
+        dimension_id="consecutive_relay",
+        label="连板接力臂(lbc>=2, overnight gap) 【ARCHIVED 2026-09-24】",
+        lift=None,
+        n=5228,
+        days_robust=558,  # V2 offline 量化（s203_harness_v2.py），全 regime falsified
+        validation_status="falsified",
+        weight_multiplier=0.0,  # 2026-09-24 archive: V2 falsified
         source_script="tools/s203_consecutive_relay_harness_v2.py",
         note="2026-09-24 ARCHIVE: V2 offline 量化（s203_harness_v2.py，S228 grill workflow 4 视角后）证否——"
-             "真 edge（spec 本意 D+1 close→D+2 open）= -1.66% bull / -1.89% bear + p=1.0（完全无 edge）"
-             "+ adequate power（n_test 89/65≥60）→ definitive falsify 所有 regime。"
-             "原 +1.04% verdict（V1 D close→D+1 open）是'D 日涨停封板溢价'（D close=涨停价 D+1 开盘高开）"
-             "非'连板接力 edge'——V1 未过滤 D+1 一字板（momentum 最强 picks 贡献涨停溢价）+ "
-             "D+1 一字板 exit=open 涨停价实际卖不掉（一字涨停封死无买盘）over-credit。"
-             "arm kill switch（trade_journal.arm_status is_active=False）+ regime_caps 全 ×0 兜底。"
-             "原 ×1.0 verdict（2026-09-19 unlock）基于假 edge，已撤销——VR_ALLOW_X1DOT0 不再相关。"
-             "原 S211/S217/S218 verdict 全基于 V1 假 edge，stale——见 memory consecutive-relay-falsified-2026-09-23。",
+        "真 edge（spec 本意 D+1 close→D+2 open）= -1.66% bull / -1.89% bear + p=1.0（完全无 edge）"
+        "+ adequate power（n_test 89/65≥60）→ definitive falsify 所有 regime。"
+        "原 +1.04% verdict（V1 D close→D+1 open）是'D 日涨停封板溢价'（D close=涨停价 D+1 开盘高开）"
+        "非'连板接力 edge'——V1 未过滤 D+1 一字板（momentum 最强 picks 贡献涨停溢价）+ "
+        "D+1 一字板 exit=open 涨停价实际卖不掉（一字涨停封死无买盘）over-credit。"
+        "arm kill switch（trade_journal.arm_status is_active=False）+ regime_caps 全 ×0 兜底。"
+        "原 ×1.0 verdict（2026-09-19 unlock）基于假 edge，已撤销——VR_ALLOW_X1DOT0 不再相关。"
+        "原 S211/S217/S218 verdict 全基于 V1 假 edge，stale——见 memory consecutive-relay-falsified-2026-09-23。",
         regime_caps={"bull": 0.0, "bear": 0.0, "range": 0.0},
     ),
     "turnover": DimensionValidation(
-        dimension_id="turnover", label="换手剔除(>30%)",
-        lift=0.9979, n=14366, days_robust=167,           # 167 日大样本 robust
-        validation_status="劣于随机", weight_multiplier=0.1,
+        dimension_id="turnover",
+        label="换手剔除(>30%)",
+        lift=0.9979,
+        n=14366,
+        days_robust=167,  # 167 日大样本 robust
+        validation_status="劣于随机",
+        weight_multiplier=0.1,
         source_script="tools/first_board_layer_lift.py --baostock",
         note="换手>30% 剔除后 lift<1，越剔越差（本会话跑）",
     ),
     "seal_amount": DimensionValidation(
-        dimension_id="seal_amount", label="封板质量(炸板/封单)",
-        lift=0.9897, n=177, days_robust=5,              # 5 日弱样本
-        validation_status="探索性", weight_multiplier=1.0,       # n 小 + 5 日非 robust → 探索性待 60 日
+        dimension_id="seal_amount",
+        label="封板质量(炸板/封单)",
+        lift=0.9897,
+        n=177,
+        days_robust=5,  # 5 日弱样本
+        validation_status="探索性",
+        weight_multiplier=1.0,  # n 小 + 5 日非 robust → 探索性待 60 日
         source_script="tools/first_board_layer_lift.py --baostock-history",
         note="5 日弱样本方向性但非 robust，待 60 日复验",
     ),
     "path_lift": DimensionValidation(
-        dimension_id="path_lift", label="选股整体 path_lift",
-        lift=0.978, n=627, days_robust=44,              # 627 picks / 2708 universe
-        validation_status="劣于随机", weight_multiplier=0.1,
+        dimension_id="path_lift",
+        label="选股整体 path_lift",
+        lift=0.978,
+        n=627,
+        days_robust=44,  # 627 picks / 2708 universe
+        validation_status="劣于随机",
+        weight_multiplier=0.1,
         source_script="tools/s145_recompute_path.py",
         note="选股整体 path_lift<1，s145 敏感性 5 组 0.87-0.97 robust",
     ),
     # S152 盘中 H2（baostock 5min 历史补，突破 seal_intraday 30 天 live 卡点）
     "first_plate_h2": DimensionValidation(
-        dimension_id="first_plate_h2", label="盘中 H2 早封板(<=10:00)",
-        lift=0.8273, n=1125, days_robust=31,           # full run 2717 features / 31 日
-        validation_status="劣于随机", weight_multiplier=0.1,
+        dimension_id="first_plate_h2",
+        label="盘中 H2 早封板(<=10:00)",
+        lift=0.8273,
+        n=1125,
+        days_robust=31,  # full run 2717 features / 31 日
+        validation_status="劣于随机",
+        weight_multiplier=0.1,
         source_script="tools/first_plate_h2_lift.py --full",
         note="S152 baostock 5min 早封板 lift<1（null_p95=1.048，pass_filter_edge=False）；"
-             "盘中封板时间无 edge；caveat: T+0 o2c+5min 粒度",
+        "盘中封板时间无 edge；caveat: T+0 o2c+5min 粒度",
     ),
     "late_lock": DimensionValidation(
-        dimension_id="late_lock", label="盘中晚封板/尾盘突袭(>14:00) [FALSIFIED]",
-        lift=1.3559, n=422, days_robust=31,             # path-window（D+1-path）1.356 是 sign-flip artifact（见 note）
-        validation_status="劣于随机", weight_multiplier=0.1,   # FALSIFIED 2026-09-18 gap-window 重跑（wh8h514qx）
+        dimension_id="late_lock",
+        label="盘中晚封板/尾盘突袭(>14:00) [FALSIFIED]",
+        lift=1.3559,
+        n=422,
+        days_robust=31,  # path-window（D+1-path）1.356 是 sign-flip artifact（见 note）
+        validation_status="劣于随机",
+        weight_multiplier=0.1,  # FALSIFIED 2026-09-18 gap-window 重跑（wh8h514qx）
         source_script="tools/zt_pool_seal_time_lift_gap.py",
         note="FALSIFIED 2026-09-18 gap-window 重跑（workflow wh8h514qx）：gap 窗口 lift 0.58x(em-sourced 权威 fbt)/0.89x(H2) "
-             "BOTH<1.0=劣于随机；方向错——late-seal 股 gap DOWN -0.67%~-1.57% vs universe +0.107%（晚封不携带隔夜动量反反转）；"
-             "regime-robust（em+H2 两期都 underperform）；原 1.3559 是 two-negatives sign-flip artifact（late_lock mean 负 vs universe 负→比值为正但实际更差）；"
-             "§44 v1 错窗口（D+1-path 反转段）测的，gap 窗口证否；archive consistent with milestone-2026-09-18 做减法 pivot。"
-             "realizability: late_lock 14:00 后封板→D close 已涨停封死→买不到；24-25 em-fbt 天 underpowered BUT 方向一致负非数据不够（更多天不会翻成 2.0 edge）。"
-             "原 path harness tools/first_plate_h2_lift.py --full 不动（保留 reproducibility）。",
+        "BOTH<1.0=劣于随机；方向错——late-seal 股 gap DOWN -0.67%~-1.57% vs universe +0.107%（晚封不携带隔夜动量反反转）；"
+        "regime-robust（em+H2 两期都 underperform）；原 1.3559 是 two-negatives sign-flip artifact（late_lock mean 负 vs universe 负→比值为正但实际更差）；"
+        "§44 v1 错窗口（D+1-path 反转段）测的，gap 窗口证否；archive consistent with milestone-2026-09-18 做减法 pivot。"
+        "realizability: late_lock 14:00 后封板→D close 已涨停封死→买不到；24-25 em-fbt 天 underpowered BUT 方向一致负非数据不够（更多天不会翻成 2.0 edge）。"
+        "原 path harness tools/first_plate_h2_lift.py --full 不动（保留 reproducibility）。",
     ),
     # 参照（非选股层，不参与降权）— S155 证伪：pooled 2.046 look-ahead，per-T 1.974<2 + net<1x cost-killed
     "vol_surge_ref": DimensionValidation(
-        dimension_id="vol_surge_ref", label="vol_surge(参照,非选股层,T-1非盘中)",
-        lift=1.974, n=43691, days_robust=42,   # per-T quintile（无 look-ahead；pooled 2.046 是全局 quintile artifact）
-        validation_status="未validated", weight_multiplier=0.5,  # per-T<2→未validated；参照不参与选股降权(never applied)
+        dimension_id="vol_surge_ref",
+        label="vol_surge(参照,非选股层,T-1非盘中)",
+        lift=1.974,
+        n=43691,
+        days_robust=42,  # per-T quintile（无 look-ahead；pooled 2.046 是全局 quintile artifact）
+        validation_status="未validated",
+        weight_multiplier=0.5,  # per-T<2→未validated；参照不参与选股降权(never applied)
         source_script="tools/kline_ta_validation.py",
         note="S155 证伪：pooled 2.046(全局quintile look-ahead)→per-T 1.974(<2未validated); "
-             "net path-winrate 扣0.70%cost=0.945x 劣于随机(cost-killed,非tradeable); "
-             "原'盘中维度'是mislabel(实为T-1特征); 参照不参与选股降权",
+        "net path-winrate 扣0.70%cost=0.945x 劣于随机(cost-killed,非tradeable); "
+        "原'盘中维度'是mislabel(实为T-1特征); 参照不参与选股降权",
     ),
     # S153 R7/R8 选股层 breakout 精细化（闭合 breakout 家族，2026-09-05 跑出）
     "platform_breakout": DimensionValidation(
-        dimension_id="platform_breakout", label="平台突破(breakout精细化)",
-        lift=1.0791, n=946, days_robust=130,   # confirm 臂（D+1 high>cons_max 无 look-ahead，n=946 最稳健）
-        validation_status="未validated", weight_multiplier=0.5,
+        dimension_id="platform_breakout",
+        label="平台突破(breakout精细化)",
+        lift=1.0791,
+        n=946,
+        days_robust=130,  # confirm 臂（D+1 high>cons_max 无 look-ahead，n=946 最稳健）
+        validation_status="未validated",
+        weight_multiplier=0.5,
         source_script="tools/platform_breakout_lift.py",
         note="S153 R7 tight0.9606劣于随机/confirm1.0791/both1.2177全<2x is_sig=False; "
-             "regime_bull both1.4152 p=0.018 但 Bonferroni α_adj=0.00625 fail; "
-             "walk-forward0.77-1.05; pre_register 74295b9; 闭合 breakout 家族",
+        "regime_bull both1.4152 p=0.018 但 Bonferroni α_adj=0.00625 fail; "
+        "walk-forward0.77-1.05; pre_register 74295b9; 闭合 breakout 家族",
     ),
     "low_absorption": DimensionValidation(
-        dimension_id="low_absorption", label="低吸缩量(C3 vol_brk<1)",
-        lift=1.0015, n=92308, days_robust=145,   # lift≈1.0 null（大样本）
-        validation_status="未validated", weight_multiplier=0.5,
+        dimension_id="low_absorption",
+        label="低吸缩量(C3 vol_brk<1)",
+        lift=1.0015,
+        n=92308,
+        days_robust=145,  # lift≈1.0 null（大样本）
+        validation_status="未validated",
+        weight_multiplier=0.5,
         source_script="tools/low_absorption_c3_lift.py",
         note="S153 R8 C3 vol_brk<1.0 lift≈1.0 null n=92308; regime_strong0.997<1; "
-             "walk-forward0.99-1.04; pre_register 74295b9; 无 edge",
+        "walk-forward0.99-1.04; pre_register 74295b9; 无 edge",
     ),
     # 板块/regime 层（2026-09-05 跑出，闭合 verdict 外推缺口——此层原未测）
     "sector_heat": DimensionValidation(
-        dimension_id="sector_heat", label="板块热度→次日新涨停",
-        lift=1.359, n=466, days_robust=41,   # zt≥3 臂（CI 不重叠但<2x，最高）
-        validation_status="未validated", weight_multiplier=0.5,
+        dimension_id="sector_heat",
+        label="板块热度→次日新涨停",
+        lift=1.359,
+        n=466,
+        days_robust=41,  # zt≥3 臂（CI 不重叠但<2x，最高）
+        validation_status="未validated",
+        weight_multiplier=0.5,
         source_script="tools/sector_heat_validation.py",
         note="5 定义全<2x(top1 1.23/top3 1.07/top5 1.29/zt≥3 1.359 CI不重叠/zt≥5 1.28); "
-             "n=41日 eastmoney_live; 情绪/regime 是 moderator 非 standalone signal; 60日后复验",
+        "n=41日 eastmoney_live; 情绪/regime 是 moderator 非 standalone signal; 60日后复验",
     ),
     "sector_phase": DimensionValidation(
-        dimension_id="sector_phase", label="板块周期相位",
-        lift=None, n=2319, days_robust=25,   # winrate-based 非 lift（非单调→无方向 edge）
-        validation_status="劣于随机", weight_multiplier=0.1,
+        dimension_id="sector_phase",
+        label="板块周期相位",
+        lift=None,
+        n=2319,
+        days_robust=25,  # winrate-based 非 lift（非单调→无方向 edge）
+        validation_status="劣于随机",
+        weight_multiplier=0.1,
         source_script="tools/_archive/sector_phase_regression.py (archived 2026-09-19, 劣于随机 ×0.1)",
         note="winrate 0.52-0.60 非单调(启动0.563→发酵0.565→高潮0.605→退潮0.569回落); "
-             "CI 重叠; label-only(B); 修饰方向单调=False; 无 edge",
+        "CI 重叠; label-only(B); 修饰方向单调=False; 无 edge",
     ),
     # S181 R7：trend 臂进 cron paper_track 后需 ×0.5 provisional cap（EXPLORATORY 未验证）。
     # days_robust=0/n=0/lift=None → lift_to_multiplier 返 ('探索性', 0.5) 复用 §44v2 R8 逻辑，不新建路径
     "trend_swing": DimensionValidation(
-        dimension_id="trend_swing", label="趋势波段臂(trend_swing)",
-        lift=None, n=0, days_robust=0,   # 未测 → lift_to_multiplier 探索性 ×0.5
-        validation_status="探索性", weight_multiplier=0.5,
+        dimension_id="trend_swing",
+        label="趋势波段臂(trend_swing)",
+        lift=None,
+        n=0,
+        days_robust=0,  # 未测 → lift_to_multiplier 探索性 ×0.5
+        validation_status="探索性",
+        weight_multiplier=0.5,
         source_script="(未测——S181 趋势臂 EXPLORATORY，未跑 §44 验证)",
         note="trend 臂真 signal generator（板块周期 phase+资金流 composite）已建但 §44 未验证；"
-             "×0.5 provisional cap 防未验证臂全权重跑；60 天 track record 后复验",
+        "×0.5 provisional cap 防未验证臂全权重跑；60 天 track record 后复验",
     ),
     # S185 P1-4（wok7j1arm grill）：低波因子入 registry——A 股最硬定论（红利低波 9-12% 三重定论）。
     # externally_validated（外部文献验证非本系统 §44）。§44 验证窗口用 hold-and-win（非 D+1 path）。
     "low_volatility": DimensionValidation(
-        dimension_id="low_volatility", label="低波动率(红利低波)",
-        lift=None, n=0, days_robust=0,
-        validation_status="外部验证", weight_multiplier=1.0,  # 三重定论 9-12% 年化
+        dimension_id="low_volatility",
+        label="低波动率(红利低波)",
+        lift=None,
+        n=0,
+        days_robust=0,
+        validation_status="外部验证",
+        weight_multiplier=1.0,  # 三重定论 9-12% 年化
         source_script="(externally_validated——学术+卖方+指数三重定论，fork 现成非自建)",
         note="A 股最硬 alpha：红利低波 9-12% 年化三重定论；baostock kline turn 可算 ATR/realized_vol；"
-             "§44 窗口须 hold-and-win 非 D+1 path；fork zlotus/ash-mcp smart-beta capped",
+        "§44 窗口须 hold-and-win 非 D+1 path；fork zlotus/ash-mcp smart-beta capped",
     ),
     # S185 P1-4（wok7j1arm grill）：盘中 conditioning 因子入 §44——S176 纯函数已建但不在 registry（逻辑断裂）。
     # §44 说 edge 在盘中但盘中因子没进 §44 验证。§44 窗口用盘中→D收（intraday conditioning→当日 close）。
     "ofi_accumulated": DimensionValidation(
-        dimension_id="ofi_accumulated", label="盘中OFI累积(intraday)",
-        lift=None, n=0, days_robust=0,
-        validation_status="探索性", weight_multiplier=0.5,
+        dimension_id="ofi_accumulated",
+        label="盘中OFI累积(intraday)",
+        lift=None,
+        n=0,
+        days_robust=0,
+        validation_status="探索性",
+        weight_multiplier=0.5,
         source_script="(未测——S176 ofi_collect cron */3 9-14 累积中，60d live 后复验)",
         note="OFI 归一化 [-1,1] 累积；compute_ofi 已建（engine/intraday_ofi.py）；"
-             "§44 窗口盘中→D收；breakout 臂盘中 conditioning",
+        "§44 窗口盘中→D收；breakout 臂盘中 conditioning",
     ),
     "seal_sincerity": DimensionValidation(
-        dimension_id="seal_sincerity", label="封单诚意(炸板/封单delta)",
-        lift=None, n=0, days_robust=0,
-        validation_status="探索性", weight_multiplier=0.5,
+        dimension_id="seal_sincerity",
+        label="封单诚意(炸板/封单delta)",
+        lift=None,
+        n=0,
+        days_robust=0,
+        validation_status="探索性",
+        weight_multiplier=0.5,
         source_script="(未测——S176 compute_seal_delta_ratio/volatility/drawdown 已建，60d live 后复验)",
         note="封单诚意 = Δseal_amount/volatility/drawdown 三合一；compute_seal_delta_ratio 已建；"
-             "§44 窗口盘中→D收；breakout 臂盘中 conditioning",
+        "§44 窗口盘中→D收；breakout 臂盘中 conditioning",
     ),
     "bid_ask_pressure": DimensionValidation(
-        dimension_id="bid_ask_pressure", label="买卖盘压力(OFI raw)",
-        lift=None, n=0, days_robust=0,
-        validation_status="探索性", weight_multiplier=0.5,
+        dimension_id="bid_ask_pressure",
+        label="买卖盘压力(OFI raw)",
+        lift=None,
+        n=0,
+        days_robust=0,
+        validation_status="探索性",
+        weight_multiplier=0.5,
         source_script="(未测——S176 compute_bid_ask_pressure 已建，60d live 后复验)",
         note="bid_ask_pressure = Σbuy/Σsell（涨停 sell=0 → cap 999）；compute_bid_ask_pressure 已建；"
-             "§44 窗口盘中→D收；breakout 臂盘中 conditioning",
+        "§44 窗口盘中→D收；breakout 臂盘中 conditioning",
     ),
 }
 
 
 def lift_to_multiplier(
-    lift: Optional[float], n: int, ci_overlap: bool = True, robust: bool = True,
+    lift: Optional[float],
+    n: int,
+    ci_overlap: bool = True,
+    robust: bool = True,
     days_robust: int = 0,
 ) -> tuple[str, float]:
     """R2+R8：lift/n/CI/robust/days_robust → (status, multiplier) 纯函数。
@@ -265,9 +346,9 @@ def lift_to_multiplier(
     if not days_sufficient:
         # §44v2 R6: days<60 不能下定论（不能 validated 也不能证否）→ provisional cap ×0.5
         if lift < PASS_LIFT_HARD_FLOOR:
-            return ("待复验", 0.5)   # would be 劣于随机 but days<60 → 不能证否
+            return ("待复验", 0.5)  # would be 劣于随机 but days<60 → 不能证否
         if lift >= PASS_LIFT_FLOOR:
-            return ("待复验", 0.5)   # would be validated but days<60 → 不能 validated
+            return ("待复验", 0.5)  # would be validated but days<60 → 不能 validated
         return ("未validated", 0.5)  # 1≤lift<2 → ×0.5（cap 不变）
 
     # days≥60: existing logic（robust/CI 仍生效）
@@ -285,9 +366,9 @@ def lift_to_multiplier(
 # r3-enforce R8 搁置（path_lift 没臂读+forward_test 18天<30阈值），但 R3-R4 sizing 接线独立有用
 # 让 ×0.5 cap 接 sizing 路径（当前默认 1.0 不咬）。前瞻基建，当前空转（breakout paper_track 不 sizing）
 DIM_ARM_MAP: dict[str, list[str] | None] = {
-    "floor": None,      # N/A——指数复制非选股，lift 不作用 → 1.0
-    "gap": None,        # dead_arm → 不 sizing
-    "limitup": None,    # dormant mock
+    "floor": None,  # N/A——指数复制非选股，lift 不作用 → 1.0
+    "gap": None,  # dead_arm → 不 sizing
+    "limitup": None,  # dormant mock
     "trend": ["trend_swing"],  # S181 R7：进 cron paper_track，×0.5 provisional cap（EXPLORATORY 未验证）
     # S185 P1-4（wok7j1arm grill）：盘中 conditioning 维度 → breakout 臂；低波 → floor 臂
     # 盘中因子 ofi/seal_sincerity/bid_ask_pressure 映射到 breakout（盘中 conditioning 非 T-1 选股）
@@ -309,7 +390,9 @@ DIM_ARM_MAP: dict[str, list[str] | None] = {
 # memory kline-backfill-x1-unlock-2026-09-19）：baostock kline backfill 后 bear chrono
 # cross-regime oos_supporting +0.97% p=0.0013 / n_test=64>=60 adequate power /
 # train bias -0.074%→+0.236%（证原负 train 是稀疏 artifact 非 edge 假象）。
-_FRESH_HARNESS_VERDICT: bool = False  # 默认 False——×1.0 unlock 须 env VR_ALLOW_X1DOT0=1（deploy 时设），保留 #7 runtime 控制非代码永久许可
+_FRESH_HARNESS_VERDICT: bool = (
+    False  # 默认 False——×1.0 unlock 须 env VR_ALLOW_X1DOT0=1（deploy 时设），保留 #7 runtime 控制非代码永久许可
+)
 
 
 def _x1dot0_upgrade_permitted() -> bool:
@@ -340,6 +423,7 @@ def lift_for_arm(arm: str, regime: str | None = None) -> tuple[float, str]:
     # arm_status override 优先于 registry：is_active=False → 返 0.0 停交易；weight_override 设值 → 优先
     try:
         from engine.trade_journal import TradeJournal
+
         status = TradeJournal().query_arm_status(arm)
         if status is not None:
             if not status["is_active"]:
@@ -349,8 +433,12 @@ def lift_for_arm(arm: str, regime: str | None = None) -> tuple[float, str]:
                 return (float(wo), f"arm override: {status.get('kill_reason') or 'manual'}")
     except Exception as e:  # noqa: BLE001
         import logging
-        logging.getLogger(__name__).warning("arm_status 读失败→registry fallback（不阻塞）: %s", e)  # arm_status 读失败（表未建/db 缺）→ 走 registry fallback（不阻塞，backward compat）
+
+        logging.getLogger(__name__).warning(
+            "arm_status 读失败→registry fallback（不阻塞）: %s", e
+        )  # arm_status 读失败（表未建/db 缺）→ 走 registry fallback（不阻塞，backward compat）
     from candidate_funnel.lift_override import get_effective_dimension
+
     dims = DIM_ARM_MAP.get(arm)
     if not dims:
         return (1.0, "N/A cap 不作用（floor/gap/mock）")
@@ -367,7 +455,9 @@ def lift_for_arm(arm: str, regime: str | None = None) -> tuple[float, str]:
                     # S218 #7: ×1.0 freeze 升级守卫 —— cap==1.0 须 fresh harness 许可
                     # （stats.py:483 oos_supporting caps at ×0.75 NOT ×1.0 until cross-regime replication）
                     if cap == 1.0 and not _x1dot0_upgrade_permitted():
-                        multipliers.append((0.75, f"{dim_id} regime={regime} ×1.0 freeze→保守×0.75（须 fresh harness run 许可）"))
+                        multipliers.append(
+                            (0.75, f"{dim_id} regime={regime} ×1.0 freeze→保守×0.75（须 fresh harness run 许可）")
+                        )
                         continue
                     note_suffix = " ×1.0 升级许可（fresh harness run）" if cap == 1.0 else ""
                     multipliers.append((cap, f"{dim_id} regime={regime}{note_suffix}"))
@@ -384,7 +474,11 @@ def lift_for_arm(arm: str, regime: str | None = None) -> tuple[float, str]:
 
 
 def _apply_evaluation_layer(
-    cards: list, genes: dict, activity: dict, eff, date: str,
+    cards: list,
+    genes: dict,
+    activity: dict,
+    eff,
+    date: str,
 ) -> tuple[list, dict]:
     """R5：在 funnel.py:466（card 构建循环后、return FunnelResult 前）注入评价层。
 
@@ -401,6 +495,7 @@ def _apply_evaluation_layer(
     复用 attach_first_board_analysis post-hoc card-mutation 模式（不改 build_diagnosis_card 参数）。
     """
     from candidate_funnel.lift_override import get_effective_dimension
+
     turnover_dim = get_effective_dimension("turnover")
     gene_dim = get_effective_dimension("gene_score")
 
@@ -414,7 +509,8 @@ def _apply_evaluation_layer(
         turnover_pct = act.get("turnover_pct") if isinstance(act, dict) else None
         if turnover_pct is not None and turnover_dim and turnover_dim.lift is not None:
             _t_status, t_mult = lift_to_multiplier(
-                turnover_dim.lift, turnover_dim.n,
+                turnover_dim.lift,
+                turnover_dim.n,
                 days_robust=turnover_dim.days_robust,
             )
             if t_mult < 1.0:
@@ -425,7 +521,8 @@ def _apply_evaluation_layer(
         gene_score = getattr(card, "gene_score", None)
         if gene_score is not None and gene_dim:
             _g_status, g_mult = lift_to_multiplier(
-                gene_dim.lift, gene_dim.n,
+                gene_dim.lift,
+                gene_dim.n,
                 days_robust=gene_dim.days_robust,
             )
             if g_mult < 1.0:
@@ -434,8 +531,7 @@ def _apply_evaluation_layer(
 
         # (2) 降权梯度（breakout 等其他维度按 lift_to_multiplier 映射，此处只标 turnover/gene
         #     即时处理，其他维度降权在 compute_strategy_score 注入 multiplier）
-        status = "demoted" if "turnover" in demoted_dims else (
-            "unranked" if "gene_score" in demoted_dims else "normal")
+        status = "demoted" if "turnover" in demoted_dims else ("unranked" if "gene_score" in demoted_dims else "normal")
         honest_label = "选股层无validated维度,edge待盘中验证"
 
         # 注入 card.evaluation（R4 models.py 加 Optional[dict] 字段）
@@ -456,23 +552,36 @@ def _apply_evaluation_layer(
         "honest_label": "选股层无validated维度,edge待盘中验证",
         "dimensions": [
             {
-                "dimension_id": d.dimension_id, "label": d.label,
-                "lift": d.lift, "n": d.n, "status": d.validation_status,
-                "weight_multiplier": d.weight_multiplier, "note": d.note,
+                "dimension_id": d.dimension_id,
+                "label": d.label,
+                "lift": d.lift,
+                "n": d.n,
+                "status": d.validation_status,
+                "weight_multiplier": d.weight_multiplier,
+                "note": d.note,
             }
             for d in DIMENSION_LIFT_REGISTRY.values()
             if not d.dimension_id.endswith("_ref")
             and d.dimension_id != "trend_swing"  # S181 R7: arm sizing 维度非选股层 §44 验证
             and d.dimension_id != "post_first_board"  # S209: arm sizing 维度非选股层
             and d.dimension_id != "consecutive_relay"  # S211: arm sizing 维度非选股层（regime-stratified）
-            and d.dimension_id not in ("low_volatility", "ofi_accumulated", "seal_sincerity", "bid_ask_pressure")  # S185 P1-4: 盘中/低波非选股层
+            and d.dimension_id
+            not in (
+                "low_volatility",
+                "ofi_accumulated",
+                "seal_sincerity",
+                "bid_ask_pressure",
+            )  # S185 P1-4: 盘中/低波非选股层
         ],
-        "pending_dims": [d.dimension_id for d in DIMENSION_LIFT_REGISTRY.values()
-                         if d.validation_status == "探索性"
-                         and d.dimension_id != "trend_swing"
-                         and d.dimension_id != "post_first_board"
-                         and d.dimension_id != "consecutive_relay"  # S211: arm sizing 维度
-                         and d.dimension_id not in ("ofi_accumulated", "seal_sincerity", "bid_ask_pressure")],  # S185 P1-4: 盘中因子非选股层 pending
+        "pending_dims": [
+            d.dimension_id
+            for d in DIMENSION_LIFT_REGISTRY.values()
+            if d.validation_status == "探索性"
+            and d.dimension_id != "trend_swing"
+            and d.dimension_id != "post_first_board"
+            and d.dimension_id != "consecutive_relay"  # S211: arm sizing 维度
+            and d.dimension_id not in ("ofi_accumulated", "seal_sincerity", "bid_ask_pressure")
+        ],  # S185 P1-4: 盘中因子非选股层 pending
         "frozen_commit": FROZEN_COMMIT,
     }
     return cards, evaluation_summary

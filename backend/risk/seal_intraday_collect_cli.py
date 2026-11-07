@@ -10,6 +10,7 @@ acquire()，HIGH3）。subprocess.run(timeout=110) 超时 SIGKILL 子进程，OS
 
 环境：subprocess 继承 env（VR_DATA_DIR/.vibe-research），cwd=backend/（risk 包可 import）。
 """
+
 from __future__ import annotations
 
 import json
@@ -25,8 +26,12 @@ def run_collect(payload: dict) -> dict:
     from datetime import datetime
 
     from risk.seal_intraday_collector import (
-        archive_old_partitions, collect_once, get_latest_snapshots, get_snapshots_by_code,
-        _get_conn, _DB_LOCK,
+        archive_old_partitions,
+        collect_once,
+        get_latest_snapshots,
+        get_snapshots_by_code,
+        _get_conn,
+        _DB_LOCK,
     )
     from risk.bomb_alert_rules import check_all_rules
     from risk.bomb_alert_dispatcher import process_alerts
@@ -68,9 +73,12 @@ def run_collect(payload: dict) -> dict:
         derived_written = 0
         try:
             from strategies.intraday_features import (
-                compute_derived_features, compute_trajectory,
-                persist_derived_features, persist_trajectory,
+                compute_derived_features,
+                compute_trajectory,
+                persist_derived_features,
+                persist_trajectory,
             )
+
             conn = _get_conn()
             try:
                 with _DB_LOCK:

@@ -77,6 +77,7 @@ class FeishuNotifier:
 
         try:
             import requests
+
             # 飞书 webhook interactive card payload（渲染卡片，非 JSON 文本）
             payload = {"msg_type": "interactive", "card": card}
             r = requests.post(self.webhook, json=payload, timeout=15)
@@ -108,10 +109,23 @@ def build_daily_review_card(review: dict[str, Any]) -> dict[str, Any]:
         {
             "tag": "column_set",
             "columns": [
-                {"tag": "column", "width": "weighted", "weight": 1,
-                 "elements": [{"tag": "markdown", "content": f"**STI温度**: {market.get('sti_score', '-')} ({market.get('sti_phase', '-')})"}]},
-                {"tag": "column", "width": "weighted", "weight": 1,
-                 "elements": [{"tag": "markdown", "content": f"**涨停数**: {market.get('zt_count', '-')}"}]},
+                {
+                    "tag": "column",
+                    "width": "weighted",
+                    "weight": 1,
+                    "elements": [
+                        {
+                            "tag": "markdown",
+                            "content": f"**STI温度**: {market.get('sti_score', '-')} ({market.get('sti_phase', '-')})",
+                        }
+                    ],
+                },
+                {
+                    "tag": "column",
+                    "width": "weighted",
+                    "weight": 1,
+                    "elements": [{"tag": "markdown", "content": f"**涨停数**: {market.get('zt_count', '-')}"}],
+                },
             ],
         },
         {"tag": "markdown", "content": "**板块轮动**"},
@@ -119,13 +133,19 @@ def build_daily_review_card(review: dict[str, Any]) -> dict[str, Any]:
 
     for sector in review.get("sector_rotation", [])[:5]:
         elements.append(
-            {"tag": "markdown", "content": f"  • {sector.get('sector')}: {sector.get('change_pct', 0):+.1f}% ({sector.get('rotation_signal', '-')})"}
+            {
+                "tag": "markdown",
+                "content": f"  • {sector.get('sector')}: {sector.get('change_pct', 0):+.1f}% ({sector.get('rotation_signal', '-')})",
+            }
         )
 
     elements.append({"tag": "markdown", "content": "**今日关注**"})
     for s in review.get("stocks", [])[:5]:
         elements.append(
-            {"tag": "markdown", "content": f"  • {s.get('name')}({s.get('code')}): {s.get('gene_score', 0)}分 {s.get('recommendation_level', '-')}"}
+            {
+                "tag": "markdown",
+                "content": f"  • {s.get('name')}({s.get('code')}): {s.get('gene_score', 0)}分 {s.get('recommendation_level', '-')}",
+            }
         )
 
     elements.append(
@@ -150,6 +170,9 @@ def build_recommendation_card(rec: dict[str, Any]) -> dict[str, Any]:
     ]
 
     return {
-        "header": {"title": {"tag": "plain_text", "content": f"📊 研究关注: {rec.get('name', '-')}({rec.get('code', '-')})"}, "template": "green"},
+        "header": {
+            "title": {"tag": "plain_text", "content": f"📊 研究关注: {rec.get('name', '-')}({rec.get('code', '-')})"},
+            "template": "green",
+        },
         "elements": elements,
     }

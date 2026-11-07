@@ -4,4 +4,5 @@
 chat.py 手写 TOOLS 列表 + `_exec_tool` 硬分支。`import ai.tools` 即触发
 stock_tools 注册 5 个数据工具 + 2 个预测工具。
 """
+
 from __future__ import annotations

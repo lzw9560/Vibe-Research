@@ -17,6 +17,7 @@
 
 用法：cd backend && .venv/bin/python tools/kline_ta_validation.py
 """
+
 from __future__ import annotations
 
 import json
@@ -84,20 +85,34 @@ def _compute_ta(bars: list[dict], target_date: str) -> dict | None:
     highs5 = [bars[t1_idx - j]["high"] or 0 for j in range(5)]
     lows5 = [bars[t1_idx - j]["low"] or 0 for j in range(5)]
     volat = (max(highs5) - min(lows5)) / close_t1 if close_t1 else 0.0
-    return {"momentum": momentum, "vol_surge": vol_surge, "ma_align": ma_align,
-            "breakout": breakout, "volatility": volat}
+    return {
+        "momentum": momentum,
+        "vol_surge": vol_surge,
+        "ma_align": ma_align,
+        "breakout": breakout,
+        "volatility": volat,
+    }
 
 
 def main() -> int:
     cache = json.loads(KLINE_CACHE.read_bytes())
     conn = sqlite3.connect(str(DB), timeout=10)
     try:
-        em_dates = [r[0] for r in conn.execute(
-            "SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
-        ).fetchall()]
-        zt_by_date = {d: {r[0] for r in conn.execute(
-            "SELECT DISTINCT code FROM gene_scores WHERE date=? AND data_source='eastmoney_live'", (d,)).fetchall()}
-            for d in em_dates}
+        em_dates = [
+            r[0]
+            for r in conn.execute(
+                "SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
+            ).fetchall()
+        ]
+        zt_by_date = {
+            d: {
+                r[0]
+                for r in conn.execute(
+                    "SELECT DISTINCT code FROM gene_scores WHERE date=? AND data_source='eastmoney_live'", (d,)
+                ).fetchall()
+            }
+            for d in em_dates
+        }
     finally:
         conn.close()
 
@@ -110,15 +125,14 @@ def main() -> int:
             ta = _compute_ta(bars, T)
             if ta is None:
                 continue
-            observations.append({"code": code, "T": T,
-                                  "is_zt": 1 if code in zt_T else 0, **ta})
+            observations.append({"code": code, "T": T, "is_zt": 1 if code in zt_T else 0, **ta})
 
     n = len(observations)
     n_zt = sum(o["is_zt"] for o in observations)
     base_rate = n_zt / n if n else 0
     print(f"=== kline TA → T 涨停 §44 60日复验窗口验证 ===")
     print(f"观测: {n}（{len(em_dates)} T 日 × ~{n // len(em_dates)} 股/T）")
-    print(f"涨停: {n_zt} = {base_rate*100:.2f}%（base rate）\n")
+    print(f"涨停: {n_zt} = {base_rate * 100:.2f}%（base rate）\n")
 
     for feat in features:
         vals = sorted(observations, key=lambda o: o[feat])
@@ -134,12 +148,16 @@ def main() -> int:
         bb_lo, bb_hi = _wilson(b_zt, q)
         sig = "CI不重叠" if tb_lo > bb_hi else "CI重叠"
         verdict = "≥2x validated" if lift >= 2.0 else "<2x 未 validated"
-        print(f"{feat:12s}: top {t_zt}/{q}={t_rate*100:.2f}%[{tb_lo*100:.1f},{tb_hi*100:.1f}]  "
-              f"bottom {b_zt}/{q}={b_rate*100:.2f}%[{bb_lo*100:.1f},{bb_hi*100:.1f}]  "
-              f"lift={lift:.3f}x → {verdict}（{sig}）")
-    print(f"\ncaveat: n_days={len(em_dates)}；universe=cache {len(cache)} 股（全市场 broad set，"
-          f"~{n // len(em_dates)} 股/T 有 T-1+20bar 前置历史）；"
-          f"若全 <2x → kline TA 对次日涨停无 §44 edge（标未 validated，不阻断接入，60日后复验）。")
+        print(
+            f"{feat:12s}: top {t_zt}/{q}={t_rate * 100:.2f}%[{tb_lo * 100:.1f},{tb_hi * 100:.1f}]  "
+            f"bottom {b_zt}/{q}={b_rate * 100:.2f}%[{bb_lo * 100:.1f},{bb_hi * 100:.1f}]  "
+            f"lift={lift:.3f}x → {verdict}（{sig}）"
+        )
+    print(
+        f"\ncaveat: n_days={len(em_dates)}；universe=cache {len(cache)} 股（全市场 broad set，"
+        f"~{n // len(em_dates)} 股/T 有 T-1+20bar 前置历史）；"
+        f"若全 <2x → kline TA 对次日涨停无 §44 edge（标未 validated，不阻断接入，60日后复验）。"
+    )
     return 0
 
 

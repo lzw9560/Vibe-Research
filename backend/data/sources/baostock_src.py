@@ -15,6 +15,7 @@ DependencyMissing（复用 _common 范式，下游惯用降级）。
 复用 ``transport.py`` 的限流模式（0.3s 最小间隔 + 随机抖动）+ ``circuit_breaker.get_breaker("baostock")``
 （5 次连续失败 → OPEN → 60s 后 HALF_OPEN 恢复）。login 失败触发熔断，query 异常/失败也计数。
 """
+
 from __future__ import annotations
 
 import logging
@@ -35,7 +36,7 @@ _BS_LOCK = threading.Lock()
 
 # ── 限流（防 IP 封禁，复用 transport.py 的 _em_last_call 模式）──────────────────
 _BS_MIN_INTERVAL = 0.3  # 最小请求间隔（秒）
-_bs_last_call = [0.0]           # 上次请求时间戳（可变单元素列表，模块级共享）
+_bs_last_call = [0.0]  # 上次请求时间戳（可变单元素列表，模块级共享）
 _bs_last_call_lock = threading.Lock()  # 保护 _bs_last_call 读写
 
 # liveness probe 间隔（durable fix 2026-10-26）：long-running server session 过期检测
@@ -66,8 +67,7 @@ def _mark_call() -> None:
 KLINE_FIELDS = "date,open,high,low,close,volume,amount,turn,pctChg,isST"
 
 # 数值字段（float 转换），其余（date / isST / time）保持字符串
-_FLOAT_FIELDS = frozenset({"open", "high", "low", "close", "volume", "amount",
-                           "turn", "pctChg", "preclose"})
+_FLOAT_FIELDS = frozenset({"open", "high", "low", "close", "volume", "amount", "turn", "pctChg", "preclose"})
 
 
 def _probe_alive() -> bool:
@@ -78,11 +78,15 @@ def _probe_alive() -> bool:
     error_code=='0' = session 活；异常或非 0 = 死。
     """
     import baostock as bs  # noqa: PLC0415
+
     try:
         rs = bs.query_history_k_data_plus(
-            "sh.600000", "date,close",
-            start_date="2026-01-01", end_date="2026-01-02",
-            frequency="d", adjustflag="2",
+            "sh.600000",
+            "date,close",
+            start_date="2026-01-01",
+            end_date="2026-01-02",
+            frequency="d",
+            adjustflag="2",
         )
         _mark_call()
         return rs.error_code == "0"
@@ -119,6 +123,7 @@ def ensure_login() -> None:
             # 假熔断解除：直连验证服务端，成功→reset+复用login（S236-R6）
             _rate_limit()
             import baostock as _bs_probe  # noqa: PLC0415
+
             try:
                 _rs = _bs_probe.login()
             except Exception as e:  # noqa: BLE001
@@ -137,6 +142,7 @@ def ensure_login() -> None:
             return
         _rate_limit()
         import baostock as bs  # noqa: PLC0415
+
         try:
             rs = bs.login()
         except Exception as e:  # noqa: BLE001
@@ -168,6 +174,7 @@ def logout() -> None:
     _BS_READY = False
     try:
         import baostock as bs  # noqa: PLC0415
+
         bs.logout()
     except Exception:  # noqa: BLE001
         pass
@@ -212,6 +219,7 @@ def fetch_5min_bars(code: str, start: str, end: str) -> list[dict[str, Any]]:
         logger.warning("[baostock] login 不可用: %s", e)
         return []
     import baostock as bs  # noqa: PLC0415
+
     bc = _six_to_baostock(code)
     bars: list[dict[str, Any]] = []
     breaker = get_breaker("baostock")
@@ -223,20 +231,29 @@ def fetch_5min_bars(code: str, start: str, end: str) -> list[dict[str, Any]]:
         _rate_limit()
         try:
             rs = bs.query_history_k_data_plus(
-                bc, "date,time,open,high,low,close,volume",
-                start_date=start, end_date=end, frequency="5", adjustflag="2",
+                bc,
+                "date,time,open,high,low,close,volume",
+                start_date=start,
+                end_date=end,
+                frequency="5",
+                adjustflag="2",
             )
             _mark_call()
             if rs.error_code == "0":
                 breaker.record_success()
                 while rs.next():
                     row = rs.get_row_data()
-                    bars.append({
-                        "date": row[0], "time": row[1],
-                        "open": float(row[2]), "high": float(row[3]),
-                        "low": float(row[4]), "close": float(row[5]),
-                        "volume": float(row[6]) if row[6] else 0.0,
-                    })
+                    bars.append(
+                        {
+                            "date": row[0],
+                            "time": row[1],
+                            "open": float(row[2]),
+                            "high": float(row[3]),
+                            "low": float(row[4]),
+                            "close": float(row[5]),
+                            "volume": float(row[6]) if row[6] else 0.0,
+                        }
+                    )
             else:
                 breaker.record_failure()
         except Exception as e:  # noqa: BLE001
@@ -266,8 +283,11 @@ def _parse_row(field_names: list[str], row: list[str]) -> dict[str, Any]:
 
 
 def fetch_bars(
-    code: str, start: str, end: str,
-    fields: str = KLINE_FIELDS, adjustflag: str = "2",
+    code: str,
+    start: str,
+    end: str,
+    fields: str = KLINE_FIELDS,
+    adjustflag: str = "2",
     frequency: str = "d",
 ) -> list[dict[str, Any]]:
     """通用 baostock K 线（可配 fields/adjustflag/frequency）。
@@ -288,6 +308,7 @@ def fetch_bars(
         logger.warning("[baostock] login 不可用: %s", e)
         return []
     import baostock as bs  # noqa: PLC0415
+
     bc = _to_bs_code(code)
     field_names = fields.split(",")
     bars: list[dict[str, Any]] = []
@@ -299,9 +320,12 @@ def fetch_bars(
         _rate_limit()
         try:
             rs = bs.query_history_k_data_plus(
-                bc, fields,
-                start_date=start, end_date=end,
-                frequency=frequency, adjustflag=adjustflag,
+                bc,
+                fields,
+                start_date=start,
+                end_date=end,
+                frequency=frequency,
+                adjustflag=adjustflag,
             )
             _mark_call()
             if rs.error_code == "0":
@@ -323,7 +347,10 @@ def fetch_bars(
 
 
 def fetch_daily_bars(
-    code: str, start: str, end: str, adjustflag: str = "2",
+    code: str,
+    start: str,
+    end: str,
+    adjustflag: str = "2",
 ) -> list[dict[str, Any]]:
     """baostock 日K（标准 10 字段：date/open/high/low/close/volume/amount/turn/pctChg/isST）。
 
@@ -331,8 +358,7 @@ def fetch_daily_bars(
     返 [{date, open, high, low, close, volume, amount, turn, pctChg, isST}, ...]。
     缺数据/异常返 []（不臆造）。
     """
-    return fetch_bars(code, start, end, fields=KLINE_FIELDS,
-                      adjustflag=adjustflag, frequency="d")
+    return fetch_bars(code, start, end, fields=KLINE_FIELDS, adjustflag=adjustflag, frequency="d")
 
 
 def fetch_stock_industry() -> dict[str, str]:
@@ -348,6 +374,7 @@ def fetch_stock_industry() -> dict[str, str]:
         logger.warning("[baostock] login 不可用: %s", e)
         return {}
     import baostock as bs  # noqa: PLC0415
+
     mapping: dict[str, str] = {}
     breaker = get_breaker("baostock")
     if not breaker.allow_request():
@@ -389,6 +416,7 @@ def fetch_trade_dates(start: str, end: str) -> list[str]:
         logger.warning("[baostock] login 不可用: %s", e)
         return []
     import baostock as bs  # noqa: PLC0415
+
     trading: list[str] = []
     breaker = get_breaker("baostock")
     if not breaker.allow_request():
@@ -426,6 +454,7 @@ def fetch_all_stock(day: str) -> list[dict[str, str]]:
         logger.warning("[baostock] login 不可用: %s", e)
         return []
     import baostock as bs  # noqa: PLC0415
+
     stocks: list[dict[str, str]] = []
     breaker = get_breaker("baostock")
     if not breaker.allow_request():
@@ -441,11 +470,13 @@ def fetch_all_stock(day: str) -> list[dict[str, str]]:
                 d = rs.get_row_data()
                 if len(d) < 2:
                     continue
-                stocks.append({
-                    "code": d[0],
-                    "tradeStatus": d[1],
-                    "code_name": d[2] if len(d) > 2 else "",
-                })
+                stocks.append(
+                    {
+                        "code": d[0],
+                        "tradeStatus": d[1],
+                        "code_name": d[2] if len(d) > 2 else "",
+                    }
+                )
         else:
             breaker.record_failure()
     except Exception as e:  # noqa: BLE001
@@ -468,6 +499,7 @@ def fetch_stock_basic(code: str = "") -> list[dict[str, str]]:
         logger.warning("[baostock] login 不可用: %s", e)
         return []
     import baostock as bs  # noqa: PLC0415
+
     rows: list[dict[str, str]] = []
     breaker = get_breaker("baostock")
     if not breaker.allow_request():
@@ -481,14 +513,16 @@ def fetch_stock_basic(code: str = "") -> list[dict[str, str]]:
             breaker.record_success()
             while rs.next():
                 d = rs.get_row_data()
-                rows.append({
-                    "code": d[0] if len(d) > 0 else "",
-                    "code_name": d[1] if len(d) > 1 else "",
-                    "ipoDate": d[2] if len(d) > 2 else "",
-                    "outDate": d[3] if len(d) > 3 else "",
-                    "type": d[4] if len(d) > 4 else "",
-                    "status": d[5] if len(d) > 5 else "",
-                })
+                rows.append(
+                    {
+                        "code": d[0] if len(d) > 0 else "",
+                        "code_name": d[1] if len(d) > 1 else "",
+                        "ipoDate": d[2] if len(d) > 2 else "",
+                        "outDate": d[3] if len(d) > 3 else "",
+                        "type": d[4] if len(d) > 4 else "",
+                        "status": d[5] if len(d) > 5 else "",
+                    }
+                )
         else:
             breaker.record_failure()
     except Exception as e:  # noqa: BLE001
@@ -516,6 +550,7 @@ def fetch_profit_data(code: str, year: int, quarter: int) -> dict[str, Any] | No
         logger.warning("[baostock] login 不可用: %s", e)
         return None
     import baostock as bs  # noqa: PLC0415
+
     bc = _to_bs_code(code)
     breaker = get_breaker("baostock")
     if not breaker.allow_request():

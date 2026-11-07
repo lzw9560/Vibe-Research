@@ -5,6 +5,7 @@
 - 串联 003-010（数据层 + 三层剔除）→ 011-021 评分排序落盘
 - S148 Phase 2 (a)：attach_first_board_analysis 把首板评分接到涨停叉 lane
 """
+
 from __future__ import annotations
 
 import logging
@@ -36,19 +37,19 @@ _logger = logging.getLogger(__name__)
 # grill 收紧：5 核心维度（seal_time/sector_link/market_cap/seal_ratio/turnover）
 # + 保留 5 旧维度 + 废弃 2 维度（auction/northbound 返 -1 不参与加权）。
 _SCORE_DIMS = [
-    ("seal_time", score_dim_seal_time),       # 核心：封板时间
-    ("sector_link", score_dim_sector_link),   # 核心：板块联动
-    ("market_cap", score_dim_market_cap),     # 核心：市值
-    ("seal_ratio", score_dim_seal_ratio),     # 核心：封单比
-    ("turnover", score_dim_turnover),         # 核心：换手率（grill 收紧：换手改评分）
-    ("hot_money", score_dim2_hot_money),      # 保留：游资画像
-    ("chip", score_dim4_chip),                # 保留：筹码结构
+    ("seal_time", score_dim_seal_time),  # 核心：封板时间
+    ("sector_link", score_dim_sector_link),  # 核心：板块联动
+    ("market_cap", score_dim_market_cap),  # 核心：市值
+    ("seal_ratio", score_dim_seal_ratio),  # 核心：封单比
+    ("turnover", score_dim_turnover),  # 核心：换手率（grill 收紧：换手改评分）
+    ("hot_money", score_dim2_hot_money),  # 保留：游资画像
+    ("chip", score_dim4_chip),  # 保留：筹码结构
     ("institution", score_dim7_institution),  # 保留：龙虎榜机构
-    ("theme", score_dim8_theme),              # 保留：题材热度
-    ("event", score_dim9_event),              # 保留：事件评分
+    ("theme", score_dim8_theme),  # 保留：题材热度
+    ("event", score_dim9_event),  # 保留：事件评分
     # 废弃（数据缺失，返 -1 不参与加权）：
-    ("auction", score_dim5_auction),          # 竞价（T-1 盘后无数据→-1）
-    ("northbound", score_dim6_northbound),    # 北向（2024-08-19 后停更→-1）
+    ("auction", score_dim5_auction),  # 竞价（T-1 盘后无数据→-1）
+    ("northbound", score_dim6_northbound),  # 北向（2024-08-19 后停更→-1）
 ]
 
 
@@ -181,7 +182,7 @@ def rank_candidates(candidates: list[dict], date: str) -> list[dict]:
         # 候选<3 只时全部精选
         for s in scored:
             s["pool_type"] = "精选"
-    print(f"[fb_filter] 精选池: {sum(1 for s in scored if s.get('pool_type')=='精选')}/{len(scored)}", flush=True)
+    print(f"[fb_filter] 精选池: {sum(1 for s in scored if s.get('pool_type') == '精选')}/{len(scored)}", flush=True)
 
     return scored
 
@@ -215,10 +216,14 @@ def run_first_board_filter(date: str, pool: list[dict] | None = None) -> dict:
     # 不打东财、不重复在内部 3 处 em_zt_topic_pool 加守卫（避免散落）。
     # 显式历史交易日照常放行。
     from vr_paths import is_trading_day as _is_trading_day  # noqa: PLC0415
+
     try:
         from datetime import date as _fb_date
-        _parsed = _fb_date.fromisoformat(date) if "-" in date else _fb_date(
-            int(compact_date[:4]), int(compact_date[4:6]), int(compact_date[6:8])
+
+        _parsed = (
+            _fb_date.fromisoformat(date)
+            if "-" in date
+            else _fb_date(int(compact_date[:4]), int(compact_date[4:6]), int(compact_date[6:8]))
         )
     except (ValueError, TypeError):
         _parsed = _fb_date.today()
@@ -258,11 +263,12 @@ def run_first_board_filter(date: str, pool: list[dict] | None = None) -> dict:
 
     # 009-010 层3 市场环境
     after_l3, filtered_l3, env_flags = _exclusions.exclude_layer3_market_env(
-        after_l2, compact_date, first_boards=first_boards,
+        after_l2,
+        compact_date,
+        first_boards=first_boards,
     )
     excluded.extend(filtered_l3)
-    print(f"[fb_filter] 层3剔除: {len(filtered_l3)} 剩余: {len(after_l3)} "
-          f"env={env_flags}", flush=True)
+    print(f"[fb_filter] 层3剔除: {len(filtered_l3)} 剩余: {len(after_l3)} env={env_flags}", flush=True)
 
     # 011-021 9 维度评分 + 排序 + 落盘
     print(f"[fb_filter] 开始评分 {len(after_l3)} 只候选...", flush=True)
@@ -329,5 +335,5 @@ if __name__ == "__main__":
         print(f"  L{e['layer']} {e['code']} {e['reason']}")
     print("评分 TOP 5:")
     for c in result.get("scored_candidates", [])[:5]:
-        print(f"  #{c['rank']} {c['code']} {c.get('name','')} total={c['total']:.1f}")
+        print(f"  #{c['rank']} {c['code']} {c.get('name', '')} total={c['total']:.1f}")
         print(f"    scores: {c['scores']}")

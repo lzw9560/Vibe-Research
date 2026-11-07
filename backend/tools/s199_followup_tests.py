@@ -22,6 +22,7 @@ Test 2 — binary gate ablation (threshold edge, not graded rank):
 Usage: python tools/s199_followup_tests.py [signals.json]
 Default: /tmp/s194_signals_fresh.json
 """
+
 import json
 import sys
 from collections import defaultdict
@@ -86,16 +87,14 @@ def _winrate(returns: list[float]) -> float:
 
 def load_data(path: str) -> list[dict]:
     raw = Path(path).read_text()
-    data = json.loads(raw[raw.index("["):])  # 容错 baostock 污染
+    data = json.loads(raw[raw.index("[") :])  # 容错 baostock 污染
     for d in data:
-        d["gap_a"] = encode_gap_direction_aware(
-            d.get("gap_regime", "无"), d.get("gap_direction", "无"))
+        d["gap_a"] = encode_gap_direction_aware(d.get("gap_regime", "无"), d.get("gap_direction", "无"))
         d["gap_b"] = encode_gap_direction_agnostic(d.get("gap_regime", "无"))
     return data
 
 
-def _split_trade_level(cases: list[dict], gap_field: str,
-                       arm_filter: str | None = None):
+def _split_trade_level(cases: list[dict], gap_field: str, arm_filter: str | None = None):
     """Split cases into surv (gap>0) / raw (gap==0) / all, by day.
 
     arm_filter restricts to one arm (deconfound). Returns (surv, raw, all).
@@ -118,8 +117,7 @@ def _split_trade_level(cases: list[dict], gap_field: str,
     return surv, raw, all_
 
 
-def _split_market_level(cases: list[dict], gap_field: str, n: int,
-                        arm_filter: str | None = None):
+def _split_market_level(cases: list[dict], gap_field: str, n: int, arm_filter: str | None = None):
     """Forward-return split (window n) into gap-present / no-gap / all by day."""
     gap_fwd: list[tuple[float, str]] = []
     nogap_fwd: list[tuple[float, str]] = []
@@ -164,14 +162,21 @@ def _run_lift_block(surv, raw, all_, label: str) -> dict:
     perm_p = permutation_p_value(surv, all_, lift) if lift is not None else 1.0
     pl_days = pl.n_days if pl else 0
     lift_s = f"{lift:.4f}" if lift is not None else "n/a"
-    print(f"  {label}: surv_n={n_surv} raw_n={n_raw} n_days={n_days} "
-          f"surv_wr={surv_wr:.4f} raw_wr={raw_wr:.4f} "
-          f"lift={lift_s} perm_p={perm_p:.4f} (pl_days={pl_days})")
+    print(
+        f"  {label}: surv_n={n_surv} raw_n={n_raw} n_days={n_days} "
+        f"surv_wr={surv_wr:.4f} raw_wr={raw_wr:.4f} "
+        f"lift={lift_s} perm_p={perm_p:.4f} (pl_days={pl_days})"
+    )
     return {
-        "label": label, "n_surv": n_surv, "n_raw": n_raw, "n_days": n_days,
-        "surv_wr": round(surv_wr, 4), "raw_wr": round(raw_wr, 4),
+        "label": label,
+        "n_surv": n_surv,
+        "n_raw": n_raw,
+        "n_days": n_days,
+        "surv_wr": round(surv_wr, 4),
+        "raw_wr": round(raw_wr, 4),
         "lift": round(lift, 4) if lift is not None else None,
-        "perm_p": perm_p, "pl_days": pl_days,
+        "perm_p": perm_p,
+        "pl_days": pl_days,
     }
 
 
@@ -203,8 +208,10 @@ def test1_breakout_stratified(data: list[dict]) -> None:
     surv_fl, raw_fl, all_fl = _split_trade_level(data, "gap_a", arm_filter="floor")
     n_fl_surv = sum(len(v) for v in surv_fl.values())
     n_fl_raw = sum(len(v) for v in raw_fl.values())
-    print(f"\n  floor arm (WITHOUT-breakout): surv_n={n_fl_surv} raw_n={n_fl_raw} "
-          f"(too small for robust §44, underpowered)")
+    print(
+        f"\n  floor arm (WITHOUT-breakout): surv_n={n_fl_surv} raw_n={n_fl_raw} "
+        f"(too small for robust §44, underpowered)"
+    )
 
     # --- B. Market-level 3/5/10d (pre-window sanity, §44v2 ①) ---
     print("\n--- B. Market-level (bars forward 3/5/10d, pre-window sanity) ---")
@@ -246,20 +253,27 @@ def test1_breakout_stratified(data: list[dict]) -> None:
         delta = r_orig["lift"] - r_bk_a["lift"]
         print(f"  confound delta (orig - bk-stratified) = {delta:+.4f}")
     # Simpson's paradox: pooled winrate lift vs day-paired lift
-    pooled_lift_a = (r_bk_a["surv_wr"] / r_bk_a["raw_wr"]
-                     if r_bk_a["raw_wr"] > 0 else None)
-    print(f"  Simpson check: pooled_wr_lift={pooled_lift_a:.4f} "
-          f"(surv_wr={r_bk_a['surv_wr']} vs raw_wr={r_bk_a['raw_wr']}) "
-          f"vs day_paired_lift={r_bk_a['lift']}")
+    pooled_lift_a = r_bk_a["surv_wr"] / r_bk_a["raw_wr"] if r_bk_a["raw_wr"] > 0 else None
+    print(
+        f"  Simpson check: pooled_wr_lift={pooled_lift_a:.4f} "
+        f"(surv_wr={r_bk_a['surv_wr']} vs raw_wr={r_bk_a['raw_wr']}) "
+        f"vs day_paired_lift={r_bk_a['lift']}"
+    )
     if pooled_lift_a and r_bk_a["lift"]:
         if pooled_lift_a < 1.0 < r_bk_a["lift"]:
-            print("  → SIMPSON'S PARADOX: pooled winrate lift<1 (gap LOSES absolute) "
-                  "but day-paired lift>1 (gap wins per-day relative). 'Selection edge' "
-                  "= day-clustering artifact, NOT per-trade winrate edge.")
-    print(f"  floor arm realized=0 → stratification is no-op (all gap-present ARE "
-          f"breakout). Deconfound = within-breakout comparison (breakout held constant).")
-    print("  → lift persists within breakout arm (NOT breakout-driven), BUT pooled "
-          "winrate<1 → not a robust per-trade selection edge")
+            print(
+                "  → SIMPSON'S PARADOX: pooled winrate lift<1 (gap LOSES absolute) "
+                "but day-paired lift>1 (gap wins per-day relative). 'Selection edge' "
+                "= day-clustering artifact, NOT per-trade winrate edge."
+            )
+    print(
+        f"  floor arm realized=0 → stratification is no-op (all gap-present ARE "
+        f"breakout). Deconfound = within-breakout comparison (breakout held constant)."
+    )
+    print(
+        "  → lift persists within breakout arm (NOT breakout-driven), BUT pooled "
+        "winrate<1 → not a robust per-trade selection edge"
+    )
 
 
 # ── Test 2: binary gate ablation ────────────────────────────────────────────
@@ -272,14 +286,19 @@ def _gate_metrics(cases: list[dict], label: str) -> dict:
     mean = sum(rets) / len(rets) if rets else 0.0
     t = day_clustered_t_test(rets, dates)
     if t:
-        print(f"  {label}: n={len(rets)} n_days={len(set(dates))} "
-              f"winrate={wr:.4f} mean_return={mean:+.4f}% "
-              f"day_t={t.t_stat:+.3f} p={t.p_one_sided:.4f}")
+        print(
+            f"  {label}: n={len(rets)} n_days={len(set(dates))} "
+            f"winrate={wr:.4f} mean_return={mean:+.4f}% "
+            f"day_t={t.t_stat:+.3f} p={t.p_one_sided:.4f}"
+        )
     else:
         print(f"  {label}: n={len(rets)} n_days<2 (insufficient)")
     return {
-        "label": label, "n": len(rets), "n_days": len(set(dates)),
-        "winrate": round(wr, 4), "mean_return": round(mean, 6),
+        "label": label,
+        "n": len(rets),
+        "n_days": len(set(dates)),
+        "winrate": round(wr, 4),
+        "mean_return": round(mean, 6),
         "t_stat": round(t.t_stat, 4) if t else None,
         "p": t.p_one_sided if t else None,
     }
@@ -300,9 +319,11 @@ def test2_binary_gate_ablation(data: list[dict]) -> None:
     m_off = _gate_metrics(ungated, "gate OFF (all, ablated)")
     d_wr = m_on["winrate"] - m_off["winrate"]
     d_mean = m_on["mean_return"] - m_off["mean_return"]
-    print(f"  DELTA: winrate {d_wr*100:+.4f}pp | mean_return {d_mean:+.4f}pp")
-    print(f"  → gate improves winrate? {'YES' if d_wr > 0.01 else 'NO/marginal'} "
-          f"({'edge' if d_wr > 0.02 and (m_on['p'] or 1) < 0.05 else 'no clear edge'})")
+    print(f"  DELTA: winrate {d_wr * 100:+.4f}pp | mean_return {d_mean:+.4f}pp")
+    print(
+        f"  → gate improves winrate? {'YES' if d_wr > 0.01 else 'NO/marginal'} "
+        f"({'edge' if d_wr > 0.02 and (m_on['p'] or 1) < 0.05 else 'no clear edge'})"
+    )
 
     # --- B. Within breakout arm (deconfounded) ---
     print("\n--- B. Within breakout arm (deconfounded), gap_a ---")
@@ -313,7 +334,7 @@ def test2_binary_gate_ablation(data: list[dict]) -> None:
     m_off_bk = _gate_metrics(ungated_bk, "gate OFF (all bk, ablated)")
     d_wr_bk = m_on_bk["winrate"] - m_off_bk["winrate"]
     d_mean_bk = m_on_bk["mean_return"] - m_off_bk["mean_return"]
-    print(f"  DELTA: winrate {d_wr_bk*100:+.4f}pp | mean_return {d_mean_bk:+.4f}pp")
+    print(f"  DELTA: winrate {d_wr_bk * 100:+.4f}pp | mean_return {d_mean_bk:+.4f}pp")
 
     # --- C. gap_b (direction-agnostic) within breakout ---
     print("\n--- C. Within breakout arm, gap_b (direction-agnostic) ---")
@@ -321,19 +342,15 @@ def test2_binary_gate_ablation(data: list[dict]) -> None:
     m_on_bb = _gate_metrics(gated_b_bk, "gate ON  (gap_b-present bk)")
     d_wr_bb = m_on_bb["winrate"] - m_off_bk["winrate"]
     d_mean_bb = m_on_bb["mean_return"] - m_off_bk["mean_return"]
-    print(f"  DELTA: winrate {d_wr_bb*100:+.4f}pp | mean_return {d_mean_bb:+.4f}pp")
+    print(f"  DELTA: winrate {d_wr_bb * 100:+.4f}pp | mean_return {d_mean_bb:+.4f}pp")
 
     # --- D. Summary ---
     print("\n--- D. Test 2 summary ---")
     print(f"  graded IC ablation (S199 R2): delta_ic≈-0.002 p=0.56 (no rank edge)")
-    print(f"  binary gate (all arms): winrate_delta={d_wr*100:+.4f}pp "
-          f"mean_delta={d_mean:+.4f}pp")
-    print(f"  binary gate (bk-stratified): winrate_delta={d_wr_bk*100:+.4f}pp "
-          f"mean_delta={d_mean_bk:+.4f}pp")
-    print("  → if gate delta materially >0 + gated day_t significant: gap-as-binary-gate "
-          "has edge (graded IC missed)")
-    print("  → if gate delta ≈0: binary gate also no edge, 'no_contribution' holds "
-          "for both graded and binary")
+    print(f"  binary gate (all arms): winrate_delta={d_wr * 100:+.4f}pp mean_delta={d_mean:+.4f}pp")
+    print(f"  binary gate (bk-stratified): winrate_delta={d_wr_bk * 100:+.4f}pp mean_delta={d_mean_bk:+.4f}pp")
+    print("  → if gate delta materially >0 + gated day_t significant: gap-as-binary-gate has edge (graded IC missed)")
+    print("  → if gate delta ≈0: binary gate also no edge, 'no_contribution' holds for both graded and binary")
 
 
 def main() -> None:
@@ -346,8 +363,10 @@ def main() -> None:
     n_gap_a = sum(1 for d in data if d["gap_a"] > 0)
     n_gap_b = sum(1 for d in data if d["gap_b"] > 0)
     n_days = len(set(d["entry_date"] for d in data if d.get("gross_return") is not None))
-    print(f"# S199 follow-up: n_total={n_total} n_ret={n_ret} n_days={n_days} "
-          f"arm: breakout={n_bk} floor={n_floor} | gap_a>0={n_gap_a} gap_b>0={n_gap_b}")
+    print(
+        f"# S199 follow-up: n_total={n_total} n_ret={n_ret} n_days={n_days} "
+        f"arm: breakout={n_bk} floor={n_floor} | gap_a>0={n_gap_a} gap_b>0={n_gap_b}"
+    )
     print(f"# §44v2: n_days={n_days} >=60 → robust tier, Bonferroni (not BH)")
 
     test1_breakout_stratified(data)

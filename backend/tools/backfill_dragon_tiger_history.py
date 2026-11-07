@@ -11,6 +11,7 @@
 
 增量：skip 已 fetch 的 trade_date（断点续跑）
 """
+
 from __future__ import annotations
 import json
 import sys
@@ -96,20 +97,22 @@ def save_day(conn, trade_date: str, meta: dict) -> int:
     # 插入新行
     batch = []
     for r in rows:
-        batch.append((
-            trade_date,
-            r.get("SECURITY_CODE", ""),
-            r.get("OPERATEDEPT_NAME", ""),
-            str(r.get("OPERATEDEPT_CODE", "")),
-            r.get("side", ""),
-            r.get("BUY"),
-            r.get("SELL"),
-            r.get("NET"),
-            r.get("EXPLANATION", ""),
-            r.get("CHANGE_RATE"),
-            r.get("CLOSE_PRICE"),
-            r.get("ACCUM_AMOUNT"),
-        ))
+        batch.append(
+            (
+                trade_date,
+                r.get("SECURITY_CODE", ""),
+                r.get("OPERATEDEPT_NAME", ""),
+                str(r.get("OPERATEDEPT_CODE", "")),
+                r.get("side", ""),
+                r.get("BUY"),
+                r.get("SELL"),
+                r.get("NET"),
+                r.get("EXPLANATION", ""),
+                r.get("CHANGE_RATE"),
+                r.get("CLOSE_PRICE"),
+                r.get("ACCUM_AMOUNT"),
+            )
+        )
     conn.executemany(
         "INSERT INTO dragon_tiger_rows (trade_date,security_code,dept_name,dept_code,side,buy,sell,net,explanation,change_rate,close_price,accum_amount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         batch,
@@ -144,14 +147,17 @@ def backfill(start: str = "2018-01-01", end: str = "2026-10-07") -> None:
             elapsed = time.time() - t0
             rate = (i + 1 - skip) / elapsed if elapsed > 0 and (i + 1 - skip) > 0 else 0
             eta = (len(days) - i - 1) / rate if rate > 0 else 0
-            log.info(f"  [{i+1}/{len(days)}] {d} ok={ok} fail={fail} skip={skip} "
-                     f"rows_day={n} elapsed={elapsed:.0f}s rate={rate:.2f}/d ETA={eta:.0f}s ({eta/60:.1f}min)")
+            log.info(
+                f"  [{i + 1}/{len(days)}] {d} ok={ok} fail={fail} skip={skip} "
+                f"rows_day={n} elapsed={elapsed:.0f}s rate={rate:.2f}/d ETA={eta:.0f}s ({eta / 60:.1f}min)"
+            )
 
     conn.close()
     elapsed = time.time() - t0
-    log.info(f"\n[done] total={len(days)} ok={ok} fail={fail} skip={skip} "
-             f"elapsed={elapsed:.0f}s ({elapsed/60:.1f}min)")
-    log.info(f"[saved] {DB_PATH} ({DB_PATH.stat().st_size/1024:.0f}KB)")
+    log.info(
+        f"\n[done] total={len(days)} ok={ok} fail={fail} skip={skip} elapsed={elapsed:.0f}s ({elapsed / 60:.1f}min)"
+    )
+    log.info(f"[saved] {DB_PATH} ({DB_PATH.stat().st_size / 1024:.0f}KB)")
 
 
 if __name__ == "__main__":

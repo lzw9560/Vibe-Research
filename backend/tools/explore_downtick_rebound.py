@@ -9,6 +9,7 @@
 数据：intraday_quote_snapshots（14 天 <60 → exploratory）
 跑法：cd backend && .venv/bin/python tools/explore_downtick_rebound.py
 """
+
 import json
 import sqlite3
 import statistics
@@ -39,9 +40,15 @@ def load_kline_bars(code):
         bars = json.loads(row[0])
     except Exception:
         return []
-    out = [{"date": str(b.get("date",""))[:10], "open": float(b.get("open",0) or 0),
-            "close": float(b.get("close",0) or 0)}
-           for b in bars if b.get("date") and float(b.get("open",0) or 0)>0]
+    out = [
+        {
+            "date": str(b.get("date", ""))[:10],
+            "open": float(b.get("open", 0) or 0),
+            "close": float(b.get("close", 0) or 0),
+        }
+        for b in bars
+        if b.get("date") and float(b.get("open", 0) or 0) > 0
+    ]
     out.sort(key=lambda x: x["date"])
     return out
 
@@ -49,10 +56,10 @@ def load_kline_bars(code):
 def find_next_open(bars, date):
     for i, b in enumerate(bars):
         if b["date"] == date:
-            prev_c = bars[i-1]["close"] if i > 0 else 0.0
+            prev_c = bars[i - 1]["close"] if i > 0 else 0.0
             if i + 2 < len(bars):
                 # D 跌停，entry=D+1 open（次日买），exit=D+2 open（T+1 卖）
-                return (prev_c, b["open"], b["close"], bars[i+1]["open"], bars[i+1]["close"], bars[i+2]["open"])
+                return (prev_c, b["open"], b["close"], bars[i + 1]["open"], bars[i + 1]["close"], bars[i + 2]["open"])
             return None
     return None
 
@@ -88,8 +95,16 @@ def main():
         # R3 exit 一字（D+2 open vs d1_close 涨跌幅 abs>=9.5%）
         d2_gap_pct = (d2_open - d1_close) / d1_close * 100 if d1_close > 0 else 0
         is_exit_locked = abs(d2_gap_pct) >= 9.5
-        obs.append({"date": date, "code": code, "edge": edge, "win": 1 if edge > 0 else 0,
-                    "entry_locked": is_entry_locked, "exit_locked": is_exit_locked})
+        obs.append(
+            {
+                "date": date,
+                "code": code,
+                "edge": edge,
+                "win": 1 if edge > 0 else 0,
+                "entry_locked": is_entry_locked,
+                "exit_locked": is_exit_locked,
+            }
+        )
 
     n = len(obs)
     days = len(set(o["date"] for o in obs))
@@ -101,7 +116,7 @@ def main():
     rets = [o["edge"] for o in obs]
     wr = sum(o["win"] for o in obs) / n
     print(f"\n=== 跌停股次日反弹 T+1 edge（全样本）===")
-    print(f"n={n} days={days} net_mean={statistics.mean(rets)*100:.2f}% WR={wr*100:.2f}%")
+    print(f"n={n} days={days} net_mean={statistics.mean(rets) * 100:.2f}% WR={wr * 100:.2f}%")
 
     # §44 v3 R1+R3 filter
     obs_f = [o for o in obs if not o["entry_locked"] and not o["exit_locked"]]
@@ -110,9 +125,10 @@ def main():
     if obs_f:
         rets_f = [o["edge"] for o in obs_f]
         wr_f = sum(o["win"] for o in obs_f) / len(obs_f)
-        print(f"  n={len(obs_f)} net_mean={statistics.mean(rets_f)*100:.2f}% WR={wr_f*100:.2f}%")
+        print(f"  n={len(obs_f)} net_mean={statistics.mean(rets_f) * 100:.2f}% WR={wr_f * 100:.2f}%")
         try:
             from s44_verifier.stats import day_clustered_t_test
+
             dts = [o["date"] for o in obs_f]
             res = day_clustered_t_test(rets_f, dts)
             print(f"  §44 t={res.t_stat:.3f} p_one_sided={res.p_one_sided:.4f} (days={days}<60 exploratory)")

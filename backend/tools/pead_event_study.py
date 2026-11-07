@@ -12,6 +12,7 @@ target: drift [D+1 open, D+N close] for N=1..5, 扣 0.70% round-trip 成本。
   ④ 扣成本 0.70% round-trip
   ⑤ 小 n 标 underpowered 不判劣于随机
 """
+
 from __future__ import annotations
 
 import json
@@ -31,12 +32,13 @@ from tools.first_board_premium_baseline import _load_kline_cache, _bs_code  # no
 
 # ── 常量 ──────────────────────────────────────────────────────────────────
 from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
+
 CACHE_PATH = resolve_data_dir() / "baostock_kline_cache.json"
 FORECAST_CACHE = ROOT / "backend" / ".scratch" / "pead-event-study" / "forecast_reports.json"
 OUT_DIR = ROOT / "backend" / ".scratch" / "pead-event-study"
-N_PERM = 500             # permutation 次数 (p-value 分辨率 0.002, alpha_adj=0.01 足够)
+N_PERM = 500  # permutation 次数 (p-value 分辨率 0.002, alpha_adj=0.01 足够)
 PERM_SEED = 42
-ALPHA_ADJ = 0.05 / 5     # Bonferroni K=5（5 个 horizon，D+1~D+5）
+ALPHA_ADJ = 0.05 / 5  # Bonferroni K=5（5 个 horizon，D+1~D+5）
 
 GOOD_NEWS_TYPES = {"预增", "略增", "扭亏", "续盈", "减亏"}
 BAD_NEWS_TYPES = {"预减", "略减", "首亏", "增亏", "续亏"}
@@ -98,21 +100,31 @@ def collect_forecast_reports() -> list[dict]:
             d = rs.get_row_data()
             if len(d) < 7 or not d[1]:
                 continue
-            events.append({
-                "code": code, "bs_code": bsc,
-                "pub_date": d[1], "stat_date": d[2], "ftype": d[3],
-                "abstract": d[4],
-                "chg_up": _to_float(d[5]), "chg_dwn": _to_float(d[6]),
-            })
+            events.append(
+                {
+                    "code": code,
+                    "bs_code": bsc,
+                    "pub_date": d[1],
+                    "stat_date": d[2],
+                    "ftype": d[3],
+                    "abstract": d[4],
+                    "chg_up": _to_float(d[5]),
+                    "chg_dwn": _to_float(d[6]),
+                }
+            )
         if (i + 1) % 200 == 0:
             el = time.time() - t0
-            print(f"  {i+1}/{len(codes)} events={len(events)} "
-                  f"elapsed={el:.0f}s eta={el/(i+1)*(len(codes)-i-1):.0f}s", flush=True)
+            print(
+                f"  {i + 1}/{len(codes)} events={len(events)} "
+                f"elapsed={el:.0f}s eta={el / (i + 1) * (len(codes) - i - 1):.0f}s",
+                flush=True,
+            )
         if (i + 1) % 500 == 0:
             try:
                 bs.logout()
             except Exception as e:  # noqa: BLE001
                 import logging
+
                 logging.getLogger(__name__).warning("pead_event_study 失败（降级，不阻塞）: %s", e)
             bs.login()
 
@@ -120,8 +132,9 @@ def collect_forecast_reports() -> list[dict]:
         bs.logout()
     except Exception as e:  # noqa: BLE001
         import logging
+
         logging.getLogger(__name__).warning("pead_event_study 失败（降级，不阻塞）: %s", e)
-    print(f"[PEAD] collected {len(events)} events in {time.time()-t0:.0f}s")
+    print(f"[PEAD] collected {len(events)} events in {time.time() - t0:.0f}s")
     FORECAST_CACHE.parent.mkdir(parents=True, exist_ok=True)
     FORECAST_CACHE.write_text(json.dumps(events, ensure_ascii=False, indent=2), encoding="utf-8")
     return events
@@ -139,12 +152,14 @@ def build_calendar(cache: dict) -> list[str]:
 
 def next_trading_day(calendar: list[str], pub_date: str) -> str | None:
     import bisect
+
     idx = bisect.bisect(calendar, pub_date)
     return calendar[idx] if idx < len(calendar) else None
 
 
 def nth_trading_day(calendar: list[str], entry_date: str, n: int) -> str | None:
     import bisect
+
     idx = bisect.bisect_left(calendar, entry_date)
     target = idx + n
     return calendar[target] if target < len(calendar) else None
@@ -225,7 +240,7 @@ def compute_all_returns(
             if b.get("date"):
                 d[b["date"]] = b
         code_date_bar[code] = d
-    print(f"[PEAD] bar index built in {time.time()-t0:.1f}s ({len(code_date_bar)} codes)")
+    print(f"[PEAD] bar index built in {time.time() - t0:.1f}s ({len(code_date_bar)} codes)")
 
     # 对每个 pubDate, 遍历全 cache 一次, 收集 ALL horizons 的 returns
     result: dict = {}
@@ -263,8 +278,7 @@ def compute_all_returns(
                     result[N]["event_by_day"][pub].append(net_ret)
 
         if (pi + 1) % 20 == 0:
-            print(f"  pubDate {pi+1}/{len(valid_pubs)} ({pub}) "
-                  f"elapsed={time.time()-t0:.1f}s", flush=True)
+            print(f"  pubDate {pi + 1}/{len(valid_pubs)} ({pub}) elapsed={time.time() - t0:.1f}s", flush=True)
 
     for N in horizons:
         ev = [r for rs in result[N]["event_by_day"].values() for r in rs]
@@ -358,12 +372,14 @@ def spearman_ic(signal: list[float], ret: list[float]) -> float | None:
     if len(signal) < 10:
         return None
     try:
+
         def rank(lst):
             si = sorted(range(len(lst)), key=lambda i: lst[i])
             ranks = [0.0] * len(lst)
             for r, i in enumerate(si):
                 ranks[i] = r + 1.0
             from collections import defaultdict as dd
+
             vtoc = dd(list)
             for i, v in enumerate(lst):
                 vtoc[v].append(i)
@@ -378,7 +394,7 @@ def spearman_ic(signal: list[float], ret: list[float]) -> float | None:
         rs2 = rank(ret)
         n = len(signal)
         d2 = sum((a - b) ** 2 for a, b in zip(rs1, rs2))
-        return round(1 - 6 * d2 / (n * (n ** 2 - 1)), 4)
+        return round(1 - 6 * d2 / (n * (n**2 - 1)), 4)
     except Exception:
         return None
 
@@ -447,12 +463,14 @@ def analyze_subset(
             "verdict": verdict,
             "n_perm": len(nulls),
         }
-        print(f"[PEAD {label}] D+{N}: n={n_event} lift={obs_lift} "
-              f"ev_wr={results[f'D+{N}']['event_winrate']} "
-              f"un_wr={results[f'D+{N}']['universe_winrate']} "
-              f"ev_mean={results[f'D+{N}']['event_mean_pct']} "
-              f"un_mean={results[f'D+{N}']['universe_mean_pct']} "
-              f"p={p_value:.4f} verdict={verdict}")
+        print(
+            f"[PEAD {label}] D+{N}: n={n_event} lift={obs_lift} "
+            f"ev_wr={results[f'D+{N}']['event_winrate']} "
+            f"un_wr={results[f'D+{N}']['universe_winrate']} "
+            f"ev_mean={results[f'D+{N}']['event_mean_pct']} "
+            f"un_mean={results[f'D+{N}']['universe_mean_pct']} "
+            f"p={p_value:.4f} verdict={verdict}"
+        )
     return results
 
 
@@ -474,9 +492,7 @@ def run_pead_analysis() -> dict:
 
     # Step 3: 算 returns
     horizons = [1, 2, 3, 4, 5]
-    all_returns, event_type_map, valid_events, code_date_bar = compute_all_returns(
-        cache, events, calendar, horizons
-    )
+    all_returns, event_type_map, valid_events, code_date_bar = compute_all_returns(cache, events, calendar, horizons)
 
     # 预计算 universe winrate + returns per horizon per day
     universe_winrate_by_day: dict = {}
@@ -490,6 +506,7 @@ def run_pead_analysis() -> dict:
 
     # 构建 good/bad/all event by_day per horizon
     from datetime import datetime, timedelta
+
     max_cache_date = calendar[-1]
     max_pub = (datetime.strptime(max_cache_date, "%Y-%m-%d") - timedelta(days=10)).strftime("%Y-%m-%d")
 
@@ -526,20 +543,17 @@ def run_pead_analysis() -> dict:
     # Step 4: §44 分析
     print("\n=== ALL EVENTS ===")
     all_results = analyze_subset(
-        all_by_day, universe_returns_by_day, universe_winrate_by_day,
-        horizons, all_returns, "all"
+        all_by_day, universe_returns_by_day, universe_winrate_by_day, horizons, all_returns, "all"
     )
 
     print("\n=== GOOD NEWS (预增/略增/扭亏/续盈/减亏) ===")
     good_results = analyze_subset(
-        good_by_day, universe_returns_by_day, universe_winrate_by_day,
-        horizons, all_returns, "good"
+        good_by_day, universe_returns_by_day, universe_winrate_by_day, horizons, all_returns, "good"
     )
 
     print("\n=== BAD NEWS (预减/略减/首亏/增亏/续亏) ===")
     bad_results = analyze_subset(
-        bad_by_day, universe_returns_by_day, universe_winrate_by_day,
-        horizons, all_returns, "bad"
+        bad_by_day, universe_returns_by_day, universe_winrate_by_day, horizons, all_returns, "bad"
     )
 
     # IC: forecast chg% vs drift return (all events)
@@ -596,10 +610,12 @@ def run_pead_analysis() -> dict:
         "ic": ic_results,
         "good_types": list(GOOD_NEWS_TYPES),
         "bad_types": list(BAD_NEWS_TYPES),
-        "note": ("event drift = (D+N close - D+1 open)/D+1 open - per_trade _cost_pct; "
-                 "universe = all cache stocks same window; "
-                 "day_paired lift non-pooled; within-day permutation null; "
-                 "不外推: PEAD selection edge ≠ overall edge (盘中 60% 未测)"),
+        "note": (
+            "event drift = (D+N close - D+1 open)/D+1 open - per_trade _cost_pct; "
+            "universe = all cache stocks same window; "
+            "day_paired lift non-pooled; within-day permutation null; "
+            "不外推: PEAD selection edge ≠ overall edge (盘中 60% 未测)"
+        ),
     }
     out_path = OUT_DIR / "matrix.json"
     out_path.write_text(json.dumps(matrix, ensure_ascii=False, indent=2), encoding="utf-8")

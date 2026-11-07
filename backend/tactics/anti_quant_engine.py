@@ -10,6 +10,7 @@
 
 ⚠️ 探索性：所有阈值未经统计验证，≤3% 资金跟踪，n≥60 才出 verdict。
 """
+
 from __future__ import annotations
 
 from tactics.factor_calculator import (
@@ -27,9 +28,9 @@ from tactics.factor_calculator import (
 # ---------------------------------------------------------------------------
 
 HARD_PRECONDITIONS: dict[str, list[str]] = {
-    "reversal": ["prev_drop"],       # 前日必须跌>5%
+    "reversal": ["prev_drop"],  # 前日必须跌>5%
     "tail_breakout": ["above_vwap"],  # 必须站稳 VWAP
-    "ice_rebound": ["ice_point"],    # 必须冰点期
+    "ice_rebound": ["ice_point"],  # 必须冰点期
 }
 
 # ---------------------------------------------------------------------------
@@ -38,13 +39,13 @@ HARD_PRECONDITIONS: dict[str, list[str]] = {
 
 FACTOR_WEIGHTS: dict[str, dict[str, float]] = {
     "reversal": {
-        "gap_pct": 0.30,        # 2-5%→1.0
-        "vol_ratio": 0.30,      # 4.5→1.0 线性
-        "amount_ratio": 0.25,   # 10%→1.0 线性
-        "bid_increasing": 0.15, # bool→0/1
+        "gap_pct": 0.30,  # 2-5%→1.0
+        "vol_ratio": 0.30,  # 4.5→1.0 线性
+        "amount_ratio": 0.25,  # 10%→1.0 线性
+        "bid_increasing": 0.15,  # bool→0/1
     },
     "tail_breakout": {
-        "turnover_rate": 0.25,    # 12-22%→1.0
+        "turnover_rate": 0.25,  # 12-22%→1.0
         "breakout_high": 0.25,
         "big_order_proxy": 0.10,  # 降级因子
         "sector_resonance": 0.25,
@@ -55,7 +56,7 @@ FACTOR_WEIGHTS: dict[str, dict[str, float]] = {
         "break_vwap": 0.20,
         "turnover_rate": 0.20,
         "bottom_divergence": 0.15,  # 降级因子
-        "big_order_proxy": 0.10,    # 降级因子
+        "big_order_proxy": 0.10,  # 降级因子
     },
 }
 
@@ -75,7 +76,8 @@ def _build_reason(normalized: dict, weights: dict) -> str:
     """人类可读的因子贡献串（降序排，便于飞书卡片展示）。"""
     items = sorted(
         ((k, normalized.get(k, 0.0), w) for k, w in weights.items()),
-        key=lambda x: x[1] * x[2], reverse=True,
+        key=lambda x: x[1] * x[2],
+        reverse=True,
     )
     return "; ".join(f"{k}={n:.2f}×{w}" for k, n, w in items)
 
@@ -134,18 +136,13 @@ class AntiQuantEngine:
         open_price = float(auction_final.get("open_price", 0) or 0)
         gap_pct_calc = ((open_price - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
         # 5 日开盘量从 prev_klines 取（open_volume 优先，fallback volume）
-        prev_5d_open_vols = [
-            float(k.get("open_volume", k.get("volume", 0)) or 0)
-            for k in prev_klines[-5:]
-        ]
+        prev_5d_open_vols = [float(k.get("open_volume", k.get("volume", 0)) or 0) for k in prev_klines[-5:]]
         # hithink auction-snapshot 直接值优先（真实数据口径正确），
         # 回退 calc（inline 测试）。2026-10-08 实测发现：calc 口径错
         # （竞价量/前5日开盘量单位不匹配返0），hithink 直接值才对。
         gap_pct = float(auction_final.get("auction_pct") or gap_pct_calc or 0)
         vol_ratio = float(
-            auction_final.get("auction_volume_ratio")
-            or calc_vol_ratio(auction_final, prev_5d_open_vols)
-            or 0
+            auction_final.get("auction_volume_ratio") or calc_vol_ratio(auction_final, prev_5d_open_vols) or 0
         )
         # auction_yesterday_ratio_pct 是百分点（2.66=2.66%），amount_ratio 需比率（0.0266）→ /100
         amt_hithink = float(auction_final.get("auction_yesterday_ratio_pct", 0) or 0) / 100
@@ -156,8 +153,7 @@ class AntiQuantEngine:
             "vol_ratio": vol_ratio,
             "amount_ratio": amount_ratio,
             "bid_increasing": bool(
-                float(auction_live_2.get("volume", 0) or 0)
-                >= float(auction_live_1.get("volume", 0) or 0)
+                float(auction_live_2.get("volume", 0) or 0) >= float(auction_live_1.get("volume", 0) or 0)
             ),
         }
         result = score_tactic("reversal", factors)

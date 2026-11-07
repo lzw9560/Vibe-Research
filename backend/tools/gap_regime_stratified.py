@@ -25,6 +25,7 @@ Regime definition (3-way):
 MA20_slope = (ma20_today - ma20_yesterday) / ma20_yesterday,
 where yesterday = previous trading day (baostock returns trading days only).
 """
+
 from __future__ import annotations
 
 import bisect
@@ -58,12 +59,12 @@ MA_WINDOW = 20
 
 # ─── data loading ───────────────────────────────────────────────────────
 
+
 def load_universe() -> list[dict]:
     """Load 120d first-board universe (same as s44_gap_run_60d)."""
     with open(UNIVERSE, encoding="utf-8") as f:
         data = json.load(f)
-    print(f"[universe] window={data['meta']['window']} "
-          f"first_board={data['totals']['first_board']}")
+    print(f"[universe] window={data['meta']['window']} first_board={data['totals']['first_board']}")
     return data["first_boards"]
 
 
@@ -100,6 +101,7 @@ def calendar_next(calendar: list[str], date_str: str) -> str | None:
 
 
 # ─── gap computation (replicated from s44_gap_run_60d) ───────────────────
+
 
 def compute_gap_series(fbs, cache, idx_maps, calendar):
     """Per-trade gap net return (buy D close, sell D+1 open, real cost).
@@ -173,18 +175,28 @@ def compute_gap_series(fbs, cache, idx_maps, calendar):
             n_unbuyable += 1
             continue
         gap, cost_pct, _gross = gap_net_return(
-            close_d, open_next, entry_date=d, size=TRADE_SIZE,
+            close_d,
+            open_next,
+            entry_date=d,
+            size=TRADE_SIZE,
         )
         returns.append(gap)
         costs.append(cost_pct)
         dates.append(d)
     return (
-        returns, dates, costs,
-        n_unbuyable, n_no_code, n_bad_close, n_suspended, n_adj_mismatch,
+        returns,
+        dates,
+        costs,
+        n_unbuyable,
+        n_no_code,
+        n_bad_close,
+        n_suspended,
+        n_adj_mismatch,
     )
 
 
 # ─── regime computation (3-way: bull/bear/range) ───────────────────────
+
 
 def _load_regime_cache() -> list[tuple[str, float, float]] | None:
     """Load index_ma20_regime.json -> sorted [(date, close, ma20), ...].
@@ -203,8 +215,7 @@ def _load_regime_cache() -> list[tuple[str, float, float]] | None:
         if c is not None and m is not None:
             rows.append((d, float(c), float(m)))
     rows.sort(key=lambda x: x[0])
-    print(f"[regime] cache loaded: {len(rows)} dates "
-          f"({rows[0][0]} -> {rows[-1][0]})")
+    print(f"[regime] cache loaded: {len(rows)} dates ({rows[0][0]} -> {rows[-1][0]})")
     return rows
 
 
@@ -216,28 +227,37 @@ def _fetch_index_bars_baostock() -> list[dict]:
     """
     try:
         from data.sources.baostock_src import fetch_bars  # noqa: PLC0415
+
         bars = fetch_bars(
-            "sh.000001", "2025-06-01", "2026-09-30",
-            fields="date,open,close", adjustflag="3",  # no adjust for index
+            "sh.000001",
+            "2025-06-01",
+            "2026-09-30",
+            fields="date,open,close",
+            adjustflag="3",  # no adjust for index
         )
         return bars
     except Exception:
         # direct baostock fallback (inline, same as platform_breakout_lift.py)
         import baostock as bs  # noqa: PLC0415
+
         bars: list[dict] = []
         try:
             bs.login()
             rs = bs.query_history_k_data_plus(
-                "sh.000001", "date,open,close",
-                start_date="2025-06-01", end_date="2026-09-30",
+                "sh.000001",
+                "date,open,close",
+                start_date="2025-06-01",
+                end_date="2026-09-30",
             )
             while rs.error_code == "0" and rs.next():
                 row = rs.get_row_data()
-                bars.append({
-                    "date": row[0],
-                    "open": float(row[1]) if len(row) > 1 and row[1] else None,
-                    "close": float(row[2]) if len(row) > 2 and row[2] else None,
-                })
+                bars.append(
+                    {
+                        "date": row[0],
+                        "open": float(row[1]) if len(row) > 1 and row[1] else None,
+                        "close": float(row[2]) if len(row) > 2 and row[2] else None,
+                    }
+                )
             bs.logout()
         except Exception as e:  # noqa: BLE001
             print(f"[regime] baostock fetch failed: {e}")
@@ -337,14 +357,17 @@ def compute_regime_labels() -> dict[str, str]:
     for v in regime.values():
         counts[v] += 1
     total = len(regime)
-    print(f"[regime] distribution (all {total} cached dates): "
-          f"bull={counts['bull']}({counts['bull']*100/total:.1f}%) "
-          f"bear={counts['bear']}({counts['bear']*100/total:.1f}%) "
-          f"range={counts['range']}({counts['range']*100/total:.1f}%)")
+    print(
+        f"[regime] distribution (all {total} cached dates): "
+        f"bull={counts['bull']}({counts['bull'] * 100 / total:.1f}%) "
+        f"bear={counts['bear']}({counts['bear'] * 100 / total:.1f}%) "
+        f"range={counts['range']}({counts['range'] * 100 / total:.1f}%)"
+    )
     return regime
 
 
 # ─── stratification + stats ────────────────────────────────────────────
+
 
 def stratify_gap(
     returns: list[float],
@@ -360,7 +383,9 @@ def stratify_gap(
     """
     by_regime: dict[str, list[float]] = {"bull": [], "bear": [], "range": []}
     by_regime_day: dict[str, dict[str, list[float]]] = {
-        "bull": {}, "bear": {}, "range": {},
+        "bull": {},
+        "bear": {},
+        "range": {},
     }
     n_untagged = 0
     for ret, d in zip(returns, dates):
@@ -387,20 +412,21 @@ def regime_stats(
     n_days = len(by_day)
     if n == 0:
         return {
-            "n_picks": 0, "n_days": 0,
-            "net_mean_pct": None, "median_pct": None,
-            "win_rate": None, "std_pct": None,
-            "pooled_t_stat": None, "day_clustered_t_stat": None,
+            "n_picks": 0,
+            "n_days": 0,
+            "net_mean_pct": None,
+            "median_pct": None,
+            "win_rate": None,
+            "std_pct": None,
+            "pooled_t_stat": None,
+            "day_clustered_t_stat": None,
             "day_mean_pct": None,
         }
     net_mean_pct = float(arr.mean()) * 100
     median_pct = float(np.median(arr)) * 100
     win_rate = float((arr > 0).mean())
     std_pct = float(arr.std(ddof=1)) * 100 if n > 1 else 0.0
-    pooled_t = (
-        net_mean_pct / (std_pct / (n ** 0.5))
-        if n > 1 and std_pct > 0 else 0.0
-    )
+    pooled_t = net_mean_pct / (std_pct / (n**0.5)) if n > 1 and std_pct > 0 else 0.0
 
     # day-clustered (honest: each day = 1 observation)
     day_means = [float(np.mean(rs)) for rs in by_day.values()]
@@ -408,10 +434,7 @@ def regime_stats(
     if len(day_means) > 1:
         day_arr = np.asarray(day_means, dtype=float)
         day_std = float(day_arr.std(ddof=1))
-        day_t = (
-            day_mean_pct / (day_std / (len(day_means) ** 0.5))
-            if day_std > 0 else 0.0
-        )
+        day_t = day_mean_pct / (day_std / (len(day_means) ** 0.5)) if day_std > 0 else 0.0
     else:
         day_t = 0.0
 
@@ -430,6 +453,7 @@ def regime_stats(
 
 # ─── main ───────────────────────────────────────────────────────────────
 
+
 def main():
     # 1. load data
     fbs = load_universe()
@@ -440,8 +464,9 @@ def main():
         return
 
     # 2. compute gap series (same as s44_gap_run_60d)
-    returns, dates, costs, n_unbuyable, n_no_code, n_bad_close, n_suspended, n_adj_mm = \
-        compute_gap_series(fbs, cache, idx_maps, calendar)
+    returns, dates, costs, n_unbuyable, n_no_code, n_bad_close, n_suspended, n_adj_mm = compute_gap_series(
+        fbs, cache, idx_maps, calendar
+    )
     arr = np.asarray(returns, dtype=float)
     n = arr.size
     overall_net = float(arr.mean()) * 100 if n else 0.0
@@ -501,6 +526,7 @@ def main():
     print(f"\n=== PER-REGIME §44v2 EVENT VERDICT ===")
     try:
         from tools._s44_wire import wire_verdict  # noqa: E402
+
         avg_cost_ratio = float(np.mean(costs) / 100.0) if costs else 0.0
         for tag in ("bull", "bear", "range"):
             rets = by_regime[tag]
@@ -546,9 +572,11 @@ def main():
     # regime balance check
     max_share = max(regime_in_uni.values()) / len(uni_dates) if uni_dates else 0
     dominant = max(regime_in_uni, key=regime_in_uni.get)
-    print(f"  regime balance: bull={regime_in_uni['bull']} "
-          f"bear={regime_in_uni['bear']} range={regime_in_uni['range']} "
-          f"(of {len(uni_dates)} days)")
+    print(
+        f"  regime balance: bull={regime_in_uni['bull']} "
+        f"bear={regime_in_uni['bear']} range={regime_in_uni['range']} "
+        f"(of {len(uni_dates)} days)"
+    )
     print(f"  dominant regime: {dominant} ({max_share:.1%} of days)")
     print(f"  gap net negative in: {neg_regimes if neg_regimes else 'none'}")
     print(f"  gap net positive in: {pos_regimes if pos_regimes else 'none'}")
@@ -574,8 +602,7 @@ def main():
         if s["n_picks"] == 0:
             continue
         if s["n_days"] < 30:
-            print(f"  WARNING: {tag} regime has only {s['n_days']} days "
-                  f"(< 30) -> EXPLORATORY, not validated.")
+            print(f"  WARNING: {tag} regime has only {s['n_days']} days (< 30) -> EXPLORATORY, not validated.")
         if s.get("day_clustered_t_stat") is not None:
             t = s["day_clustered_t_stat"]
             if abs(t) < 2.0:

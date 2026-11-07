@@ -12,6 +12,7 @@ pre-涨停候选识别（探索性，社区阈值标 overfit）：
 - 连板苗子：lbc≥1（已 1 板，可能接力）
 - gene_score 高（high_gene=1，龙头潜力）
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

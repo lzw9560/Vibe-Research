@@ -7,6 +7,7 @@ fetch bars 一次/（code,date），多 params 复用 simulate_holding（快，�
 
 用法：python tools/s145_sensitivity.py [--sample N]   # N=采样 signal_date 数（默认 12）
 """
+
 from __future__ import annotations
 
 import argparse
@@ -41,30 +42,46 @@ def main(sample: int = 12) -> int:
     try:
         ensure_login()
     except (ImportError, DependencyMissing):
-        logger.warning("baostock 不可用"); return 1
+        logger.warning("baostock 不可用")
+        return 1
 
     import sqlite3
+
     conn = sqlite3.connect(GENE_SCORES_DB_PATH)
     try:
         # 采样有 path 数据的 signal_date（近期）
-        dates = [r[0] for r in conn.execute(
-            "SELECT DISTINCT signal_date FROM forward_test_records "
-            "WHERE return_path IS NOT NULL ORDER BY signal_date DESC LIMIT ?", (sample,)).fetchall()]
+        dates = [
+            r[0]
+            for r in conn.execute(
+                "SELECT DISTINCT signal_date FROM forward_test_records "
+                "WHERE return_path IS NOT NULL ORDER BY signal_date DESC LIMIT ?",
+                (sample,),
+            ).fetchall()
+        ]
         # 每 date 的 pick codes + universe codes
         date_codes: dict[str, tuple[list, list]] = {}
         for d in dates:
-            picks = [r[0] for r in conn.execute(
-                "SELECT DISTINCT code FROM forward_test_records WHERE signal_date=? AND return_path IS NOT NULL",
-                (d,)).fetchall()]
-            unis = [r[0] for r in conn.execute(
-                "SELECT DISTINCT code FROM universe_returns WHERE signal_date=? AND return_open2close IS NOT NULL",
-                (d,)).fetchall()]
+            picks = [
+                r[0]
+                for r in conn.execute(
+                    "SELECT DISTINCT code FROM forward_test_records WHERE signal_date=? AND return_path IS NOT NULL",
+                    (d,),
+                ).fetchall()
+            ]
+            unis = [
+                r[0]
+                for r in conn.execute(
+                    "SELECT DISTINCT code FROM universe_returns WHERE signal_date=? AND return_open2close IS NOT NULL",
+                    (d,),
+                ).fetchall()
+            ]
             date_codes[d] = (picks, unis)
     finally:
         conn.close()
     logger.info("采样 %d dates", len(dates))
 
     from datetime import datetime, timedelta
+
     # 收集所有 (date, code) 的 bars（fetch 一次，多 params 复用）
     bars_cache: dict[tuple, list] = {}
     try:

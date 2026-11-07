@@ -20,6 +20,7 @@
 
 跑法: import 后用 build_picks_generic + analyze_subset + verdict_for。
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -45,13 +46,14 @@ DATA = resolve_data_dir()
 KLINE_DB = DATA / "baostock_kline_cache.db"
 ZT_DB = DATA / "zt_history.db"
 
-SLIPPAGE = 0.002       # 0.2% 滑点 (R6 gap-through fill)
-COST = 0.003           # round-trip cost (印花+佣金+滑点) for net EV
-STOP_PCT = 0.03        # -3% stop for stop variant
+SLIPPAGE = 0.002  # 0.2% 滑点 (R6 gap-through fill)
+COST = 0.003  # round-trip cost (印花+佣金+滑点) for net EV
+STOP_PCT = 0.03  # -3% stop for stop variant
 ALPHA = 0.05
 
 
 # ---------- data loading ----------
+
 
 def load_kline_db() -> tuple[dict[str, dict[str, dict]], set[str]]:
     """从 SQLite 读 kline. 返回 (code -> {date: bar}, all_dates set)."""
@@ -89,6 +91,7 @@ def load_zt() -> list[tuple[str, str, int]]:
 
 # ---------- helpers (FIXED 2026-10-06) ----------
 
+
 def limit_for_code(code: str, is_st: bool = False) -> float:
     """涨停幅度: ST 5%, 创业板(300/301)/科创板(688/689) 20%, 北交(4/8 开头) 30%, 其他 10%.
 
@@ -124,6 +127,7 @@ def is_yizi_t1(t1_bar: dict, t_close: float, limit: float) -> bool:
 
 
 # ---------- pick construction (generic, filter callback) ----------
+
 
 def build_picks_generic(
     code_map: dict[str, dict[str, dict]],
@@ -178,29 +182,31 @@ def build_picks_generic(
         if filter_fn is not None and not filter_fn(code, lbc, t_bar, t1_bar, t2_bar):
             continue
 
-        picks.append({
-            "code": code,
-            "zt_date": zt_date,
-            "t1_date": t1_date,
-            "t2_date": t2_date,
-            "entry": t1_open,
-            "t1_bar": t1_bar,
-            "t2_bar": t2_bar,
-            "t_close": t_close,
-            "lbc": lbc,
-        })
+        picks.append(
+            {
+                "code": code,
+                "zt_date": zt_date,
+                "t1_date": t1_date,
+                "t2_date": t2_date,
+                "entry": t1_open,
+                "t1_bar": t1_bar,
+                "t2_bar": t2_bar,
+                "t_close": t_close,
+                "lbc": lbc,
+            }
+        )
     return picks
 
 
 # ---------- close_ev (basic + R6 stop) ----------
+
 
 def close_ev_basic(p: dict) -> float | None:
     """T+1 open 买 → T+2 close 卖. 无 stop, R6 N/A. close_ev 非 open_ev."""
     return (p["t2_bar"]["close"] - p["entry"]) / p["entry"] * 100
 
 
-def close_ev_stop(p: dict, stop_pct: float = STOP_PCT,
-                  realistic: bool = True) -> tuple[float, str] | None:
+def close_ev_stop(p: dict, stop_pct: float = STOP_PCT, realistic: bool = True) -> tuple[float, str] | None:
     """-3% stop + R6 gap-through fill.
 
     Entry = T+1 open. Stop = entry * (1 - stop_pct).
@@ -243,11 +249,11 @@ def close_ev_stop(p: dict, stop_pct: float = STOP_PCT,
 
 # ---------- stats ----------
 
+
 def ev_stats(rets: list[float]) -> dict:
     n = len(rets)
     if n == 0:
-        return {"n": 0, "ev": 0.0, "std": 0.0, "t": 0.0,
-                "ci_lo": 0.0, "ci_hi": 0.0, "wr": 0.0}
+        return {"n": 0, "ev": 0.0, "std": 0.0, "t": 0.0, "ci_lo": 0.0, "ci_hi": 0.0, "wr": 0.0}
     mean = sum(rets) / n
     std = statistics.pstdev(rets) if n > 1 else 0.0
     se = std / sqrt(n) if n > 0 else 0.0
@@ -255,9 +261,15 @@ def ev_stats(rets: list[float]) -> dict:
     ci_lo = mean - 1.96 * se if se > 0 else mean
     ci_hi = mean + 1.96 * se if se > 0 else mean
     wr = sum(1 for x in rets if x > 0) / n
-    return {"n": n, "ev": round(mean, 3), "std": round(std, 3),
-            "t": round(t, 2), "ci_lo": round(ci_lo, 3), "ci_hi": round(ci_hi, 3),
-            "wr": round(wr * 100, 1)}
+    return {
+        "n": n,
+        "ev": round(mean, 3),
+        "std": round(std, 3),
+        "t": round(t, 2),
+        "ci_lo": round(ci_lo, 3),
+        "ci_hi": round(ci_hi, 3),
+        "wr": round(wr * 100, 1),
+    }
 
 
 def norm_sf_positive(t: float) -> float:
@@ -282,8 +294,7 @@ def day_paired_t(rets_by_date: dict[str, list[float]]) -> dict:
     se = std / sqrt(n) if n > 0 else 0.0
     t = mean / se if se > 0 else 0.0
     p = norm_sf_positive(t)
-    return {"n_days": n, "mean": round(mean, 3), "std": round(std, 3),
-            "t": round(t, 2), "p_one_sided": round(p, 6)}
+    return {"n_days": n, "mean": round(mean, 3), "std": round(std, 3), "t": round(t, 2), "p_one_sided": round(p, 6)}
 
 
 def bonferroni_p(p_raw: float, n_tests: int) -> float:
@@ -291,6 +302,7 @@ def bonferroni_p(p_raw: float, n_tests: int) -> float:
 
 
 # ---------- walk-forward ----------
+
 
 def walk_forward(picks: list[dict], ret_fn: Callable[[dict], float | None]) -> dict:
     """前半 train → 后半 test. 用 zt_date 排序分半. 非 in-sample 分段."""
@@ -325,8 +337,10 @@ def walk_forward(picks: list[dict], ret_fn: Callable[[dict], float | None]) -> d
 
     return {
         "status": "ok",
-        "n_train": len(train_rets), "n_test": len(test_rets),
-        "n_train_dates": len(train_dates), "n_test_dates": len(test_dates),
+        "n_train": len(train_rets),
+        "n_test": len(test_rets),
+        "n_train_dates": len(train_dates),
+        "n_test_dates": len(test_dates),
         "train_ev": ev_stats(train_rets),
         "test_ev": ev_stats(test_rets),
         "train_day_t": day_paired_t(train_by_date),
@@ -336,10 +350,14 @@ def walk_forward(picks: list[dict], ret_fn: Callable[[dict], float | None]) -> d
 
 # ---------- per-subset analysis ----------
 
-def analyze_subset(name: str, picks: list[dict],
-                  ret_fn_basic: Callable[[dict], float | None] = close_ev_basic,
-                  ret_fn_stop: Callable[[dict], tuple[float, str] | None] | None = close_ev_stop,
-                  ret_fn_label: str = "close_ev") -> dict:
+
+def analyze_subset(
+    name: str,
+    picks: list[dict],
+    ret_fn_basic: Callable[[dict], float | None] = close_ev_basic,
+    ret_fn_stop: Callable[[dict], tuple[float, str] | None] | None = close_ev_stop,
+    ret_fn_label: str = "close_ev",
+) -> dict:
     """对一个子集跑全部分析: basic + stop variant + R6 + walk-forward.
 
     ret_fn_basic: (p) -> float | None  (basic EV, 默认 close_ev_basic)
@@ -358,10 +376,12 @@ def analyze_subset(name: str, picks: list[dict],
     basic_rets = [ret_fn_basic(p) for p in picks]
     basic_rets = [r for r in basic_rets if r is not None]
     basic_s = ev_stats(basic_rets)
-    print(f"  n={basic_s['n']} gross_EV={basic_s['ev']}% std={basic_s['std']}% "
-          f"WR={basic_s['wr']}% t={basic_s['t']} CI[{basic_s['ci_lo']},{basic_s['ci_hi']}]")
-    net_basic = basic_s['ev'] - COST * 100
-    print(f"  net EV (after {COST*100:.1f}% cost): {net_basic:.3f}%")
+    print(
+        f"  n={basic_s['n']} gross_EV={basic_s['ev']}% std={basic_s['std']}% "
+        f"WR={basic_s['wr']}% t={basic_s['t']} CI[{basic_s['ci_lo']},{basic_s['ci_hi']}]"
+    )
+    net_basic = basic_s["ev"] - COST * 100
+    print(f"  net EV (after {COST * 100:.1f}% cost): {net_basic:.3f}%")
 
     basic_by_date: dict[str, list[float]] = defaultdict(list)
     for p in picks:
@@ -369,8 +389,10 @@ def analyze_subset(name: str, picks: list[dict],
         if r is not None:
             basic_by_date[p["zt_date"]].append(r)
     basic_dt = day_paired_t(basic_by_date)
-    print(f"  day-paired: n_days={basic_dt['n_days']} mean={basic_dt['mean']}% "
-          f"t={basic_dt['t']} p_one_sided={basic_dt['p_one_sided']}")
+    print(
+        f"  day-paired: n_days={basic_dt['n_days']} mean={basic_dt['mean']}% "
+        f"t={basic_dt['t']} p_one_sided={basic_dt['p_one_sided']}"
+    )
 
     # ---- stop variant ----
     stop_s = {"n": 0, "ev": 0.0, "std": 0.0, "t": 0.0, "ci_lo": 0.0, "ci_hi": 0.0, "wr": 0.0}
@@ -379,13 +401,15 @@ def analyze_subset(name: str, picks: list[dict],
     r6_impact = {"ideal_ev": 0.0, "realistic_ev": 0.0, "diff": 0.0, "gap_through": 0}
 
     if ret_fn_stop is not None:
-        print(f"\n--- stop variant (-{STOP_PCT*100:.0f}% stop + R6 gap-through fill) ---")
+        print(f"\n--- stop variant (-{STOP_PCT * 100:.0f}% stop + R6 gap-through fill) ---")
         stop_rets = [ret_fn_stop(p) for p in picks]
         stop_rets_clean = [r[0] for r in stop_rets if r is not None]
         stop_s = ev_stats(stop_rets_clean)
-        print(f"  n={stop_s['n']} gross_EV={stop_s['ev']}% std={stop_s['std']}% "
-              f"WR={stop_s['wr']}% t={stop_s['t']} CI[{stop_s['ci_lo']},{stop_s['ci_hi']}]")
-        net_stop = stop_s['ev'] - COST * 100
+        print(
+            f"  n={stop_s['n']} gross_EV={stop_s['ev']}% std={stop_s['std']}% "
+            f"WR={stop_s['wr']}% t={stop_s['t']} CI[{stop_s['ci_lo']},{stop_s['ci_hi']}]"
+        )
+        net_stop = stop_s["ev"] - COST * 100
         print(f"  net EV (after cost): {net_stop:.3f}%")
 
         stop_by_date: dict[str, list[float]] = defaultdict(list)
@@ -394,8 +418,10 @@ def analyze_subset(name: str, picks: list[dict],
             if r is not None:
                 stop_by_date[p["zt_date"]].append(r[0])
         stop_dt = day_paired_t(stop_by_date)
-        print(f"  day-paired: n_days={stop_dt['n_days']} mean={stop_dt['mean']}% "
-              f"t={stop_dt['t']} p_one_sided={stop_dt['p_one_sided']}")
+        print(
+            f"  day-paired: n_days={stop_dt['n_days']} mean={stop_dt['mean']}% "
+            f"t={stop_dt['t']} p_one_sided={stop_dt['p_one_sided']}"
+        )
 
         for p in picks:
             r = ret_fn_stop(p)
@@ -404,7 +430,7 @@ def analyze_subset(name: str, picks: list[dict],
         total_r = sum(stop_reasons.values())
         print(f"  exit reasons:")
         for rsn, cnt in sorted(stop_reasons.items(), key=lambda x: -x[1]):
-            print(f"    {rsn}: {cnt} ({cnt/max(total_r,1)*100:.1f}%)")
+            print(f"    {rsn}: {cnt} ({cnt / max(total_r, 1) * 100:.1f}%)")
 
         # R6 impact
         print(f"\n--- R6 fill impact (ideal vs realistic stop) ---")
@@ -414,13 +440,18 @@ def analyze_subset(name: str, picks: list[dict],
         sr = stop_s
         gap_count = stop_reasons.get("t2_gap_stop", 0)
         stop_count = sum(v for k, v in stop_reasons.items() if "stop" in k)
-        r6_impact = {"ideal_ev": si['ev'], "realistic_ev": sr['ev'],
-                     "diff": round(si['ev']-sr['ev'], 3),
-                     "gap_through": gap_count}
-        print(f"  ideal EV={si['ev']}% | realistic EV={sr['ev']}% | "
-              f"diff={round(si['ev']-sr['ev'],3)}% | "
-              f"stops={stop_count}({stop_count/max(len(stop_rets_clean),1)*100:.1f}%) "
-              f"gap_through={gap_count}({gap_count/max(stop_count,1)*100:.1f}% of stops)")
+        r6_impact = {
+            "ideal_ev": si["ev"],
+            "realistic_ev": sr["ev"],
+            "diff": round(si["ev"] - sr["ev"], 3),
+            "gap_through": gap_count,
+        }
+        print(
+            f"  ideal EV={si['ev']}% | realistic EV={sr['ev']}% | "
+            f"diff={round(si['ev'] - sr['ev'], 3)}% | "
+            f"stops={stop_count}({stop_count / max(len(stop_rets_clean), 1) * 100:.1f}%) "
+            f"gap_through={gap_count}({gap_count / max(stop_count, 1) * 100:.1f}% of stops)"
+        )
 
     # ---- walk-forward ----
     print(f"\n--- walk-forward OOS (basic, 前半 train → 后半 test) ---")
@@ -430,13 +461,13 @@ def analyze_subset(name: str, picks: list[dict],
         te = wf_basic["test_ev"]
         tr_dt = wf_basic["train_day_t"]
         te_dt = wf_basic["test_day_t"]
-        print(f"  train: n={tr['n']} n_dates={wf_basic['n_train_dates']} "
-              f"EV={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
-        print(f"  test:  n={te['n']} n_dates={wf_basic['n_test_dates']} "
-              f"EV={te['ev']}% t={te['t']} day_t={te_dt['t']} "
-              f"p={te_dt['p_one_sided']}")
-        decay = ((tr['ev'] - te['ev']) / abs(tr['ev']) * 100
-                 if tr['ev'] != 0 else 0)
+        print(f"  train: n={tr['n']} n_dates={wf_basic['n_train_dates']} EV={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
+        print(
+            f"  test:  n={te['n']} n_dates={wf_basic['n_test_dates']} "
+            f"EV={te['ev']}% t={te['t']} day_t={te_dt['t']} "
+            f"p={te_dt['p_one_sided']}"
+        )
+        decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
         print(f"  decay: {decay:.0f}% (train→test)")
     else:
         print(f"  {wf_basic['status']} (n_dates={wf_basic.get('n_dates', 0)})")
@@ -454,6 +485,7 @@ def analyze_subset(name: str, picks: list[dict],
 
 
 # ---------- honest verdict (parameterized cross-factor Bonferroni) ----------
+
 
 def verdict_for(
     ev_gross: float,
@@ -487,11 +519,9 @@ def verdict_for(
     p_bonf = bonferroni_p(p_raw, n_tests)
 
     print(f"\n  {subset_name}:")
-    print(f"    gross_EV={ev_gross}% net_EV={net_ev}% day_t={t_day} "
-          f"Bonf_p(×{n_tests})={p_bonf:.6f} n_days={n_days}")
+    print(f"    gross_EV={ev_gross}% net_EV={net_ev}% day_t={t_day} Bonf_p(×{n_tests})={p_bonf:.6f} n_days={n_days}")
     if wf_status == "ok":
-        print(f"    walk-forward: train_EV={wf_train_ev}% test_EV={wf_test_ev}% "
-              f"test_p={wf_test_p}")
+        print(f"    walk-forward: train_EV={wf_train_ev}% test_EV={wf_test_ev}% test_p={wf_test_p}")
 
     if ev_gross < 0:
         print(f"    → FALSIFIED: gross EV < 0 (negative edge, loser signal)")
@@ -508,8 +538,10 @@ def verdict_for(
     if wf_status == "ok":
         # Fix 2026-10-06: train_ev>0 检查——train 半无 edge 而 test 半有 = regime 过拟合
         if wf_train_ev <= 0:
-            print(f"    → EXPLORATORY: train_EV={wf_train_ev}% <= 0 (edge not in train half, "
-                  f"test_EV={wf_test_ev}% may be regime overfitting)")
+            print(
+                f"    → EXPLORATORY: train_EV={wf_train_ev}% <= 0 (edge not in train half, "
+                f"test_EV={wf_test_ev}% may be regime overfitting)"
+            )
             return "exploratory"
         if wf_test_ev <= 0:
             print(f"    → FALSIFIED: walk-forward test_EV={wf_test_ev}% <= 0")
@@ -517,11 +549,15 @@ def verdict_for(
         # Fix 2026-10-06: OOS test_p 也施 Bonferroni（与 step3 一致，旧版用 raw test_p = leniency）
         wf_test_p_bonf = bonferroni_p(wf_test_p, n_tests)
         if wf_test_p_bonf >= ALPHA:
-            print(f"    → EXPLORATORY: OOS test EV={wf_test_ev}% > 0 but "
-                  f"test p={wf_test_p} Bonf×{n_tests}={wf_test_p_bonf} >= {ALPHA} (not significant OOS)")
+            print(
+                f"    → EXPLORATORY: OOS test EV={wf_test_ev}% > 0 but "
+                f"test p={wf_test_p} Bonf×{n_tests}={wf_test_p_bonf} >= {ALPHA} (not significant OOS)"
+            )
             return "exploratory"
-        print(f"    → EDGE-CONFIRMED: gross+net EV > 0, Bonferroni PASS, "
-              f"OOS test EV={wf_test_ev}% significant (p={wf_test_p}, Bonf×{n_tests}={wf_test_p_bonf})")
+        print(
+            f"    → EDGE-CONFIRMED: gross+net EV > 0, Bonferroni PASS, "
+            f"OOS test EV={wf_test_ev}% significant (p={wf_test_p}, Bonf×{n_tests}={wf_test_p_bonf})"
+        )
         return "edge-confirmed"
     print(f"    → EXPLORATORY: walk-forward not available")
     return "exploratory"

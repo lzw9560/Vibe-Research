@@ -6,6 +6,7 @@
 
 gate 判定：net real-exec > +0.3% = edge 存活可上小钱；≤+0.15% = 执行幻觉 combo 降级 paper-only。
 """
+
 from __future__ import annotations
 
 import json
@@ -91,11 +92,17 @@ def build_by_date() -> dict:
                 continue  # T+1 一字板(open=high=low 近涨停)不可买
             real_exec = (t5_close - t1_open) / t1_open  # T+1 open → T+5 close
             close_close = (t5_close - t_close) / t_close  # T close → T+5 close
-            by_date[bars[i].get("date", "")].append({
-                "code": code, "gap": gap, "tr": today_ret, "amt": amt,
-                "real_exec": real_exec, "close_close": close_close,
-                "entry_gap": (t1_open - t_close) / t_close,  # T+1 open vs T close
-            })
+            by_date[bars[i].get("date", "")].append(
+                {
+                    "code": code,
+                    "gap": gap,
+                    "tr": today_ret,
+                    "amt": amt,
+                    "real_exec": real_exec,
+                    "close_close": close_close,
+                    "entry_gap": (t1_open - t_close) / t_close,  # T+1 open vs T close
+                }
+            )
     return by_date
 
 
@@ -132,8 +139,15 @@ def stats(dates: list, by_date: dict, field: str) -> dict | None:
     std = statistics.pstdev(daily_mean) if len(daily_mean) > 1 else 0
     se = std / (len(daily_mean) ** 0.5) if daily_mean else 0
     t = m / se if se > 0 else 0
-    return {"n_days": len(daily_mean), "n_picks": len(all_picks),
-            "mean": m, "median": med, "wr": wr, "net": m - COST, "t": t}
+    return {
+        "n_days": len(daily_mean),
+        "n_picks": len(all_picks),
+        "mean": m,
+        "median": med,
+        "wr": wr,
+        "net": m - COST,
+        "t": t,
+    }
 
 
 def main() -> None:
@@ -141,13 +155,17 @@ def main() -> None:
     all_d = sorted(by_date.keys())
     print(f"\n=== combo real-execution edge（生产 mode=filtered，{len(all_d)} 日 {all_d[0]}~{all_d[-1]}）===\n")
 
-    for label, field in [("close-to-close (T close→T+5 close)", "close_close"),
-                         ("real-execution (T+1 open→T+5 close)", "real_exec")]:
+    for label, field in [
+        ("close-to-close (T close→T+5 close)", "close_close"),
+        ("real-execution (T+1 open→T+5 close)", "real_exec"),
+    ]:
         r = stats(all_d, by_date, field)
         if r:
             print(f"【{label}】")
             print(f"  days={r['n_days']} picks={r['n_picks']}")
-            print(f"  mean={r['mean']*100:+.3f}% median={r['median']*100:+.3f}% WR={r['wr']*100:.1f}% net={r['net']*100:+.3f}% t={r['t']:.2f}")
+            print(
+                f"  mean={r['mean'] * 100:+.3f}% median={r['median'] * 100:+.3f}% WR={r['wr'] * 100:.1f}% net={r['net'] * 100:+.3f}% t={r['t']:.2f}"
+            )
     print()
 
     # entry gap 分布
@@ -159,15 +177,19 @@ def main() -> None:
     if picks:
         n = len(picks)
         print(f"【entry gap 分布】（T+1 open vs T close，{n} picks）")
-        print(f"  mean={statistics.mean(picks)*100:+.3f}% median={statistics.median(picks)*100:+.3f}%")
-        print(f"  >0(T+1高于T收):{sum(1 for x in picks if x>0)/n*100:.1f}%  >+1%:{sum(1 for x in picks if x>0.01)/n*100:.1f}%  <-1%:{sum(1 for x in picks if x<-0.01)/n*100:.1f}%")
+        print(f"  mean={statistics.mean(picks) * 100:+.3f}% median={statistics.median(picks) * 100:+.3f}%")
+        print(
+            f"  >0(T+1高于T收):{sum(1 for x in picks if x > 0) / n * 100:.1f}%  >+1%:{sum(1 for x in picks if x > 0.01) / n * 100:.1f}%  <-1%:{sum(1 for x in picks if x < -0.01) / n * 100:.1f}%"
+        )
 
     cc = stats(all_d, by_date, "close_close")
     re = stats(all_d, by_date, "real_exec")
     if cc and re:
         eaten = cc["mean"] - re["mean"]
-        print(f"\n【entry gap 吃 edge】close-close {cc['mean']*100:+.3f}% → real-exec {re['mean']*100:+.3f}% = 吃掉 {eaten*100:+.3f}%")
-        print(f"  median: {cc['median']*100:+.3f}% → {re['median']*100:+.3f}%（real-exec median 归零=变 lottery）")
+        print(
+            f"\n【entry gap 吃 edge】close-close {cc['mean'] * 100:+.3f}% → real-exec {re['mean'] * 100:+.3f}% = 吃掉 {eaten * 100:+.3f}%"
+        )
+        print(f"  median: {cc['median'] * 100:+.3f}% → {re['median'] * 100:+.3f}%（real-exec median 归零=变 lottery）")
         net_re = re["net"]
         if net_re > 0.003:
             verdict = "✅ net >+0.3% edge 存活可上小钱"
@@ -175,7 +197,7 @@ def main() -> None:
             verdict = "⚠️ net ≤+0.15% 执行幻觉 combo 降级 paper-only 不上真钱"
         else:
             verdict = "🟡 0.15-0.3% 灰区 60天前向定"
-        print(f"  net real-exec = {net_re*100:+.3f}% → {verdict}")
+        print(f"  net real-exec = {net_re * 100:+.3f}% → {verdict}")
 
 
 if __name__ == "__main__":

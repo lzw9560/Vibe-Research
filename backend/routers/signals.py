@@ -6,6 +6,7 @@ GET /api/signals/daily-report ——人话版每日信号报告
 GET /api/signals/status ——regime 新鲜度 + arm 状态
 POST /api/signals/manual-trade ——记录手动真实交易（S218 P0 闭环反馈）
 """
+
 from __future__ import annotations
 
 import json
@@ -30,6 +31,7 @@ _MANUAL_TRADES_FILE = Path(resolve_data_dir()) / "signal_reports" / "manual_trad
 
 class ManualTradeInput(BaseModel):
     """手动交易录入请求体。"""
+
     code: str = Field(..., description="股票代码 6 位")
     entry_price: float = Field(..., gt=0, description="实际买入价")
     entry_time: str = Field(..., description="买入时间 ISO")
@@ -71,6 +73,7 @@ def _get_reference_price_from_signal(signal_id: str) -> tuple[float | None, str,
     arm 取 trade_journal.arm 列（权威源，不靠 parse signal_id——arm 名含下划线如 consecutive_relay）。
     """
     from strategies.journal_recorder import JournalRecorder
+
     try:
         JournalRecorder()
         # 从 trade_journal 读 fills_json 找参考信号对应记录
@@ -89,7 +92,10 @@ def _get_reference_price_from_signal(signal_id: str) -> tuple[float | None, str,
             conn.close()
     except Exception as e:  # noqa: BLE001
         import logging
-        logging.getLogger(__name__).warning("signals trade_journal entry_price/arm 查询失败 signal_id=%s: %s", signal_id, e)
+
+        logging.getLogger(__name__).warning(
+            "signals trade_journal entry_price/arm 查询失败 signal_id=%s: %s", signal_id, e
+        )
     return None, "not_found", None
 
 
@@ -191,6 +197,7 @@ def _signals_status() -> dict[str, Any]:
 
     # regime cache freshness
     from tools.signal_report import _regime_freshness
+
     freshness = _regime_freshness()
 
     # arm status
@@ -303,6 +310,7 @@ def _get_weekly_review(date: str | None = None) -> dict[str, Any]:
     """
     import json  # noqa: PLC0415
     from pathlib import Path  # noqa: PLC0415
+
     _dir = Path(resolve_data_dir()) / "signal_reports"
     if date:
         path = _dir / f"{date}_weekly_review.json"
@@ -321,6 +329,7 @@ def _get_weekly_review(date: str | None = None) -> dict[str, Any]:
 
 
 # ── helper: weekly_review 用实际 P&L ──
+
 
 def _actual_pnl_for_weekly_review() -> dict[str, Any]:
     """供 weekly_review 调用：取最近实际 P&L 统计。

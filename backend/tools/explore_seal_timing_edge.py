@@ -9,6 +9,7 @@
 数据：intraday_quote_snapshots（14 天 <60 → exploratory）
 跑法：cd backend && .venv/bin/python tools/explore_seal_timing_edge.py
 """
+
 import json
 import sqlite3
 import statistics
@@ -39,9 +40,15 @@ def load_kline_bars(code: str) -> list[dict]:
         bars = json.loads(row[0])
     except Exception:
         return []
-    out = [{"date": str(b.get("date",""))[:10], "open": float(b.get("open",0) or 0),
-            "close": float(b.get("close",0) or 0)}
-           for b in bars if b.get("date") and float(b.get("open",0) or 0)>0]
+    out = [
+        {
+            "date": str(b.get("date", ""))[:10],
+            "open": float(b.get("open", 0) or 0),
+            "close": float(b.get("close", 0) or 0),
+        }
+        for b in bars
+        if b.get("date") and float(b.get("open", 0) or 0) > 0
+    ]
     out.sort(key=lambda x: x["date"])
     return out
 
@@ -49,9 +56,9 @@ def load_kline_bars(code: str) -> list[dict]:
 def find_next_open(bars, date):
     for i, b in enumerate(bars):
         if b["date"] == date:
-            prev_c = bars[i-1]["close"] if i > 0 else 0.0
+            prev_c = bars[i - 1]["close"] if i > 0 else 0.0
             if i + 1 < len(bars):
-                return (prev_c, b["open"], b["close"], bars[i+1]["open"])
+                return (prev_c, b["open"], b["close"], bars[i + 1]["open"])
             return None
     return None
 
@@ -99,9 +106,17 @@ def main():
         entry_open_pct = (open_p - prev_close) / prev_close * 100 if prev_close > 0 else 0
         # R1 entry 一字涨停（open=涨停价买不到）+ 一字跌停（open vs prev_close<=-9.5%）
         is_entry_locked = entry_open_pct >= 9.5 or entry_open_pct <= -9.5
-        obs.append({"date": date, "code": code, "bucket": bucket,
-                    "edge": edge, "win": 1 if edge > 0 else 0,
-                    "next_locked": is_next_locked, "entry_locked": is_entry_locked})
+        obs.append(
+            {
+                "date": date,
+                "code": code,
+                "bucket": bucket,
+                "edge": edge,
+                "win": 1 if edge > 0 else 0,
+                "next_locked": is_next_locked,
+                "entry_locked": is_entry_locked,
+            }
+        )
 
     n = len(obs)
     days = len(set(o["date"] for o in obs))
@@ -113,6 +128,7 @@ def main():
     # 按 bucket 分组
     print(f"\n=== 按封板时机分组 T+1 edge（全样本）===")
     from collections import defaultdict
+
     groups = defaultdict(list)
     for o in obs:
         groups[o["bucket"]].append(o)
@@ -122,7 +138,9 @@ def main():
             continue
         g_rets = [o["edge"] for o in g]
         g_wr = sum(o["win"] for o in g) / len(g)
-        print(f"  {name}: n={len(g)} days={len(set(o['date'] for o in g))} net_mean={statistics.mean(g_rets)*100:.2f}% WR={g_wr*100:.2f}%")
+        print(
+            f"  {name}: n={len(g)} days={len(set(o['date'] for o in g))} net_mean={statistics.mean(g_rets) * 100:.2f}% WR={g_wr * 100:.2f}%"
+        )
 
     # §44 v3 R1+R3 filter
     obs_f = [o for o in obs if not o["entry_locked"] and not o["next_locked"]]
@@ -138,10 +156,11 @@ def main():
             continue
         g_rets = [o["edge"] for o in g]
         g_wr = sum(o["win"] for o in g) / len(g)
-        print(f"  {name}: n={len(g)} net_mean={statistics.mean(g_rets)*100:.2f}% WR={g_wr*100:.2f}%")
+        print(f"  {name}: n={len(g)} net_mean={statistics.mean(g_rets) * 100:.2f}% WR={g_wr * 100:.2f}%")
 
     try:
         from s44_verifier.stats import day_clustered_t_test
+
         dts = [o["date"] for o in obs_f]
         rets_f = [o["edge"] for o in obs_f]
         res = day_clustered_t_test(rets_f, dts)

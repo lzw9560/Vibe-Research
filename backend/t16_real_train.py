@@ -22,6 +22,7 @@ Linux model stack, NOT the full S008/S018 panel pipeline. Sources NOT wired
 here (fund_flow 120d limit + flaky, auction/yesterday_limit/day_trip via
 limitup_sti+龙虎榜, sentiment, external, text) are deferred — not faked.
 """
+
 from __future__ import annotations
 
 import json
@@ -50,17 +51,21 @@ FRED_KEY_PATH = "/home/vdb/turing/code/Vibe-Research/.vibe-research/fred_api_key
 
 # ── data fetch ─────────────────────────────────────────────────────────
 
+
 def fetch_kline() -> list[dict]:
     df = ak.stock_zh_index_daily(symbol=SYMBOL).tail(N_TAIL_DAYS).reset_index(drop=True)
-    return [{"date": str(r["date"]), "close": float(r["close"]), "volume": float(r["volume"])}
-            for _, r in df.iterrows()]
+    return [
+        {"date": str(r["date"]), "close": float(r["close"]), "volume": float(r["volume"])} for _, r in df.iterrows()
+    ]
 
 
 def fetch_fred(series_id: str, start: str, end: str, api_key: str) -> dict[str, float]:
     """Return {calendar_date: value} for a FRED series, forward-fillable."""
-    url = (f"https://api.stlouisfed.org/fred/series/observations?"
-           f"series_id={series_id}&api_key={api_key}&file_type=json"
-           f"&observation_start={start}&observation_end={end}")
+    url = (
+        f"https://api.stlouisfed.org/fred/series/observations?"
+        f"series_id={series_id}&api_key={api_key}&file_type=json"
+        f"&observation_start={start}&observation_end={end}"
+    )
     with urllib.request.urlopen(url, timeout=20) as r:
         d = json.loads(r.read())
     out: dict[str, float] = {}
@@ -100,6 +105,7 @@ def _latest_le(series: dict[str, float], sorted_dates: list[str], t: str) -> flo
     为 ``bisect_left`` 闭合此泄漏。
     """
     import bisect
+
     i = bisect.bisect_left(sorted_dates, t) - 1
     if i < 0:
         return float("nan")
@@ -107,6 +113,7 @@ def _latest_le(series: dict[str, float], sorted_dates: list[str], t: str) -> flo
 
 
 # ── features ───────────────────────────────────────────────────────────
+
 
 def build_features(bars: list[dict], macro: dict[str, dict[str, float]]):
     """(dates, X, valid_idx). 8 features, all from data <= t."""
@@ -119,23 +126,32 @@ def build_features(bars: list[dict], macro: dict[str, dict[str, float]]):
         sub_vols = vols[: t + 1]
         d = bars[t]["date"]
 
-        f0 = short_term_reversal_ret(sub_bars, window=FEAT_WINDOW)        # 5d ret %
-        f1 = abnormal_turnover_ratio(sub_vols, avg_window=VOL_WINDOW)      # vol ratio
-        f2 = _momentum(sub_closes, MOM_WINDOW)                            # 20d ret %
-        f3 = _realized_vol(sub_closes, VOL_WINDOW)                        # 5d std of rets
-        f4 = _day_of_week(d)                                              # 0..4
-        f5 = _is_month_end(d, bars, t)                                    # 0/1
+        f0 = short_term_reversal_ret(sub_bars, window=FEAT_WINDOW)  # 5d ret %
+        f1 = abnormal_turnover_ratio(sub_vols, avg_window=VOL_WINDOW)  # vol ratio
+        f2 = _momentum(sub_closes, MOM_WINDOW)  # 20d ret %
+        f3 = _realized_vol(sub_closes, VOL_WINDOW)  # 5d std of rets
+        f4 = _day_of_week(d)  # 0..4
+        f5 = _is_month_end(d, bars, t)  # 0/1
         macro.get(d, {})
-        f6 = _macro_change(macro, bars, t, "dgs10")                       # 5d chg
-        f7 = _macro_change(macro, bars, t, "dxy")                         # 5d chg
+        f6 = _macro_change(macro, bars, t, "dgs10")  # 5d chg
+        f7 = _macro_change(macro, bars, t, "dxy")  # 5d chg
 
         if any(v is None for v in (f0, f1, f2, f3)):
             continue
         if not (np.isfinite(f1) and f1 != 0):
             continue
-        rows.append([float(f0), float(f1), float(f2), float(f3),
-                     float(f4), float(f5), float(f6) if np.isfinite(f6) else 0.0,
-                     float(f7) if np.isfinite(f7) else 0.0])
+        rows.append(
+            [
+                float(f0),
+                float(f1),
+                float(f2),
+                float(f3),
+                float(f4),
+                float(f5),
+                float(f6) if np.isfinite(f6) else 0.0,
+                float(f7) if np.isfinite(f7) else 0.0,
+            ]
+        )
         dates.append(d)
         valid_idx.append(t)
     return dates, np.array(rows, dtype=float), valid_idx
@@ -150,7 +166,7 @@ def _momentum(closes: list[float], w: int) -> float | None:
 def _realized_vol(closes: list[float], w: int) -> float | None:
     if len(closes) < w + 1:
         return None
-    rets = np.diff(closes[-(w + 1):]) / np.array(closes[-(w + 1):-1])
+    rets = np.diff(closes[-(w + 1) :]) / np.array(closes[-(w + 1) : -1])
     return float(np.std(rets))
 
 
@@ -177,6 +193,7 @@ def _macro_change(macro, bars, t, key) -> float:
 
 
 # ── labels ─────────────────────────────────────────────────────────────
+
 
 def label_past(bars, idx):
     # 过去标签窗口与所有特征窗口**不相交**（特征最长 MOM_WINDOW=20，窗口 [idx-20, idx]）。
@@ -215,15 +232,23 @@ def assemble(bars, dates, X, valid_idx, label_fn):
 
 # ── run ────────────────────────────────────────────────────────────────
 
+
 def run_variant(name, dates, X, y, cfg: TrainConfig):
     print(f"\n{'=' * 72}\nVariant {name}\n  n_samples={len(y)}  pos_rate={y.mean():.3f}  n_features={X.shape[1]}")
     if len(y) < 40:
         print("  too few samples — skipping")
         return
-    splits = roll_retrain(dates, train_size=cfg.train_size, test_size=cfg.test_size,
-                          step_days=cfg.step_days, embargo_days=cfg.embargo_days,
-                          purge_days=cfg.purge_days)
-    print(f"  feasible folds={len(splits)} (train_size={cfg.train_size} test_size={cfg.test_size} gap={cfg.embargo_days + cfg.purge_days})")
+    splits = roll_retrain(
+        dates,
+        train_size=cfg.train_size,
+        test_size=cfg.test_size,
+        step_days=cfg.step_days,
+        embargo_days=cfg.embargo_days,
+        purge_days=cfg.purge_days,
+    )
+    print(
+        f"  feasible folds={len(splits)} (train_size={cfg.train_size} test_size={cfg.test_size} gap={cfg.embargo_days + cfg.purge_days})"
+    )
     if not splits:
         print("  no fold feasible — skipping")
         return
@@ -232,9 +257,11 @@ def run_variant(name, dates, X, y, cfg: TrainConfig):
     last = art["split"]
     ev = evaluate_short_sector(art, X[list(last.test_idx)], y[list(last.test_idx)])
     print(f"  [train_short_sector] backends={art['backends']} regime={art['regime'].backend()}")
-    print(f"  [last-fold OOS] test {last.test_dates[0]}..{last.test_dates[-1]} "
-          f"({len(last.test_idx)} pts): win_rate={ev['win_rate']:.3f} auc={ev['auc']:.3f} "
-          f"leakage_flag={ev['leakage_flag']}")
+    print(
+        f"  [last-fold OOS] test {last.test_dates[0]}..{last.test_dates[-1]} "
+        f"({len(last.test_idx)} pts): win_rate={ev['win_rate']:.3f} auc={ev['auc']:.3f} "
+        f"leakage_flag={ev['leakage_flag']}"
+    )
 
     wrs = []
     for sp in splits:
@@ -246,8 +273,10 @@ def run_variant(name, dates, X, y, cfg: TrainConfig):
         yp = (proba[:, 1] >= 0.5).astype(int) if proba.ndim == 2 else (proba >= 0.5).astype(int)
         wrs.append(win_rate(y[te], yp))
     agg = float(np.mean(wrs)) if wrs else float("nan")
-    print(f"  [aggregated OOS] folds_evaluated={len(wrs)} mean_win_rate={agg:.3f} "
-          f"leakage_flag(>{LEAKAGE_WIN_RATE_THRESHOLD:.0%})={agg > LEAKAGE_WIN_RATE_THRESHOLD}")
+    print(
+        f"  [aggregated OOS] folds_evaluated={len(wrs)} mean_win_rate={agg:.3f} "
+        f"leakage_flag(>{LEAKAGE_WIN_RATE_THRESHOLD:.0%})={agg > LEAKAGE_WIN_RATE_THRESHOLD}"
+    )
 
 
 def main():
@@ -268,15 +297,19 @@ def main():
     dates, X, valid_idx = build_features(bars, macro)
     print(f"  feature rows (post lookback): {len(X)}  X.shape={X.shape}")
 
-    for name, fn in (("A: past-3d label, window disjoint from features (leakage-fixed)", label_past),
-                     ("B: forward-3d label (honest target)", label_forward)):
+    for name, fn in (
+        ("A: past-3d label, window disjoint from features (leakage-fixed)", label_past),
+        ("B: forward-3d label (honest target)", label_forward),
+    ):
         d, Xs, ys = assemble(bars, dates, X, valid_idx, fn)
         run_variant(name, d, Xs, ys, cfg)
 
-    print(f"\n{'=' * 72}\nFeatures (8, all data <= t): short_term_reversal, abnormal_turnover,\n"
-          f"  momentum_20d, realized_vol_5d, day_of_week, is_month_end, dgs10_chg5d, dxy_chg5d.\n"
-          f"Deferred (not faked): fund_flow(120d limit+flaky), auction/yesterday_limit/day_trip\n"
-          f"  (limitup_sti+龙虎榜), sentiment, external, text — need S008 source work.")
+    print(
+        f"\n{'=' * 72}\nFeatures (8, all data <= t): short_term_reversal, abnormal_turnover,\n"
+        f"  momentum_20d, realized_vol_5d, day_of_week, is_month_end, dgs10_chg5d, dxy_chg5d.\n"
+        f"Deferred (not faked): fund_flow(120d limit+flaky), auction/yesterday_limit/day_trip\n"
+        f"  (limitup_sti+龙虎榜), sentiment, external, text — need S008 source work."
+    )
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ from formatters import chunk_content_by_max_bytes  # <-- 引入项目内置的�
 
 logger = logging.getLogger(__name__)
 
+
 class DingtalkSender:
     def __init__(self, config: Config):
         self.webhook_url = config.dingtalk_webhook_url
@@ -25,12 +26,12 @@ class DingtalkSender:
         # 1. 签名逻辑 (Security Signature)
         if self.secret:
             timestamp = str(round(time.time() * 1000))
-            secret_enc = self.secret.encode('utf-8')
-            string_to_sign = f'{timestamp}\n{self.secret}'
-            string_to_sign_enc = string_to_sign.encode('utf-8')
+            secret_enc = self.secret.encode("utf-8")
+            string_to_sign = f"{timestamp}\n{self.secret}"
+            string_to_sign_enc = string_to_sign.encode("utf-8")
             hmac_code = hmac.new(secret_enc, string_to_sign_enc, digestmod=hashlib.sha256).digest()
             sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
-            
+
             if "?" in self.webhook_url:
                 url = f"{self.webhook_url}&timestamp={timestamp}&sign={sign}"
             else:
@@ -49,25 +50,19 @@ class DingtalkSender:
 
         for index, chunk in enumerate(chunks):
             text = f"### {safe_title}\n\n{chunk}" if index == 0 and safe_title else chunk
-            
+
             display_title = safe_title or "通知 (Notification)"
             if len(chunks) > 1:
                 display_title = f"{display_title} ({index + 1}/{len(chunks)})"
-            
-            payload = {
-                "msgtype": "markdown",
-                "markdown": {
-                    "title": display_title,
-                    "text": text
-                }
-            }
-            headers = {'Content-Type': 'application/json'}
+
+            payload = {"msgtype": "markdown", "markdown": {"title": display_title, "text": text}}
+            headers = {"Content-Type": "application/json"}
 
             # 4. 发送请求
             try:
                 response = requests.post(url, json=payload, headers=headers, timeout=timeout_seconds)
                 response.raise_for_status()
-                
+
                 result = response.json()
                 if result.get("errcode") == 0:
                     logger.info(f"钉钉消息分段 {index + 1} 发送成功 (Chunk {index + 1} sent successfully)")
@@ -77,7 +72,7 @@ class DingtalkSender:
             except Exception as e:
                 logger.error(f"发送钉钉消息异常 (Failed to send DingTalk notification chunk {index + 1}): {e}")
                 all_success = False
-            
+
             if len(chunks) > 1 and index < len(chunks) - 1:
                 time.sleep(0.5)
 

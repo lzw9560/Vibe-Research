@@ -12,6 +12,7 @@ scheduler 触发正证，二者皆空 = missed（cron 从未触发，last_run_at
 工程底线：不臆造（读真实 last_run_at + 真实 receipt，不猜不补）；私有数据隔离
 （cron_fire.log 在 .vibe-research/，VR_DATA_DIR）；零网络（只读本地 SQLite + jsonl）。
 """
+
 from __future__ import annotations
 
 import logging

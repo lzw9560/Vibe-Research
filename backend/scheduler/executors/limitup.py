@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """limitup executors——涨停预计算/STI 盘后/涨停历史快照/ST radar/derived 预计算。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -109,19 +110,22 @@ def sti_post_market(payload: Dict[str, Any]) -> Dict[str, Any]:
         results["source_date"] = target
         logger.info(
             "[sti_post_market] %s STI 计算完成：score=%s phase=%s",
-            target, sti_result.score,
+            target,
+            sti_result.score,
             sti_result.phase.value if sti_result.phase else None,
         )
         # S065：STI 成功后落 weather_history 快照（失败不阻断主流程）
         try:
             from routers.sentiment_weather import compute_weather_snapshot
             from weather_history import save_weather_snapshot
+
             snapshot = compute_weather_snapshot(target)
             if snapshot.get("data_status") == "ok":
                 save_weather_snapshot(snapshot)
                 logger.info(
                     "[sti_post_market] %s weather_history 快照已落库：%s",
-                    target, snapshot.get("weather_state"),
+                    target,
+                    snapshot.get("weather_state"),
                 )
         except Exception as we:
             logger.warning("[sti_post_market] weather_history 落库失败（不阻断）: %s", we)
@@ -145,19 +149,21 @@ def zt_history_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         from data.zt_history_store import snapshot_zt_pool
         from vr_paths import last_trading_date_str
+
         target = payload.get("date") or last_trading_date_str()
         # 采集时点判定：北京时间 17:15 后视为终盘稳定版（东财涨停池盘后持续收缩，
         # 17:15 后已稳定）。dateutil 不可用则回退 zoneinfo（3.9+ stdlib）。
         import datetime as _dt
+
         try:
             from zoneinfo import ZoneInfo
+
             now_bj = _dt.datetime.now(ZoneInfo("Asia/Shanghai"))
         except Exception:  # noqa: BLE001
             now_bj = _dt.datetime.now()  # fallback：无 tz 信息，按本地（开发机通常 CST）
         is_final = now_bj.hour > 17 or (now_bj.hour == 17 and now_bj.minute >= 15)
         written = snapshot_zt_pool(target, is_final=is_final)
-        logger.info("[zt_history_snapshot] %s 涨停池 snapshot 写入 %s 行 (is_final=%s)",
-                    target, written, is_final)
+        logger.info("[zt_history_snapshot] %s 涨停池 snapshot 写入 %s 行 (is_final=%s)", target, written, is_final)
         return {"date": target, "written": written, "is_final": is_final, "status": "ok"}
     except Exception as e:
         logger.warning("[zt_history_snapshot] 采集失败: %s", e)
@@ -177,14 +183,17 @@ def regime_cache_fetch(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     import subprocess
     import sys
+
     script = Path(__file__).resolve().parents[2] / "tools" / "index_ma20_regime_fetch.py"
     try:
         result = subprocess.run(
-            [sys.executable, str(script)], capture_output=True, text=True, timeout=180,
+            [sys.executable, str(script)],
+            capture_output=True,
+            text=True,
+            timeout=180,
         )
         if result.returncode != 0:
-            logger.warning("[regime_cache_fetch] 脚本失败 rc=%s: %s",
-                           result.returncode, result.stderr[:300])
+            logger.warning("[regime_cache_fetch] 脚本失败 rc=%s: %s", result.returncode, result.stderr[:300])
             return {"status": f"error: rc={result.returncode}", "stderr": result.stderr[:200]}
         last_line = result.stdout.strip().split("\n")[-1] if result.stdout.strip() else ""
         logger.info("[regime_cache_fetch] 刷 cache ok: %s", last_line)
@@ -205,6 +214,7 @@ def st_play_radar(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     try:
         from candidate_funnel.sources.st_play_radar import run_st_play_radar  # noqa: PLC0415
+
         radar = run_st_play_radar()
         logger.info("[st_play_radar] 白名单写入 %s 只（摘帽/重组/扭亏）", len(radar))
         return {"count": len(radar), "status": "ok"}
@@ -233,10 +243,14 @@ def derived_precompute(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         from candidate_funnel.sources import zt_pool_source
         from risk.seal_intraday_collector import (
-            run_migrations, get_snapshots_by_code, _get_conn, _DB_LOCK,
+            run_migrations,
+            get_snapshots_by_code,
+            _get_conn,
+            _DB_LOCK,
         )
         from strategies.intraday_features import (
-            compute_derived_features, persist_derived_features,
+            compute_derived_features,
+            persist_derived_features,
         )
     except Exception as e:
         logger.warning("[derived_precompute] 依赖导入失败: %s", e)
@@ -287,7 +301,9 @@ def derived_precompute(payload: Dict[str, Any]) -> Dict[str, Any]:
                 except Exception as exc:
                     logger.warning(
                         "[derived_precompute] %s %s 派生落库失败（跳过）: %s",
-                        yesterday, code, exc,
+                        yesterday,
+                        code,
+                        exc,
                     )
                     skipped += 1
             conn.commit()
@@ -296,7 +312,9 @@ def derived_precompute(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     logger.info(
         "[derived_precompute] %s derived 预采集完成：涨停%s/写入%s/跳过%s",
-        yesterday, len(codes), written, skipped,
+        yesterday,
+        len(codes),
+        written,
+        skipped,
     )
-    return {"date": yesterday, "status": "ok", "codes": len(codes),
-            "written": written, "skipped": skipped}
+    return {"date": yesterday, "status": "ok", "codes": len(codes), "written": written, "skipped": skipped}

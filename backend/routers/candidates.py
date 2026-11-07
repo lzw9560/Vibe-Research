@@ -20,11 +20,16 @@ from fastapi import APIRouter, HTTPException
 try:
     from app import cache_response
 except (ImportError, AttributeError):  # noqa: PLC0415 — 测试环境 app 未加载时回退
+
     def cache_response(ttl: int = 300):  # type: ignore[misc]
         """noop fallback：测试环境无缓存中间件，直接透传。"""
+
         def deco(func):
             return func
+
         return deco
+
+
 from candidate_funnel import funnel as funnel_mod
 from candidate_funnel.funnel_cache import (  # S087 R10：run_funnel 结果落库缓存
     list_cached_dates,
@@ -168,4 +173,7 @@ async def rerun_downstream(layer_id: str, date: str | None = None):
     idx = next((i for i, l in enumerate(result.layers) if l.layer_id == layer_id), None)
     if idx is None:
         raise HTTPException(404, f"未知漏斗层: {layer_id}")
-    return {"layers": [l.model_dump(mode="json") for l in result.layers[idx:]], "final_candidates": [c.model_dump(mode="json") for c in result.final_candidates]}
+    return {
+        "layers": [l.model_dump(mode="json") for l in result.layers[idx:]],
+        "final_candidates": [c.model_dump(mode="json") for c in result.final_candidates],
+    }

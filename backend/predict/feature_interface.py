@@ -87,6 +87,7 @@ def build_default_registry() -> Registry:
 
 # ── Public API ──────────────────────────────────────────────────────
 
+
 def list_available_features(head: str, stage: str) -> list[str]:
     """Return the feature names unlocked for *head* at *stage*.
 

@@ -10,6 +10,7 @@
 n_comparisons=15（3 arms × 5 horizons，BH K=15 多重比较校正，verifier event 分支已加）。
 input_files 传 forecast_reports + kline_cache hash（grill #5 复现锚点）。
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -49,9 +50,7 @@ def run():
         print("[S169] 无交易日历")
         return
 
-    frozen = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=str(ROOT)
-    ).decode().strip()[:8]
+    frozen = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(ROOT)).decode().strip()[:8]
 
     arms = {
         "all": events,
@@ -64,10 +63,12 @@ def run():
         str(CACHE_PATH): "kline_cache",
     }
 
-    print(f"[S169] PEAD: {len(events)} events "
-          f"({sum(len(v) for v in arms.values()) if False else len(events)} total, "
-          f"good={len(arms['good_news'])} bad={len(arms['bad_news'])}), "
-          f"{len(calendar)} calendar days, frozen={frozen}")
+    print(
+        f"[S169] PEAD: {len(events)} events "
+        f"({sum(len(v) for v in arms.values()) if False else len(events)} total, "
+        f"good={len(arms['good_news'])} bad={len(arms['bad_news'])}), "
+        f"{len(calendar)} calendar days, frozen={frozen}"
+    )
     for arm_name, arm_events in arms.items():
         for N in HORIZONS:
             run_event_verdict(

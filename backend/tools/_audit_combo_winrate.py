@@ -10,6 +10,7 @@
 
 复用 _audit_combo_deep.py 的 rank 逻辑，加：去涨停 + 全历史 + 三胜率 + gate。
 """
+
 from __future__ import annotations
 
 import json
@@ -75,11 +76,18 @@ def build_by_date() -> dict:
             if not nc:
                 continue
             fwd5 = (nc - c) / c
-            by_date[bars[i].get("date", "")].append({
-                "code": code, "gap": gap, "tr": today_ret, "amt": amt,
-                "fwd5": fwd5, "up": c > ma60, "past5": past_5d,
-                "limit": today_ret >= bl * 0.98,  # 涨停（含接近涨停）
-            })
+            by_date[bars[i].get("date", "")].append(
+                {
+                    "code": code,
+                    "gap": gap,
+                    "tr": today_ret,
+                    "amt": amt,
+                    "fwd5": fwd5,
+                    "up": c > ma60,
+                    "past5": past_5d,
+                    "limit": today_ret >= bl * 0.98,  # 涨停（含接近涨停）
+                }
+            )
     return by_date
 
 
@@ -125,9 +133,15 @@ def wr_stats(dates: list, by_date: dict, exclude_limit: bool = True) -> dict | N
     se = std / (len(daily_mean) ** 0.5) if daily_mean else 0
     t = m / se if se > 0 else 0
     return {
-        "n_days": len(daily_mean), "n_picks": len(all_picks),
-        "mean": m, "median": med, "net": m - COST, "t": t,
-        "per_pick_wr": per_pick_wr, "combo_wr": combo_wr, "day_wr": day_wr,
+        "n_days": len(daily_mean),
+        "n_picks": len(all_picks),
+        "mean": m,
+        "median": med,
+        "net": m - COST,
+        "t": t,
+        "per_pick_wr": per_pick_wr,
+        "combo_wr": combo_wr,
+        "day_wr": day_wr,
     }
 
 
@@ -153,11 +167,17 @@ def main() -> None:
     r = wr_stats(all_d, by_date)
     if r:
         print(f"【全历史】days={r['n_days']} picks={r['n_picks']}")
-        print(f"  mean={r['mean']*100:+.3f}% median={r['median']*100:+.3f}% net={r['net']*100:+.3f}% t={r['t']:.2f}")
-        print(f"  胜率: per-pick={r['per_pick_wr']*100:.1f}% / 日组合={r['combo_wr']*100:.1f}% / 日胜率(赚钱天)={r['day_wr']*100:.1f}%\n")
+        print(
+            f"  mean={r['mean'] * 100:+.3f}% median={r['median'] * 100:+.3f}% net={r['net'] * 100:+.3f}% t={r['t']:.2f}"
+        )
+        print(
+            f"  胜率: per-pick={r['per_pick_wr'] * 100:.1f}% / 日组合={r['combo_wr'] * 100:.1f}% / 日胜率(赚钱天)={r['day_wr'] * 100:.1f}%\n"
+        )
 
     # 各年分层
-    print(f"{'年份':<8}{'mean':>10}{'median':>10}{'per-pick':>10}{'日组合':>10}{'日胜率':>10}{'net':>10}{'t':>7}{'days':>7}")
+    print(
+        f"{'年份':<8}{'mean':>10}{'median':>10}{'per-pick':>10}{'日组合':>10}{'日胜率':>10}{'net':>10}{'t':>7}{'days':>7}"
+    )
     print("-" * 72)
     for yr in ["2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025", "2026"]:
         ds = [d for d in all_d if d.startswith(yr)]
@@ -166,7 +186,9 @@ def main() -> None:
         r = wr_stats(ds, by_date)
         if not r:
             continue
-        print(f"{yr:<8}{r['mean']*100:>+9.3f}%{r['median']*100:>+9.3f}%{r['per_pick_wr']*100:>9.1f}%{r['combo_wr']*100:>9.1f}%{r['day_wr']*100:>9.1f}%{r['net']*100:>+9.3f}%{r['t']:>6.2f}{r['n_days']:>7}")
+        print(
+            f"{yr:<8}{r['mean'] * 100:>+9.3f}%{r['median'] * 100:>+9.3f}%{r['per_pick_wr'] * 100:>9.1f}%{r['combo_wr'] * 100:>9.1f}%{r['day_wr'] * 100:>9.1f}%{r['net'] * 100:>+9.3f}%{r['t']:>6.2f}{r['n_days']:>7}"
+        )
     print()
 
     # gate 分层
@@ -179,7 +201,9 @@ def main() -> None:
         r = wr_stats(ds, by_date)
         if not r:
             continue
-        print(f"  {label}: days={r['n_days']:>4} mean={r['mean']*100:+.3f}% per-pick={r['per_pick_wr']*100:.1f}% 日胜率={r['day_wr']*100:.1f}% net={r['net']*100:+.3f}% t={r['t']:.2f}")
+        print(
+            f"  {label}: days={r['n_days']:>4} mean={r['mean'] * 100:+.3f}% per-pick={r['per_pick_wr'] * 100:.1f}% 日胜率={r['day_wr'] * 100:.1f}% net={r['net'] * 100:+.3f}% t={r['t']:.2f}"
+        )
     print()
 
     # 含涨停 vs 去涨停对比（验证 R4：涨停贡献 40%）
@@ -187,10 +211,14 @@ def main() -> None:
     r1 = wr_stats(all_d, by_date, exclude_limit=False)
     r2 = wr_stats(all_d, by_date, exclude_limit=True)
     if r1 and r2:
-        print(f"  含涨停: mean={r1['mean']*100:+.3f}% per-pick={r1['per_pick_wr']*100:.1f}% 日胜率={r1['day_wr']*100:.1f}% t={r1['t']:.2f}")
-        print(f"  去涨停: mean={r2['mean']*100:+.3f}% per-pick={r2['per_pick_wr']*100:.1f}% 日胜率={r2['day_wr']*100:.1f}% t={r2['t']:.2f}")
-        ratio = r2['mean'] / r1['mean'] if r1['mean'] else 0
-        print(f"  去涨停/含涨停={ratio*100:.0f}% → 涨停贡献约 {(1-ratio)*100:.0f}%")
+        print(
+            f"  含涨停: mean={r1['mean'] * 100:+.3f}% per-pick={r1['per_pick_wr'] * 100:.1f}% 日胜率={r1['day_wr'] * 100:.1f}% t={r1['t']:.2f}"
+        )
+        print(
+            f"  去涨停: mean={r2['mean'] * 100:+.3f}% per-pick={r2['per_pick_wr'] * 100:.1f}% 日胜率={r2['day_wr'] * 100:.1f}% t={r2['t']:.2f}"
+        )
+        ratio = r2["mean"] / r1["mean"] if r1["mean"] else 0
+        print(f"  去涨停/含涨停={ratio * 100:.0f}% → 涨停贡献约 {(1 - ratio) * 100:.0f}%")
     print()
 
     # 持有期分布（去涨停全历史）
@@ -205,9 +233,13 @@ def main() -> None:
                 picks.extend(x["fwd5"] for x in top)
         if picks:
             n = len(picks)
-            print(f"  n={n} mean={statistics.mean(picks)*100:+.3f}% median={statistics.median(picks)*100:+.3f}%")
-            print(f"  >0(赚):{sum(1 for x in picks if x>0)/n*100:.1f}%  >+5%:{sum(1 for x in picks if x>0.05)/n*100:.1f}%  >+10%:{sum(1 for x in picks if x>0.10)/n*100:.1f}%")
-            print(f"  <0(亏):{sum(1 for x in picks if x<0)/n*100:.1f}%  <-5%:{sum(1 for x in picks if x<-0.05)/n*100:.1f}%  <-10%:{sum(1 for x in picks if x<-0.10)/n*100:.1f}%")
+            print(f"  n={n} mean={statistics.mean(picks) * 100:+.3f}% median={statistics.median(picks) * 100:+.3f}%")
+            print(
+                f"  >0(赚):{sum(1 for x in picks if x > 0) / n * 100:.1f}%  >+5%:{sum(1 for x in picks if x > 0.05) / n * 100:.1f}%  >+10%:{sum(1 for x in picks if x > 0.10) / n * 100:.1f}%"
+            )
+            print(
+                f"  <0(亏):{sum(1 for x in picks if x < 0) / n * 100:.1f}%  <-5%:{sum(1 for x in picks if x < -0.05) / n * 100:.1f}%  <-10%:{sum(1 for x in picks if x < -0.10) / n * 100:.1f}%"
+            )
 
 
 if __name__ == "__main__":

@@ -34,11 +34,12 @@ Status = Literal["pending", "met_up", "met_down", "within", "data_missing"]
 @dataclass(frozen=True)
 class VerificationCondition:
     """单条验证条件。"""
-    date: str          # 生成日 YYYY-MM-DD
-    metric: str        # 指标名
-    subject: str       # 主体（主线板块名/空）
+
+    date: str  # 生成日 YYYY-MM-DD
+    metric: str  # 指标名
+    subject: str  # 主体（主线板块名/空）
     baseline: float | None
-    threshold_up: float | None   # 上行阈值（变动超此 → met_up）
+    threshold_up: float | None  # 上行阈值（变动超此 → met_up）
     threshold_down: float | None  # 下行阈值（变动超此 → met_down）
     actual: float | None = None  # T+1 实际值
     status: Status = "pending"
@@ -53,11 +54,15 @@ def run_migrations() -> None:
     manager = MigrationManager(db_path=_DB_PATH)
     migration_v1 = (
         Path(__file__).resolve().parent.parent
-        / "migrations" / "verification_card" / "20260812-001_create_verification_conditions.sql"
+        / "migrations"
+        / "verification_card"
+        / "20260812-001_create_verification_conditions.sql"
     ).read_text(encoding="utf-8")
-    manager.upgrade([
-        {"version": "20260812-001", "name": "create_verification_conditions", "sql": migration_v1},
-    ])
+    manager.upgrade(
+        [
+            {"version": "20260812-001", "name": "create_verification_conditions", "sql": migration_v1},
+        ]
+    )
 
 
 def _get_conn() -> sqlite3.Connection:
@@ -102,51 +107,87 @@ def generate_conditions(emotion_data: dict, date_str: str | None = None) -> list
 
     # 1. 涨停家数 ±20%
     if zt is not None and zt > 0:
-        conditions.append(VerificationCondition(
-            date=date_str, metric="zt_count", subject="全市场",
-            baseline=zt, threshold_up=zt * 1.2, threshold_down=zt * 0.8,
-            note=f"涨停家数 {int(zt)} ±20%",
-        ))
+        conditions.append(
+            VerificationCondition(
+                date=date_str,
+                metric="zt_count",
+                subject="全市场",
+                baseline=zt,
+                threshold_up=zt * 1.2,
+                threshold_down=zt * 0.8,
+                note=f"涨停家数 {int(zt)} ±20%",
+            )
+        )
 
     # 2. 炸板率 ±5pct
     if br is not None:
-        conditions.append(VerificationCondition(
-            date=date_str, metric="break_rate", subject="全市场",
-            baseline=br, threshold_up=br + 0.05, threshold_down=max(0.0, br - 0.05),
-            note=f"炸板率 {br:.1%} ±5pct",
-        ))
+        conditions.append(
+            VerificationCondition(
+                date=date_str,
+                metric="break_rate",
+                subject="全市场",
+                baseline=br,
+                threshold_up=br + 0.05,
+                threshold_down=max(0.0, br - 0.05),
+                note=f"炸板率 {br:.1%} ±5pct",
+            )
+        )
 
     # 3. 连板高度 ±1 板
     if mb is not None and mb > 0:
-        conditions.append(VerificationCondition(
-            date=date_str, metric="max_boards", subject="全市场",
-            baseline=mb, threshold_up=mb + 1, threshold_down=max(1.0, mb - 1),
-            note=f"最高连板 {int(mb)} ±1 板",
-        ))
+        conditions.append(
+            VerificationCondition(
+                date=date_str,
+                metric="max_boards",
+                subject="全市场",
+                baseline=mb,
+                threshold_up=mb + 1,
+                threshold_down=max(1.0, mb - 1),
+                note=f"最高连板 {int(mb)} ±1 板",
+            )
+        )
 
     # 4. 封板率 ±5pct
     if sr is not None:
-        conditions.append(VerificationCondition(
-            date=date_str, metric="seal_rate", subject="全市场",
-            baseline=sr, threshold_up=min(1.0, sr + 0.05), threshold_down=max(0.0, sr - 0.05),
-            note=f"封板率 {sr:.1%} ±5pct",
-        ))
+        conditions.append(
+            VerificationCondition(
+                date=date_str,
+                metric="seal_rate",
+                subject="全市场",
+                baseline=sr,
+                threshold_up=min(1.0, sr + 0.05),
+                threshold_down=max(0.0, sr - 0.05),
+                note=f"封板率 {sr:.1%} ±5pct",
+            )
+        )
 
     # 5. 晋级率 ±3pct
     if pr is not None:
-        conditions.append(VerificationCondition(
-            date=date_str, metric="promotion_rate", subject="全市场",
-            baseline=pr, threshold_up=min(1.0, pr + 0.03), threshold_down=max(0.0, pr - 0.03),
-            note=f"晋级率 {pr:.1%} ±3pct",
-        ))
+        conditions.append(
+            VerificationCondition(
+                date=date_str,
+                metric="promotion_rate",
+                subject="全市场",
+                baseline=pr,
+                threshold_up=min(1.0, pr + 0.03),
+                threshold_down=max(0.0, pr - 0.03),
+                note=f"晋级率 {pr:.1%} ±3pct",
+            )
+        )
 
     # 6. 昨涨停家数（主线延续代理指标，-30% 视为断档）
     if yzt is not None and yzt > 0:
-        conditions.append(VerificationCondition(
-            date=date_str, metric="yzt_count", subject="昨涨停",
-            baseline=yzt, threshold_up=yzt * 1.3, threshold_down=yzt * 0.7,
-            note=f"昨涨停 {int(yzt)} ±30%（主线延续代理）",
-        ))
+        conditions.append(
+            VerificationCondition(
+                date=date_str,
+                metric="yzt_count",
+                subject="昨涨停",
+                baseline=yzt,
+                threshold_up=yzt * 1.3,
+                threshold_down=yzt * 0.7,
+                note=f"昨涨停 {int(yzt)} ±30%（主线延续代理）",
+            )
+        )
 
     return conditions
 
@@ -179,33 +220,31 @@ def verify_conditions(
     for cond in pending:
         next_key = metric_to_next_key.get(cond.metric)
         if next_key is None:
-            verified.append(_replace(cond, actual=None, status="data_missing",
-                                     note=cond.note + "；对账字段未知"))
+            verified.append(_replace(cond, actual=None, status="data_missing", note=cond.note + "；对账字段未知"))
             continue
 
         actual = _safe_float(next_day_emotion.get(next_key))
         if actual is None:
-            verified.append(_replace(cond, actual=None, status="data_missing",
-                                     note=cond.note + "；T+1 数据缺失"))
+            verified.append(_replace(cond, actual=None, status="data_missing", note=cond.note + "；T+1 数据缺失"))
             continue
 
         # 对账判定
         if cond.baseline is None:
-            verified.append(_replace(cond, actual=actual, status="data_missing",
-                                     note=cond.note + "；基准值缺失"))
+            verified.append(_replace(cond, actual=actual, status="data_missing", note=cond.note + "；基准值缺失"))
             continue
 
         up = cond.threshold_up
         down = cond.threshold_down
         if up is not None and actual >= up:
-            verified.append(_replace(cond, actual=actual, status="met_up",
-                                     note=cond.note + f"；实际 {actual} ≥ {up}"))
+            verified.append(_replace(cond, actual=actual, status="met_up", note=cond.note + f"；实际 {actual} ≥ {up}"))
         elif down is not None and actual <= down:
-            verified.append(_replace(cond, actual=actual, status="met_down",
-                                     note=cond.note + f"；实际 {actual} ≤ {down}"))
+            verified.append(
+                _replace(cond, actual=actual, status="met_down", note=cond.note + f"；实际 {actual} ≤ {down}")
+            )
         else:
-            verified.append(_replace(cond, actual=actual, status="within",
-                                     note=cond.note + f"；实际 {actual} 在区间内"))
+            verified.append(
+                _replace(cond, actual=actual, status="within", note=cond.note + f"；实际 {actual} 在区间内")
+            )
 
     return verified
 
@@ -240,8 +279,20 @@ def save_conditions(conditions: list[VerificationCondition]) -> int:
                 (date, metric, subject, baseline, threshold_up, threshold_down,
                  actual, status, note)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                [(c.date, c.metric, c.subject, c.baseline, c.threshold_up,
-                  c.threshold_down, c.actual, c.status, c.note) for c in conditions],
+                [
+                    (
+                        c.date,
+                        c.metric,
+                        c.subject,
+                        c.baseline,
+                        c.threshold_up,
+                        c.threshold_down,
+                        c.actual,
+                        c.status,
+                        c.note,
+                    )
+                    for c in conditions
+                ],
             )
             conn.commit()
             return cur.rowcount
@@ -302,7 +353,9 @@ def generate_and_save(emotion_data: dict, date_str: str | None = None) -> list[V
     """盘后生成条件并落库。返回生成的条件列表。"""
     conditions = generate_conditions(emotion_data, date_str)
     save_conditions(conditions)
-    _logger.info("[verification_card] 生成 %d 条条件（date=%s）", len(conditions), conditions[0].date if conditions else "?")
+    _logger.info(
+        "[verification_card] 生成 %d 条条件（date=%s）", len(conditions), conditions[0].date if conditions else "?"
+    )
     return conditions
 
 
@@ -321,10 +374,15 @@ def verify_and_update() -> list[VerificationCondition]:
     by_date: dict[str, list[VerificationCondition]] = {}
     for r in pending_rows:
         cond = VerificationCondition(
-            date=r["date"], metric=r["metric"], subject=r["subject"] or "",
-            baseline=r["baseline"], threshold_up=r["threshold_up"],
-            threshold_down=r["threshold_down"], actual=r["actual"],
-            status=r["status"], note=r["note"] or "",
+            date=r["date"],
+            metric=r["metric"],
+            subject=r["subject"] or "",
+            baseline=r["baseline"],
+            threshold_up=r["threshold_up"],
+            threshold_down=r["threshold_down"],
+            actual=r["actual"],
+            status=r["status"],
+            note=r["note"] or "",
         )
         by_date.setdefault(r["date"], []).append(cond)
 
@@ -345,8 +403,9 @@ def verify_and_update() -> list[VerificationCondition]:
         if not next_emotion:
             # 数据缺失 → 全标 data_missing
             for c in conds:
-                all_verified.append(_replace(c, actual=None, status="data_missing",
-                                             note=c.note + "；T+1 情绪数据未取得"))
+                all_verified.append(
+                    _replace(c, actual=None, status="data_missing", note=c.note + "；T+1 情绪数据未取得")
+                )
         else:
             verified = verify_conditions(conds, next_emotion)
             all_verified.extend(verified)

@@ -8,6 +8,7 @@
 - datacenter 不需 ut（与个股 push2 需 ut 不同）。
 不臆造：返空就标空，不猜。结果落 .vibe-research/s088-secid-probe/matrix.json。
 """
+
 from __future__ import annotations
 
 import json
@@ -45,25 +46,41 @@ def probe_push2() -> list[dict]:
             lat = round(time.time() - t0, 2)
             if d:
                 chg = d.get("f170")
-                out.append({
-                    "secid": secid, "key": key, "note": note,
-                    "raw_non_empty": True, "name": d.get("f58"),
-                    "price": gstock._price(d, "f43"),
-                    "change_pct": round(chg / 100, 2) if isinstance(chg, (int, float)) else None,
-                    "latency_s": lat, "host_index": gstock._gs_host[0],
-                })
+                out.append(
+                    {
+                        "secid": secid,
+                        "key": key,
+                        "note": note,
+                        "raw_non_empty": True,
+                        "name": d.get("f58"),
+                        "price": gstock._price(d, "f43"),
+                        "change_pct": round(chg / 100, 2) if isinstance(chg, (int, float)) else None,
+                        "latency_s": lat,
+                        "host_index": gstock._gs_host[0],
+                    }
+                )
             else:
-                out.append({
-                    "secid": secid, "key": key, "note": note,
-                    "raw_non_empty": False, "latency_s": lat,
-                    "host_index": gstock._gs_host[0],
-                })
+                out.append(
+                    {
+                        "secid": secid,
+                        "key": key,
+                        "note": note,
+                        "raw_non_empty": False,
+                        "latency_s": lat,
+                        "host_index": gstock._gs_host[0],
+                    }
+                )
         except Exception as e:  # noqa: BLE001
-            out.append({
-                "secid": secid, "key": key, "note": note,
-                "raw_non_empty": False, "error": repr(e),
-                "latency_s": round(time.time() - t0, 2),
-            })
+            out.append(
+                {
+                    "secid": secid,
+                    "key": key,
+                    "note": note,
+                    "raw_non_empty": False,
+                    "error": repr(e),
+                    "latency_s": round(time.time() - t0, 2),
+                }
+            )
         time.sleep(2)  # push2 探测间隔（谨慎防限流）
     return out
 
@@ -79,29 +96,39 @@ def probe_sox_datacenter() -> dict:
         rows = astock.eastmoney_datacenter(
             "RPT_INDUSTRY_INDEX",
             filter_str='(INDICATOR_ID="EMI00055562")',
-            page_size=5, sort_columns="REPORT_DATE", sort_types="-1",
+            page_size=5,
+            sort_columns="REPORT_DATE",
+            sort_types="-1",
         )
         lat = round(time.time() - t0, 2)
         if rows:
             r = rows[0]
             return {
-                "route": "datacenter:RPT_INDUSTRY_INDEX/EMI00055562", "key": "sox",
+                "route": "datacenter:RPT_INDUSTRY_INDEX/EMI00055562",
+                "key": "sox",
                 "note": "费城半导体 datacenter 路线（非 push2 secid）",
-                "raw_non_empty": True, "fields_sample": list(r.keys())[:12],
+                "raw_non_empty": True,
+                "fields_sample": list(r.keys())[:12],
                 "report_date": str(r.get("REPORT_DATE", ""))[:10],
                 "indicator_value": r.get("INDICATOR_VALUE"),
                 "change_rate": r.get("CHANGE_RATE"),
                 "latency_s": lat,
             }
         return {
-            "route": "datacenter:RPT_INDUSTRY_INDEX/EMI00055562", "key": "sox",
-            "note": "费城半导体 datacenter 路线", "raw_non_empty": False, "latency_s": lat,
+            "route": "datacenter:RPT_INDUSTRY_INDEX/EMI00055562",
+            "key": "sox",
+            "note": "费城半导体 datacenter 路线",
+            "raw_non_empty": False,
+            "latency_s": lat,
         }
     except Exception as e:  # noqa: BLE001
         return {
-            "route": "datacenter:RPT_INDUSTRY_INDEX/EMI00055562", "key": "sox",
+            "route": "datacenter:RPT_INDUSTRY_INDEX/EMI00055562",
+            "key": "sox",
             "note": "费城半导体 datacenter 路线",
-            "raw_non_empty": False, "error": repr(e), "latency_s": round(time.time() - t0, 2),
+            "raw_non_empty": False,
+            "error": repr(e),
+            "latency_s": round(time.time() - t0, 2),
         }
 
 

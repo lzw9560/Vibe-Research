@@ -18,6 +18,7 @@ Case B (NAV跌收敛, price平): 散户 = 0%, BHAR = +5% (BHAR 虚增!)
   4. 危机 vs 非危机 BHAR (用户疑点2)
   5. T+1 open 折价 vs T close 折价 (用户疑点3——隔夜收敛)
 """
+
 from __future__ import annotations
 import json
 import statistics
@@ -104,25 +105,33 @@ def build_picks(etf_data, threshold=-0.3, hold_days=1):
             # T+1 一字涨停代理跳过
             if close_sig > 0 and entry / close_sig >= 1.099:
                 continue
-            picks.append({
-                "code": code, "signal_date": d, "t1_date": t1_date, "exit_date": exit_date,
-                "disc_t_close": disc_t,  # T 收盘折价（信号时）
-                "entry": entry, "exit_close": exit_close,
-                "nav_signal": nav_sig, "nav_t1": nav_t1, "nav_exit": nav_exit,
-                "t1_close": t1_close,  # T+1 收盘价（测隔夜收敛用）
-                "is_crisis": is_crisis(d),
-            })
+            picks.append(
+                {
+                    "code": code,
+                    "signal_date": d,
+                    "t1_date": t1_date,
+                    "exit_date": exit_date,
+                    "disc_t_close": disc_t,  # T 收盘折价（信号时）
+                    "entry": entry,
+                    "exit_close": exit_close,
+                    "nav_signal": nav_sig,
+                    "nav_t1": nav_t1,
+                    "nav_exit": nav_exit,
+                    "t1_close": t1_close,  # T+1 收盘价（测隔夜收敛用）
+                    "is_crisis": is_crisis(d),
+                }
+            )
     return picks
 
 
 def decompose(p):
     """分解散户收益 = 收敛alpha + beta分量。验证 BHAR 诚实性。"""
-    r = p["entry"] / p["nav_signal"]            # 入场折价比
-    s = p["exit_close"] / p["nav_exit"]          # 出场折价比
-    m = p["nav_exit"] / p["nav_signal"]          # NAV 收益比 (市场 beta)
-    retail_ret = (s / r) * m - 1                 # 散户收益 (数学恒等)
-    bhar = s - r                                  # BHAR = 折价变化
-    nav_ret = m - 1                               # NAV 收益 (市场 beta)
+    r = p["entry"] / p["nav_signal"]  # 入场折价比
+    s = p["exit_close"] / p["nav_exit"]  # 出场折价比
+    m = p["nav_exit"] / p["nav_signal"]  # NAV 收益比 (市场 beta)
+    retail_ret = (s / r) * m - 1  # 散户收益 (数学恒等)
+    bhar = s - r  # BHAR = 折价变化
+    nav_ret = m - 1  # NAV 收益 (市场 beta)
     # 收敛分量 = 散户收益 - beta 分量 (散户超出市场部分)
     conv_component = retail_ret - nav_ret
     return {
@@ -130,7 +139,9 @@ def decompose(p):
         "bhar_pct": bhar * 100,
         "nav_ret_pct": nav_ret * 100,
         "conv_component_pct": conv_component * 100,  # 散户捕获的收敛 alpha
-        "r": r, "s": s, "m": m,
+        "r": r,
+        "s": s,
+        "m": m,
     }
 
 
@@ -165,24 +176,24 @@ def main():
     print(f"  关键对比:")
     print(f"    BHAR = {bhar_mean:+.4f}%  vs  散户收敛分量 = {conv_mean:+.4f}%")
     if abs(bhar_mean - conv_mean) < 0.05:
-        print(f"    → BHAR ≈ 散户收敛分量 (差 {bhar_mean-conv_mean:+.4f}%) → BHAR 诚实，散户捕获收敛 alpha")
+        print(f"    → BHAR ≈ 散户收敛分量 (差 {bhar_mean - conv_mean:+.4f}%) → BHAR 诚实，散户捕获收敛 alpha")
     elif bhar_mean > conv_mean:
-        print(f"    → BHAR > 散户收敛分量 (BHAR 虚增 {bhar_mean-conv_mean:+.4f}%) → Case B 主导，BHAR 高估")
+        print(f"    → BHAR > 散户收敛分量 (BHAR 虚增 {bhar_mean - conv_mean:+.4f}%) → Case B 主导，BHAR 高估")
     else:
-        print(f"    → BHAR < 散户收敛分量 (BHAR 保守 {bhar_mean-conv_mean:+.4f}%)")
+        print(f"    → BHAR < 散户收敛分量 (BHAR 保守 {bhar_mean - conv_mean:+.4f}%)")
 
     # Case A vs Case B
     print("\n" + "=" * 70)
     print("【验证2】Case A vs Case B 占比（用户核心质疑）")
     print("=" * 70)
     case_a = [d for d in decs if d["retail_ret_pct"] >= d["bhar_pct"]]  # 散户 ≥ BHAR (price涨收敛)
-    case_b = [d for d in decs if d["retail_ret_pct"] < d["bhar_pct"]]   # 散户 < BHAR (NAV跌收敛)
-    print(f"  Case A (散户≥BHAR, price涨收敛): {len(case_a)} ({len(case_a)/len(decs)*100:.1f}%)")
-    print(f"  Case B (散户<BHAR, NAV跌收敛):  {len(case_b)} ({len(case_b)/len(decs)*100:.1f}%)")
+    case_b = [d for d in decs if d["retail_ret_pct"] < d["bhar_pct"]]  # 散户 < BHAR (NAV跌收敛)
+    print(f"  Case A (散户≥BHAR, price涨收敛): {len(case_a)} ({len(case_a) / len(decs) * 100:.1f}%)")
+    print(f"  Case B (散户<BHAR, NAV跌收敛):  {len(case_b)} ({len(case_b) / len(decs) * 100:.1f}%)")
     if case_b:
         b_retail = mean([d["retail_ret_pct"] for d in case_b])
         b_bhar = mean([d["bhar_pct"] for d in case_b])
-        print(f"  Case B 内: 散户={b_retail:+.4f}% vs BHAR={b_bhar:+.4f}% (BHAR 虚增 {b_bhar-b_retail:+.4f}%)")
+        print(f"  Case B 内: 散户={b_retail:+.4f}% vs BHAR={b_bhar:+.4f}% (BHAR 虚增 {b_bhar - b_retail:+.4f}%)")
     if case_a:
         a_retail = mean([d["retail_ret_pct"] for d in case_a])
         a_bhar = mean([d["bhar_pct"] for d in case_a])
@@ -190,7 +201,9 @@ def main():
 
     # Case B 进一步: 散户收益 < 0 (真亏) 占比
     case_b_loss = [d for d in case_b if d["retail_ret_pct"] < 0]
-    print(f"  Case B 中散户真亏 (retail<0): {len(case_b_loss)} ({len(case_b_loss)/max(len(case_b),1)*100:.1f}% of Case B)")
+    print(
+        f"  Case B 中散户真亏 (retail<0): {len(case_b_loss)} ({len(case_b_loss) / max(len(case_b), 1) * 100:.1f}% of Case B)"
+    )
 
     # 危机 vs 非危机
     print("\n" + "=" * 70)
@@ -198,8 +211,8 @@ def main():
     print("=" * 70)
     crisis_decs = [d for d, p in zip(decs, picks) if p["is_crisis"]]
     noncrisis_decs = [d for d, p in zip(decs, picks) if not p["is_crisis"]]
-    print(f"  危机 picks: {len(crisis_decs)} ({len(crisis_decs)/len(decs)*100:.1f}%)")
-    print(f"  非危机 picks: {len(noncrisis_decs)} ({len(noncrisis_decs)/len(decs)*100:.1f}%)")
+    print(f"  危机 picks: {len(crisis_decs)} ({len(crisis_decs) / len(decs) * 100:.1f}%)")
+    print(f"  非危机 picks: {len(noncrisis_decs)} ({len(noncrisis_decs) / len(decs) * 100:.1f}%)")
     if crisis_decs:
         c_retail = mean([d["retail_ret_pct"] for d in crisis_decs])
         c_bhar = mean([d["bhar_pct"] for d in crisis_decs])
@@ -213,12 +226,12 @@ def main():
         for d, p in zip(noncrisis_decs, picks):
             if not p["is_crisis"]:
                 by_date_nc[p["signal_date"]].append(d["retail_ret_pct"])
-        day_means = [sum(vs)/len(vs) for vs in by_date_nc.values() if vs]
+        day_means = [sum(vs) / len(vs) for vs in by_date_nc.values() if vs]
         n_days = len(day_means)
-        m = sum(day_means)/n_days if n_days else 0
+        m = sum(day_means) / n_days if n_days else 0
         sd = statistics.pstdev(day_means) if n_days > 1 else 0
-        se = sd/sqrt(n_days) if n_days else 0
-        t = m/se if se > 0 else 0
+        se = sd / sqrt(n_days) if n_days else 0
+        t = m / se if se > 0 else 0
         print(f"  非危机 day-paired: n_days={n_days} mean={m:+.4f}% t={t:.2f}")
 
     # T+1 open 折价 vs T close 折价（隔夜收敛）
@@ -234,17 +247,19 @@ def main():
     print(f"  隔夜收敛: {mean(narrowing):+.4f}% (正=折价隔夜缩小, 散户买在更小折价)")
     # T+1 open 折价还 < -0.3% 的占比
     still_discounted = [d for d in disc_t1_open if d < -0.3]
-    print(f"  T+1 open 折价仍 <-0.3%: {len(still_discounted)}/{len(picks)} ({len(still_discounted)/len(picks)*100:.1f}%)")
+    print(
+        f"  T+1 open 折价仍 <-0.3%: {len(still_discounted)}/{len(picks)} ({len(still_discounted) / len(picks) * 100:.1f}%)"
+    )
     # 隔夜收敛 > 0 的占比（散户买前已收敛）
     narrowed_overnight = [n for n in narrowing if n > 0]
-    print(f"  隔夜已收敛的: {len(narrowed_overnight)}/{len(picks)} ({len(narrowed_overnight)/len(picks)*100:.1f}%)")
+    print(f"  隔夜已收敛的: {len(narrowed_overnight)}/{len(picks)} ({len(narrowed_overnight) / len(picks) * 100:.1f}%)")
 
     # 综合判定
     print("\n" + "=" * 70)
     print("【综合】用户质疑'不可能 edge 方法肯定有问题' 是否成立")
     print("=" * 70)
-    print(f"  BHAR 诚实性: BHAR={bhar_mean:+.4f}% vs 散户收敛分量={conv_mean:+.4f}% (差 {bhar_mean-conv_mean:+.4f}%)")
-    print(f"  Case B 占比: {len(case_b)/len(decs)*100:.1f}% (BHAR 虚增风险)")
+    print(f"  BHAR 诚实性: BHAR={bhar_mean:+.4f}% vs 散户收敛分量={conv_mean:+.4f}% (差 {bhar_mean - conv_mean:+.4f}%)")
+    print(f"  Case B 占比: {len(case_b) / len(decs) * 100:.1f}% (BHAR 虚增风险)")
     print(f"  散户总收益: {retail_mean:+.4f}% ({'正=散户盈利' if retail_mean > 0 else '负=散户亏损'})")
     print(f"  非危机 edge: 散户={mean([d['retail_ret_pct'] for d in noncrisis_decs]) if noncrisis_decs else 0:+.4f}%")
     print(f"  隔夜收敛: {mean(narrowing):+.4f}% ({'散户买前已部分收敛' if mean(narrowing) > 0.01 else '隔夜未收敛'})")

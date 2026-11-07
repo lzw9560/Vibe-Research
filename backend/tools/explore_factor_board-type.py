@@ -19,18 +19,28 @@
 
 跑法：cd backend && .venv/bin/python -m tools.explore_factor_board-type
 """
+
 from __future__ import annotations
 from collections import defaultdict
 
 from tools._factor_helpers import (
-    load_kline_db, load_zt, limit_for_code,
-    build_picks_generic, analyze_subset, verdict_for,
-    close_ev_basic, close_ev_stop,
-    ev_stats, day_paired_t, bonferroni_p, COST,
+    load_kline_db,
+    load_zt,
+    limit_for_code,
+    build_picks_generic,
+    analyze_subset,
+    verdict_for,
+    close_ev_basic,
+    close_ev_stop,
+    ev_stats,
+    day_paired_t,
+    bonferroni_p,
+    COST,
 )
 
 
 # ---------- board-type classification (matches limit_for_code prefixes) ----------
+
 
 def board_of(code: str) -> str:
     """按 6 位纯数字 code 前缀判板块类型。前缀与 limit_for_code 一致。
@@ -57,8 +67,10 @@ def board_of(code: str) -> str:
 
 def make_board_filter(board: str):
     """返回 filter_fn(code, lbc, t_bar, t1_bar, t2_bar) → bool, 只纳指定板块。"""
+
     def _fn(code: str, lbc: int, t_bar: dict, t1_bar: dict, t2_bar: dict) -> bool:
         return board_of(code) == board
+
     return _fn
 
 
@@ -93,18 +105,16 @@ def main():
     print(f"\n构建 picks (entry=T+1 open, 一字涨停跳过, limit_for_code FIXED):")
     built = []
     for label, board in SUBSETS:
-        picks = build_picks_generic(code_map, calendar, zt_rows,
-                                    filter_fn=make_board_filter(board))
+        picks = build_picks_generic(code_map, calendar, zt_rows, filter_fn=make_board_filter(board))
         print(f"  {label}: {len(picks)} picks")
         built.append((label, board, picks))
 
     # 分析各子集
     analyses = []
     for label, board, picks in built:
-        a = analyze_subset(label, picks,
-                           ret_fn_basic=close_ev_basic,
-                           ret_fn_stop=close_ev_stop,
-                           ret_fn_label="close_ev")
+        a = analyze_subset(
+            label, picks, ret_fn_basic=close_ev_basic, ret_fn_stop=close_ev_stop, ret_fn_label="close_ev"
+        )
         analyses.append((label, board, picks, a))
 
     # ---- honest verdict per subset (cross-factor Bonferroni ×12) ----
@@ -127,15 +137,27 @@ def main():
         wf_test = wf.get("test_ev", {}).get("ev", 0.0)
         wf_test_t = wf.get("test_day_t", {}).get("t", 0.0)
         wf_test_p = wf.get("test_day_t", {}).get("p_one_sided", 1.0)
-        v = verdict_for(ev_gross, t_day, p_raw, wf_status, wf_train, wf_test,
-                        wf_test_p, n_days, net_ev, label, n_cross_factor=6)
-        verdicts.append({
-            "label": label, "board": board, "verdict": v,
-            "n_picks": len(picks), "ev_gross": ev_gross, "t_day": t_day,
-            "p_raw": p_raw, "n_days": n_days, "net_ev": net_ev,
-            "wf_status": wf_status, "wf_train": wf_train, "wf_test": wf_test,
-            "wf_test_t": wf_test_t, "wf_test_p": wf_test_p,
-        })
+        v = verdict_for(
+            ev_gross, t_day, p_raw, wf_status, wf_train, wf_test, wf_test_p, n_days, net_ev, label, n_cross_factor=6
+        )
+        verdicts.append(
+            {
+                "label": label,
+                "board": board,
+                "verdict": v,
+                "n_picks": len(picks),
+                "ev_gross": ev_gross,
+                "t_day": t_day,
+                "p_raw": p_raw,
+                "n_days": n_days,
+                "net_ev": net_ev,
+                "wf_status": wf_status,
+                "wf_train": wf_train,
+                "wf_test": wf_test,
+                "wf_test_t": wf_test_t,
+                "wf_test_p": wf_test_p,
+            }
+        )
 
     # ---- overall factor verdict ----
     print(f"\n{'=' * 70}")
@@ -156,23 +178,26 @@ def main():
     print(f"\n{'=' * 70}")
     print("汇总表")
     print(f"{'=' * 70}")
-    print(f"{'subset':<44} {'n':>5} {'EV%':>8} {'net%':>8} {'t_day':>7} "
-          f"{'n_days':>6} {'Bonf×12':>9} {'verdict':<14}")
+    print(f"{'subset':<44} {'n':>5} {'EV%':>8} {'net%':>8} {'t_day':>7} {'n_days':>6} {'Bonf×12':>9} {'verdict':<14}")
     for r in verdicts:
         bonf = bonferroni_p(r["p_raw"], 12)
         short = r["label"].split("(")[0].strip()
-        print(f"{short:<44} {r['n_picks']:>5} {r['ev_gross']:>8.3f} "
-              f"{r['net_ev']:>8.3f} {r['t_day']:>7.2f} {r['n_days']:>6} "
-              f"{bonf:>9.6f} {r['verdict']:<14}")
+        print(
+            f"{short:<44} {r['n_picks']:>5} {r['ev_gross']:>8.3f} "
+            f"{r['net_ev']:>8.3f} {r['t_day']:>7.2f} {r['n_days']:>6} "
+            f"{bonf:>9.6f} {r['verdict']:<14}"
+        )
 
     # walk-forward 汇总
     print(f"\nwalk-forward OOS 汇总:")
     print(f"{'subset':<44} {'train%':>8} {'test%':>8} {'test_t':>7} {'test_p':>8}")
     for r in verdicts:
         if r["wf_status"] == "ok":
-            print(f"{r['label'].split('(')[0].strip():<44} "
-                  f"{r['wf_train']:>8.3f} {r['wf_test']:>8.3f} "
-                  f"{r['wf_test_t']:>7.2f} {r['wf_test_p']:>8.6f}")
+            print(
+                f"{r['label'].split('(')[0].strip():<44} "
+                f"{r['wf_train']:>8.3f} {r['wf_test']:>8.3f} "
+                f"{r['wf_test_t']:>7.2f} {r['wf_test_p']:>8.6f}"
+            )
         else:
             print(f"{r['label'].split('(')[0].strip():<44} {r['wf_status']}")
 

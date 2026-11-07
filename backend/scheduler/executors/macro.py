@@ -5,6 +5,7 @@
 前端 MacroPanel（/api/macro/snapshot）+ storm_predictor 读 cache。
 FRED 走 get_fred_api_key（.vibe-research/fred_api_key）+ fetch_fred_series，不裸调 requests（防封底线）。
 """
+
 from __future__ import annotations
 
 import json
@@ -23,8 +24,11 @@ def macro_fetch(payload: Dict[str, Any]) -> Dict[str, Any]:
     前端 MacroPanel（/api/macro/snapshot）+ storm_predictor 读 cache。
     """
     from predict.features.macro import (  # noqa: PLC0415
-        MACRO_SPECS, FRED_SERIES, get_fred_api_key,
-        fetch_fred_series, parse_fred_observations,
+        MACRO_SPECS,
+        FRED_SERIES,
+        get_fred_api_key,
+        fetch_fred_series,
+        parse_fred_observations,
     )
     from vr_paths import resolve_data_dir  # noqa: PLC0415
 

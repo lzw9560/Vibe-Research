@@ -4,6 +4,7 @@
 对比 backfill 前 28.4%（pre-2025-06-03）+ 38%（train third）。
 不臆造——纯 cache 读取 + zt_history 查询。
 """
+
 from __future__ import annotations
 
 import json
@@ -51,13 +52,12 @@ def main() -> None:
 
     # 1. pre-2025-06-03 picks（backfill 前基线 28.4%）
     pre = conn.execute(
-        "SELECT date, code FROM zt_history WHERE date<'2025-06-03' "
-        "AND lbc>=2 AND is_final=1 ORDER BY date"
+        "SELECT date, code FROM zt_history WHERE date<'2025-06-03' AND lbc>=2 AND is_final=1 ORDER BY date"
     ).fetchall()
     hd, hd1, tot = _coverage([(r[0], r[1]) for r in pre], cache)
     print(
-        f"\n1) pre-2025-06-03 picks: {hd}/{tot}={hd/tot*100:.1f}% have D bar "
-        f"(D+D+1: {hd1}/{tot}={hd1/tot*100:.1f}%)  [baseline was 28.4%]",
+        f"\n1) pre-2025-06-03 picks: {hd}/{tot}={hd / tot * 100:.1f}% have D bar "
+        f"(D+D+1: {hd1}/{tot}={hd1 / tot * 100:.1f}%)  [baseline was 28.4%]",
         flush=True,
     )
 
@@ -68,19 +68,17 @@ def main() -> None:
     ).fetchall()
     hd, hd1, tot = _coverage([(r[0], r[1]) for r in train], cache)
     print(
-        f"2) train third (2024-06..2025-12) picks: {hd}/{tot}={hd/tot*100:.1f}% have D bar "
-        f"(D+D+1: {hd1}/{tot}={hd1/tot*100:.1f}%)  [baseline was ~38%]",
+        f"2) train third (2024-06..2025-12) picks: {hd}/{tot}={hd / tot * 100:.1f}% have D bar "
+        f"(D+D+1: {hd1}/{tot}={hd1 / tot * 100:.1f}%)  [baseline was ~38%]",
         flush=True,
     )
 
     # 3. 全量 picks（总覆盖）
-    allp = conn.execute(
-        "SELECT date, code FROM zt_history WHERE lbc>=2 AND is_final=1 ORDER BY date"
-    ).fetchall()
+    allp = conn.execute("SELECT date, code FROM zt_history WHERE lbc>=2 AND is_final=1 ORDER BY date").fetchall()
     hd, hd1, tot = _coverage([(r[0], r[1]) for r in allp], cache)
     print(
-        f"3) all picks ({allp[0][0]}..{allp[-1][0]}): {hd}/{tot}={hd/tot*100:.1f}% have D bar "
-        f"(D+D+1: {hd1}/{tot}={hd1/tot*100:.1f}%)",
+        f"3) all picks ({allp[0][0]}..{allp[-1][0]}): {hd}/{tot}={hd / tot * 100:.1f}% have D bar "
+        f"(D+D+1: {hd1}/{tot}={hd1 / tot * 100:.1f}%)",
         flush=True,
     )
     conn.close()

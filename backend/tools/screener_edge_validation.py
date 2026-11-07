@@ -14,6 +14,7 @@ ST 5% 漏——近似，标注）。合规（§1.2）：全实测、不臆造。
 
 用法：cd backend && ../.venv/bin/python tools/screener_edge_validation.py
 """
+
 from __future__ import annotations
 
 import json
@@ -41,9 +42,7 @@ ZT_NEXT_THRESHOLD = 9.8  # 主板涨停 10% 限近似（创业/科创 20% 亦命
 def load_src_map() -> dict[tuple[str, str], str]:
     conn = sqlite3.connect(str(DB_PATH))
     try:
-        return {(r[0], r[1]): r[2] for r in conn.execute(
-            "SELECT date, code, data_source FROM gene_scores"
-        ).fetchall()}
+        return {(r[0], r[1]): r[2] for r in conn.execute("SELECT date, code, data_source FROM gene_scores").fetchall()}
     finally:
         conn.close()
 
@@ -100,8 +99,12 @@ def within_day_r(samples: list[dict], y_field: str) -> dict:
         resid_y.extend(s[y_field] - my for s in ss)
     r = pearson(resid_x, resid_y)
     lo, hi, hw = fisher_ci(r, len(resid_x))
-    return {"within_day_r": round(r, 4), "n": len(resid_x),
-            "ci": [round(lo, 4), round(hi, 4)], "detectable_r_floor": round(hw, 4)}
+    return {
+        "within_day_r": round(r, 4),
+        "n": len(resid_x),
+        "ci": [round(lo, 4), round(hi, 4)],
+        "detectable_r_floor": round(hw, 4),
+    }
 
 
 def main() -> int:
@@ -123,18 +126,23 @@ def main() -> int:
     q = max(1, len(scores) // 5)
     quintiles = []
     for i in range(5):
-        chunk = scores[i * q: (i + 1) * q] if i < 4 else scores[i * q:]
+        chunk = scores[i * q : (i + 1) * q] if i < 4 else scores[i * q :]
         n = len(chunk)
         zt = sum(1 for s in chunk if s.get("next_pctChg", 0) >= ZT_NEXT_THRESHOLD)
         lo, hi = wilson(zt, n)
-        quintiles.append({
-            "quintile": f"Q{i+1}", "score_range": [
-                chunk[0]["total_score"] if chunk else None,
-                chunk[-1]["total_score"] if chunk else None,
-            ],
-            "n": n, "zt_next": zt, "p_zt": round(zt / n, 4) if n else None,
-            "p_zt_ci": [round(lo, 4), round(hi, 4)] if n else None,
-        })
+        quintiles.append(
+            {
+                "quintile": f"Q{i + 1}",
+                "score_range": [
+                    chunk[0]["total_score"] if chunk else None,
+                    chunk[-1]["total_score"] if chunk else None,
+                ],
+                "n": n,
+                "zt_next": zt,
+                "p_zt": round(zt / n, 4) if n else None,
+                "p_zt_ci": [round(lo, 4), round(hi, 4)] if n else None,
+            }
+        )
     # 连板单调：Q5(高分) P(zt) > Q1(低分)?
     q1p = quintiles[0]["p_zt"] or 0
     q5p = quintiles[4]["p_zt"] or 0
@@ -154,15 +162,21 @@ def main() -> int:
     lianban_sig = lianban_monotonic and (q5ci[0] > q1ci[1])
 
     if lianban_sig:
-        verdict = ("连板概率 Q5>Q1 显著 → total_score 预测连板 → screener 是质量筛(b)，"
-                   "next-day-return r≈0 是错口径，照常用；不 pivot 选股基础。")
+        verdict = (
+            "连板概率 Q5>Q1 显著 → total_score 预测连板 → screener 是质量筛(b)，"
+            "next-day-return r≈0 是错口径，照常用；不 pivot 选股基础。"
+        )
     elif not powered:
-        verdict = (f"功效不足(c)：within-day 可检测 r 下界={r_ret['detectable_r_floor']}（>0.05），"
-                   "r≈0 可能是测不出小效应而非真无——需更多天数。")
+        verdict = (
+            f"功效不足(c)：within-day 可检测 r 下界={r_ret['detectable_r_floor']}（>0.05），"
+            "r≈0 可能是测不出小效应而非真无——需更多天数。"
+        )
     elif ret_null and pct_null:
-        verdict = ("total_score 既不预测次日收益(a) 也不预测次日涨跌幅/连板 —— 选股无验证 edge；"
-                   "top-N-by-total_score 当前无 edge，该诚实标注（标未 validated，不阻断接入跑通）+ 等 60 天复验或 pivot 选股基础。"
-                   "60日复验窗口：破2x→validated 升级权重，<2x→保留接入标注复验未破2x。")
+        verdict = (
+            "total_score 既不预测次日收益(a) 也不预测次日涨跌幅/连板 —— 选股无验证 edge；"
+            "top-N-by-total_score 当前无 edge，该诚实标注（标未 validated，不阻断接入跑通）+ 等 60 天复验或 pivot 选股基础。"
+            "60日复验窗口：破2x→validated 升级权重，<2x→保留接入标注复验未破2x。"
+        )
     else:
         verdict = "部分信号，见下表。"
 
@@ -171,7 +185,8 @@ def main() -> int:
         "n_eastmoney_live": len(samples),
         "zt_threshold": ZT_NEXT_THRESHOLD,
         "quintile_lianban": quintiles,
-        "lianban_q5_gt_q1": lianban_monotonic, "lianban_significant": lianban_sig,
+        "lianban_q5_gt_q1": lianban_monotonic,
+        "lianban_significant": lianban_sig,
         "within_day_r_return_close2close": r_ret,
         "within_day_r_next_pctChg": r_pct,
         "verdict": verdict,
@@ -182,12 +197,15 @@ def main() -> int:
     print(f"{'quintile':<5}{'score':>12}{'n':>6}{'p_zt':>8}{'95%CI':>20}")
     for qd in quintiles:
         ci = f"[{qd['p_zt_ci'][0]},{qd['p_zt_ci'][1]}]" if qd["p_zt_ci"] else "—"
-        print(f"{qd['quintile']:<5}{str(qd['score_range']):>12}{qd['n']:>6}"
-              f"{str(qd['p_zt']):>8}{ci:>20}")
-    print(f"\nwithin-day r(total_score, return_close2close) = {r_ret['within_day_r']} "
-          f"CI {r_ret['ci']} (n={r_ret['n']}, 可检测 r≥{r_ret['detectable_r_floor']})")
-    print(f"within-day r(total_score, next_pctChg)        = {r_pct['within_day_r']} "
-          f"CI {r_pct['ci']} (可检测 r≥{r_pct['detectable_r_floor']})")
+        print(f"{qd['quintile']:<5}{str(qd['score_range']):>12}{qd['n']:>6}{str(qd['p_zt']):>8}{ci:>20}")
+    print(
+        f"\nwithin-day r(total_score, return_close2close) = {r_ret['within_day_r']} "
+        f"CI {r_ret['ci']} (n={r_ret['n']}, 可检测 r≥{r_ret['detectable_r_floor']})"
+    )
+    print(
+        f"within-day r(total_score, next_pctChg)        = {r_pct['within_day_r']} "
+        f"CI {r_pct['ci']} (可检测 r≥{r_pct['detectable_r_floor']})"
+    )
     print(f"\n连板 Q5>Q1={lianban_monotonic} 显著={lianban_sig}")
     print(f"verdict: {verdict}")
     print(f"输出: {OUT_PATH}")

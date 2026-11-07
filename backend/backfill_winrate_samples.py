@@ -10,6 +10,7 @@
 
 工程底线：只读 gene_scores.db + 本地 K 线缓存；零 em_get。
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,10 +27,9 @@ def _list_gene_score_dates(limit: int = 60) -> List[str]:
     """gene_scores.db 已有日期降序（最多 limit 日）。"""
     try:
         from limitup_screener.data import get_db
+
         conn = get_db()
-        rows = conn.execute(
-            "SELECT DISTINCT date FROM gene_scores ORDER BY date DESC LIMIT ?", (limit,)
-        ).fetchall()
+        rows = conn.execute("SELECT DISTINCT date FROM gene_scores ORDER BY date DESC LIMIT ?", (limit,)).fetchall()
         conn.close()
         return [r["date"] for r in rows]
     except Exception:
@@ -40,6 +40,7 @@ def _load_gene_scores_for_date(date: str) -> List[dict]:
     """读 gene_scores 指定日（code/name/total_score）。"""
     try:
         from limitup_screener.data import get_db
+
         conn = get_db()
         rows = conn.execute(
             "SELECT code, name, total_score FROM gene_scores WHERE date = ? ORDER BY total_score DESC",
@@ -61,6 +62,7 @@ def _calc_next_day_return(code: str, date_str: str) -> float | None:
     """
     try:
         from backtest_lite import _calc_next_day_return_meta as _calc_meta
+
         ret, fetch_ok = _calc_meta(code, date_str, {})
         return ret if fetch_ok else None
     except Exception:

@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 
-
 def normalize_model_used(value: str) -> str:
     """Normalize model name."""
     return str(value or "").strip()

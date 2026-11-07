@@ -9,6 +9,7 @@ gap_regime_encoded 作特征）→ cosine 相似度 top-K → [{case, similarity
 - 全库 lookahead：检索全历史 case 不区分 in/out-sample（无法 walk-forward OOS 划分）。
 → §44v2 verifier 套不上，FS1 价值靠「AI 研判 + 用户反馈」定性评估，不参与 F1 消融 §44 验证（spec §3 R5 只测 FS2）。
 """
+
 from __future__ import annotations
 
 import numpy as np

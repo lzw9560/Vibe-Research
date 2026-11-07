@@ -18,6 +18,7 @@ terminal master switch: cap=0（consecutive_relay falsified）→ 短路 BLOCK�
 
 跑法：cd backend && .venv/bin/python -c "from tools.discipline_gate import evaluate_discipline_gate; print(evaluate_discipline_gate('2026-09-29'))"
 """
+
 from __future__ import annotations
 
 import json
@@ -81,6 +82,7 @@ def _is_pre_holiday_lock(target_date: str) -> bool:
     """
     try:
         from vr_paths import is_trading_day  # noqa: PLC0415
+
         buy_dt = datetime.strptime(target_date, "%Y-%m-%d").date()
         # T+1 卖出日 = 下一交易日
         next_td = buy_dt + timedelta(days=1)
@@ -109,6 +111,7 @@ def evaluate_discipline_gate(target_date: str) -> dict[str, Any]:
     # Terminal master switch: cap=0（consecutive_relay falsified）
     try:
         from candidate_funnel.evaluation import lift_for_arm  # noqa: PLC0415
+
         cap, _cap_note = lift_for_arm("consecutive_relay", regime="bull")
     except Exception as e:  # noqa: BLE001
         _logger.warning("[discipline_gate] lift_for_arm 读取失败: %s", e)
@@ -130,9 +133,11 @@ def evaluate_discipline_gate(target_date: str) -> dict[str, Any]:
     # 数据源：sti_timeline DB
     try:
         from config import STI_TIMELINE_DB_PATH  # noqa: PLC0415
+
         db_path = Path(STI_TIMELINE_DB_PATH)
     except Exception:  # noqa: BLE001
         from vr_paths import resolve_data_dir  # noqa: PLC0415
+
         db_path = resolve_data_dir() / "sti_timeline.db"
 
     sti_row = _load_sti_row(db_path, target_date)
@@ -140,6 +145,7 @@ def evaluate_discipline_gate(target_date: str) -> dict[str, Any]:
     # C1: composite≥75 晴天
     try:
         from routers.sentiment_weather import compute_weather_snapshot  # noqa: PLC0415
+
         snap = compute_weather_snapshot(target_date)
         composite = float(snap.get("composite_score", 0) or 0)
         weather = snap.get("weather_state", "未知")
@@ -148,15 +154,24 @@ def evaluate_discipline_gate(target_date: str) -> dict[str, Any]:
         weather = "未知"
         _logger.warning("[discipline_gate] C1 composite 读取失败: %s", e)
     c1_pass = composite >= 75
-    conditions.append({"id": "C1", "name": "composite≥75 晴天", "value": composite, "threshold": 75,
-                       "pass": c1_pass, "red_line": True})
+    conditions.append(
+        {
+            "id": "C1",
+            "name": "composite≥75 晴天",
+            "value": composite,
+            "threshold": 75,
+            "pass": c1_pass,
+            "red_line": True,
+        }
+    )
     if not c1_pass:
         reasons.append(f"C1 fail: composite={composite} <75（{weather}）")
 
     # C2: STI 连续 3 天>50
     c2_pass, c2_scores = _sti_consecutive_above(db_path, 50.0, 3)
-    conditions.append({"id": "C2", "name": "STI 连续 3 天>50", "value": c2_scores, "threshold": 50,
-                       "pass": c2_pass, "red_line": True})
+    conditions.append(
+        {"id": "C2", "name": "STI 连续 3 天>50", "value": c2_scores, "threshold": 50, "pass": c2_pass, "red_line": True}
+    )
     if not c2_pass:
         reasons.append(f"C2 fail: STI 连续 3 天>50 未达（scores={c2_scores}）")
 
@@ -165,16 +180,32 @@ def evaluate_discipline_gate(target_date: str) -> dict[str, Any]:
         # C3: promotion_rate>15%
         promo = float(sti_row.get("dimension_promotion_rate", 0) or 0)
         c3_pass = promo > 15
-        conditions.append({"id": "C3", "name": "promotion_rate>15%", "value": promo, "threshold": 15,
-                           "pass": c3_pass, "red_line": True})
+        conditions.append(
+            {
+                "id": "C3",
+                "name": "promotion_rate>15%",
+                "value": promo,
+                "threshold": 15,
+                "pass": c3_pass,
+                "red_line": True,
+            }
+        )
         if not c3_pass:
             reasons.append(f"C3 fail: promotion_rate={promo} <=15%")
 
         # C4: advance_decline_ratio>1.0
         ad = float(sti_row.get("dimension_advance_decline_ratio", 1.0) or 1.0)
         c4_pass = ad > 1.0
-        conditions.append({"id": "C4", "name": "advance_decline_ratio>1.0（广度>50%）", "value": ad,
-                           "threshold": 1.0, "pass": c4_pass, "red_line": True})
+        conditions.append(
+            {
+                "id": "C4",
+                "name": "advance_decline_ratio>1.0（广度>50%）",
+                "value": ad,
+                "threshold": 1.0,
+                "pass": c4_pass,
+                "red_line": True,
+            }
+        )
         if not c4_pass:
             reasons.append(f"C4 fail: ad_ratio={ad} <=1.0（涨<=跌）")
 
@@ -182,34 +213,69 @@ def evaluate_discipline_gate(target_date: str) -> dict[str, Any]:
         lu = float(sti_row.get("dimension_limit_up_count", 0) or 0)
         ld = float(sti_row.get("dimension_limit_down_count", 0) or 0)
         c5_pass = ld < lu
-        conditions.append({"id": "C5", "name": "跌停<涨停", "value": {"limit_up": lu, "limit_down": ld},
-                           "threshold": "ld<lu", "pass": c5_pass, "red_line": True})
+        conditions.append(
+            {
+                "id": "C5",
+                "name": "跌停<涨停",
+                "value": {"limit_up": lu, "limit_down": ld},
+                "threshold": "ld<lu",
+                "pass": c5_pass,
+                "red_line": True,
+            }
+        )
         if not c5_pass:
             reasons.append(f"C5 fail: 跌停{ld}>=涨停{lu}（高位补跌）")
     else:
         for cid, cname in [("C3", "promotion_rate>15%"), ("C4", "ad_ratio>1.0"), ("C5", "跌停<涨停")]:
-            conditions.append({"id": cid, "name": cname, "value": None, "threshold": None,
-                               "pass": False, "red_line": True, "missing": True})
+            conditions.append(
+                {
+                    "id": cid,
+                    "name": cname,
+                    "value": None,
+                    "threshold": None,
+                    "pass": False,
+                    "red_line": True,
+                    "missing": True,
+                }
+            )
             reasons.append(f"{cid} missing: sti_timeline 无数据")
 
     # C6: kill switch 未触发（通知级 CAUTION 非 BLOCK）
     # 复用 scheduled_tasks._check_pmarket_kill_switch（如果可调）或标 CAUTION
     try:
         from scheduled_tasks import _check_pmarket_kill_switch  # noqa: PLC0415
+
         kill_triggered, kill_reason = _check_pmarket_kill_switch()
     except Exception:  # noqa: BLE001
         kill_triggered = False
         kill_reason = "kill_switch 接口未确认（标 CAUTION）"
     c6_pass = not kill_triggered
-    conditions.append({"id": "C6", "name": "kill switch 未触发（上证<-3%/创业板<-4%）", "value": not kill_triggered,
-                       "threshold": "未触发", "pass": c6_pass, "red_line": False, "notify_level": True})  # 通知级非阻断
+    conditions.append(
+        {
+            "id": "C6",
+            "name": "kill switch 未触发（上证<-3%/创业板<-4%）",
+            "value": not kill_triggered,
+            "threshold": "未触发",
+            "pass": c6_pass,
+            "red_line": False,
+            "notify_level": True,
+        }
+    )  # 通知级非阻断
     if not c6_pass:
         reasons.append(f"C6 CAUTION: kill_switch 触发——{kill_reason}")
 
     # C7: 节前禁入（T+1 锁仓≥3 自然日）
     c7_pass = not _is_pre_holiday_lock(target_date)
-    conditions.append({"id": "C7", "name": "节前禁入（T+1 锁仓<3 自然日）", "value": not c7_pass,
-                       "threshold": "gap<3", "pass": c7_pass, "red_line": True})
+    conditions.append(
+        {
+            "id": "C7",
+            "name": "节前禁入（T+1 锁仓<3 自然日）",
+            "value": not c7_pass,
+            "threshold": "gap<3",
+            "pass": c7_pass,
+            "red_line": True,
+        }
+    )
     if not c7_pass:
         reasons.append("C7 fail: 节前禁入（T+1=≥3 自然日锁仓，如 09-30 买→10-08 卖=8 天）")
 
@@ -244,7 +310,9 @@ def render_discipline_report(verdict: dict[str, Any]) -> str:
     lines.append(f"📊 打板纪律门禁报告 | {verdict['date']}")
     lines.append("")
     status_emoji = {"BLOCK": "🔴", "CAUTION": "🟡", "PASS": "🟢"}
-    lines.append(f"{status_emoji.get(verdict['status'], '⚪')} 当前判定：{verdict['status']}（cap={verdict.get('cap', '?')}）")
+    lines.append(
+        f"{status_emoji.get(verdict['status'], '⚪')} 当前判定：{verdict['status']}（cap={verdict.get('cap', '?')}）"
+    )
 
     if verdict.get("terminal"):
         lines.append("")

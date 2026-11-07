@@ -14,6 +14,7 @@ baostock_kline_cache.json。覆盖完整 train third（2024-06..2025-12）。
 不臆造——baostock 真实 bars，缺数据返 [] 跳过。baostock 不封 IP，sleep 0.3s/股限流。
 不碰 harness 逻辑/evaluation.py——只补 cache 数据 + 原子写。
 """
+
 from __future__ import annotations
 
 import json
@@ -54,9 +55,7 @@ def _codes_needing_backfill(cache: dict) -> list[tuple[str, str | None]]:
     conn = sqlite3.connect(str(DB))
     # train third 全量 picks（team-lead 测 bear train third = 2024-06..2025-12）
     rows = conn.execute(
-        "SELECT date, code FROM zt_history "
-        "WHERE date>='2024-06-01' AND date<='2025-12-31' "
-        "AND lbc>=2 AND is_final=1"
+        "SELECT date, code FROM zt_history WHERE date>='2024-06-01' AND date<='2025-12-31' AND lbc>=2 AND is_final=1"
     ).fetchall()
     conn.close()
 
@@ -118,9 +117,7 @@ def main() -> None:
                 existing_dates = {b["date"][:10] for b in existing}
                 new_bars = [b for b in bars if b["date"][:10] not in existing_dates]
                 if new_bars:
-                    cache[code] = sorted(
-                        new_bars + existing, key=lambda b: b["date"][:10]
-                    )
+                    cache[code] = sorted(new_bars + existing, key=lambda b: b["date"][:10])
                     n_filled += 1
                     n_bars_added += len(new_bars)
                 time.sleep(0.3)
@@ -139,7 +136,7 @@ def main() -> None:
             rate = (i + 1) / elapsed
             eta = (len(need) - i - 1) / rate if rate > 0 else 0
             print(
-                f"  {i+1}/{len(need)}: filled={n_filled} +{n_bars_added} bars "
+                f"  {i + 1}/{len(need)}: filled={n_filled} +{n_bars_added} bars "
                 f"failed={n_failed} | {elapsed:.0f}s elapsed ETA {eta:.0f}s",
                 flush=True,
             )
@@ -147,8 +144,7 @@ def main() -> None:
 
     _save(cache)
     print(
-        f"\n[backfill] 完成: {n_filled} 股 +{n_bars_added} bars "
-        f"({n_failed} 股无数据/失败) in {time.time()-t0:.0f}s",
+        f"\n[backfill] 完成: {n_filled} 股 +{n_bars_added} bars ({n_failed} 股无数据/失败) in {time.time() - t0:.0f}s",
         flush=True,
     )
 

@@ -6,6 +6,7 @@
 - horizon>1 用持有期 close 收益
 - K 线缺失 → voided 诚实标注
 """
+
 from __future__ import annotations
 
 import logging
@@ -29,12 +30,14 @@ def _calc_actual_return(code: str, stated_at: str, horizon: int) -> float | None
     """
     try:
         from backtest_lite import _calc_next_day_return_meta
+
         if horizon == 1:
             ret, fetch_ok = _calc_next_day_return_meta(code, stated_at, kline_cache={})
             return ret if fetch_ok else None  # K 线缺失→None（voided，不计 miss，S123 R4）
         # horizon > 1：取 stated_at + horizon 日的 close vs stated_at close
         import astock
         from data.mappers import kline_from_mootdx
+
         raw = astock.kline(code, category=4, offset=horizon + 15)
         bars = kline_from_mootdx(code, raw).bars
         if not bars:
@@ -55,8 +58,7 @@ def _calc_actual_return(code: str, stated_at: str, horizon: int) -> float | None
         return None
 
 
-def verify_due_predictions(as_of: str | None = None,
-                            db_path: str = pl.WINRATE_DB_PATH) -> dict[str, Any]:
+def verify_due_predictions(as_of: str | None = None, db_path: str = pl.WINRATE_DB_PATH) -> dict[str, Any]:
     """对账入口：扫到期日 <= as_of 的 pending 预测，逐条验证。
 
     幂等：已验证的不重写（verify_prediction 内 SQL WHERE status='pending'）。

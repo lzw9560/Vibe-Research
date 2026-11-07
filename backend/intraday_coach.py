@@ -8,6 +8,7 @@
 
 合规：教学点讲机制不讲动作（§12.4）；缺数据 missing 不臆造；无新 em_get。
 """
+
 from __future__ import annotations
 
 import json
@@ -30,6 +31,7 @@ _COACH_CONFIG_PATH = _DATA_DIR / "coach_config.json"
 # ---------------------------------------------------------------------------
 # 1. 时刻表（纯静态，来自 workflow doc §12.2 时刻表种子）
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class TimetableSlot:
@@ -231,6 +233,7 @@ def get_current_slot(now: datetime) -> tuple[TimetableSlot | None, str]:
 # 2. attention_mode 读写
 # ---------------------------------------------------------------------------
 
+
 def get_attention_mode(date: str) -> str:
     """读当日 attention_mode；跨日或缺失返 'A'（默认全程盯盘）。"""
     try:
@@ -251,9 +254,7 @@ def set_attention_mode(date: str, mode: str) -> str:
         raise ValueError(f"attention_mode 必须是 A/B/C，收到 {mode!r}")
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
     data = {"date": date, "attention_mode": mode}
-    _COACH_CONFIG_PATH.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    _COACH_CONFIG_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     return mode
 
 
@@ -354,12 +355,8 @@ def _build_bomb_index(date: str) -> dict[str, dict[str, Any]]:
             checks = check_all_rules(snap_list, code, "", now=datetime.now())
             triggered = [c for c in checks if c.triggered]
             by_code.setdefault(code, {})
-            by_code[code]["bomb_alerts"] = [
-                {"rule_id": t.rule_id, "reason": t.reason} for t in triggered
-            ]
-            by_code[code]["data_status"] = (
-                "missing" if any(c.data_status == "missing" for c in checks) else "ok"
-            )
+            by_code[code]["bomb_alerts"] = [{"rule_id": t.rule_id, "reason": t.reason} for t in triggered]
+            by_code[code]["data_status"] = "missing" if any(c.data_status == "missing" for c in checks) else "ok"
         except Exception as exc:
             logger.warning("[coach] check_all_rules %s 异常: %s", code, exc)
             by_code.setdefault(code, {})["bomb_alerts"] = []
@@ -377,9 +374,7 @@ def _group_snapshots_by_code(
     return grouped
 
 
-def _compute_max_hold_warning(
-    state: dict[str, Any], strategy_meta: dict[str, Any]
-) -> str | None:
+def _compute_max_hold_warning(state: dict[str, Any], strategy_meta: dict[str, Any]) -> str | None:
     """持仓天数 vs max_hold_days 警告。无持仓/无策略/缺数据返 None。"""
     if state.get("status") != "holding":
         return None
@@ -391,6 +386,7 @@ def _compute_max_hold_warning(
         return None
     try:
         from datetime import date as date_cls  # noqa: PLC0415
+
         y, m, d = (int(x) for x in entry_date.split("-"))
         held = (date_cls.today() - date_cls(y, m, d)).days
     except Exception:
@@ -433,27 +429,30 @@ def build_condition_checklist(date: str) -> list[dict[str, Any]]:
         smeta = _strategy_meta(strategy)
         funnel_p = funnel_idx.get(code, {})
         bomb = bomb_idx.get(code, {})
-        checklist.append({
-            "code": code,
-            "name": st.get("name", ""),
-            "status": st.get("status"),
-            "strategy": strategy,
-            "strategy_name": smeta.get("name", strategy or ""),
-            "entry_condition": smeta.get("entry_condition", ""),
-            "stop_loss_condition": smeta.get("stop_loss_condition", ""),
-            "matched_triggers": funnel_p.get("matched_triggers", []),
-            "seal_amount": bomb.get("seal_amount"),
-            "bomb_alerts": bomb.get("bomb_alerts", []),
-            "data_status": bomb.get("data_status", "missing"),
-            "max_hold_warning": _compute_max_hold_warning(st, smeta),
-            "attention_mode": st.get("attention_mode") or "A",
-        })
+        checklist.append(
+            {
+                "code": code,
+                "name": st.get("name", ""),
+                "status": st.get("status"),
+                "strategy": strategy,
+                "strategy_name": smeta.get("name", strategy or ""),
+                "entry_condition": smeta.get("entry_condition", ""),
+                "stop_loss_condition": smeta.get("stop_loss_condition", ""),
+                "matched_triggers": funnel_p.get("matched_triggers", []),
+                "seal_amount": bomb.get("seal_amount"),
+                "bomb_alerts": bomb.get("bomb_alerts", []),
+                "data_status": bomb.get("data_status", "missing"),
+                "max_hold_warning": _compute_max_hold_warning(st, smeta),
+                "attention_mode": st.get("attention_mode") or "A",
+            }
+        )
     return checklist
 
 
 # ---------------------------------------------------------------------------
 # 5. 教练状态顶层组装
 # ---------------------------------------------------------------------------
+
 
 def build_coach_state(date: str, now: datetime | None = None) -> dict[str, Any]:
     """顶层组装：current_slot + attention_mode + checklist + mode_rules。"""

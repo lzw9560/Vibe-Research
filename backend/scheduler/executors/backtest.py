@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """backtest executors——日回测/§44 检查点/评价层回测/forward_test daily/T+1 settle。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -10,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from scheduler.snapshots import _save_snapshot
+
 # §44v2 P0：apply_revalidation 模块级 import（monkeypatch 友好；lift_override→evaluation 无循环）
 from candidate_funnel.lift_override import apply_revalidation
 
@@ -41,7 +43,12 @@ def daily_backtest_run(payload: Dict[str, Any]) -> Dict[str, Any]:
         start_dt = today_dt
     start = (start_dt - timedelta(days=lookback)).strftime("%Y-%m-%d")
 
-    results: Dict[str, Any] = {"snapshot_date": snapshot_date, "lookback_days": lookback, "start": start, "as_of_date": as_of}
+    results: Dict[str, Any] = {
+        "snapshot_date": snapshot_date,
+        "lookback_days": lookback,
+        "start": start,
+        "as_of_date": as_of,
+    }
 
     # lite 引擎
     # L5 标注：asyncio.run() 在 execute() 同步路径经 asyncio.to_thread 包装在线程池中，
@@ -94,22 +101,29 @@ def s066_validation_checkpoint(payload: Dict[str, Any]) -> Dict[str, Any]:
         conn.close()
 
     if days < threshold:
-        return {"status": "not_due", "eastmoney_live_days": days, "target": threshold,
-                "note": f"积累中 {days}/{threshold} 日，到点自动提醒 §44 复验"}
+        return {
+            "status": "not_due",
+            "eastmoney_live_days": days,
+            "target": threshold,
+            "note": f"积累中 {days}/{threshold} 日，到点自动提醒 §44 复验",
+        }
 
     # 到期：写 checkpoint + WARNING + 返操作指引
-    ckpt = {"status": "due", "eastmoney_live_days": days, "target": threshold,
-            "action": "cd backend && .venv/bin/python tools/forward_test_backfill.py --weather "
-                      "→ 查 get_forward_test_summary 的 lift：破 2x + within-day r 显著 → alpha 成立；"
-                      "否则确认无 edge（spec §13 ①/§44）",
-            "checked_at": datetime.now().isoformat()}
+    ckpt = {
+        "status": "due",
+        "eastmoney_live_days": days,
+        "target": threshold,
+        "action": "cd backend && .venv/bin/python tools/forward_test_backfill.py --weather "
+        "→ 查 get_forward_test_summary 的 lift：破 2x + within-day r 显著 → alpha 成立；"
+        "否则确认无 edge（spec §13 ①/§44）",
+        "checked_at": datetime.now().isoformat(),
+    }
     try:
         ckpt_path = Path(resolve_data_dir()) / "s066_60day_due.json"
         ckpt_path.write_text(json.dumps(ckpt, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception as e:  # noqa: BLE001
         logger.warning("backtest executor 失败（降级，不阻塞）: %s", e)
-    logger.warning(
-        "[s066_checkpoint] §44 60 天复验 DUE：eastmoney_live=%d 日 → 跑 backfill --weather 查 lift", days)
+    logger.warning("[s066_checkpoint] §44 60 天复验 DUE：eastmoney_live=%d 日 → 跑 backfill --weather 查 lift", days)
     return ckpt
 
 
@@ -136,27 +150,33 @@ def evaluation_backtest(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     conn = get_healthy_conn(GENE_SCORES_DB_PATH)
     try:
-        days = conn.execute(
-            "SELECT COUNT(DISTINCT signal_date) FROM forward_test_records"
-        ).fetchone()[0]
+        days = conn.execute("SELECT COUNT(DISTINCT signal_date) FROM forward_test_records").fetchone()[0]
         # S144 buyable 口径（剔 is_unbuyable=1 一字板，与 verdict 同源）
-        n = conn.execute(
-            "SELECT COUNT(*) FROM forward_test_records WHERE is_unbuyable = 0"
-        ).fetchone()[0]
+        n = conn.execute("SELECT COUNT(*) FROM forward_test_records WHERE is_unbuyable = 0").fetchone()[0]
     finally:
         conn.close()
 
     # 未到期：返进度（静默）
     if days < first_threshold:
-        return {"status": "not_due", "signal_days": days, "picks_n": n,
-                "first_threshold": first_threshold, "reverify_threshold": reverify_threshold,
-                "min_n": min_n,
-                "note": f"日数积累中 {days}/{first_threshold}（n={n}），到点提醒 §44 首次回溯"}
+        return {
+            "status": "not_due",
+            "signal_days": days,
+            "picks_n": n,
+            "first_threshold": first_threshold,
+            "reverify_threshold": reverify_threshold,
+            "min_n": min_n,
+            "note": f"日数积累中 {days}/{first_threshold}（n={n}），到点提醒 §44 首次回溯",
+        }
     if n < min_n:
-        return {"status": "not_due", "signal_days": days, "picks_n": n,
-                "first_threshold": first_threshold, "reverify_threshold": reverify_threshold,
-                "min_n": min_n,
-                "note": f"日数 {days}≥{first_threshold} 达首档但 n={n}/{min_n} 不足，picks 积累中"}
+        return {
+            "status": "not_due",
+            "signal_days": days,
+            "picks_n": n,
+            "first_threshold": first_threshold,
+            "reverify_threshold": reverify_threshold,
+            "min_n": min_n,
+            "note": f"日数 {days}≥{first_threshold} 达首档但 n={n}/{min_n} 不足，picks 积累中",
+        }
 
     # 到期：判阶段 + 自动写回 + checkpoint + WARNING + 操作指引（fallback）
     # §44v2 P0（S159 R4 回溯主场）：不再 reminder-only——到点调 apply_revalidation
@@ -184,12 +204,19 @@ def evaluation_backtest(payload: Dict[str, Any]) -> Dict[str, Any]:
             "→ 重跑 lift + 判升级/降级（lift≥2+CI不重叠→validated×1.0；lift<1 robust→劣于随机×0.1；"
             "1≤lift<2→未validated×0.5）——更新 DIMENSION_LIFT_REGISTRY updated_*"
         )
-    ckpt = {"status": "due", "phase": phase, "signal_days": days, "picks_n": n,
-            "first_threshold": first_threshold, "reverify_threshold": reverify_threshold,
-            "min_n": min_n, "action": action,
-            "written_back": written_back,  # 自动写回的维度（§44v2 P0）
-            "write_errors": write_errors,
-            "checked_at": datetime.now().isoformat()}
+    ckpt = {
+        "status": "due",
+        "phase": phase,
+        "signal_days": days,
+        "picks_n": n,
+        "first_threshold": first_threshold,
+        "reverify_threshold": reverify_threshold,
+        "min_n": min_n,
+        "action": action,
+        "written_back": written_back,  # 自动写回的维度（§44v2 P0）
+        "write_errors": write_errors,
+        "checked_at": datetime.now().isoformat(),
+    }
     try:
         ckpt_path = Path(resolve_data_dir()) / "s151_evaluation_backtest_due.json"
         ckpt_path.write_text(json.dumps(ckpt, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -198,11 +225,16 @@ def evaluation_backtest(payload: Dict[str, Any]) -> Dict[str, Any]:
     if written_back:
         logger.warning(
             "[evaluation_backtest] S151 回溯 DUE（%s）自动写回 %d 维度：%s；signal_days=%d picks_n=%d",
-            phase, len(written_back), written_back, days, n)
+            phase,
+            len(written_back),
+            written_back,
+            days,
+            n,
+        )
     else:
         logger.warning(
-            "[evaluation_backtest] S151 回溯 DUE（%s）自动写回空（compute 不可用）→ reminder：%s",
-            phase, action)
+            "[evaluation_backtest] S151 回溯 DUE（%s）自动写回空（compute 不可用）→ reminder：%s", phase, action
+        )
     return ckpt
 
 
@@ -218,7 +250,9 @@ def r3_enforce(payload: Dict[str, Any]) -> Dict[str, Any]:
     forward_test records 可重算 days。
     """
     from candidate_funnel.evaluation import (  # noqa: PLC0415
-        DIMENSION_LIFT_REGISTRY, DIM_ARM_MAP, lift_to_multiplier,
+        DIMENSION_LIFT_REGISTRY,
+        DIM_ARM_MAP,
+        lift_to_multiplier,
     )
     from candidate_funnel.lift_override import write_override  # noqa: PLC0415
     from engine.trade_journal import TradeJournal  # noqa: PLC0415
@@ -236,7 +270,9 @@ def r3_enforce(payload: Dict[str, Any]) -> Dict[str, Any]:
     enforced: list[dict] = []
     skipped_underpowered: list[dict] = []
     skipped_non_arm: list[str] = []
-    skipped_event_edge: list[dict] = []  # S219-deep-review（2026-09-18 w1d19k2hl）：event-edge (lift=None/regime_caps) → weekly_review cap gate 管
+    skipped_event_edge: list[
+        dict
+    ] = []  # S219-deep-review（2026-09-18 w1d19k2hl）：event-edge (lift=None/regime_caps) → weekly_review cap gate 管
 
     for dim_id, dim in DIMENSION_LIFT_REGISTRY.items():
         if dim_id.endswith("_ref"):
@@ -250,10 +286,14 @@ def r3_enforce(payload: Dict[str, Any]) -> Dict[str, Any]:
         records = journal.query_records(arm=arm, is_realized=1, is_dead_arm=None)
         current_days = len({r.exit_date for r in records if r.exit_date})
         if current_days < threshold_days:
-            skipped_underpowered.append({
-                "dimension_id": dim_id, "arm": arm,
-                "current_days": current_days, "threshold": threshold_days,
-            })
+            skipped_underpowered.append(
+                {
+                    "dimension_id": dim_id,
+                    "arm": arm,
+                    "current_days": current_days,
+                    "threshold": threshold_days,
+                }
+            )
             continue
         # S219-deep-review event-edge 守卫（2026-09-18 w1d19k2hl）：consecutive_relay lift=None +
         # regime_caps 不走 lift_to_multiplier(None→×1.0) 路径——lift is None 分支返 ('探索性', 1.0)
@@ -262,27 +302,42 @@ def r3_enforce(payload: Dict[str, Any]) -> Dict[str, Any]:
         # consecutive_relay cap 由 weekly_review cap gate 管（_evaluate_cap_up_gate/_evaluate_cap_down_trigger），
         # 非 r3_enforce selection-lift 逻辑。
         if dim.lift is None or dim.regime_caps is not None:
-            skipped_event_edge.append({
-                "dimension_id": dim_id, "arm": arm, "current_days": current_days,
-                "lift": dim.lift, "regime_caps": dim.regime_caps,
-                "reason": "event-edge (lift=None/regime_caps) → weekly_review cap gate 管，非 r3_enforce",
-            })
+            skipped_event_edge.append(
+                {
+                    "dimension_id": dim_id,
+                    "arm": arm,
+                    "current_days": current_days,
+                    "lift": dim.lift,
+                    "regime_caps": dim.regime_caps,
+                    "reason": "event-edge (lift=None/regime_caps) → weekly_review cap gate 管，非 r3_enforce",
+                }
+            )
             continue
         # ≥60 → enforce: lift_to_multiplier + write_override 刷新
         status, mult = lift_to_multiplier(
-            dim.lift, dim.n, days_robust=current_days,
+            dim.lift,
+            dim.n,
+            days_robust=current_days,
         )
         write_override(
-            dim_id, dim.lift, dim.n, current_days,
+            dim_id,
+            dim.lift,
+            dim.n,
+            current_days,
             phase="r3_enforce",
             source_script="scheduler/executors/backtest.py::r3_enforce",
         )
-        enforced.append({
-            "dimension_id": dim_id, "arm": arm,
-            "current_days": current_days,
-            "lift": dim.lift, "n": dim.n,
-            "status": status, "weight_multiplier": mult,
-        })
+        enforced.append(
+            {
+                "dimension_id": dim_id,
+                "arm": arm,
+                "current_days": current_days,
+                "lift": dim.lift,
+                "n": dim.n,
+                "status": status,
+                "weight_multiplier": mult,
+            }
+        )
 
     summary = (
         f"R3 enforce: {len(enforced)} enforced, "
@@ -318,10 +373,19 @@ def forward_test_daily(payload: Dict[str, Any]) -> Dict[str, Any]:
     except Exception:
         weather = None
     r = run_daily_forward_test(signal_date, weather_state=weather)
-    logger.info("[forward_test_daily] %s picks=%s universe=%s weather=%s",
-               signal_date, r.get("recommendations", 0), r.get("universe_codes", 0), weather)
-    return {"signal_date": signal_date, "weather": weather,
-            "picks": r.get("recommendations", 0), "universe_codes": r.get("universe_codes", 0)}
+    logger.info(
+        "[forward_test_daily] %s picks=%s universe=%s weather=%s",
+        signal_date,
+        r.get("recommendations", 0),
+        r.get("universe_codes", 0),
+        weather,
+    )
+    return {
+        "signal_date": signal_date,
+        "weather": weather,
+        "picks": r.get("recommendations", 0),
+        "universe_codes": r.get("universe_codes", 0),
+    }
 
 
 def forward_test_t1_settle(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -388,11 +452,17 @@ def forward_test_t1_settle(payload: Dict[str, Any]) -> Dict[str, Any]:
             # S145：picks 取 code + strategy_code（建 strategy_params_map 供 path 模拟用其战法 params）
             pick_rows = conn.execute(
                 "SELECT code, strategy_code FROM forward_test_records "
-                "WHERE signal_date=? AND return_open2close IS NULL", (signal_date,)).fetchall()
+                "WHERE signal_date=? AND return_open2close IS NULL",
+                (signal_date,),
+            ).fetchall()
             pick_codes = list(dict.fromkeys(r[0] for r in pick_rows))
-            uni_codes = [r[0] for r in conn.execute(
-                "SELECT DISTINCT code FROM universe_returns "
-                "WHERE signal_date=? AND return_open2close IS NULL", (signal_date,)).fetchall()]
+            uni_codes = [
+                r[0]
+                for r in conn.execute(
+                    "SELECT DISTINCT code FROM universe_returns WHERE signal_date=? AND return_open2close IS NULL",
+                    (signal_date,),
+                ).fetchall()
+            ]
         finally:
             conn.close()
         all_codes = list(dict.fromkeys(pick_codes + uni_codes))
@@ -400,30 +470,41 @@ def forward_test_t1_settle(payload: Dict[str, Any]) -> Dict[str, Any]:
             continue
         # S145 R2：每 pick code 取首个战法 params（多战法同 code 时按 code UPDATE 全行同 path）
         from strategies.kline_returns import strategy_params_for  # noqa: PLC0415
+
         strategy_params_map: dict[str, dict] = {}
         for code, sc in pick_rows:
             if code not in strategy_params_map and sc:
                 strategy_params_map[code] = strategy_params_for(sc)
-        returns_map = compute_returns_for_codes(signal_date, all_codes,
-                                                strategy_params_map=strategy_params_map or None)
+        returns_map = compute_returns_for_codes(signal_date, all_codes, strategy_params_map=strategy_params_map or None)
         if not returns_map:
             summary.append({"signal_date": signal_date, "status": "baostock_unavailable"})
             break  # baostock 不可用，后续日也跑不了
-        picks_returns = {c: returns_map[c] for c in pick_codes
-                         if c in returns_map and returns_map[c]["return_open2close"] is not None}
-        uni_returns = {c: returns_map[c] for c in uni_codes
-                       if c in returns_map and returns_map[c]["return_open2close"] is not None}
+        picks_returns = {
+            c: returns_map[c]
+            for c in pick_codes
+            if c in returns_map and returns_map[c]["return_open2close"] is not None
+        }
+        uni_returns = {
+            c: returns_map[c] for c in uni_codes if c in returns_map and returns_map[c]["return_open2close"] is not None
+        }
         n_picks = record_actual_returns(signal_date, picks_returns)
         n_uni = record_universe_returns(signal_date, uni_returns)
         settled = n_picks + n_uni
         # 0-settle → 标 stuck（如调休补班 baostock 无 bar），7 日内不重试
         if settled == 0:
             stuck[signal_date] = datetime.now().isoformat()
-        logger.info("[forward_test_t1_settle] %s settled picks=%s/%s universe=%s/%s%s",
-                   signal_date, n_picks, len(pick_codes), n_uni, len(uni_codes),
-                   " [stuck-mark]" if settled == 0 else "")
-        summary.append({"signal_date": signal_date, "settled_picks": n_picks,
-                        "settled_universe": n_uni, "total": settled})
+        logger.info(
+            "[forward_test_t1_settle] %s settled picks=%s/%s universe=%s/%s%s",
+            signal_date,
+            n_picks,
+            len(pick_codes),
+            n_uni,
+            len(uni_codes),
+            " [stuck-mark]" if settled == 0 else "",
+        )
+        summary.append(
+            {"signal_date": signal_date, "settled_picks": n_picks, "settled_universe": n_uni, "total": settled}
+        )
 
     try:
         stuck_path.write_text(json.dumps(stuck, ensure_ascii=False, indent=2), encoding="utf-8")

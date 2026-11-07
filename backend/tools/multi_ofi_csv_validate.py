@@ -10,6 +10,7 @@
   python tools/multi_ofi_csv_validate.py /Users/lizhiwei/Downloads/as_market_test_data.csv
   python tools/multi_ofi_csv_validate.py <csv> --output result.json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -61,13 +62,15 @@ def validate_csv(csv_path: str, levels: int = 5) -> dict:
             _extract_levels(curr, "ask", "v", levels),
             levels=levels,
         )
-        records.append({
-            "timestamp": str(curr["timestamp"]),
-            "ofi_levels": [round(x, 1) for x in per_level],
-            "total_ofi": round(total, 1),
-            "buy_pressure": int(sum(_extract_levels(curr, "bid", "v", levels))),
-            "sell_pressure": int(sum(_extract_levels(curr, "ask", "v", levels))),
-        })
+        records.append(
+            {
+                "timestamp": str(curr["timestamp"]),
+                "ofi_levels": [round(x, 1) for x in per_level],
+                "total_ofi": round(total, 1),
+                "buy_pressure": int(sum(_extract_levels(curr, "bid", "v", levels))),
+                "sell_pressure": int(sum(_extract_levels(curr, "ask", "v", levels))),
+            }
+        )
 
     # 统计
     totals = [r["total_ofi"] for r in records]

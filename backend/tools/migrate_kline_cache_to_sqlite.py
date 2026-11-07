@@ -13,6 +13,7 @@
 
 工程底线：不臆造——JSON 不在/损坏返 0 不崩。私有数据目录（.vibe-research/）不进 git。
 """
+
 from __future__ import annotations
 
 import json
@@ -62,9 +63,14 @@ def main(force: bool = False) -> int:
     sample_code = next(iter(data))
     row = conn.execute("SELECT bars_json FROM kline WHERE code=?", (sample_code,)).fetchone()
     bars_check = json.loads(row[0]) if row else []
-    _logger.info("验证：SQLite %d stocks，抽检 %s = %d bars（JSON %d bars，%s）",
-                 n_after, sample_code, len(bars_check), len(data[sample_code]),
-                 "✓ 一致" if len(bars_check) == len(data[sample_code]) else "✗ 不一致")
+    _logger.info(
+        "验证：SQLite %d stocks，抽检 %s = %d bars（JSON %d bars，%s）",
+        n_after,
+        sample_code,
+        len(bars_check),
+        len(data[sample_code]),
+        "✓ 一致" if len(bars_check) == len(data[sample_code]) else "✗ 不一致",
+    )
 
     db_size = dbp.stat().st_size / 1e6
     json_size = jp.stat().st_size / 1e6

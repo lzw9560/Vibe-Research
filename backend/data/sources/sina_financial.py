@@ -18,6 +18,7 @@ earnings-review 5 异常信号（应收/存货/OCF<NI/资本化/非经常性）�
 NO-LOOK-AHEAD：财报是已披露历史数据；当期财报在披露日后才可用，消费方须按
 披露日对齐（availability_offset），本源不负责对齐。
 """
+
 from __future__ import annotations
 
 import json
@@ -28,23 +29,21 @@ from circuit_breaker import CircuitBreakerConfig, get_breaker
 from ._common import UA
 from .tencent import get_prefix
 
-_SINA_FIN_URL = ("https://quotes.sina.cn/cn/api/openapi.php/"
-                 "CompanyFinanceService.getFinanceReport2022")
+_SINA_FIN_URL = "https://quotes.sina.cn/cn/api/openapi.php/CompanyFinanceService.getFinanceReport2022"
 
 # S134：新浪三表慢 12-25s、3×/code、无 Sina 备份——threshold=3 让 1 股完整
 # outage（3 表全失败）即 trip，而非默认 5（1.5 股 150s）。first-write-wins 注入。
-_SINA_FIN_BREAKER = get_breaker(
-    "sina_financial", CircuitBreakerConfig(failure_threshold=3)
-)
+_SINA_FIN_BREAKER = get_breaker("sina_financial", CircuitBreakerConfig(failure_threshold=3))
 
 
 def _fetch_json(code: str, report_type: str = "lrb", num: int = 8) -> dict:
     """新浪财报三表原始 JSON。urllib 不限流；timeout 30s（实测 12-25s 留余量）。"""
     prefix = get_prefix(code)
     from urllib.parse import urlencode
+
     params = {
         "paperCode": f"{prefix}{code}",
-        "source": report_type,   # lrb / fzb / llb
+        "source": report_type,  # lrb / fzb / llb
         "type": "0",
         "page": "1",
         "num": str(num),
@@ -88,9 +87,7 @@ def fetch_raw(code: str, report_type: str = "lrb", num: int = 8) -> list[dict]:
     """
     breaker = get_breaker("sina_financial")
     if not breaker.allow_request():
-        raise RuntimeError(
-            f"[CircuitBreaker:sina_financial] 新浪三表源熔断中，快速失败（{code}/{report_type}）"
-        )
+        raise RuntimeError(f"[CircuitBreaker:sina_financial] 新浪三表源熔断中，快速失败（{code}/{report_type}）")
     try:
         d = _fetch_json(code, report_type, num)
         breaker.record_success()

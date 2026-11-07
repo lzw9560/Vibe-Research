@@ -1,4 +1,5 @@
 """pytest 配置：把 backend 目录加进 sys.path，注册 live 标记，隔离用户数据目录。"""
+
 import os
 import sys
 import tempfile
@@ -59,14 +60,20 @@ def sina_breaker():
     for name in ("sina_financial", "sina_kline"):
         br = get_breaker(name)
         saved[name] = (
-            br.state, br.failure_count, br.last_failure_time,
-            br.half_open_calls, br.success_count,
+            br.state,
+            br.failure_count,
+            br.last_failure_time,
+            br.half_open_calls,
+            br.success_count,
         )
     yield
     for name, br in ((n, get_breaker(n)) for n in ("sina_financial", "sina_kline")):
         (
-            br.state, br.failure_count, br.last_failure_time,
-            br.half_open_calls, br.success_count,
+            br.state,
+            br.failure_count,
+            br.last_failure_time,
+            br.half_open_calls,
+            br.success_count,
         ) = saved[name]
 
 

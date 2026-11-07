@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """kg executors——知识图谱审查/数据同步。"""
+
 from __future__ import annotations
 
 import logging
@@ -26,7 +27,9 @@ def daily_kg_audit(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         result = subprocess.run(
             ["python3", str(script), "--quiet"],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
             cwd=str(vault_path),
         )
         if result.returncode == 0:
@@ -63,7 +66,9 @@ def daily_kg_sync(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         result = subprocess.run(
             ["python3", str(script)],
-            capture_output=True, text=True, timeout=600,
+            capture_output=True,
+            text=True,
+            timeout=600,
             cwd=str(vault_path),
         )
         if result.returncode == 0:
@@ -87,6 +92,7 @@ def kg_inject(payload: Dict[str, Any]) -> Dict[str, Any]:
     手动触发用 POST /api/kg/inject?code= 或 cron 传 codes）。
     """
     from tools.kg_inject import inject_announcements_to_inbox  # noqa: PLC0415
+
     codes = payload.get("codes") or []
     limit = int(payload.get("limit", 10))
     if not codes:

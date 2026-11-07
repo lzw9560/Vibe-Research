@@ -31,6 +31,7 @@ A股先验: 2015 暴跌期 5692 笔增持 (平时 1500-3000) → 可能是"暴�
 - 2015 暴跌期大量增持事件因无 kline 数据被排除 → 样本偏向近年
 - 这是数据管道限制非策略缺陷, 须如实报告
 """
+
 from __future__ import annotations
 import json
 import sys
@@ -42,8 +43,14 @@ from math import erf, sqrt
 # import shared helpers (DRY)
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tools._factor_helpers import (  # noqa: E402
-    ev_stats, day_paired_t, bonferroni_p, norm_sf_positive,
-    limit_for_code, is_yizi_t1, ALPHA, COST,
+    ev_stats,
+    day_paired_t,
+    bonferroni_p,
+    norm_sf_positive,
+    limit_for_code,
+    is_yizi_t1,
+    ALPHA,
+    COST,
 )
 
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
@@ -74,9 +81,11 @@ N_WINDOWS = 3
 
 # ---------- data loading ----------
 
+
 def load_insider_buys() -> list[dict]:
     """Fetch material insider buys from akshare. Returns list of events."""
     import akshare as ak
+
     df = ak.stock_ggcg_em(symbol="全部")
     inc = df[df["持股变动信息-增减"] == "增持"].copy()
     mat = inc[inc["持股变动信息-占总股本比例"] >= 0.1].copy()
@@ -88,12 +97,14 @@ def load_insider_buys() -> list[dict]:
         shareholder = str(row.get("股东名称", ""))
         if not code or not ann_date or ann_date == "nan":
             continue
-        events.append({
-            "code": code,
-            "ann_date": ann_date,
-            "pct_total": pct,
-            "shareholder": shareholder,
-        })
+        events.append(
+            {
+                "code": code,
+                "ann_date": ann_date,
+                "pct_total": pct,
+                "shareholder": shareholder,
+            }
+        )
     print(f"[data] insider buys: {len(events)} material events (>=0.1% of total shares)")
     return events
 
@@ -101,6 +112,7 @@ def load_insider_buys() -> list[dict]:
 def load_kline_db() -> dict[str, dict[str, dict]]:
     """Load kline cache. Returns code -> {date: bar}."""
     import sqlite3
+
     conn = sqlite3.connect(str(KLINE_DB))
     code_map: dict[str, dict[str, dict]] = {}
     for code, bj in conn.execute("SELECT code, bars_json FROM kline"):
@@ -150,6 +162,7 @@ def load_regime() -> dict[str, str]:
 
 
 # ---------- pick construction ----------
+
 
 def build_insider_picks(
     events: list[dict],
@@ -237,12 +250,15 @@ def build_insider_picks(
             pick[f"{wname}_close"] = eclose
         picks.append(pick)
 
-    print(f"[picks] built {len(picks)} picks from {len(events)} events "
-          f"(skipped {len(events) - len(picks)} — no kline / yizi / missing bars)")
+    print(
+        f"[picks] built {len(picks)} picks from {len(events)} events "
+        f"(skipped {len(events) - len(picks)} — no kline / yizi / missing bars)"
+    )
     return picks
 
 
 # ---------- return functions ----------
+
 
 def raw_ev(p: dict, wname: str) -> float | None:
     """Raw EV: (T+n close - T+1 open) / T+1 open."""
@@ -281,6 +297,7 @@ def bhar(p: dict, wname: str, idx_bars: dict[str, dict]) -> float | None:
 
 # ---------- walk-forward (event-study adapted) ----------
 
+
 def walk_forward_event(
     picks: list[dict],
     wname: str,
@@ -316,8 +333,10 @@ def walk_forward_event(
     te_dt = day_paired_t(te_by_date)
     return {
         "status": "ok",
-        "n_train": len(tr_rets), "n_test": len(te_rets),
-        "n_train_dates": len(train_dates), "n_test_dates": len(test_dates),
+        "n_train": len(tr_rets),
+        "n_test": len(te_rets),
+        "n_train_dates": len(train_dates),
+        "n_test_dates": len(test_dates),
         "train_ev": ev_stats(tr_rets),
         "test_ev": ev_stats(te_rets),
         "train_day_t": tr_dt,
@@ -326,6 +345,7 @@ def walk_forward_event(
 
 
 # ---------- DSR estimation ----------
+
 
 def estimate_dsr(bhar_rets: list[float], n_tests: int) -> dict:
     """Deflated Sharpe Ratio estimation (López de Prado).
@@ -345,6 +365,7 @@ def estimate_dsr(bhar_rets: list[float], n_tests: int) -> dict:
     # e_z = (1 - euler_gamma) * norm_ppf(1 - 1/n_tests) + euler_gamma * norm_ppf(1 - 1/(n_tests*e))
     # Simplified: expected max SR ~ sqrt(2*ln(n_tests))
     from math import log, pi
+
     e_sr0 = sqrt(2 * log(n_tests)) if n_tests > 1 else 0.0
     # DSR = norm_sf((sharpe - e_sr0) / sqrt(1/n)) approx
     se = 1.0 / sqrt(n) if n > 0 else 1.0
@@ -363,6 +384,7 @@ def estimate_dsr(bhar_rets: list[float], n_tests: int) -> dict:
 
 
 # ---------- analysis ----------
+
 
 def analyze_subset(
     name: str,
@@ -384,8 +406,10 @@ def analyze_subset(
     raw_rets = [r for r in raw_rets if r is not None]
     raw_s = ev_stats(raw_rets)
     print(f"\n--- raw EV (reference, NOT primary) ---")
-    print(f"  n={raw_s['n']} gross_EV={raw_s['ev']}% WR={raw_s['wr']}% t={raw_s['t']} "
-          f"CI[{raw_s['ci_lo']},{raw_s['ci_hi']}]")
+    print(
+        f"  n={raw_s['n']} gross_EV={raw_s['ev']}% WR={raw_s['wr']}% t={raw_s['t']} "
+        f"CI[{raw_s['ci_lo']},{raw_s['ci_hi']}]"
+    )
 
     # ---- BHAR (PRIMARY metric) ----
     bhar_rets = [bhar(p, wname, idx_bars) for p in picks]
@@ -393,9 +417,11 @@ def analyze_subset(
     bhar_s = ev_stats(bhar_rets)
     bhar_net = bhar_s["ev"] - COST * 100
     print(f"\n--- BHAR vs 上证综指 (PRIMARY) ---")
-    print(f"  n={bhar_s['n']} BHAR_gross={bhar_s['ev']}% std={bhar_s['std']}% "
-          f"WR={bhar_s['wr']}% t={bhar_s['t']} CI[{bhar_s['ci_lo']},{bhar_s['ci_hi']}]")
-    print(f"  BHAR_net (after {COST*100:.1f}% cost): {bhar_net:.3f}%")
+    print(
+        f"  n={bhar_s['n']} BHAR_gross={bhar_s['ev']}% std={bhar_s['std']}% "
+        f"WR={bhar_s['wr']}% t={bhar_s['t']} CI[{bhar_s['ci_lo']},{bhar_s['ci_hi']}]"
+    )
+    print(f"  BHAR_net (after {COST * 100:.1f}% cost): {bhar_net:.3f}%")
 
     # ---- per-day-mean t ----
     bhar_by_date: dict[str, list[float]] = defaultdict(list)
@@ -404,8 +430,10 @@ def analyze_subset(
         if r is not None:
             bhar_by_date[p["ann_date"]].append(r)
     bhar_dt = day_paired_t(bhar_by_date)
-    print(f"  day-paired: n_days={bhar_dt['n_days']} mean={bhar_dt['mean']}% "
-          f"t={bhar_dt['t']} p_one_sided={bhar_dt['p_one_sided']}")
+    print(
+        f"  day-paired: n_days={bhar_dt['n_days']} mean={bhar_dt['mean']}% "
+        f"t={bhar_dt['t']} p_one_sided={bhar_dt['p_one_sided']}"
+    )
 
     # ---- Bonferroni ----
     # ×3 strategies × 3 windows = ×9 total tests reported
@@ -414,9 +442,11 @@ def analyze_subset(
     n_tests_report = N_CROSS_STRATEGY * N_WINDOWS  # ×9 for full report
     p_bonf_verdict = bonferroni_p(bhar_dt["p_one_sided"], n_tests_verdict)
     p_bonf_report = bonferroni_p(bhar_dt["p_one_sided"], n_tests_report)
-    print(f"  Bonferroni: p_raw={bhar_dt['p_one_sided']} "
-          f"×{n_tests_verdict}(verdict)={p_bonf_verdict:.6f} "
-          f"×{n_tests_report}(full)={p_bonf_report:.6f}")
+    print(
+        f"  Bonferroni: p_raw={bhar_dt['p_one_sided']} "
+        f"×{n_tests_verdict}(verdict)={p_bonf_verdict:.6f} "
+        f"×{n_tests_report}(full)={p_bonf_report:.6f}"
+    )
 
     # ---- walk-forward OOS (BHAR) ----
     print(f"\n--- walk-forward OOS (BHAR, 前半 train → 后半 test) ---")
@@ -426,12 +456,12 @@ def analyze_subset(
         te = wf["test_ev"]
         tr_dt = wf["train_day_t"]
         te_dt = wf["test_day_t"]
-        print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} "
-              f"BHAR={tr['ev']}% t={tr_dt['t']}")
-        print(f"  test:  n={te['n']} n_dates={wf['n_test_dates']} "
-              f"BHAR={te['ev']}% t={te_dt['t']} p={te_dt['p_one_sided']}")
-        decay = ((tr['ev'] - te['ev']) / abs(tr['ev']) * 100
-                 if tr['ev'] != 0 else 0)
+        print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} BHAR={tr['ev']}% t={tr_dt['t']}")
+        print(
+            f"  test:  n={te['n']} n_dates={wf['n_test_dates']} "
+            f"BHAR={te['ev']}% t={te_dt['t']} p={te_dt['p_one_sided']}"
+        )
+        decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
         print(f"  decay: {decay:.0f}% (train→test)")
     else:
         print(f"  {wf['status']} (n_dates={wf.get('n_dates', 0)})")
@@ -439,8 +469,7 @@ def analyze_subset(
     # ---- DSR ----
     dsr = estimate_dsr(bhar_rets, n_tests_report)
     print(f"\n--- DSR (Deflated Sharpe Ratio, ×{n_tests_report} tests) ---")
-    print(f"  Sharpe={dsr['sharpe']} e_sr0={dsr['e_sr0']} "
-          f"DSR={dsr['dsr']} haircut={dsr['haircut']}")
+    print(f"  Sharpe={dsr['sharpe']} e_sr0={dsr['e_sr0']} DSR={dsr['dsr']} haircut={dsr['haircut']}")
 
     # ---- verdict ----
     verdict = _verdict(
@@ -488,8 +517,7 @@ def _verdict(
 ) -> str:
     """Honest verdict cascade (§44 v3, BHAR-primary)."""
     print(f"\n  VERDICT cascade:")
-    print(f"    BHAR_gross={bhar_gross}% BHAR_net={bhar_net}% day_t={t_day} "
-          f"Bonf_p={p_bonf} n_days={n_days}")
+    print(f"    BHAR_gross={bhar_gross}% BHAR_net={bhar_net}% day_t={t_day} Bonf_p={p_bonf} n_days={n_days}")
 
     if bhar_gross < 0:
         print(f"    → FALSIFIED: BHAR gross < 0 (negative abnormal return)")
@@ -505,25 +533,29 @@ def _verdict(
         return "edge-falsified"
     if wf_status == "ok":
         if wf_train_ev <= 0:
-            print(f"    → EXPLORATORY: train BHAR={wf_train_ev}% <= 0 "
-                  f"(edge not in train half, test may be regime overfitting)")
+            print(
+                f"    → EXPLORATORY: train BHAR={wf_train_ev}% <= 0 "
+                f"(edge not in train half, test may be regime overfitting)"
+            )
             return "exploratory"
         if wf_test_ev <= 0:
             print(f"    → FALSIFIED: walk-forward test BHAR={wf_test_ev}% <= 0")
             return "edge-falsified"
         wf_test_p_bonf = bonferroni_p(wf_test_p, N_CROSS_STRATEGY)
         if wf_test_p_bonf >= ALPHA:
-            print(f"    → EXPLORATORY: OOS test BHAR={wf_test_ev}% > 0 but "
-                  f"test p={wf_test_p} Bonf×{N_CROSS_STRATEGY}={wf_test_p_bonf} >= {ALPHA}")
+            print(
+                f"    → EXPLORATORY: OOS test BHAR={wf_test_ev}% > 0 but "
+                f"test p={wf_test_p} Bonf×{N_CROSS_STRATEGY}={wf_test_p_bonf} >= {ALPHA}"
+            )
             return "exploratory"
-        print(f"    → EDGE-CONFIRMED: BHAR gross+net > 0, Bonf PASS, "
-              f"OOS test BHAR={wf_test_ev}% significant")
+        print(f"    → EDGE-CONFIRMED: BHAR gross+net > 0, Bonf PASS, OOS test BHAR={wf_test_ev}% significant")
         return "edge-confirmed"
     print(f"    → EXPLORATORY: walk-forward not available")
     return "exploratory"
 
 
 # ---------- main ----------
+
 
 def main() -> None:
     print("=" * 70)
@@ -553,9 +585,11 @@ def main() -> None:
         regimes[p["regime"]] += 1
     print(f"  Year distribution: {dict(sorted(years.items()))}")
     print(f"  Regime distribution: {dict(regimes)}")
-    print(f"  Threshold: min={min(p['pct_total'] for p in picks):.3f}% "
-          f"median={statistics.median([p['pct_total'] for p in picks]):.3f}% "
-          f"max={max(p['pct_total'] for p in picks):.3f}%")
+    print(
+        f"  Threshold: min={min(p['pct_total'] for p in picks):.3f}% "
+        f"median={statistics.median([p['pct_total'] for p in picks]):.3f}% "
+        f"max={max(p['pct_total'] for p in picks):.3f}%"
+    )
 
     # ---- dimension 1: window comparison (all picks) ----
     print(f"\n{'#' * 70}")
@@ -617,25 +651,29 @@ def main() -> None:
     print(f"\n窗口对比 (all picks, BHAR):")
     for r in results_windows:
         if r.get("n_picks", 0) > 0:
-            print(f"  {r['wname']}: BHAR_gross={r['bhar_gross']}% net={r['bhar_net']}% "
-                  f"t={r['bhar_day_t']['t']} p_bonf={r['p_bonf_verdict']} "
-                  f"verdict={r['verdict']}")
+            print(
+                f"  {r['wname']}: BHAR_gross={r['bhar_gross']}% net={r['bhar_net']}% "
+                f"t={r['bhar_day_t']['t']} p_bonf={r['p_bonf_verdict']} "
+                f"verdict={r['verdict']}"
+            )
     print(f"\n阈值分桶 (T+20, BHAR):")
     for r in results_thresholds:
         if r.get("n_picks", 0) > 0:
-            print(f"  {r['name']}: n={r['n_picks']} BHAR_gross={r['bhar_gross']}% "
-                  f"net={r['bhar_net']}% t={r['bhar_day_t']['t']} "
-                  f"p_bonf={r['p_bonf_verdict']} verdict={r['verdict']}")
+            print(
+                f"  {r['name']}: n={r['n_picks']} BHAR_gross={r['bhar_gross']}% "
+                f"net={r['bhar_net']}% t={r['bhar_day_t']['t']} "
+                f"p_bonf={r['p_bonf_verdict']} verdict={r['verdict']}"
+            )
 
     # Check if any sub-condition survives
     all_results = results_windows + results_thresholds
     survivors = [r for r in all_results if r.get("verdict") in ("edge-confirmed", "exploratory")]
-    print(f"\n存活子条件: {len(survivors)}/{len(all_results)} "
-          f"(edge-confirmed or exploratory)")
+    print(f"\n存活子条件: {len(survivors)}/{len(all_results)} (edge-confirmed or exploratory)")
     if survivors:
         for s in survivors:
-            print(f"  → {s['name']} | {s['wname']}: {s['verdict']} "
-                  f"BHAR={s['bhar_gross']}% p_bonf={s['p_bonf_verdict']}")
+            print(
+                f"  → {s['name']} | {s['wname']}: {s['verdict']} BHAR={s['bhar_gross']}% p_bonf={s['p_bonf_verdict']}"
+            )
 
 
 if __name__ == "__main__":

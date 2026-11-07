@@ -18,6 +18,7 @@
 
 用法：cd backend && .venv/bin/python tools/sector_heat_validation.py
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -62,13 +63,19 @@ def compute() -> dict:
     # heat 定义：top-N + zt_count>=阈值
     heat_defs = [("top1", 1, 0), ("top3", 3, 0), ("top5", 5, 0), ("zt>=3", 99, 3), ("zt>=5", 99, 5)]
     try:
-        dates = [r[0] for r in conn.execute(
-            "SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
-        ).fetchall()]
+        dates = [
+            r[0]
+            for r in conn.execute(
+                "SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
+            ).fetchall()
+        ]
         date_set = set(dates)
-        code_ind: dict[str, str] = {r[0]: r[1] for r in conn.execute(
-            "SELECT code, industry FROM code_industry WHERE industry IS NOT NULL AND industry != ''"
-        ).fetchall()}
+        code_ind: dict[str, str] = {
+            r[0]: r[1]
+            for r in conn.execute(
+                "SELECT code, industry FROM code_industry WHERE industry IS NOT NULL AND industry != ''"
+            ).fetchall()
+        }
 
         # 预取每日 D 的 zt_by_ind + d_zt_codes + D+1 涨停池
         daily = []
@@ -79,14 +86,17 @@ def compute() -> dict:
             zt_by_ind: dict[str, int] = defaultdict(int)
             d_zt_codes = set()
             for code, ind in conn.execute(
-                "SELECT code, industry FROM gene_scores WHERE date=? AND data_source='eastmoney_live'",
-                (d,)).fetchall():
+                "SELECT code, industry FROM gene_scores WHERE date=? AND data_source='eastmoney_live'", (d,)
+            ).fetchall():
                 if ind:
                     zt_by_ind[ind] += 1
                     d_zt_codes.add(code)
-            d1_zt = {r[0] for r in conn.execute(
-                "SELECT DISTINCT code FROM gene_scores WHERE date=? AND data_source='eastmoney_live'",
-                (d1,)).fetchall()}
+            d1_zt = {
+                r[0]
+                for r in conn.execute(
+                    "SELECT DISTINCT code FROM gene_scores WHERE date=? AND data_source='eastmoney_live'", (d1,)
+                ).fetchall()
+            }
             daily.append((d, zt_by_ind, d_zt_codes, d1_zt))
     finally:
         conn.close()
@@ -107,7 +117,8 @@ def compute() -> dict:
             cold_mem = [c for c, ind in code_ind.items() if ind not in all_inds and c not in d_zt_codes]
             if not hot_mem or not cold_mem:
                 continue
-            hm += len(hot_mem); cm += len(cold_mem)
+            hm += len(hot_mem)
+            cm += len(cold_mem)
             hn += sum(1 for c in hot_mem if c in d1_zt)
             cn += sum(1 for c in cold_mem if c in d1_zt)
         hr = hn / hm if hm else 0.0
@@ -117,12 +128,22 @@ def compute() -> dict:
         clo, chi = _wilson(cn, cm)
         ci_overlap = not (hlo > chi)  # True=CI重叠(不显著) / False=CI不重叠(显著)
         verdict = "≥2x validated" if lift >= 2.0 else "<2x 未 validated"
-        results.append({
-            "name": name, "lift": lift, "hot_n": hm, "hot_wins": hn,
-            "cold_n": cm, "cold_wins": cn,
-            "hot_lo": hlo, "hot_hi": hhi, "cold_lo": clo, "cold_hi": chi,
-            "ci_overlap": ci_overlap, "verdict": verdict,
-        })
+        results.append(
+            {
+                "name": name,
+                "lift": lift,
+                "hot_n": hm,
+                "hot_wins": hn,
+                "cold_n": cm,
+                "cold_wins": cn,
+                "hot_lo": hlo,
+                "hot_hi": hhi,
+                "cold_lo": clo,
+                "cold_hi": chi,
+                "ci_overlap": ci_overlap,
+                "verdict": verdict,
+            }
+        )
     return {"days": len(daily), "heat_defs": results}
 
 
@@ -135,11 +156,15 @@ def main() -> int:
         hr = d["hot_wins"] / d["hot_n"] if d["hot_n"] else 0.0
         cr = d["cold_wins"] / d["cold_n"] if d["cold_n"] else 0.0
         sig = "CI不重叠" if not d["ci_overlap"] else "CI重叠"
-        print(f"{d['name']:6s}: hot {d['hot_wins']}/{d['hot_n']}={hr*100:.2f}%[{d['hot_lo']*100:.2f},{d['hot_hi']*100:.2f}]  "
-              f"cold {d['cold_wins']}/{d['cold_n']}={cr*100:.2f}%[{d['cold_lo']*100:.2f},{d['cold_hi']*100:.2f}]  "
-              f"lift={d['lift']:.3f}x → {d['verdict']}（{sig}）")
-    print(f"\ncaveat: n={days}日{'（<30 探索性）' if days < 30 else ''}；冷=0涨停板块（基线≈市场~1%）；"
-          f"若全 <2x → 板块热度对次日新涨停无 §44 edge（标未 validated，不阻断接入，60日后复验）。")
+        print(
+            f"{d['name']:6s}: hot {d['hot_wins']}/{d['hot_n']}={hr * 100:.2f}%[{d['hot_lo'] * 100:.2f},{d['hot_hi'] * 100:.2f}]  "
+            f"cold {d['cold_wins']}/{d['cold_n']}={cr * 100:.2f}%[{d['cold_lo'] * 100:.2f},{d['cold_hi'] * 100:.2f}]  "
+            f"lift={d['lift']:.3f}x → {d['verdict']}（{sig}）"
+        )
+    print(
+        f"\ncaveat: n={days}日{'（<30 探索性）' if days < 30 else ''}；冷=0涨停板块（基线≈市场~1%）；"
+        f"若全 <2x → 板块热度对次日新涨停无 §44 edge（标未 validated，不阻断接入，60日后复验）。"
+    )
     return 0
 
 

@@ -11,6 +11,7 @@ top_similar_cases, signal_weights}。不直接触发买卖（喂 AI 综合研判
 - top_similar_cases：FS1 检索结果透传（AI 看历史相似 case + outcome）。
 - signal_weights：FS2 权重透传。
 """
+
 from __future__ import annotations
 
 # regime → direction 映射（反转方向歧义标中性由 AI 终判）
@@ -47,10 +48,9 @@ def fusion_layer(
     # confidence：FS2 加权信号置信度（信号不在 fs2_weights → 权重 0 排除）
     total_w = sum(fs2_weights.get(s["signal_name"], 0.0) for s in signals_aligned)
     if total_w > 0:
-        confidence = sum(
-            float(s["confidence"]) * fs2_weights.get(s["signal_name"], 0.0)
-            for s in signals_aligned
-        ) / total_w
+        confidence = (
+            sum(float(s["confidence"]) * fs2_weights.get(s["signal_name"], 0.0) for s in signals_aligned) / total_w
+        )
     else:
         confidence = 0.0
 

@@ -7,12 +7,14 @@ normalize_factor 把异纲量原始值映射到 0-1，使加权评分数学有�
 ⚠️ 字段名 provisional：竞价/快照字段口径待 Phase B T14 实测 CLI 确认。
    当前命名与 tests/fixtures/*.json 内部一致，Phase B 接 live 时若有偏差在此调整。
 """
+
 from __future__ import annotations
 from typing import Any
 
 # ---------------------------------------------------------------------------
 # 原始因子计算（calc_*）—— 输入 dict 快照，返回数值
 # ---------------------------------------------------------------------------
+
 
 def calc_vwap(snapshot: dict) -> float:
     """VWAP 近似 = (open + high + low + 2*close) / 5。

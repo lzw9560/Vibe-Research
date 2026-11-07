@@ -7,6 +7,7 @@
 数据源：baostock bars（OHLCV，不封 IP）——走 engine.bars_provider。
 6 维从 bars 复算（可复算非臆造），缺数据标 missing 不编。
 """
+
 from __future__ import annotations
 
 import logging
@@ -36,6 +37,7 @@ def score_to_signal(score: float) -> str:
 
 # ── 辅助：MA / EMA 计算 ──────────────────────────────────────────────
 
+
 def _sma(values: list[float], period: int) -> list[float | None]:
     """简单移动平均（SMA）。返 list 同 len，前 period-1 个返 None。"""
     out: list[float | None] = [None] * len(values)
@@ -58,6 +60,7 @@ def _ema(values: list[float], period: int) -> list[float | None]:
 
 # ── 维度1：MA 均线系统（多空排列）──────────────────────────────────────
 
+
 def score_ma(bars: list[dict]) -> tuple[float, dict]:
     """MA5/10/20/60 多空排列评分。多头排列高分，空头低分。"""
     closes = [float(b.get("close", 0) or 0) for b in bars if b.get("close")]
@@ -79,11 +82,16 @@ def score_ma(bars: list[dict]) -> tuple[float, dict]:
         score = 35.0
     else:  # 交叉/震荡
         score = 50.0
-    return round(score, 1), {"ma5": round(ma5, 4), "ma10": round(ma10, 4),
-                             "ma20": round(ma20, 4), "ma60": round(ma60, 4)}
+    return round(score, 1), {
+        "ma5": round(ma5, 4),
+        "ma10": round(ma10, 4),
+        "ma20": round(ma20, 4),
+        "ma60": round(ma60, 4),
+    }
 
 
 # ── 维度2：MACD（DIF/DEA/柱状）────────────────────────────────────────
+
 
 def score_macd(bars: list[dict]) -> tuple[float, dict]:
     """MACD 趋势动能评分。金叉（DIF>DEA）+ 柱状放大高分。"""
@@ -105,11 +113,11 @@ def score_macd(bars: list[dict]) -> tuple[float, dict]:
         score = 20.0 if hist_last < hist_prev else 35.0
     else:
         score = 50.0
-    return round(score, 1), {"dif": round(dif_last, 4), "dea": round(dea_last, 4),
-                             "hist": round(hist_last, 4)}
+    return round(score, 1), {"dif": round(dif_last, 4), "dea": round(dea_last, 4), "hist": round(hist_last, 4)}
 
 
 # ── 维度3：RSI（6/12/24 超买超卖）─────────────────────────────────────
+
 
 def _rsi(closes: list[float], period: int) -> float | None:
     """RSI（Wilder 简化版）。"""
@@ -155,6 +163,7 @@ def score_rsi(bars: list[dict]) -> tuple[float, dict]:
 
 # ── 维度4：量能（量比）─────────────────────────────────────────────────
 
+
 def score_volume(bars: list[dict]) -> tuple[float, dict]:
     """量比评分。量比 1-2 健康放量高分，>5 异常低分，<0.5 缩量低分。"""
     vols = [float(b.get("volume", 0) or 0) for b in bars if b.get("volume") is not None]
@@ -179,6 +188,7 @@ def score_volume(bars: list[dict]) -> tuple[float, dict]:
 
 
 # ── 维度5：乖离率（BIAS vs MA20）──────────────────────────────────────
+
 
 def score_bias(bars: list[dict]) -> tuple[float, dict]:
     """乖离率评分。BIAS 在 ±5% 内高分（无追高风险），>5% 追高低分，<-5% 超卖高分。"""
@@ -207,6 +217,7 @@ def score_bias(bars: list[dict]) -> tuple[float, dict]:
 
 # ── 维度6：支撑/压力位 ────────────────────────────────────────────────
 
+
 def score_support(bars: list[dict]) -> tuple[float, dict]:
     """支撑/压力位评分。近支撑（+5% 内）高分，近压力（-5% 内）低分。
 
@@ -234,12 +245,16 @@ def score_support(bars: list[dict]) -> tuple[float, dict]:
         score = 65.0
     else:  # 离压力近
         score = 45.0
-    return round(score, 1), {"support": support, "resistance": resistance,
-                             "dist_support_pct": round(dist_support_pct, 2),
-                             "dist_resist_pct": round(dist_resist_pct, 2)}
+    return round(score, 1), {
+        "support": support,
+        "resistance": resistance,
+        "dist_support_pct": round(dist_support_pct, 2),
+        "dist_resist_pct": round(dist_resist_pct, 2),
+    }
 
 
 # ── 合成：100 分 + 信号 ───────────────────────────────────────────────
+
 
 def compute_tech_score(bars: list[dict]) -> dict:
     """6 维合成 100 分 + 信号映射（等权，不 flat 先验权重防过拟合）。
@@ -252,8 +267,12 @@ def compute_tech_score(bars: list[dict]) -> dict:
         bars < 60 → {total_score:0, signal:观望, reason}。
     """
     if not bars or len(bars) < 60:
-        return {"total_score": 0.0, "signal": SIGNAL_WATCH,
-                "reason": f"bars 不足（{len(bars) if bars else 0} < 60）", "n_bars": len(bars) if bars else 0}
+        return {
+            "total_score": 0.0,
+            "signal": SIGNAL_WATCH,
+            "reason": f"bars 不足（{len(bars) if bars else 0} < 60）",
+            "n_bars": len(bars) if bars else 0,
+        }
     ma_s, ma_raw = score_ma(bars)
     macd_s, macd_raw = score_macd(bars)
     rsi_s, rsi_raw = score_rsi(bars)
@@ -277,6 +296,18 @@ def compute_tech_score(bars: list[dict]) -> dict:
     }
 
 
-__all__ = ["compute_tech_score", "score_to_signal",
-           "score_ma", "score_macd", "score_rsi", "score_volume", "score_bias", "score_support",
-           "SIGNAL_STRONG_BUY", "SIGNAL_BUY", "SIGNAL_HOLD", "SIGNAL_WATCH", "SIGNAL_STRONG_SELL"]
+__all__ = [
+    "compute_tech_score",
+    "score_to_signal",
+    "score_ma",
+    "score_macd",
+    "score_rsi",
+    "score_volume",
+    "score_bias",
+    "score_support",
+    "SIGNAL_STRONG_BUY",
+    "SIGNAL_BUY",
+    "SIGNAL_HOLD",
+    "SIGNAL_WATCH",
+    "SIGNAL_STRONG_SELL",
+]

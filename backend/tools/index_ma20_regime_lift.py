@@ -11,6 +11,7 @@ Methodology (§44 v2 strict):
   4. Cost: 逐笔 _cost_pct（5元门 size-dependent，S201b）; one-word D-day boards excluded (sealed, unbuyable)
   5. No extrapolation (regime-edge on selection != full-pipeline edge)
 """
+
 import datetime
 import json
 import sqlite3
@@ -35,12 +36,14 @@ from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-dat
 from tools.first_board_premium_baseline import _load_kline_cache  # noqa: E402  # S204 T1: enriched baostock cache（pctChg 0.0/None 一字板修复）
 from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
+
 KLINE = resolve_data_dir() / "baostock_kline_cache.json"
 ZT_DB = resolve_data_dir() / "zt_history.db"
 REGIME_F = resolve_data_dir() / "index_ma20_regime.json"
-TOL = 0.01           # one-word board price tolerance
+TOL = 0.01  # one-word board price tolerance
 MA_WINDOW = 20
-N_PERM = 10000       # permutation iterations
+N_PERM = 10000  # permutation iterations
+
 
 # ---- limit-up thresholds by board prefix ----
 def is_limit_up(code, pctchg):
@@ -48,10 +51,17 @@ def is_limit_up(code, pctchg):
     if pctchg is None:
         return False
     if code.startswith("30") or code.startswith("688"):
-        return 19.5 <= pctchg <= 20.5    # ChiNext / STAR: +20%
-    if code.startswith("8") or code.startswith("43") or code.startswith("83") or code.startswith("87") or code.startswith("92"):
-        return 29.0 <= pctchg <= 30.5     # BSE: +30% (broad catch)
-    return 9.8 <= pctchg <= 10.2          # main board: +10%
+        return 19.5 <= pctchg <= 20.5  # ChiNext / STAR: +20%
+    if (
+        code.startswith("8")
+        or code.startswith("43")
+        or code.startswith("83")
+        or code.startswith("87")
+        or code.startswith("92")
+    ):
+        return 29.0 <= pctchg <= 30.5  # BSE: +30% (broad catch)
+    return 9.8 <= pctchg <= 10.2  # main board: +10%
+
 
 def is_one_word_d(bar):
     """D-day one-word board: open≈high≈low≈close (sealed, unbuyable)."""
@@ -60,16 +70,18 @@ def is_one_word_d(bar):
         return False
     return abs(h - l) <= TOL and abs(o - c) <= TOL and abs(h - o) <= TOL
 
+
 def find_idx(bars, D):
     return next((i for i, b in enumerate(bars) if str(b["date"])[:10] == D), None)
+
 
 # ---- load data ----
 print("loading data...")
 cache = _load_kline_cache()  # S204 T1: enriched（一字板 pctChg=0.0/None 修复）
 # S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
-validate_or_reject("baostock_kline",
-                   [b for bars in cache.values() for b in bars],
-                   as_of=datetime.date.today().isoformat())
+validate_or_reject(
+    "baostock_kline", [b for bars in cache.values() for b in bars], as_of=datetime.date.today().isoformat()
+)
 regime = json.loads(REGIME_F.read_text())
 # NOTE: index_ma20_regime.json（index_ma20_regime_fetch 派生产物，dict_of_dicts）无对应 schema — 派生 artifact
 
@@ -84,7 +96,7 @@ print(f"zt_history final pairs: {len(zt_set)}")
 # ---- build observations ----
 # Strategy: iterate kline cache, identify limit-up days by pctChg, compute gap.
 # Mark whether the (date, code) is in zt_history for cross-validation.
-obs = []          # {D, code, gap, net_gap, win, regime, from_zt}
+obs = []  # {D, code, gap, net_gap, win, regime, from_zt}
 n_no_d1 = n_one_word = n_no_regime = n_codes = 0
 
 for code, bars in cache.items():
@@ -113,18 +125,22 @@ for code, bars in cache.items():
         # S201b: 逐笔 _cost_pct（entry=D close，overnight gap trade）
         cost = _cost_pct(float(d_close), 100.0, D)
         net_gap = gap - cost
-        obs.append({
-            "D": D,
-            "code": code,
-            "gap": gap,
-            "net_gap": net_gap,
-            "win": 1 if net_gap > 0 else 0,
-            "regime": reg["regime"],
-            "from_zt": (D, code) in zt_set,
-            "cost": cost,
-        })
+        obs.append(
+            {
+                "D": D,
+                "code": code,
+                "gap": gap,
+                "net_gap": net_gap,
+                "win": 1 if net_gap > 0 else 0,
+                "regime": reg["regime"],
+                "from_zt": (D, code) in zt_set,
+                "cost": cost,
+            }
+        )
 
-print(f"scanned {n_codes} codes | obs={len(obs)} | excluded: no_d1={n_no_d1} one_word={n_one_word} no_regime={n_no_regime}")
+print(
+    f"scanned {n_codes} codes | obs={len(obs)} | excluded: no_d1={n_no_d1} one_word={n_one_word} no_regime={n_no_regime}"
+)
 unique_days = sorted(set(o["D"] for o in obs))
 print(f"unique days={len(unique_days)} | zt-tagged={sum(1 for o in obs if o['from_zt'])}")
 
@@ -137,21 +153,25 @@ day_summary = []  # {D, regime, n, mean_gap, mean_net_gap, wr}
 for D in unique_days:
     picks = day_data[D]
     reg = picks[0]["regime"]  # regime is day-level, same for all picks that day
-    day_summary.append({
-        "D": D,
-        "regime": reg,
-        "n": len(picks),
-        "mean_gap": statistics.mean(o["gap"] for o in picks),
-        "mean_net_gap": statistics.mean(o["net_gap"] for o in picks),
-        "wr": sum(o["win"] for o in picks) / len(picks),
-    })
+    day_summary.append(
+        {
+            "D": D,
+            "regime": reg,
+            "n": len(picks),
+            "mean_gap": statistics.mean(o["gap"] for o in picks),
+            "mean_net_gap": statistics.mean(o["net_gap"] for o in picks),
+            "wr": sum(o["win"] for o in picks) / len(picks),
+        }
+    )
 
 strong_days = [d for d in day_summary if d["regime"] == "strong"]
 weak_days = [d for d in day_summary if d["regime"] == "weak"]
 
+
 def agg(days, key):
     vals = [d[key] for d in days]
     return vals
+
 
 # ---- §44 v2 stats ----
 print("\n" + "=" * 70)
@@ -170,13 +190,21 @@ for label, days in [("strong(bull)", strong_days), ("weak(bear)", weak_days)]:
     ns = agg(days, "n")
     total_picks = sum(ns)
     print(f"  {label}: n_days={len(days)} n_picks={total_picks}")
-    print(f"    gross_gap mean={statistics.mean(mg):.2f}% net_gap mean={statistics.mean(ng):.2f}% net_WR mean={statistics.mean(wr)*100:.1f}%")
-    print(f"    net_gap median={statistics.median(ng):.2f}% net_gap std={statistics.pstdev(ng):.2f}%" if len(ng) > 1 else "")
+    print(
+        f"    gross_gap mean={statistics.mean(mg):.2f}% net_gap mean={statistics.mean(ng):.2f}% net_WR mean={statistics.mean(wr) * 100:.1f}%"
+    )
+    print(
+        f"    net_gap median={statistics.median(ng):.2f}% net_gap std={statistics.pstdev(ng):.2f}%"
+        if len(ng) > 1
+        else ""
+    )
 
 # overall
 all_ng = [o["net_gap"] for o in obs]
 all_wr = sum(o["win"] for o in obs) / len(obs)
-print(f"  ALL: n_days={len(day_summary)} n_picks={len(obs)} net_gap mean={statistics.mean(all_ng):.2f}% net_WR={all_wr*100:.1f}%")
+print(
+    f"  ALL: n_days={len(day_summary)} n_picks={len(obs)} net_gap mean={statistics.mean(all_ng):.2f}% net_WR={all_wr * 100:.1f}%"
+)
 
 # 2. day_paired lift (strong vs weak)
 print("\n[2] day_paired lift (strong vs weak, per-day means):")
@@ -195,8 +223,8 @@ else:
     lift_s = mean_s / base if base != 0 else float("inf")
     lift_w = mean_w / base if base != 0 else float("inf")
     ratio = mean_s / mean_w if mean_w != 0 else float("inf")
-    print(f"  strong: mean_net_gap={mean_s:.2f}% WR={wr_s*100:.1f}% (n_days={len(strong_days)})")
-    print(f"  weak:   mean_net_gap={mean_w:.2f}% WR={wr_w*100:.1f}% (n_days={len(weak_days)})")
+    print(f"  strong: mean_net_gap={mean_s:.2f}% WR={wr_s * 100:.1f}% (n_days={len(strong_days)})")
+    print(f"  weak:   mean_net_gap={mean_w:.2f}% WR={wr_w * 100:.1f}% (n_days={len(weak_days)})")
     print(f"  lift(strong/all)={lift_s:.3f}x  lift(weak/all)={lift_w:.3f}x  ratio(strong/weak)={ratio:.3f}x")
     print(f"  {'VALIDATED (>=2x)' if max(lift_s, lift_w, ratio) >= 2 else 'NO validated edge (<2x)'}")
 
@@ -278,9 +306,13 @@ if zt_obs:
     print(f"  zt picks={len(zt_obs)} strong_picks={len(zt_strong)} weak_picks={len(zt_weak)}")
     print(f"  zt strong days={len(zt_strong_days)} weak days={len(zt_weak_days)}")
     if zt_strong:
-        print(f"  zt strong: net_gap mean={statistics.mean(o['net_gap'] for o in zt_strong):.2f}% WR={sum(o['win'] for o in zt_strong)*100/len(zt_strong):.1f}%")
+        print(
+            f"  zt strong: net_gap mean={statistics.mean(o['net_gap'] for o in zt_strong):.2f}% WR={sum(o['win'] for o in zt_strong) * 100 / len(zt_strong):.1f}%"
+        )
     if zt_weak:
-        print(f"  zt weak:   net_gap mean={statistics.mean(o['net_gap'] for o in zt_weak):.2f}% WR={sum(o['win'] for o in zt_weak)*100/len(zt_weak):.1f}%")
+        print(
+            f"  zt weak:   net_gap mean={statistics.mean(o['net_gap'] for o in zt_weak):.2f}% WR={sum(o['win'] for o in zt_weak) * 100 / len(zt_weak):.1f}%"
+        )
 else:
     print("  no zt_history overlap")
 
@@ -298,11 +330,12 @@ else:
         statistics.mean(agg(strong_days, "mean_net_gap")) / (statistics.mean(all_ng) or 1),
         statistics.mean(agg(weak_days, "mean_net_gap")) / (statistics.mean(all_ng) or 1),
     )
-    ratio_val = (statistics.mean(agg(strong_days, "mean_net_gap")) /
-                 (statistics.mean(agg(weak_days, "mean_net_gap")) or 1))
+    ratio_val = statistics.mean(agg(strong_days, "mean_net_gap")) / (
+        statistics.mean(agg(weak_days, "mean_net_gap")) or 1
+    )
     print(f"  days={len(day_summary)} ({len(strong_days)} strong / {len(weak_days)} weak) picks={len(obs)}")
     print(f"  max lift vs all = {max_lift:.3f}x | strong/weak ratio = {ratio_val:.3f}x")
-    if max_lift >= 2 or (p_perm < 0.05 if 'p_perm' in dir() else False):
+    if max_lift >= 2 or (p_perm < 0.05 if "p_perm" in dir() else False):
         print("  → EDGE: regime conditions gap (validated or significant)")
     else:
         print("  → NO EDGE: regime does not meaningfully condition gap (<2x lift, not significant)")
@@ -346,8 +379,12 @@ for _arm_name, _arm_days in _s168_arms:
         round_trip_cost=sum(o["cost"] for o in obs) / len(obs) if obs else 0.0,
         script="tools/index_ma20_regime_lift.py",
         params={
-            "arm": _arm_name, "cost_pct": "per_trade", "regime": _arm_name,
-            "ma_window": MA_WINDOW, "n_perm": N_PERM,
-            "one_word_excluded": True, "tol": TOL,
+            "arm": _arm_name,
+            "cost_pct": "per_trade",
+            "regime": _arm_name,
+            "ma_window": MA_WINDOW,
+            "n_perm": N_PERM,
+            "one_word_excluded": True,
+            "tol": TOL,
         },
     )

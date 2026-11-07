@@ -7,6 +7,7 @@
 数据：shareholder_count_cache.json (5187 股, 430927 records, 2013-2026) + baostock_kline_cache.db (5248 股, 但多数仅 2024-2026 近期)
 Caveat：kline 仅近期 → 测的是 2024-2026 子集（survivorship 偏差 + 单 regime）
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -115,12 +116,22 @@ def build_picks(holder_cache, kline_map, calendar, threshold, hold_days=HOLD_DAY
             limit = limit_for_code(code, is_st)
             if is_yizi_t1(t1, t_close, limit):
                 continue
-            picks.append({
-                "code": code, "notice_date": nd, "t1_date": t1_date, "exit_date": exit_date,
-                "change_ratio": cr, "entry": entry, "exit_close": exit_close,
-                "t_close": t_close, "t1_bar": t1, "ex_bar": ex, "is_st": is_st,
-                "zt_date": nd,  # 兼容 helper.walk_forward 排序
-            })
+            picks.append(
+                {
+                    "code": code,
+                    "notice_date": nd,
+                    "t1_date": t1_date,
+                    "exit_date": exit_date,
+                    "change_ratio": cr,
+                    "entry": entry,
+                    "exit_close": exit_close,
+                    "t_close": t_close,
+                    "t1_bar": t1,
+                    "ex_bar": ex,
+                    "is_st": is_st,
+                    "zt_date": nd,  # 兼容 helper.walk_forward 排序
+                }
+            )
     return picks
 
 
@@ -176,22 +187,26 @@ def walk_forward(picks, ret_fn, calendar):
         if r is not None:
             test_by_date[p["notice_date"]].append(r)
     return {
-        "status": "ok", "n_train": len(train_rets), "n_test": len(test_rets),
-        "n_train_dates": len(train_dates), "n_test_dates": len(test_dates),
-        "train_ev": ev_stats(train_rets), "test_ev": ev_stats(test_rets),
-        "train_day_t": day_paired_t(train_by_date), "test_day_t": day_paired_t(test_by_date),
+        "status": "ok",
+        "n_train": len(train_rets),
+        "n_test": len(test_rets),
+        "n_train_dates": len(train_dates),
+        "n_test_dates": len(test_dates),
+        "train_ev": ev_stats(train_rets),
+        "test_ev": ev_stats(test_rets),
+        "train_day_t": day_paired_t(train_by_date),
+        "test_day_t": day_paired_t(test_by_date),
     }
 
 
 def verdict_for_holder(ev_gross, t_day, p_raw, wf, n_days, net_ev, label, n_bonf):
     p_bonf = bonferroni_p(p_raw, n_bonf)
     print(f"\n  {label}:")
-    print(f"    gross_EV={ev_gross}% net_EV={net_ev}% day_t={t_day} "
-          f"Bonf_p(×{n_bonf})={p_bonf:.6f} n_days={n_days}")
+    print(f"    gross_EV={ev_gross}% net_EV={net_ev}% day_t={t_day} Bonf_p(×{n_bonf})={p_bonf:.6f} n_days={n_days}")
     if wf["status"] == "ok":
-        tr = wf["train_ev"]; te = wf["test_ev"]
-        print(f"    walk-forward: train_EV={tr['ev']}% test_EV={te['ev']}% "
-              f"test_p={wf['test_day_t']['p_one_sided']}")
+        tr = wf["train_ev"]
+        te = wf["test_ev"]
+        print(f"    walk-forward: train_EV={tr['ev']}% test_EV={te['ev']}% test_p={wf['test_day_t']['p_one_sided']}")
     if ev_gross < 0:
         print(f"    → FALSIFIED: gross EV < 0")
         return "falsified"
@@ -234,8 +249,10 @@ def main():
     index_map = load_index()
     calendar = sorted(all_dates)
     date_idx = {d: i for i, d in enumerate(calendar)}
-    print(f"\n[数据] holder codes={len(holder)}, kline codes={len(kline_map)}, "
-          f"calendar {calendar[0]}~{calendar[-1]} ({len(calendar)} dates)")
+    print(
+        f"\n[数据] holder codes={len(holder)}, kline codes={len(kline_map)}, "
+        f"calendar {calendar[0]}~{calendar[-1]} ({len(calendar)} dates)"
+    )
 
     # BHAR 需要 index 同窗口
     def bhar_fn(p):
@@ -247,9 +264,9 @@ def main():
 
     for thr in THRESHOLDS:
         picks = build_picks(holder, kline_map, calendar, thr, HOLD_DAYS)
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"阈值 change_ratio<{thr}%: n_picks={len(picks)}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         if not picks:
             print("  无 picks")
             continue
@@ -273,22 +290,31 @@ def main():
                 bhar_by_date[p["notice_date"]].append(r)
         bhar_dt = day_paired_t(bhar_by_date) if bhar_by_date else None
 
-        print(f"\n  raw_ev: gross={raw_s['ev']:+.4f}% net={raw_s['ev']-COST:+.4f}% "
-              f"WR={raw_s['wr']}% day_t={raw_dt['t']} p={raw_dt['p_one_sided']} "
-              f"n_days={raw_dt['n_days']}")
+        print(
+            f"\n  raw_ev: gross={raw_s['ev']:+.4f}% net={raw_s['ev'] - COST:+.4f}% "
+            f"WR={raw_s['wr']}% day_t={raw_dt['t']} p={raw_dt['p_one_sided']} "
+            f"n_days={raw_dt['n_days']}"
+        )
         if bhar_s:
-            print(f"  BHAR(vs沪深300): gross={bhar_s['ev']:+.4f}% net={bhar_s['ev']-COST:+.4f}% "
-                  f"day_t={bhar_dt['t']} p={bhar_dt['p_one_sided']}")
-        print(f"  beta 漂移 = raw - BHAR = {raw_s['ev']-bhar_s['ev'] if bhar_s else 0:+.4f}%")
+            print(
+                f"  BHAR(vs沪深300): gross={bhar_s['ev']:+.4f}% net={bhar_s['ev'] - COST:+.4f}% "
+                f"day_t={bhar_dt['t']} p={bhar_dt['p_one_sided']}"
+            )
+        print(f"  beta 漂移 = raw - BHAR = {raw_s['ev'] - bhar_s['ev'] if bhar_s else 0:+.4f}%")
 
         # walk-forward
         wf = walk_forward(picks, raw_ev, calendar)
 
         # verdict (用 raw_ev 主口径, BHAR 辅助)
         v = verdict_for_holder(
-            ev_gross=raw_s['ev'], t_day=raw_dt['t'], p_raw=raw_dt['p_one_sided'],
-            wf=wf, n_days=raw_dt['n_days'], net_ev=raw_s['ev']-COST,
-            label=f"change_ratio<{thr}% (raw_ev)", n_bonf=n_bonf
+            ev_gross=raw_s["ev"],
+            t_day=raw_dt["t"],
+            p_raw=raw_dt["p_one_sided"],
+            wf=wf,
+            n_days=raw_dt["n_days"],
+            net_ev=raw_s["ev"] - COST,
+            label=f"change_ratio<{thr}% (raw_ev)",
+            n_bonf=n_bonf,
         )
 
         # flaw 检查
@@ -302,9 +328,11 @@ def main():
                 print(f"  flaw5 拥挤倒U: train={tr_ev}% test={te_ev}% decay={decay:.0f}%")
         # flaw 9: phantom alpha（BHAR vs raw_ev 差）
         if bhar_s:
-            phantom = bhar_s['ev'] - raw_s['ev']
-            print(f"  flaw9 phantom: BHAR-raw={phantom:+.4f}% "
-                  f"({'BHAR>raw=可能虚增' if phantom > 0.1 else 'BHAR<=raw=保守'})")
+            phantom = bhar_s["ev"] - raw_s["ev"]
+            print(
+                f"  flaw9 phantom: BHAR-raw={phantom:+.4f}% "
+                f"({'BHAR>raw=可能虚增' if phantom > 0.1 else 'BHAR<=raw=保守'})"
+            )
         # flaw 1: 一字涨停跳过数
         # flaw 2: survivorship (kline 仅有近期=已知)
         print(f"  flaw2 survivorship: kline 仅近期 → 测的是存活股（已知偏差）")

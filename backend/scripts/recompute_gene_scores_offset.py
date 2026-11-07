@@ -40,6 +40,7 @@ fix-18 上轮重算 08-17~08-21 后，发现 08-13/08-14 仍偏移一天：
     gene_scores 08-14(59) = zt_history 08-13 的池  ← 错位
 本次把 ``TARGET_DATES`` 改为 ``['2026-08-13','2026-08-14']`` 重算对齐。
 """
+
 from __future__ import annotations
 
 import argparse
@@ -73,24 +74,18 @@ SLEEP_BETWEEN_DATES = 2.0
 
 def _gs_codes(d: str, conn: sqlite3.Connection) -> set[str]:
     """gene_scores 某日 code 集合。"""
-    rows = conn.execute(
-        "SELECT code FROM gene_scores WHERE date = ?", (d,)
-    ).fetchall()
+    rows = conn.execute("SELECT code FROM gene_scores WHERE date = ?", (d,)).fetchall()
     return {r[0] for r in rows}
 
 
 def _zh_codes(d: str, conn: sqlite3.Connection) -> set[str]:
     """zt_history 某日 code 集合（最终稳定池）。"""
-    rows = conn.execute(
-        "SELECT code FROM zt_history WHERE date = ?", (d,)
-    ).fetchall()
+    rows = conn.execute("SELECT code FROM zt_history WHERE date = ?", (d,)).fetchall()
     return {r[0] for r in rows}
 
 
 def _gs_count(d: str, conn: sqlite3.Connection) -> int:
-    return conn.execute(
-        "SELECT COUNT(*) FROM gene_scores WHERE date = ?", (d,)
-    ).fetchone()[0]
+    return conn.execute("SELECT COUNT(*) FROM gene_scores WHERE date = ?", (d,)).fetchone()[0]
 
 
 def _print_before_state(conn: sqlite3.Connection) -> dict[str, int]:
@@ -159,7 +154,7 @@ async def _run_apply() -> int:
 
     print("=== 开始重算 ===")
     for i, d in enumerate(TARGET_DATES):
-        print(f"[{i+1}/{len(TARGET_DATES)}] {d}")
+        print(f"[{i + 1}/{len(TARGET_DATES)}] {d}")
         try:
             await _recompute_one(d)
         except Exception as e:
@@ -208,8 +203,8 @@ def _verify() -> int:
             all_ok = False
             print(
                 f"  {d}: 不等 [FAIL] gs={len(gs_set)} zh={len(zh_set)} "
-                f"only_gs={sorted(only_gs)[:5]}{'...' if len(only_gs)>5 else ''} "
-                f"only_zh={sorted(only_zh)[:5]}{'...' if len(only_zh)>5 else ''}"
+                f"only_gs={sorted(only_gs)[:5]}{'...' if len(only_gs) > 5 else ''} "
+                f"only_zh={sorted(only_zh)[:5]}{'...' if len(only_zh) > 5 else ''}"
             )
     print()
 
@@ -217,13 +212,12 @@ def _verify() -> int:
     # SQLite CURRENT_TIMESTAMP 默认 UTC，北京时间凌晨会落在前一 UTC 日。
     # 误差 ±1 日视为通过（重算动作发生在今天才是关注点，非时区精确性）。
     from datetime import date as _date, timedelta as _td
+
     today_d = _date.today()
     ok_dates = {today_d.isoformat(), (today_d - _td(days=1)).isoformat()}
     print("--- c. updated_at 应为今天（重算时间戳，±1日/UTC）---")
     for d in TARGET_DATES:
-        row = gs_conn.execute(
-            "SELECT MAX(updated_at) AS ua FROM gene_scores WHERE date = ?", (d,)
-        ).fetchone()
+        row = gs_conn.execute("SELECT MAX(updated_at) AS ua FROM gene_scores WHERE date = ?", (d,)).fetchone()
         ua = row[0] if row else None
         # updated_at 格式 "YYYY-MM-DD HH:MM:SS"，取前 10 字符比对日期
         ua_date = str(ua)[:10] if ua else ""
@@ -254,9 +248,7 @@ def _dry_run() -> int:
     print("=== zt_history 最终池行数（基准）===")
     zh_conn = sqlite3.connect(ZT_HISTORY_DB_PATH)
     for d in TARGET_DATES:
-        cnt = zh_conn.execute(
-            "SELECT COUNT(*) FROM zt_history WHERE date = ?", (d,)
-        ).fetchone()[0]
+        cnt = zh_conn.execute("SELECT COUNT(*) FROM zt_history WHERE date = ?", (d,)).fetchone()[0]
         print(f"  {d}: {cnt}")
     zh_conn.close()
 
@@ -274,9 +266,7 @@ def _dry_run() -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="重算 gene_scores 表历史行日期错位（08-13/08-14）"
-    )
+    parser = argparse.ArgumentParser(description="重算 gene_scores 表历史行日期错位（08-13/08-14）")
     parser.add_argument(
         "--apply",
         action="store_true",

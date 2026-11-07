@@ -9,6 +9,7 @@ S161 Recorder 接 ``data_snapshot_id = latest_snapshot_id(source, data_date)``�
 S162 engine 回测读 ``query_as_of(source, data_date, as_of=verdict_as_of)`` 替代
 live kline_cache（复现性）。
 """
+
 from __future__ import annotations
 
 from .store import SnapshotStore
@@ -30,9 +31,7 @@ def reset_default(store: SnapshotStore | None = None) -> None:
     _default = store
 
 
-def query_as_of(
-    source: str, data_date: str | None, as_of: str | None = None
-) -> bytes | None:
+def query_as_of(source: str, data_date: str | None, as_of: str | None = None) -> bytes | None:
     """point-in-time 查询：≤ as_of 最近快照 raw（as_of=None → 最新）。无匹配返 None。"""
     return _store().query_as_of(source, data_date, as_of)
 

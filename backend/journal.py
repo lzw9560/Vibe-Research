@@ -19,6 +19,7 @@
 S166 fresh-impl（design-agnostic）。_settle 移动加权平均算法参考自 cb54a96 历史，
 非整文件复活——文件结构、注释、接线按当前 develop 重写。
 """
+
 from __future__ import annotations
 
 import datetime
@@ -61,9 +62,9 @@ PLAYBOOKS = ["打板", "低吸", "接力", "半路", "套利", "其它"]
 
 # 交易费用初值（能跑起来，非推荐值非真实费率——请按自己账户实际费率改）。
 DEFAULT_FEES = {
-    "commission_rate": 0.00025,    # 佣金费率（双向），万 2.5
-    "commission_min": 5.0,         # 单笔佣金最低收取（元）
-    "stamp_tax_rate": 0.0005,      # 印花税，仅卖出收
+    "commission_rate": 0.00025,  # 佣金费率（双向），万 2.5
+    "commission_min": 5.0,  # 单笔佣金最低收取（元）
+    "stamp_tax_rate": 0.0005,  # 印花税，仅卖出收
     "transfer_fee_rate": 0.00001,  # 过户费（双向）
 }
 _FEE_LABELS = {
@@ -90,6 +91,7 @@ def load_fees() -> dict:
                 return cfg
     except Exception as e:  # noqa: BLE001  配置坏了退回初值，但要标出来
         import logging
+
         logging.getLogger(__name__).warning("journal 配置坏了退回初值: %s", e)
     cfg["is_default"] = True
     return cfg
@@ -151,8 +153,7 @@ def _load_raw() -> list[dict]:
         with open(path, encoding="utf-8") as fh:
             d = json.load(fh)
     except Exception as exc:  # noqa: BLE001
-        raise JournalCorrupted(
-            f"账本文件无法解析（{type(exc).__name__}），已停止写入以防覆盖：{path}") from exc
+        raise JournalCorrupted(f"账本文件无法解析（{type(exc).__name__}），已停止写入以防覆盖：{path}") from exc
     if not isinstance(d, dict) or "trades" not in d:
         raise JournalCorrupted(f"账本文件结构异常，已停止写入以防覆盖：{path}")
     got = d.get("schema")
@@ -160,8 +161,7 @@ def _load_raw() -> list[dict]:
         # 能自动迁移的就迁，别让老用户卡死。迁移前先备份——账本是永久数据，宁可多留一份。
         trades = _migrate(got, d.get("trades") or [])
         if trades is None:
-            raise JournalCorrupted(
-                f"账本 schema={got} 无法自动迁移到 {_SCHEMA}，已停止写入：{path}")
+            raise JournalCorrupted(f"账本 schema={got} 无法自动迁移到 {_SCHEMA}，已停止写入：{path}")
         return trades
     return d.get("trades") or []
 
@@ -238,9 +238,9 @@ def _market_context(date: str) -> dict:
     return {
         "emotion_phase": review.get("sti_phase"),
         "money_effect_median": review.get("money_effect_median"),
-        "promotion_overall": None,          # ReviewReport 无此字段，不臆造
+        "promotion_overall": None,  # ReviewReport 无此字段，不臆造
         "limit_up_count": review.get("zt_total"),
-        "never_broken_rate": None,           # 无此字段，不臆造
+        "never_broken_rate": None,  # 无此字段，不臆造
         "has_review": bool(review),
     }
 
@@ -272,19 +272,25 @@ def _stock_context(date: str, code: str) -> dict:
     for r in zt or []:
         if str(r.get("c", "")).zfill(6) == code:
             return {
-                "in_limit_up": True, "boards": int(r.get("lbc") or 1),
+                "in_limit_up": True,
+                "boards": int(r.get("lbc") or 1),
                 "first_seal": str(r.get("fbt") or "") or None,
                 "last_seal": str(r.get("lbt") or "") or None,
                 "broken_times": int(r.get("zbc") or 0),
-                "sector": r.get("hybk") or "", "board_type": _board_type(code),
+                "sector": r.get("hybk") or "",
+                "board_type": _board_type(code),
                 "has_stock": True,
             }
     for r in zb or []:
         if str(r.get("c", "")).zfill(6) == code:
-            return {"in_limit_up": False, "was_broken": True,
-                    "broken_times": int(r.get("zbc") or 0),
-                    "sector": r.get("hybk") or "", "board_type": _board_type(code),
-                    "has_stock": True}
+            return {
+                "in_limit_up": False,
+                "was_broken": True,
+                "broken_times": int(r.get("zbc") or 0),
+                "sector": r.get("hybk") or "",
+                "board_type": _board_type(code),
+                "has_stock": True,
+            }
     # pool 非空 + stock 不在 → verified 非涨停；pool 空 → fetch 失败/无数据 → unknown
     if pool_has_data:
         return {"in_limit_up": False, "has_stock": True}
@@ -327,8 +333,7 @@ def _norm_fills(fills: list[dict]) -> list[dict]:
         for v, label in ((price, "价格"), (shares, "股数")):
             if v != v or v in (float("inf"), float("-inf")) or v <= 0:
                 raise ValueError(f"第 {i + 1} 笔的{label}必须是正有限数")
-        row = {"side": side, "date": d, "price": round(price, 4),
-               "shares": round(shares, 2)}
+        row = {"side": side, "date": d, "price": round(price, 4), "shares": round(shares, 2)}
         # 可选：这笔成交的实际费用（对账单上的数）。填了就以它为准，不再按费率估。
         if f.get("fee") not in (None, ""):
             try:
@@ -383,18 +388,18 @@ def _settle(fills: list[dict], fees_cfg: Optional[dict] = None) -> dict:
         raise ValueError("成交明细里只有卖出没有买入，无法结算：请补上买入成交")
 
     cfg = fees_cfg if fees_cfg is not None else load_fees()
-    pos_shares = 0.0        # 当前持仓股数
-    pos_cost = 0.0          # 当前持仓总成本
-    pos_fee = 0.0           # 当前持仓对应的、尚未结转的买入费用
-    realized_pnl = 0.0      # 累计已实现毛盈亏
-    realized_cost = 0.0     # 已实现部分对应的成本（算百分比的分母）
+    pos_shares = 0.0  # 当前持仓股数
+    pos_cost = 0.0  # 当前持仓总成本
+    pos_fee = 0.0  # 当前持仓对应的、尚未结转的买入费用
+    realized_pnl = 0.0  # 累计已实现毛盈亏
+    realized_cost = 0.0  # 已实现部分对应的成本（算百分比的分母）
     realized_shares = 0.0
-    realized_fee = 0.0      # 已实现部分对应的费用（买入分摊 + 卖出）
+    realized_fee = 0.0  # 已实现部分对应的费用（买入分摊 + 卖出）
     # ⚠️ 按每笔卖出发生的那一天记净盈亏。整笔累计额全挂到最后一次卖出的话，分两天减仓时
     #    两天的盈亏会被并到后一天——「单日最大亏损」这条规则就查不准。
     by_date: dict[str, float] = {}
-    peak_capital = 0.0      # 峰值占用资金
-    cycles = 0              # 持仓周期数（平仓后再买算新的一轮）
+    peak_capital = 0.0  # 峰值占用资金
+    cycles = 0  # 持仓周期数（平仓后再买算新的一轮）
 
     for n, f in enumerate(fills, 1):
         if f["side"] == "buy":
@@ -407,22 +412,21 @@ def _settle(fills: list[dict], fees_cfg: Optional[dict] = None) -> dict:
         else:
             if f["shares"] > pos_shares + 1e-6:
                 raise ValueError(
-                    f"第 {n} 笔卖出 {f['shares']:g} 股，超过当时持有的 "
-                    f"{pos_shares:g} 股 —— 请检查成交明细的顺序与数量")
-            unit = pos_cost / pos_shares            # 卖出那一刻的持仓均价
-            ratio = f["shares"] / pos_shares        # 这次卖掉了当前持仓的几成
+                    f"第 {n} 笔卖出 {f['shares']:g} 股，超过当时持有的 {pos_shares:g} 股 —— 请检查成交明细的顺序与数量"
+                )
+            unit = pos_cost / pos_shares  # 卖出那一刻的持仓均价
+            ratio = f["shares"] / pos_shares  # 这次卖掉了当前持仓的几成
             realized_pnl += (f["price"] - unit) * f["shares"]
             realized_cost += unit * f["shares"]
             realized_shares += f["shares"]
             # 买入费用按卖出比例结转 + 这次卖出自己的费用
             leg_fee = pos_fee * ratio + _fee_of(f, cfg)
             realized_fee += leg_fee
-            by_date[f["date"]] = round(
-                by_date.get(f["date"], 0.0) + (f["price"] - unit) * f["shares"] - leg_fee, 2)
+            by_date[f["date"]] = round(by_date.get(f["date"], 0.0) + (f["price"] - unit) * f["shares"] - leg_fee, 2)
             pos_fee -= pos_fee * ratio
             pos_cost -= unit * f["shares"]
             pos_shares -= f["shares"]
-            if pos_shares <= 1e-9:                  # 落到 0 就归零，别留浮点残渣
+            if pos_shares <= 1e-9:  # 落到 0 就归零，别留浮点残渣
                 pos_shares = pos_cost = pos_fee = 0.0
 
     sells = [f for f in fills if f["side"] == "sell"]
@@ -438,8 +442,8 @@ def _settle(fills: list[dict], fees_cfg: Optional[dict] = None) -> dict:
         "has_fills": True,
         "buy_shares": round(sum(f["shares"] for f in buys), 2),
         "sell_shares": round(sum(f["shares"] for f in sells), 2),
-        "open_shares": round(pos_shares, 2),        # 当前还持有多少
-        "cycles": cycles,                           # >1 表示这条记录里有多轮进出
+        "open_shares": round(pos_shares, 2),  # 当前还持有多少
+        "cycles": cycles,  # >1 表示这条记录里有多轮进出
         "avg_cost": round(avg_cost, 4),
         "amount": round(peak_capital, 2),
         "closed": bool(sells) and pos_shares <= 1e-9,
@@ -447,34 +451,41 @@ def _settle(fills: list[dict], fees_cfg: Optional[dict] = None) -> dict:
         "last_sell": sells[-1]["date"] if sells else None,
     }
     if sells:
-        out["avg_sell"] = round(
-            sum(f["price"] * f["shares"] for f in sells) / out["sell_shares"], 4)
+        out["avg_sell"] = round(sum(f["price"] * f["shares"] for f in sells) / out["sell_shares"], 4)
         net = realized_pnl - realized_fee
-        out["gross_pnl"] = round(realized_pnl, 2)      # 未计费用的毛额
+        out["gross_pnl"] = round(realized_pnl, 2)  # 未计费用的毛额
         out["fees"] = round(realized_fee, 2)
         out["fees_are_estimated"] = not all(f.get("fee") is not None for f in fills)
         # realized_pnl 是净额——下游全部统计（权益曲线/胜率/盈亏比/模式卡/归因）都读它，
         # 让它带费用才是使用者真正赚到的钱。
         out["realized_pnl"] = round(net, 2)
-        out["realized_by_date"] = by_date      # {成交日: 当天的净已实现盈亏}
+        out["realized_by_date"] = by_date  # {成交日: 当天的净已实现盈亏}
         out["realized_pct"] = round(net / realized_cost * 100, 2) if realized_cost else None
         # 持有天数按自然日算（跨周末的隔日单，日历天数才是真实占用时间）
         try:
             d0 = datetime.datetime.strptime(buys[0]["date"], "%Y-%m-%d")
             d1 = datetime.datetime.strptime(sells[-1]["date"], "%Y-%m-%d")
             out["hold_days"] = (d1 - d0).days
-            out["is_t0"] = out["hold_days"] == 0      # 当日买卖 = 做 T
+            out["is_t0"] = out["hold_days"] == 0  # 当日买卖 = 做 T
         except ValueError as e:
             import logging
+
             logging.getLogger(__name__).debug("journal parse 失败（降级，不阻塞）: %s", e)
     return out
 
 
-def add_trade(date: str, code: str, name: str, playbook: str,
-              pnl_pct: Optional[float] = None, as_planned: Optional[bool] = None,
-              note: str = "", fills: Optional[list[dict]] = None,
-              planned_stop: Optional[float] = None,
-              planned_target: Optional[float] = None) -> dict:
+def add_trade(
+    date: str,
+    code: str,
+    name: str,
+    playbook: str,
+    pnl_pct: Optional[float] = None,
+    as_planned: Optional[bool] = None,
+    note: str = "",
+    fills: Optional[list[dict]] = None,
+    planned_stop: Optional[float] = None,
+    planned_target: Optional[float] = None,
+) -> dict:
     """记一笔交易，并自动钉上当时的市场环境。
 
     两种记法（都支持，按你手边有什么填）：
@@ -531,9 +542,11 @@ def add_trade(date: str, code: str, name: str, playbook: str,
         # 买入日与卖出日的环境各存一份——只存一份会丢掉离场时的环境信息。
         "market": _market_context(settled.get("first_buy") or date),
         "stock": _stock_context(settled.get("first_buy") or date, code),
-        "exit_market": (_market_context(settled["last_sell"])
-                        if settled.get("last_sell") and settled["last_sell"] != (
-                            settled.get("first_buy") or date) else None),
+        "exit_market": (
+            _market_context(settled["last_sell"])
+            if settled.get("last_sell") and settled["last_sell"] != (settled.get("first_buy") or date)
+            else None
+        ),
     }
     with _LOCK:
         trades = _load_raw()
@@ -543,8 +556,9 @@ def add_trade(date: str, code: str, name: str, playbook: str,
     return {"ok": True, "trade": trade}
 
 
-def update_trade(trade_id: str, *, fills=None, note=None, as_planned=_UNSET,
-                 planned_stop=_UNSET, planned_target=_UNSET) -> dict:
+def update_trade(
+    trade_id: str, *, fills=None, note=None, as_planned=_UNSET, planned_stop=_UNSET, planned_target=_UNSET
+) -> dict:
     """更新一笔已有交易——主要用途是给持仓中的记录补上后来的成交。
 
     只能改传进来的字段，其余原样保留。传了 fills 就按新的明细整份重算。
@@ -563,7 +577,7 @@ def update_trade(trade_id: str, *, fills=None, note=None, as_planned=_UNSET,
 
         if fills is not None:
             norm = _norm_fills(fills)
-            settled = _settle(norm)             # 超卖等录入错误会在这里抛 ValueError
+            settled = _settle(norm)  # 超卖等录入错误会在这里抛 ValueError
             old_first_buy = (t.get("settled") or {}).get("first_buy")
             t["fills"] = norm
             t["settled"] = settled
@@ -580,9 +594,9 @@ def update_trade(trade_id: str, *, fills=None, note=None, as_planned=_UNSET,
             if first_buy and first_buy != old_first_buy:
                 t["market"] = _market_context(first_buy)
                 t["stock"] = _stock_context(first_buy, t.get("code") or "")
-            t["exit_market"] = (_market_context(last_sell)
-                                if last_sell and last_sell != (first_buy or t.get("date"))
-                                else None)
+            t["exit_market"] = (
+                _market_context(last_sell) if last_sell and last_sell != (first_buy or t.get("date")) else None
+            )
         if note is not None:
             t["note"] = str(note).strip()[:500]
         if as_planned is not _UNSET:
@@ -621,13 +635,11 @@ def all_trades() -> list[dict]:
     ⚠️ 持仓聚合与风控统计必须走这个：用 list_trades(limit=N) 的话，账本超过 N 条之后，
     较早但仍未平仓的记录会被静默漏掉——持仓少一只、在险资金偏小，而两边都不会报错。
     """
-    return sorted(_load_raw(), key=lambda t: (t.get("date", ""), t.get("created_at", "")),
-                  reverse=True)
+    return sorted(_load_raw(), key=lambda t: (t.get("date", ""), t.get("created_at", "")), reverse=True)
 
 
 def list_trades(limit: int = 200) -> dict:
-    trades = sorted(_load_raw(), key=lambda t: (t.get("date", ""), t.get("created_at", "")),
-                    reverse=True)
+    trades = sorted(_load_raw(), key=lambda t: (t.get("date", ""), t.get("created_at", "")), reverse=True)
     return {"trades": trades[:limit], "total": len(trades)}
 
 
@@ -637,12 +649,17 @@ def _bucket_stats(rows: list[dict]) -> dict:
     有成交明细的另外汇总盈亏金额——百分比与金额是两个口径，仓位不同时二者结论可能相反。
     """
     vals = [t["pnl_pct"] for t in rows if t.get("pnl_pct") is not None]
-    money = [t["settled"]["realized_pnl"] for t in rows
-             if isinstance(t.get("settled"), dict)
-             and t["settled"].get("realized_pnl") is not None]
-    base = {"count": len(rows), "scored": len(vals),
-            "money_scored": len(money),
-            "net_pnl": round(sum(money), 2) if money else None}
+    money = [
+        t["settled"]["realized_pnl"]
+        for t in rows
+        if isinstance(t.get("settled"), dict) and t["settled"].get("realized_pnl") is not None
+    ]
+    base = {
+        "count": len(rows),
+        "scored": len(vals),
+        "money_scored": len(money),
+        "net_pnl": round(sum(money), 2) if money else None,
+    }
     if not vals:
         return {**base, "win_rate": None, "avg": None, "best": None, "worst": None}
     wins = [v for v in vals if v > 0]
@@ -672,15 +689,15 @@ def stats() -> dict:
     by_playbook: dict[str, list[dict]] = {}
     by_planned: dict[str, list[dict]] = {}
     by_boards: dict[str, list[dict]] = {}
-    by_hold: dict[str, list[dict]] = {}      # 做 T / 隔日 / 多日
+    by_hold: dict[str, list[dict]] = {}  # 做 T / 隔日 / 多日
     for t in trades:
         ph = (t.get("market") or {}).get("emotion_phase") or "未记录"
         by_phase.setdefault(ph, []).append(t)
         by_playbook.setdefault(t.get("playbook") or "其它", []).append(t)
         planned = t.get("as_planned")
-        by_planned.setdefault(
-            "按计划" if planned is True else ("计划外" if planned is False else "未标注"), []
-        ).append(t)
+        by_planned.setdefault("按计划" if planned is True else ("计划外" if planned is False else "未标注"), []).append(
+            t
+        )
         st = t.get("stock") or {}
         if st.get("in_limit_up"):
             b = int(st.get("boards") or 1)
@@ -693,8 +710,7 @@ def stats() -> dict:
         st = t.get("settled") or {}
         hd = st.get("hold_days")
         by_hold.setdefault(
-            "做T(当日)" if hd == 0 else ("隔日" if hd == 1 else
-                                       (f"持有{hd}天" if isinstance(hd, int) else "未填明细")),
+            "做T(当日)" if hd == 0 else ("隔日" if hd == 1 else (f"持有{hd}天" if isinstance(hd, int) else "未填明细")),
             [],
         ).append(t)
 
@@ -711,7 +727,16 @@ def stats() -> dict:
 
 
 __all__ = [
-    "DEFAULT_FEES", "PLAYBOOKS", "JournalCorrupted",
-    "load_fees", "save_fees", "add_trade", "update_trade", "delete_trade",
-    "list_trades", "all_trades", "stats", "_settle",
+    "DEFAULT_FEES",
+    "PLAYBOOKS",
+    "JournalCorrupted",
+    "load_fees",
+    "save_fees",
+    "add_trade",
+    "update_trade",
+    "delete_trade",
+    "list_trades",
+    "all_trades",
+    "stats",
+    "_settle",
 ]

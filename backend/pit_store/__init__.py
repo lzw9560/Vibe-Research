@@ -15,6 +15,7 @@
 - (b) data-revalidation：从 PIT pinned as_of snapshot 重导 series + content_hash 比；
   不匹配 → 诚实标"前复权重算（corporate action 后）"非假绿。
 """
+
 from __future__ import annotations
 
 from .store import SnapshotStore, run_migrations

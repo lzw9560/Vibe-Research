@@ -7,6 +7,7 @@
 
 DRY：复用 S203 dragon_score composite + S205 compute + DIMENSION_REGISTRY data_source。
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -85,7 +86,9 @@ def match_dixi_longtou(
     indicators = {
         "tech_pattern": _msc_tech(msc, bars),
         "leader_identity": ps.compute_leader_identity(
-            sector_rank=sector_rank, lbc=lbc, high_gene=high_gene,
+            sector_rank=sector_rank,
+            lbc=lbc,
+            high_gene=high_gene,
         ),
         "pullback_rhythm": ps.compute_pullback_rhythm(
             days_since_last_zt=msc.get("days_since_last_zt") if msc else None,

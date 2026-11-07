@@ -119,22 +119,31 @@ def _resample_daily_to_period(daily: list[dict], category: int) -> list[dict]:
         lows = [r["low"] for r in rows if r.get("low") is not None]
         vols = [r["volume"] for r in rows if r.get("volume") is not None]
         amts = [r["amount"] for r in rows if r.get("amount") is not None]
-        out.append({
-            "date": rows[-1].get("date"),
-            "open": rows[0].get("open"),
-            "high": max(highs) if highs else None,
-            "low": min(lows) if lows else None,
-            "close": rows[-1].get("close"),
-            "volume": sum(vols) if vols else None,
-            "amount": sum(amts) if amts else None,
-        })
+        out.append(
+            {
+                "date": rows[-1].get("date"),
+                "open": rows[0].get("open"),
+                "high": max(highs) if highs else None,
+                "low": min(lows) if lows else None,
+                "close": rows[-1].get("close"),
+                "volume": sum(vols) if vols else None,
+                "amount": sum(amts) if amts else None,
+            }
+        )
     return out
 
 
 def _baostock_5min_to_timestamp(time_str: str) -> int:
     """baostock time "20260915093500000" (YYYYMMDDHHMMSSmmm) → ms timestamp（北京 +08:00）。"""
     from datetime import datetime as _dt, timezone as _tz, timedelta as _td
-    y, mo, d, hh, mm = int(time_str[:4]), int(time_str[4:6]), int(time_str[6:8]), int(time_str[8:10]), int(time_str[10:12])
+
+    y, mo, d, hh, mm = (
+        int(time_str[:4]),
+        int(time_str[4:6]),
+        int(time_str[6:8]),
+        int(time_str[8:10]),
+        int(time_str[10:12]),
+    )
     return int(_dt(y, mo, d, hh, mm, tzinfo=_tz(_td(hours=8))).timestamp() * 1000)
 
 
@@ -174,15 +183,17 @@ def _aggregate_5min_to_period(bars_5min: list[dict], period_min: int) -> list[di
         highs = [g["high"] for g in grp if g.get("high") is not None]
         lows = [g["low"] for g in grp if g.get("low") is not None]
         vols = [g["volume"] for g in grp if g.get("volume") is not None]
-        out.append({
-            "date": grp[0].get("date", ""),
-            "timestamp": key,
-            "open": grp[0].get("open"),
-            "high": max(highs) if highs else None,
-            "low": min(lows) if lows else None,
-            "close": grp[-1].get("close"),
-            "volume": sum(vols) if vols else None,
-        })
+        out.append(
+            {
+                "date": grp[0].get("date", ""),
+                "timestamp": key,
+                "open": grp[0].get("open"),
+                "high": max(highs) if highs else None,
+                "low": min(lows) if lows else None,
+                "close": grp[-1].get("close"),
+                "volume": sum(vols) if vols else None,
+            }
+        )
     return out
 
 
@@ -200,13 +211,14 @@ def kline(code: str, category: int = 4, offset: int = 60) -> list[dict]:
         try:
             from data.sources.baostock_src import fetch_5min_bars
             from datetime import datetime, timedelta
+
             end = datetime.now().strftime("%Y-%m-%d")
             start = (datetime.now() - timedelta(days=offset * 2)).strftime("%Y-%m-%d")
             bars_5min = fetch_5min_bars(code, start, end)
             if bars_5min:
                 agg = _aggregate_5min_to_period(bars_5min, period_min)
                 bars_per_day = 240 // period_min  # 4h × 60min / period_min
-                return agg[-(offset * bars_per_day):] if len(agg) > offset * bars_per_day else agg
+                return agg[-(offset * bars_per_day) :] if len(agg) > offset * bars_per_day else agg
         except Exception as e:
             logging.getLogger("astock").warning("kline(%s) %dmin baostock 5min 聚合失败: %s", code, period_min, e)
         return []
@@ -223,11 +235,11 @@ def kline(code: str, category: int = 4, offset: int = 60) -> list[dict]:
             # category=11（60min）回退源无 intraday → 诚实返 []
             return []
     except Exception as e:
-        logging.getLogger("astock").warning(
-            "kline(%s) kline_multi failed: %s", code, e)
+        logging.getLogger("astock").warning("kline(%s) kline_multi failed: %s", code, e)
     # kline_multi（含 _baostock）空/失败 → 诚实返空，不走 mootdx_src 二次 baostock 回退
     # （baostock 是本环境唯一可用源直接用；fetch_kline timeout 8s 内命中即够）
     return []
+
 
 # ── 新浪财报三表源（urllib，基本面因子组数据地基）──────────────────────────
 # S108：fetch_raw/fetch_merged_periods 由 value_funnel/quality + routers/value_funnel 直接调，
@@ -237,6 +249,7 @@ def kline(code: str, category: int = 4, offset: int = 60) -> list[dict]:
 # ---------------------------------------------------------------------------
 # 估值计算（纯函数，无数据源，留本模块）
 # ---------------------------------------------------------------------------
+
 
 def calc_peg(pe: float, cagr: float) -> float:
     if cagr <= 0:
@@ -266,24 +279,36 @@ def full_valuation(code: str) -> dict:
 
     price = q["price"]
     out = {
-        "name": q["name"], "code": code, "price": price,
-        "mcap_yi": q["mcap_yi"], "pe_ttm": q["pe_ttm"], "pb": q["pb"],
-        "ps_ttm": None, "pcf_ttm": None,  # S104：hithink 补（东财结构性缺）
-        "pe_ttm_hithink": None, "pb_hithink": None,  # S106：备源（供 cross_validate 仲裁）
-        "eps_26e": None, "eps_27e": None, "pe_26e": None,
-        "cagr_pct": None, "peg": None, "digest_years": None, "analyst_count": 0,
+        "name": q["name"],
+        "code": code,
+        "price": price,
+        "mcap_yi": q["mcap_yi"],
+        "pe_ttm": q["pe_ttm"],
+        "pb": q["pb"],
+        "ps_ttm": None,
+        "pcf_ttm": None,  # S104：hithink 补（东财结构性缺）
+        "pe_ttm_hithink": None,
+        "pb_hithink": None,  # S106：备源（供 cross_validate 仲裁）
+        "eps_26e": None,
+        "eps_27e": None,
+        "pe_26e": None,
+        "cagr_pct": None,
+        "peg": None,
+        "digest_years": None,
+        "analyst_count": 0,
     }
 
     # S104：hithink 补 PS_TTM / PCF_TTM（5min TTL 缓存，hithink_src 内部）
     # S106：同时暴露 hithink 备源 PE/PB（valuation_snapshot 已返，零额外请求），供 cross_validate 仲裁
     try:
         from data.sources.hithink_src import valuation_snapshot as _hs_val
+
         hs = _hs_val([code])
         if code in hs:
             out["ps_ttm"] = hs[code].get("ps_ttm")
             out["pcf_ttm"] = hs[code].get("pcf_ttm")
-            out["pe_ttm_hithink"] = hs[code].get("pe_ttm")   # S106 备源（与东财腾讯口径一致）
-            out["pb_hithink"] = hs[code].get("pb_mrq")       # S106 备源
+            out["pe_ttm_hithink"] = hs[code].get("pe_ttm")  # S106 备源（与东财腾讯口径一致）
+            out["pb_hithink"] = hs[code].get("pb_mrq")  # S106 备源
     except Exception:  # noqa: BLE001 — hithink 失败不阻塞估值，PS/PCF/备源 降级 None
         out["ps_pcf_status"] = "hithink_unavailable"  # S131 R3：标源断非"无估值"，mapper 透传 data_status 给 LLM
 
@@ -293,6 +318,7 @@ def full_valuation(code: str) -> dict:
     # 不丢数据 + discrepancy 标记告知"这值两源差>5%，别基于它下重判断"，不阻断。
     try:
         from data.validators import Verdict, cross_validate
+
         discrepancies: list[dict] = []
         for field, em_val, hs_val in [
             ("pe_ttm", out.get("pe_ttm"), out.get("pe_ttm_hithink")),
@@ -301,11 +327,13 @@ def full_valuation(code: str) -> dict:
             if em_val is not None and hs_val is not None:  # 两源都有才仲裁
                 vr = cross_validate(field, {"东财": em_val, "hithink": hs_val})
                 if vr.verdict in (Verdict.DIFFERENCE, Verdict.MAJOR_DIFFERENCE):
-                    discrepancies.append({
-                        "field": field,
-                        "verdict": vr.verdict.value,
-                        "deviation_pct": vr.max_deviation_pct,
-                    })  # CONSISTENT/SINGLE_SOURCE 不标（不打扰）
+                    discrepancies.append(
+                        {
+                            "field": field,
+                            "verdict": vr.verdict.value,
+                            "deviation_pct": vr.max_deviation_pct,
+                        }
+                    )  # CONSISTENT/SINGLE_SOURCE 不标（不打扰）
         if discrepancies:
             out["discrepancy"] = discrepancies
     except Exception as e:  # noqa: BLE001 — cross_validate 故障不阻塞估值

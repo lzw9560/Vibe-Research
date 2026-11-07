@@ -13,6 +13,7 @@ adjusted Sharpe Ratio:
 
     haircut = 1 - SR_adjusted / SR_observed
 """
+
 from __future__ import annotations
 
 import math
@@ -47,7 +48,7 @@ class HaircutResult:
     method: str
     observed_sharpe: float
     adjusted_sharpe: float
-    haircut: float          # fraction of the Sharpe removed
+    haircut: float  # fraction of the Sharpe removed
     observed_pvalue: float
     adjusted_pvalue: float
     n_tests: int
@@ -121,6 +122,8 @@ if __name__ == "__main__":
     sr_pp = sr_annual / math.sqrt(252)
     for m in ("bonferroni", "holm", "bhy"):
         res = haircut_sharpe(sr_pp, n_obs=n, n_tests=50, method=m)
-        print(f"{m:11s}: SR {sr_annual:.2f} -> "
-              f"{res.adjusted_sharpe * math.sqrt(252):.2f} "
-              f"(haircut {res.haircut:.0%}, p {res.observed_pvalue:.1e} -> {res.adjusted_pvalue:.1e})")
+        print(
+            f"{m:11s}: SR {sr_annual:.2f} -> "
+            f"{res.adjusted_sharpe * math.sqrt(252):.2f} "
+            f"(haircut {res.haircut:.0%}, p {res.observed_pvalue:.1e} -> {res.adjusted_pvalue:.1e})"
+        )

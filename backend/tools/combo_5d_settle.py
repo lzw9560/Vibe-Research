@@ -12,6 +12,7 @@ settle 用 T+1-open→T+5-close（实盘口径），高 gap 票 T+1 open 常高�
 
 用法：cd backend && .venv/bin/python tools/combo_5d_settle.py
 """
+
 from __future__ import annotations
 import json
 import sqlite3

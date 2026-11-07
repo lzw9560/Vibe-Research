@@ -16,6 +16,7 @@ spec §10 定位：资讯雷达是**定性上下文层**，不是量化因子。
 不做 NLP 情感分析引擎（spec §10.6）——用 LLM API 替代（走 chat 层）。
 关键词匹配做粗筛，LLM 做精细分类（利好/利空/风险提示）。
 """
+
 from __future__ import annotations
 
 import json
@@ -36,37 +37,42 @@ RISK_KEYWORDS = ["整顿", "处罚", "违规", "下降", "亏损", "减持", "�
 # 数据结构
 # ===========================================================================
 
+
 @dataclass(frozen=True)
 class SectorNewsHeat:
     """板块资讯热度（spec §10.2 层 1）。"""
+
     sector_name: str
     news_count_48h: int
     avg_count_7d: float
-    heat_label: str          # 真热 / 情绪 / 事件 / 冷门
+    heat_label: str  # 真热 / 情绪 / 事件 / 冷门
     heat_note: str = ""
 
 
 @dataclass(frozen=True)
 class CatalystContext:
     """催化上下文（spec §10.2 层 2）。"""
-    announcement_type: str   # 公告类型（预增/扭亏/重组/回购/风险提示）
+
+    announcement_type: str  # 公告类型（预增/扭亏/重组/回购/风险提示）
     sector_news_match: bool  # 对应赛道是否有相关新闻
-    catalyst_label: str      # 双催化 / 风险叠加 / 个股催化 / 无
+    catalyst_label: str  # 双催化 / 风险叠加 / 个股催化 / 无
     matched_headlines: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class RiskRadarHit:
     """风险雷达命中（spec §10.2 层 3）。"""
+
     sector_name: str
     hit_keywords: list[str]
-    risk_label: str          # 赛道风险 / 无风险
+    risk_label: str  # 赛道风险 / 无风险
     matched_headlines: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class NewsRadarContext:
     """资讯雷达完整上下文（三层合并）。"""
+
     sector_heat: list[SectorNewsHeat]
     catalyst: CatalystContext | None
     risk_hits: list[RiskRadarHit]
@@ -76,6 +82,7 @@ class NewsRadarContext:
 # ===========================================================================
 # 板块映射
 # ===========================================================================
+
 
 def _load_mapping() -> dict:
     """加载雷达赛道→东财行业映射表。"""
@@ -104,6 +111,7 @@ def map_industry_to_radar(industry_name: str) -> str | None:
 # 层 1：板块资讯热度（spec §10.2）
 # ===========================================================================
 
+
 def compute_sector_news_heat(
     sector_name: str,
     radar_data: dict | None = None,
@@ -120,8 +128,11 @@ def compute_sector_news_heat(
     radar_key = map_industry_to_radar(sector_name)
     if not radar_key or not radar_data:
         return SectorNewsHeat(
-            sector_name=sector_name, news_count_48h=0, avg_count_7d=0.0,
-            heat_label="冷门", heat_note="无板块映射或无资讯数据",
+            sector_name=sector_name,
+            news_count_48h=0,
+            avg_count_7d=0.0,
+            heat_label="冷门",
+            heat_note="无板块映射或无资讯数据",
         )
 
     # 从 radar_data 找对应赛道的新闻数
@@ -129,8 +140,11 @@ def compute_sector_news_heat(
     target_ind = next((i for i in industries if i.get("key") == radar_key), None)
     if not target_ind:
         return SectorNewsHeat(
-            sector_name=sector_name, news_count_48h=0, avg_count_7d=0.0,
-            heat_label="冷门", heat_note="赛道无资讯",
+            sector_name=sector_name,
+            news_count_48h=0,
+            avg_count_7d=0.0,
+            heat_label="冷门",
+            heat_note="赛道无资讯",
         )
 
     items = target_ind.get("items", [])
@@ -178,6 +192,7 @@ def compute_sector_news_heat(
 # ===========================================================================
 # 层 2：催化上下文（spec §10.2）
 # ===========================================================================
+
 
 def classify_announcement(announcement_text: str) -> str:
     """公告类型分类（关键词粗筛，spec §10.2 层 2）。
@@ -274,6 +289,7 @@ def _matches_announcement_type(ann_type: str, title: str) -> bool:
 # 层 3：风险雷达（spec §10.2）
 # ===========================================================================
 
+
 def scan_risk_keywords(
     sector_name: str,
     radar_data: dict | None = None,
@@ -285,16 +301,20 @@ def scan_risk_keywords(
     radar_key = map_industry_to_radar(sector_name)
     if not radar_key or not radar_data:
         return RiskRadarHit(
-            sector_name=sector_name, hit_keywords=[],
-            risk_label="无风险", matched_headlines=[],
+            sector_name=sector_name,
+            hit_keywords=[],
+            risk_label="无风险",
+            matched_headlines=[],
         )
 
     industries = radar_data.get("industries", [])
     target_ind = next((i for i in industries if i.get("key") == radar_key), None)
     if not target_ind:
         return RiskRadarHit(
-            sector_name=sector_name, hit_keywords=[],
-            risk_label="无风险", matched_headlines=[],
+            sector_name=sector_name,
+            hit_keywords=[],
+            risk_label="无风险",
+            matched_headlines=[],
         )
 
     now = datetime.now()
@@ -327,6 +347,7 @@ def scan_risk_keywords(
 # ===========================================================================
 # 三层合并入口
 # ===========================================================================
+
 
 def build_news_radar_context(
     sector_name: str,

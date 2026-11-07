@@ -56,7 +56,9 @@ def classify_board(code: str) -> str:
 
 
 def classify_tradability(
-    name: str, code: str, radar_set: dict[str, str] | None = None,
+    name: str,
+    code: str,
+    radar_set: dict[str, str] | None = None,
 ) -> tuple[bool, str | None, str | None]:
     """可交易性过滤（S148 R2）。扩展 classify_exclusion：加 board 排除 + ST 摘帽/重组 carve-out。
 

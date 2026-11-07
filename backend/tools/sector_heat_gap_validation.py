@@ -29,6 +29,7 @@
 
 Does NOT modify tools/sector_heat_validation.py (path/binary harness preserved).
 """
+
 from __future__ import annotations
 
 import datetime
@@ -157,16 +158,18 @@ def is_one_word_d(bar: dict) -> bool:
     return abs(h - l) <= TOL and abs(o - c) <= TOL and abs(h - o) <= TOL
 
 
-def _members(industry: dict[str, str], hot_inds: set[str], all_inds: set[str],
-             d_zt_codes: set[str]) -> tuple[list[str], list[str]]:
+def _members(
+    industry: dict[str, str], hot_inds: set[str], all_inds: set[str], d_zt_codes: set[str]
+) -> tuple[list[str], list[str]]:
     """Hot/cold member codes (exclude D-ZT stocks = new-ZT framing). IDENTICAL to existing harness."""
     hot_mem = [c for c, ind in industry.items() if ind in hot_inds and c not in d_zt_codes]
     cold_mem = [c for c, ind in industry.items() if ind not in all_inds and c not in d_zt_codes]
     return hot_mem, cold_mem
 
 
-def binary_framing(zt: dict[str, set[str]], industry: dict[str, str],
-                   calendar: list[str], cal_idx: dict[str, int]) -> None:
+def binary_framing(
+    zt: dict[str, set[str]], industry: dict[str, str], calendar: list[str], cal_idx: dict[str, int]
+) -> None:
     """(A) Binary next-day-new-ZT rate lift, 318-day backfill (was 49d in existing harness)."""
     defs = [("top1", 1, 0), ("top3", 3, 0), ("top5", 5, 0), ("zt>=3", 99, 3), ("zt>=5", 99, 5)]
     zt_dates = sorted(d for d in zt if d in cal_idx)
@@ -192,13 +195,15 @@ def binary_framing(zt: dict[str, set[str]], industry: dict[str, str],
         hm = hn = cm = cn = 0
         for idx, (_, zt_by_ind, d_zt, d1_zt) in enumerate(daily):
             ranked = sorted(zt_by_ind.items(), key=lambda x: -x[1])
-            hot_inds = {ind for ind, _ in ranked[:topn]} if topn < 99 else \
-                {ind for ind, c in zt_by_ind.items() if c >= thresh}
+            hot_inds = (
+                {ind for ind, _ in ranked[:topn]} if topn < 99 else {ind for ind, c in zt_by_ind.items() if c >= thresh}
+            )
             all_inds = all_inds_per_day[idx]
             hot_mem, cold_mem = _members(industry, hot_inds, all_inds, d_zt)
             if not hot_mem or not cold_mem:
                 continue
-            hm += len(hot_mem); cm += len(cold_mem)
+            hm += len(hot_mem)
+            cm += len(cold_mem)
             hn += sum(1 for c in hot_mem if c in d1_zt)
             cn += sum(1 for c in cold_mem if c in d1_zt)
         hr = hn / hm if hm else 0.0
@@ -208,18 +213,25 @@ def binary_framing(zt: dict[str, set[str]], industry: dict[str, str],
         clo, chi = _wilson(cn, cm)
         sig = "CI不重叠" if hlo > chi else "CI重叠"
         verdict = ">=2x validated" if lift >= 2.0 else ("<2x 未validated" if lift >= 1.0 else "劣于随机")
-        print(f"{name:6s}: hot {hn}/{hm}={hr*100:.2f}%[{hlo*100:.2f},{hhi*100:.2f}]  "
-              f"cold {cn}/{cm}={cr*100:.2f}%[{clo*100:.2f},{chi*100:.2f}]  "
-              f"lift={lift:.3f}x -> {verdict}({sig})")
+        print(
+            f"{name:6s}: hot {hn}/{hm}={hr * 100:.2f}%[{hlo * 100:.2f},{hhi * 100:.2f}]  "
+            f"cold {cn}/{cm}={cr * 100:.2f}%[{clo * 100:.2f},{chi * 100:.2f}]  "
+            f"lift={lift:.3f}x -> {verdict}({sig})"
+        )
 
 
-def gap_framing(zt: dict[str, set[str]], industry: dict[str, str], kline: dict,
-                code_cal_idx: dict[str, list[int]], calendar: list[str],
-                cal_idx: dict[str, int]) -> None:
+def gap_framing(
+    zt: dict[str, set[str]],
+    industry: dict[str, str],
+    kline: dict,
+    code_cal_idx: dict[str, list[int]],
+    calendar: list[str],
+    cal_idx: dict[str, int],
+) -> None:
     """(B) Gap-window RETURN lift (gap_net_return, D收->D+1开) for hot/cold members."""
-    validate_or_reject("baostock_kline",
-                        [b for bars in kline.values() for b in bars],
-                        as_of=datetime.date.today().isoformat())
+    validate_or_reject(
+        "baostock_kline", [b for bars in kline.values() for b in bars], as_of=datetime.date.today().isoformat()
+    )
     zt_dates = sorted(d for d in zt if d in cal_idx)
     hot_rets: list[float] = []
     cold_rets: list[float] = []
@@ -246,14 +258,16 @@ def gap_framing(zt: dict[str, set[str]], industry: dict[str, str], kline: dict,
             r = _gap_for(kline, code_cal_idx, code, d, d1, cal_idx, skips)
             if r is None:
                 continue
-            hot_rets.append(r[0]); day_hot += 1
+            hot_rets.append(r[0])
+            day_hot += 1
             if r[0] > 0:
                 hot_wins += 1
         for code in cold_mem:
             r = _gap_for(kline, code_cal_idx, code, d, d1, cal_idx, skips)
             if r is None:
                 continue
-            cold_rets.append(r[0]); day_cold += 1
+            cold_rets.append(r[0])
+            day_cold += 1
             if r[0] > 0:
                 cold_wins += 1
         if day_hot:
@@ -261,14 +275,13 @@ def gap_framing(zt: dict[str, set[str]], industry: dict[str, str], kline: dict,
         if day_cold:
             n_days_cold += 1
         if (di + 1) % 50 == 0:
-            print(f"  ...{di+1}/{len(zt_dates)} days, hot_n={len(hot_rets)} "
-                  f"cold_n={len(cold_rets)}", flush=True)
-    _print_gap_results(hot_rets, cold_rets, hot_wins, cold_wins,
-                       n_days_hot, n_days_cold, skips)
+            print(f"  ...{di + 1}/{len(zt_dates)} days, hot_n={len(hot_rets)} cold_n={len(cold_rets)}", flush=True)
+    _print_gap_results(hot_rets, cold_rets, hot_wins, cold_wins, n_days_hot, n_days_cold, skips)
 
 
-def _gap_for(kline: dict, code_cal_idx: dict, code: str, d: str, d1: str,
-             cal_idx: dict[str, int], skips: Counter) -> tuple[float, float, float] | None:
+def _gap_for(
+    kline: dict, code_cal_idx: dict, code: str, d: str, d1: str, cal_idx: dict[str, int], skips: Counter
+) -> tuple[float, float, float] | None:
     """gap_net_return(D close, D+1 open) for one code-day. None + skip-reason on miss."""
     d_bar = _bar_at(kline, code_cal_idx, code, d, cal_idx)
     if d_bar is None:
@@ -290,8 +303,9 @@ def _gap_for(kline: dict, code_cal_idx: dict, code: str, d: str, d1: str,
     return net_ratio * 100.0, cost_pct, gross_ratio * 100.0
 
 
-def _print_gap_results(hot: list[float], cold: list[float], hw: int, cw: int,
-                       ndh: int, ndc: int, skips: Counter) -> None:
+def _print_gap_results(
+    hot: list[float], cold: list[float], hw: int, cw: int, ndh: int, ndc: int, skips: Counter
+) -> None:
     print(f"\n=== (B) GAP-window RETURN (D收->D+1开, gap_net_return) zt>=3 hot / 0-zt cold ===")
     print(f"  hot: n={len(hot)} days={ndh} | cold: n={len(cold)} days={ndc}")
     print(f"  excluded: {dict(skips)}")
@@ -308,9 +322,11 @@ def _print_gap_results(hot: list[float], cold: list[float], hw: int, cw: int,
     mean_lift = mean_h / mean_c if mean_c else 0.0
     sig = "CI不重叠" if hlo > chi else "CI重叠"
     wr_v = ">=2.0 robust_edge" if wr_lift >= 2.0 else ("<2 unvalidated" if wr_lift >= 1.0 else "falsified(劣于随机)")
-    mean_v = ">=2.0 robust_edge" if mean_lift >= 2.0 else ("<2 unvalidated" if mean_lift >= 1.0 else "falsified(劣于随机)")
-    print(f"  hot:  net_mean={mean_h:.3f}% net_WR={wr_h*100:.2f}%[{hlo*100:.2f},{hhi*100:.2f}]")
-    print(f"  cold: net_mean={mean_c:.3f}% net_WR={wr_c*100:.2f}%[{clo*100:.2f},{chi*100:.2f}]")
+    mean_v = (
+        ">=2.0 robust_edge" if mean_lift >= 2.0 else ("<2 unvalidated" if mean_lift >= 1.0 else "falsified(劣于随机)")
+    )
+    print(f"  hot:  net_mean={mean_h:.3f}% net_WR={wr_h * 100:.2f}%[{hlo * 100:.2f},{hhi * 100:.2f}]")
+    print(f"  cold: net_mean={mean_c:.3f}% net_WR={wr_c * 100:.2f}%[{clo * 100:.2f},{chi * 100:.2f}]")
     print(f"  winrate-lift(hot/cold) = {wr_lift:.3f}x -> {wr_v}({sig})")
     print(f"  mean-lift(hot/cold)    = {mean_lift:.3f}x -> {mean_v}")
     t, df = _welch_t(hot, cold)
@@ -326,15 +342,19 @@ def main() -> None:
     zt = load_zt_pools()
     kline, code_cal_idx, calendar = load_kline_and_calendar()
     cal_idx = {d: i for i, d in enumerate(calendar)}
-    print(f"industry map: {len(industry)} codes | zt pools: {len(zt)} days | "
-          f"kline: {len(kline)} codes | calendar: {len(calendar)} trading days")
+    print(
+        f"industry map: {len(industry)} codes | zt pools: {len(zt)} days | "
+        f"kline: {len(kline)} codes | calendar: {len(calendar)} trading days"
+    )
     binary_framing(zt, industry, calendar, cal_idx)
     gap_framing(zt, industry, kline, code_cal_idx, calendar, cal_idx)
-    print("\ncaveat: gap window measures overnight gap for NON-sealed hot-sector members "
-          "(realizable at D close, unlike consecutive_relay/late_lock sealed signals). "
-          "Binary framing tests D+1 new-ZT occurrence (T+1涨停 candidate). "
-          "318d is 6x the 49d eastmoney_live — regression toward 1.0 expected if 1.536 was "
-          "small-sample optimism; persistence above 1.5 + CI不重叠 = signal worth chasing.")
+    print(
+        "\ncaveat: gap window measures overnight gap for NON-sealed hot-sector members "
+        "(realizable at D close, unlike consecutive_relay/late_lock sealed signals). "
+        "Binary framing tests D+1 new-ZT occurrence (T+1涨停 candidate). "
+        "318d is 6x the 49d eastmoney_live — regression toward 1.0 expected if 1.536 was "
+        "small-sample optimism; persistence above 1.5 + CI不重叠 = signal worth chasing."
+    )
 
 
 if __name__ == "__main__":

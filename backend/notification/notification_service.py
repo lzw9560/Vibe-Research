@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """通知服务核心 — 组合所有 Mixin 与 Sender 类"""
+
 from __future__ import annotations
 
 import logging
@@ -56,26 +57,26 @@ class NotificationService(
 ):
     """
     通知服务
-    
+
     职责：
     1. 生成 Markdown 格式的分析日报
     2. 向所有已配置的渠道推送消息（多渠道并发）
     3. 支持本地保存日报
-    
+
     支持的渠道：
     - 企业微信 Webhook
     - 飞书 Webhook
     - Telegram Bot
     - 邮件 SMTP
     - Pushover（手机/桌面推送）
-    
+
     注意：所有已配置的渠道都会收到推送
     """
 
     def __init__(self, source_message: Optional[Any] = None):
         """
         初始化通知服务
-        
+
         检测所有已配置的渠道，推送时会向所有渠道发送
         """
         self._config = default_config
@@ -83,16 +84,12 @@ class NotificationService(
         self._context_channels: List[str] = []
 
         # Markdown 转图片（Issue #289）
-        self._markdown_to_image_channels = set(
-            getattr(default_config, 'markdown_to_image_channels', []) or []
-        )
-        self._markdown_to_image_max_chars = getattr(
-            default_config, 'markdown_to_image_max_chars', 15000
-        )
+        self._markdown_to_image_channels = set(getattr(default_config, "markdown_to_image_channels", []) or [])
+        self._markdown_to_image_max_chars = getattr(default_config, "markdown_to_image_max_chars", 15000)
 
         # 仅分析结果摘要（Issue #262）：true 时只推送汇总，不含个股详情
-        self._report_summary_only = getattr(default_config, 'report_summary_only', False)
-        self._report_show_llm_model = getattr(default_config, 'report_show_llm_model', True)
+        self._report_summary_only = getattr(default_config, "report_summary_only", False)
+        self._report_show_llm_model = getattr(default_config, "report_show_llm_model", True)
         self._history_compare_cache: Dict[Tuple[int, Tuple[Tuple[str, str], ...]], Dict[str, List[Dict[str, Any]]]] = {}
 
         # 初始化各渠道
@@ -140,16 +137,16 @@ def get_notification_service() -> NotificationService:
 def send_daily_report(results: List[Any]) -> bool:
     """
     发送每日报告的快捷方式
-    
+
     自动识别渠道并推送
     """
     service = get_notification_service()
-    
+
     # 生成报告
     report = service.generate_daily_report(results)
-    
+
     # 保存到本地
     service.save_report_to_file(report)
-    
+
     # 推送到配置的渠道（自动识别）
     return service.send(report)

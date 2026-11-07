@@ -27,6 +27,7 @@
 - 股票级成本高: 0.3% round-trip × ~26 次/年 (2 周 hold) = 7.8% 年化成本
 - 预期: gross 可能正但 net 边际, OOS 可能衰减或转负
 """
+
 from __future__ import annotations
 import sys
 import json
@@ -39,7 +40,12 @@ from math import erf, sqrt, log, pi
 # ---------- import shared helpers (DRY) ----------
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _factor_helpers import (  # type: ignore[import-not-found]
-    bonferroni_p, norm_sf_positive, ALPHA, COST, limit_for_code, is_yizi_t1,
+    bonferroni_p,
+    norm_sf_positive,
+    ALPHA,
+    COST,
+    limit_for_code,
+    is_yizi_t1,
 )
 
 # ---------- paths ----------
@@ -60,13 +66,12 @@ MIN_BARS_5YR = 1218  # ~5 trading years
 # 1. DATA LOADING
 # =====================================================================
 
+
 def load_industry_map() -> dict[str, str]:
     """code -> industry (申万分类, 6 位纯数字 code)."""
     conn = sqlite3.connect(str(GENE_DB))
     mp: dict[str, str] = {}
-    for code, _name, industry in conn.execute(
-        "SELECT code, name, industry FROM code_industry"
-    ):
+    for code, _name, industry in conn.execute("SELECT code, name, industry FROM code_industry"):
         mp[code] = industry
     conn.close()
     return mp
@@ -119,6 +124,7 @@ def build_calendar(code_map: dict[str, dict[str, dict]]) -> list[str]:
 # 2. INDUSTRY MOMENTUM
 # =====================================================================
 
+
 def compute_industry_momentum(
     code_map: dict[str, dict[str, dict]],
     industry_map: dict[str, str],
@@ -162,6 +168,7 @@ def compute_industry_momentum(
 # =====================================================================
 # 3. PORTFOLIO BACKTEST
 # =====================================================================
+
 
 def portfolio_return(
     code_map: dict[str, dict[str, dict]],
@@ -252,9 +259,7 @@ def backtest_combo(
     end_idx = len(calendar) - holding_days - 1
     reb_idx = start_idx
     while reb_idx <= end_idx:
-        momentum = compute_industry_momentum(
-            code_map, industry_map, calendar, reb_idx, formation_days
-        )
+        momentum = compute_industry_momentum(code_map, industry_map, calendar, reb_idx, formation_days)
         if len(momentum) < top_k:
             reb_idx += holding_days
             continue
@@ -264,9 +269,7 @@ def backtest_combo(
         top_set = set(top_industries)
 
         # select all stocks in top-K industries
-        selected_codes = {
-            code for code, ind in industry_map.items() if ind in top_set and code in code_map
-        }
+        selected_codes = {code for code, ind in industry_map.items() if ind in top_set and code in code_map}
         if len(selected_codes) < 3:
             reb_idx += holding_days
             continue
@@ -276,12 +279,8 @@ def backtest_combo(
         if exit_idx >= len(calendar):
             break
 
-        port_ret, n_stocks = portfolio_return(
-            code_map, selected_codes, entry_idx, exit_idx, calendar
-        )
-        bench_ret = benchmark_return(
-            code_map, list(code_map.keys()), entry_idx, exit_idx, calendar
-        )
+        port_ret, n_stocks = portfolio_return(code_map, selected_codes, entry_idx, exit_idx, calendar)
+        bench_ret = benchmark_return(code_map, list(code_map.keys()), entry_idx, exit_idx, calendar)
 
         gross_excess = (port_ret - bench_ret) * 100  # in %
         net_excess = gross_excess - COST * 100  # 0.3% cost per rebalance
@@ -289,20 +288,22 @@ def backtest_combo(
         reb_date = calendar[reb_idx]
         regime = regime_map.get(reb_date, "unknown")
 
-        results.append({
-            "rebalance_date": reb_date,
-            "rebalance_idx": reb_idx,
-            "regime": regime,
-            "formation_days": formation_days,
-            "holding_days": holding_days,
-            "top_k": top_k,
-            "n_industries_selected": len(top_industries),
-            "n_stocks_portfolio": n_stocks,
-            "portfolio_return_pct": round(port_ret * 100, 4),
-            "benchmark_return_pct": round(bench_ret * 100, 4),
-            "gross_excess_pct": round(gross_excess, 4),
-            "net_excess_pct": round(net_excess, 4),
-        })
+        results.append(
+            {
+                "rebalance_date": reb_date,
+                "rebalance_idx": reb_idx,
+                "regime": regime,
+                "formation_days": formation_days,
+                "holding_days": holding_days,
+                "top_k": top_k,
+                "n_industries_selected": len(top_industries),
+                "n_stocks_portfolio": n_stocks,
+                "portfolio_return_pct": round(port_ret * 100, 4),
+                "benchmark_return_pct": round(bench_ret * 100, 4),
+                "gross_excess_pct": round(gross_excess, 4),
+                "net_excess_pct": round(net_excess, 4),
+            }
+        )
         reb_idx += holding_days
 
     return results
@@ -311,6 +312,7 @@ def backtest_combo(
 # =====================================================================
 # 4. STATISTICAL ANALYSIS (per-rebalance-block t-test + walk-forward)
 # =====================================================================
+
 
 def analyze_combo(results: list[dict], combo_name: str) -> dict:
     """Statistical analysis for one parameter combination."""
@@ -335,10 +337,14 @@ def analyze_combo(results: list[dict], combo_name: str) -> dict:
     gross_wr = sum(1 for x in gross if x > 0) / n * 100
 
     print(f"\n--- gross excess (portfolio - benchmark) ---")
-    print(f"  n_rebalances={n} mean={gross_mean:.3f}% std={gross_std:.3f}% "
-          f"WR={gross_wr:.1f}% t={gross_t:.2f} p={gross_p:.6f}")
-    print(f"  portfolio avg={sum(r['portfolio_return_pct'] for r in results)/n:.3f}% "
-          f"benchmark avg={sum(r['benchmark_return_pct'] for r in results)/n:.3f}%")
+    print(
+        f"  n_rebalances={n} mean={gross_mean:.3f}% std={gross_std:.3f}% "
+        f"WR={gross_wr:.1f}% t={gross_t:.2f} p={gross_p:.6f}"
+    )
+    print(
+        f"  portfolio avg={sum(r['portfolio_return_pct'] for r in results) / n:.3f}% "
+        f"benchmark avg={sum(r['benchmark_return_pct'] for r in results) / n:.3f}%"
+    )
 
     # --- net stats (after 0.3% cost) ---
     net_mean = sum(net) / n
@@ -348,9 +354,8 @@ def analyze_combo(results: list[dict], combo_name: str) -> dict:
     net_p = norm_sf_positive(net_t)
     net_wr = sum(1 for x in net if x > 0) / n * 100
 
-    print(f"\n--- net excess (after {COST*100:.1f}% cost/rebalance) ---")
-    print(f"  n_rebalances={n} mean={net_mean:.3f}% std={net_std:.3f}% "
-          f"WR={net_wr:.1f}% t={net_t:.2f} p={net_p:.6f}")
+    print(f"\n--- net excess (after {COST * 100:.1f}% cost/rebalance) ---")
+    print(f"  n_rebalances={n} mean={net_mean:.3f}% std={net_std:.3f}% WR={net_wr:.1f}% t={net_t:.2f} p={net_p:.6f}")
 
     # --- regime stratification ---
     by_regime: dict[str, list[float]] = defaultdict(list)
@@ -392,19 +397,15 @@ def analyze_combo(results: list[dict], combo_name: str) -> dict:
         wf_train_ev = sum(train_nets) / len(train_nets)
         wf_test_ev = sum(test_nets) / len(test_nets)
 
-        tr_se = (statistics.pstdev(train_nets) / sqrt(len(train_nets))
-                 if len(train_nets) > 1 else 0)
-        te_se = (statistics.pstdev(test_nets) / sqrt(len(test_nets))
-                 if len(test_nets) > 1 else 0)
+        tr_se = statistics.pstdev(train_nets) / sqrt(len(train_nets)) if len(train_nets) > 1 else 0
+        te_se = statistics.pstdev(test_nets) / sqrt(len(test_nets)) if len(test_nets) > 1 else 0
         wf_train_t = wf_train_ev / tr_se if tr_se > 0 else 0
         wf_test_t = wf_test_ev / te_se if te_se > 0 else 0
         wf_test_p = norm_sf_positive(wf_test_t)
 
-        decay = ((wf_train_ev - wf_test_ev) / abs(wf_train_ev) * 100
-                 if wf_train_ev != 0 else 0)
+        decay = (wf_train_ev - wf_test_ev) / abs(wf_train_ev) * 100 if wf_train_ev != 0 else 0
         print(f"  train: n={len(train)} EV={wf_train_ev:.3f}% t={wf_train_t:.2f}")
-        print(f"  test:  n={len(test)} EV={wf_test_ev:.3f}% t={wf_test_t:.2f} "
-              f"p={wf_test_p:.6f}")
+        print(f"  test:  n={len(test)} EV={wf_test_ev:.3f}% t={wf_test_t:.2f} p={wf_test_p:.6f}")
         print(f"  decay: {decay:.0f}% (train→test)")
 
     return {
@@ -424,10 +425,12 @@ def analyze_combo(results: list[dict], combo_name: str) -> dict:
         "wf_train_t": round(wf_train_t, 2),
         "wf_test_t": round(wf_test_t, 2),
         "wf_test_p": wf_test_p,
-        "regime_strong_ev": (round(sum(by_regime["strong"]) / len(by_regime["strong"]), 3)
-                              if by_regime.get("strong") else None),
-        "regime_weak_ev": (round(sum(by_regime["weak"]) / len(by_regime["weak"]), 3)
-                           if by_regime.get("weak") else None),
+        "regime_strong_ev": (
+            round(sum(by_regime["strong"]) / len(by_regime["strong"]), 3) if by_regime.get("strong") else None
+        ),
+        "regime_weak_ev": (
+            round(sum(by_regime["weak"]) / len(by_regime["weak"]), 3) if by_regime.get("weak") else None
+        ),
         "all_results": results,  # keep for DSR/PBO
     }
 
@@ -435,6 +438,7 @@ def analyze_combo(results: list[dict], combo_name: str) -> dict:
 # =====================================================================
 # 5. DSR (Deflated Sharpe Ratio) + PBO
 # =====================================================================
+
 
 def normal_cdf(x: float) -> float:
     """Standard normal CDF."""
@@ -448,32 +452,50 @@ def normal_inv_cdf(p: float) -> float:
     if p >= 1:
         return 10.0
     # rational approximation
-    a = [-3.969683028665376e+01, 2.209460984245205e+02,
-         -2.759285104469687e+02, 1.383577518624690e+02,
-         -3.066479806617167e+01, 2.506628277459239e+00]
-    b = [-5.447609779177308e+01, 1.615858368580409e+02,
-         -1.555989798425870e+02, 6.680131188771972e+01,
-         -1.328068155288572e+01]
-    c = [-7.784894002430293e-03, -3.223161767989326e-01,
-         -2.400758277161838e+00, -2.549732539343734e+00,
-          4.374664141464968e+00, 2.938163982678786e+00]
-    d = [7.784695709041462e-03, 3.224671290700398e-01,
-         2.445134137142996e+00, 3.484244904456136e+00]
+    a = [
+        -3.969683028665376e01,
+        2.209460984245205e02,
+        -2.759285104469687e02,
+        1.383577518624690e02,
+        -3.066479806617167e01,
+        2.506628277459239e00,
+    ]
+    b = [
+        -5.447609779177308e01,
+        1.615858368580409e02,
+        -1.555989798425870e02,
+        6.680131188771972e01,
+        -1.328068155288572e01,
+    ]
+    c = [
+        -7.784894002430293e-03,
+        -3.223161767989326e-01,
+        -2.400758277161838e00,
+        -2.549732539343734e00,
+        4.374664141464968e00,
+        2.938163982678786e00,
+    ]
+    d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e00, 3.484244904456136e00]
     plow = 0.02425
     phigh = 1 - plow
     if p < plow:
         q = sqrt(-2 * log(p))
-        x = (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / \
-            ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+        x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
+            (((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1
+        )
     elif p <= phigh:
         q = p - 0.5
         r = q * q
-        x = (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5]) * q / \
-            (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1)
+        x = (
+            (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5])
+            * q
+            / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1)
+        )
     else:
         q = sqrt(-2 * log(1 - p))
-        x = -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / \
-            ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+        x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
+            (((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1
+        )
     return x
 
 
@@ -485,14 +507,12 @@ def compute_dsr(returns: list[float], n_trials: int) -> dict:
     """
     n = len(returns)
     if n < 2:
-        return {"dsr": 0.0, "sr_hat": 0.0, "sr_0": 0.0, "p_dsr": 0.5,
-                "skew": 0.0, "kurt": 0.0, "n": n}
+        return {"dsr": 0.0, "sr_hat": 0.0, "sr_0": 0.0, "p_dsr": 0.5, "skew": 0.0, "kurt": 0.0, "n": n}
 
     mean = sum(returns) / n
     std = statistics.pstdev(returns)
     if std <= 0:
-        return {"dsr": 0.0, "sr_hat": 0.0, "sr_0": 0.0, "p_dsr": 0.5,
-                "skew": 0.0, "kurt": 0.0, "n": n}
+        return {"dsr": 0.0, "sr_hat": 0.0, "sr_0": 0.0, "p_dsr": 0.5, "skew": 0.0, "kurt": 0.0, "n": n}
 
     # per-rebalance Sharpe (non-annualized)
     sr = mean / std
@@ -501,8 +521,8 @@ def compute_dsr(returns: list[float], n_trials: int) -> dict:
     if n > 2:
         m3 = sum((x - mean) ** 3 for x in returns) / n
         m4 = sum((x - mean) ** 4 for x in returns) / n
-        skew = m3 / (std ** 3)
-        kurt = m4 / (std ** 4) - 3  # excess kurtosis
+        skew = m3 / (std**3)
+        kurt = m4 / (std**4) - 3  # excess kurtosis
     else:
         skew = 0.0
         kurt = 0.0
@@ -513,7 +533,7 @@ def compute_dsr(returns: list[float], n_trials: int) -> dict:
 
     # Probabilistic Sharpe Ratio (PSR)
     # PSR = Phi( (SR - SR_0) * sqrt(T-1) / sqrt(1 - skew*SR + (kurt-1)/4 * SR^2) )
-    denom = 1 - skew * sr + (kurt) / 4 * sr ** 2
+    denom = 1 - skew * sr + (kurt) / 4 * sr**2
     if denom <= 0:
         denom = 0.01  # guard against negative
     psr_arg = (sr - sr_0) * sqrt(n - 1) / sqrt(denom)
@@ -562,6 +582,7 @@ def compute_pbo(all_combo_results: list[dict], n_bins: int = 4) -> dict:
 
     # combinatorial: choose n_bins//2 bins for IS, rest for OOS
     from itertools import combinations
+
     n_is = n_bins // 2
     if n_is < 1:
         return {"pbo": None, "reason": "n_bins_too_small", "n_dates": n_total}
@@ -589,10 +610,8 @@ def compute_pbo(all_combo_results: list[dict], n_bins: int = 4) -> dict:
         is_means: dict[str, float] = {}
         oos_means: dict[str, float] = {}
         for cn in combo_names:
-            is_rets = [date_combo_ret[d][cn] for d in is_dates
-                       if cn in date_combo_ret[d]]
-            oos_rets = [date_combo_ret[d][cn] for d in oos_dates
-                        if cn in date_combo_ret[d]]
+            is_rets = [date_combo_ret[d][cn] for d in is_dates if cn in date_combo_ret[d]]
+            oos_rets = [date_combo_ret[d][cn] for d in oos_dates if cn in date_combo_ret[d]]
             if is_rets:
                 is_means[cn] = sum(is_rets) / len(is_rets)
             if oos_rets:
@@ -629,6 +648,7 @@ def compute_pbo(all_combo_results: list[dict], n_bins: int = 4) -> dict:
 # 6. VERDICT
 # =====================================================================
 
+
 def verdict_for_combo(
     gross_ev: float,
     net_ev: float,
@@ -650,13 +670,14 @@ def verdict_for_combo(
     p_bonf = bonferroni_p(net_p, n_tests)
 
     print(f"\n  {combo_name}:")
-    print(f"    gross_excess_EV={gross_ev}% net_excess_EV={net_ev}% "
-          f"net_t={net_t} Bonf_p(×{n_tests})={p_bonf:.6f} "
-          f"n_rebalances={n_rebalances}")
+    print(
+        f"    gross_excess_EV={gross_ev}% net_excess_EV={net_ev}% "
+        f"net_t={net_t} Bonf_p(×{n_tests})={p_bonf:.6f} "
+        f"n_rebalances={n_rebalances}"
+    )
 
     if wf_status == "ok":
-        print(f"    walk-forward: train_EV={wf_train_ev}% test_EV={wf_test_ev}% "
-              f"test_p={wf_test_p}")
+        print(f"    walk-forward: train_EV={wf_train_ev}% test_EV={wf_test_ev}% test_p={wf_test_p}")
 
     # 1. gross < 0 → falsified (negative excess = worse than benchmark)
     if gross_ev < 0:
@@ -684,8 +705,10 @@ def verdict_for_combo(
             return "falsified"
         wf_test_p_bonf = bonferroni_p(wf_test_p, n_tests)
         if wf_test_p_bonf >= ALPHA:
-            print(f"    → EXPLORATORY: OOS test EV={wf_test_ev}% > 0 but "
-                  f"test p={wf_test_p} Bonf×{n_tests}={wf_test_p_bonf} >= {ALPHA}")
+            print(
+                f"    → EXPLORATORY: OOS test EV={wf_test_ev}% > 0 but "
+                f"test p={wf_test_p} Bonf×{n_tests}={wf_test_p_bonf} >= {ALPHA}"
+            )
             return "exploratory"
         print(f"    → EDGE-CONFIRMED: all checks pass")
         return "edge-confirmed"
@@ -697,6 +720,7 @@ def verdict_for_combo(
 # 7. MAIN
 # =====================================================================
 
+
 def main():
     print("=" * 70)
     print("短线策略探索: 行业动量 (sector momentum)")
@@ -705,12 +729,12 @@ def main():
     # ---- Step 0: verify ETF data (task requirement) ----
     print("\n[0] ETF 数据验证 (baostock fetch ETF)")
     import baostock as bs
+
     lg = bs.login()
     etf_ok = False
     for code in ["sh.510300", "sz.159915", "sh.510050", "sh.512890"]:
         rs = bs.query_history_k_data_plus(
-            code, "date,close", start_date="2024-01-01",
-            end_date="2024-01-31", frequency="d"
+            code, "date,close", start_date="2024-01-01", end_date="2024-01-31", frequency="d"
         )
         rows = []
         while (rs.error_code == "0") and rs.next():
@@ -728,8 +752,7 @@ def main():
     # ---- Step 1: load data ----
     print("\n[1] 加载数据 (股票级行业动量)")
     industry_map = load_industry_map()
-    print(f"  code_industry: {len(industry_map)} codes, "
-          f"{len(set(industry_map.values()))} industries")
+    print(f"  code_industry: {len(industry_map)} codes, {len(set(industry_map.values()))} industries")
 
     code_map = load_kline_for_universe(set(industry_map.keys()))
     print(f"  kline (≥5yr + in industry_map): {len(code_map)} codes")
@@ -753,9 +776,9 @@ def main():
 
     # ---- Step 2: parameter grid ----
     # Focused grid to limit Bonferroni penalty
-    formations = [10, 20]       # 2wk, 4wk formation
-    holdings = [10, 15]         # 2wk, 3wk holding
-    top_ks = [3, 5]             # top-3, top-5 industries
+    formations = [10, 20]  # 2wk, 4wk formation
+    holdings = [10, 15]  # 2wk, 3wk holding
+    top_ks = [3, 5]  # top-3, top-5 industries
     combos = [(f, h, k) for f in formations for h in holdings for k in top_ks]
     n_cross = len(combos)
     print(f"\n[2] 参数网格: {n_cross} combinations")
@@ -767,9 +790,7 @@ def main():
     all_raw: list[list[dict]] = []
     for f, h, k in combos:
         name = f"F{f}_H{h}_K{k}"
-        raw = backtest_combo(
-            code_map, industry_map, calendar, regime_map, f, h, k
-        )
+        raw = backtest_combo(code_map, industry_map, calendar, regime_map, f, h, k)
         all_raw.append(raw)
         res = analyze_combo(raw, name)
         all_results.append(res)
@@ -781,9 +802,17 @@ def main():
     verdicts: dict[str, str] = {}
     for res in all_results:
         v = verdict_for_combo(
-            res["gross_ev"], res["net_ev"], res["net_t"], res["net_p"],
-            res["wf_status"], res["wf_train_ev"], res["wf_test_ev"],
-            res["wf_test_p"], res["n_rebalances"], n_cross, res["name"]
+            res["gross_ev"],
+            res["net_ev"],
+            res["net_t"],
+            res["net_p"],
+            res["wf_status"],
+            res["wf_train_ev"],
+            res["wf_test_ev"],
+            res["wf_test_p"],
+            res["n_rebalances"],
+            n_cross,
+            res["name"],
         )
         verdicts[res["name"]] = v
 
@@ -797,29 +826,27 @@ def main():
     best_returns = [r["net_excess_pct"] for r in best_combo["all_results"]]
     dsr = compute_dsr(best_returns, n_cross)
     print(f"\n  DSR (best combo: {best_combo['name']}):")
-    print(f"    SR_hat={dsr['sr_hat']} SR_0={dsr['sr_0']} "
-          f"skew={dsr['skew']} kurt={dsr['kurt']}")
+    print(f"    SR_hat={dsr['sr_hat']} SR_0={dsr['sr_0']} skew={dsr['skew']} kurt={dsr['kurt']}")
     print(f"    DSR (p-value)={dsr['p_dsr']}")
     if dsr["p_dsr"] >= 0.95:
         print(f"    → DSR significant (p={dsr['p_dsr']} >= 0.95): Sharpe survives deflation")
     else:
-        print(f"    → DSR NOT significant (p={dsr['p_dsr']} < 0.95): "
-              f"Sharke may be inflated by multiple testing")
+        print(f"    → DSR NOT significant (p={dsr['p_dsr']} < 0.95): Sharke may be inflated by multiple testing")
 
     # DSR for all combos
     print(f"\n  DSR per combo:")
     for res in all_results:
         rets = [r["net_excess_pct"] for r in res["all_results"]]
         d = compute_dsr(rets, n_cross)
-        print(f"    {res['name']}: SR={d['sr_hat']} DSR_p={d['p_dsr']} "
-              f"skew={d['skew']} kurt={d['kurt']}")
+        print(f"    {res['name']}: SR={d['sr_hat']} DSR_p={d['p_dsr']} skew={d['skew']} kurt={d['kurt']}")
 
     # PBO
     pbo = compute_pbo(all_results, n_bins=4)
     print(f"\n  PBO (Probability of Backtest Overfitting):")
     if pbo.get("pbo") is not None:
-        print(f"    PBO={pbo['pbo']} (n_splits={pbo['n_splits']}, "
-              f"n_combos={pbo['n_combos']}, n_dates={pbo['n_dates']})")
+        print(
+            f"    PBO={pbo['pbo']} (n_splits={pbo['n_splits']}, n_combos={pbo['n_combos']}, n_dates={pbo['n_dates']})"
+        )
         if pbo["pbo"] > 0.5:
             print(f"    → PBO > 0.5: likely overfit (IS-best underperforms OOS > 50%)")
         else:
@@ -834,12 +861,14 @@ def main():
 
     # count verdicts
     from collections import Counter
+
     vc = Counter(verdicts.values())
     print(f"  verdicts: {dict(vc)}")
-    print(f"  best combo: {best_combo['name']} "
-          f"(net_excess_EV={best_combo['net_ev']}%, t={best_combo['net_t']})")
-    print(f"  best combo walk-forward: train={best_combo['wf_train_ev']}% "
-          f"test={best_combo['wf_test_ev']}% test_p={best_combo['wf_test_p']}")
+    print(f"  best combo: {best_combo['name']} (net_excess_EV={best_combo['net_ev']}%, t={best_combo['net_t']})")
+    print(
+        f"  best combo walk-forward: train={best_combo['wf_train_ev']}% "
+        f"test={best_combo['wf_test_ev']}% test_p={best_combo['wf_test_p']}"
+    )
 
     # overall verdict
     n_confirmed = vc.get("edge-confirmed", 0)

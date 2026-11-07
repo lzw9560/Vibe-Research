@@ -221,11 +221,11 @@ class AssistantDefaultConfig(NotificationConfig):
     AI_AUTO_ROLLBACK_DAYS: int = 5
 
     # === S055 盘中封单时序采集 + 炸板预警 ===
-    SEAL_INTRADAY_COLLECT_INTERVAL: int = 60   # 采集间隔秒（下限 30）
-    SEAL_INTRADAY_RETENTION_DAYS: int = 30     # 快照保留天数
-    SEAL_INTRADAY_ENABLE: bool = True           # 采集开关（盘中盯盘开启，交易时段采集封单/微结构）
-    BOMB_ALERT_COOLDOWN_MINUTES: int = 10       # 同股同规则冷却去重
-    BOMB_ALERT_NOTIFY_ENABLE: bool = False       # P0止血2026-11-05通知轰炸审查：每分钟×每涨停股×多规则=几何级飞书卡+三层抑制全失效(_cooldown_cache内存跨subprocess重置/NotificationConfig缺降噪属性/裸send不传dedup_key)。数据仍落DB(SEAL_INTRADAY_ENABLE=True不变),按需查/api/risk/bomb-alerts。P1聚合RED级汇总卡重开后改回True
+    SEAL_INTRADAY_COLLECT_INTERVAL: int = 60  # 采集间隔秒（下限 30）
+    SEAL_INTRADAY_RETENTION_DAYS: int = 30  # 快照保留天数
+    SEAL_INTRADAY_ENABLE: bool = True  # 采集开关（盘中盯盘开启，交易时段采集封单/微结构）
+    BOMB_ALERT_COOLDOWN_MINUTES: int = 10  # 同股同规则冷却去重
+    BOMB_ALERT_NOTIFY_ENABLE: bool = False  # P0止血2026-11-05通知轰炸审查：每分钟×每涨停股×多规则=几何级飞书卡+三层抑制全失效(_cooldown_cache内存跨subprocess重置/NotificationConfig缺降噪属性/裸send不传dedup_key)。数据仍落DB(SEAL_INTRADAY_ENABLE=True不变),按需查/api/risk/bomb-alerts。P1聚合RED级汇总卡重开后改回True
     # S056 R2 撤单熔断：封单额阈值（元）；盘中封单 < 此值 → 触发提醒
     SEAL_CANCEL_FUSE_AMOUNT: float = 30_000_000.0  # 3000 万
 
@@ -280,24 +280,28 @@ def load_config() -> AssistantDefaultConfig:
     # 基因阈值
     if os.getenv("VR_GENE_QUALIFY_THRESHOLD"):
         cfg.GENE_QUALIFY_THRESHOLD = _parse_float(
-            "VR_GENE_QUALIFY_THRESHOLD", os.getenv("VR_GENE_QUALIFY_THRESHOLD"),
+            "VR_GENE_QUALIFY_THRESHOLD",
+            os.getenv("VR_GENE_QUALIFY_THRESHOLD"),
             cfg.GENE_QUALIFY_THRESHOLD,
         )
     if os.getenv("VR_GENE_HIGH_THRESHOLD"):
         cfg.GENE_HIGH_THRESHOLD = _parse_float(
-            "VR_GENE_HIGH_THRESHOLD", os.getenv("VR_GENE_HIGH_THRESHOLD"),
+            "VR_GENE_HIGH_THRESHOLD",
+            os.getenv("VR_GENE_HIGH_THRESHOLD"),
             cfg.GENE_HIGH_THRESHOLD,
         )
 
     # 推荐阈值
     if os.getenv("VR_RECOMMEND_HIGH_THRESHOLD"):
         cfg.RECOMMEND_HIGH_THRESHOLD = _parse_float(
-            "VR_RECOMMEND_HIGH_THRESHOLD", os.getenv("VR_RECOMMEND_HIGH_THRESHOLD"),
+            "VR_RECOMMEND_HIGH_THRESHOLD",
+            os.getenv("VR_RECOMMEND_HIGH_THRESHOLD"),
             cfg.RECOMMEND_HIGH_THRESHOLD,
         )
     if os.getenv("VR_RECOMMEND_MEDIUM_THRESHOLD"):
         cfg.RECOMMEND_MEDIUM_THRESHOLD = _parse_float(
-            "VR_RECOMMEND_MEDIUM_THRESHOLD", os.getenv("VR_RECOMMEND_MEDIUM_THRESHOLD"),
+            "VR_RECOMMEND_MEDIUM_THRESHOLD",
+            os.getenv("VR_RECOMMEND_MEDIUM_THRESHOLD"),
             cfg.RECOMMEND_MEDIUM_THRESHOLD,
         )
 
@@ -308,29 +312,35 @@ def load_config() -> AssistantDefaultConfig:
     # 性能
     if os.getenv("VR_CONCURRENT_REQUESTS"):
         cfg.CONCURRENT_REQUESTS = _parse_int(
-            "VR_CONCURRENT_REQUESTS", os.getenv("VR_CONCURRENT_REQUESTS"),
+            "VR_CONCURRENT_REQUESTS",
+            os.getenv("VR_CONCURRENT_REQUESTS"),
             cfg.CONCURRENT_REQUESTS,
         )
     if os.getenv("VR_BATCH_SIZE"):
         cfg.BATCH_SIZE = _parse_int(
-            "VR_BATCH_SIZE", os.getenv("VR_BATCH_SIZE"), cfg.BATCH_SIZE,
+            "VR_BATCH_SIZE",
+            os.getenv("VR_BATCH_SIZE"),
+            cfg.BATCH_SIZE,
         )
 
     # S004：候选池漏斗性能
     if os.getenv("VR_CANDIDATE_FUNNEL_MAX_R2"):
         cfg.CANDIDATE_FUNNEL_MAX_R2 = _parse_int(
-            "VR_CANDIDATE_FUNNEL_MAX_R2", os.getenv("VR_CANDIDATE_FUNNEL_MAX_R2"),
+            "VR_CANDIDATE_FUNNEL_MAX_R2",
+            os.getenv("VR_CANDIDATE_FUNNEL_MAX_R2"),
             cfg.CANDIDATE_FUNNEL_MAX_R2,
         )
     if os.getenv("VR_CANDIDATE_FUNNEL_CACHE_TTL"):
         cfg.CANDIDATE_FUNNEL_CACHE_TTL = _parse_int(
-            "VR_CANDIDATE_FUNNEL_CACHE_TTL", os.getenv("VR_CANDIDATE_FUNNEL_CACHE_TTL"),
+            "VR_CANDIDATE_FUNNEL_CACHE_TTL",
+            os.getenv("VR_CANDIDATE_FUNNEL_CACHE_TTL"),
             cfg.CANDIDATE_FUNNEL_CACHE_TTL,
         )
 
     if os.getenv("VR_SEAL_CANCEL_FUSE_AMOUNT"):
         cfg.SEAL_CANCEL_FUSE_AMOUNT = _parse_float(
-            "VR_SEAL_CANCEL_FUSE_AMOUNT", os.getenv("VR_SEAL_CANCEL_FUSE_AMOUNT"),
+            "VR_SEAL_CANCEL_FUSE_AMOUNT",
+            os.getenv("VR_SEAL_CANCEL_FUSE_AMOUNT"),
             cfg.SEAL_CANCEL_FUSE_AMOUNT,
         )
 

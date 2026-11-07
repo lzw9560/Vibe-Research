@@ -1,4 +1,5 @@
 """通知模块 — 向后兼容包"""
+
 from .notification_service import (
     NotificationService,
     _safe_float,

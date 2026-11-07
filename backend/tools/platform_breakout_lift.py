@@ -10,6 +10,7 @@ first_board_premium_baseline._load_kline_cache + kline_returns.simulate_holding_
 pattern_scan.scan_patterns。pre-register 冻结 commit 74295b9（null=within-day survivor resampling,
 阈值 amplitude<=6.0, train 不优化）。
 """
+
 from __future__ import annotations
 
 import json
@@ -29,14 +30,14 @@ from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost �
 from strategies.pattern_scan import scan_patterns  # noqa: E402
 
 # 预注册冻结（commit 74295b9）
-TIGHT_THRESHOLD = 6.0           # H1 紧度 amplitude<=6.0
+TIGHT_THRESHOLD = 6.0  # H1 紧度 amplitude<=6.0
 DEFAULT_PATH_PARAMS = (-3.0, 8.0, 3)  # stop/take/max_hold
-ALPHA_ADJ = 0.05 / 8           # Bonferroni K=8
+ALPHA_ADJ = 0.05 / 8  # Bonferroni K=8
 N_PERM = 2000
 PERM_SEED = 42
-WALK_TRAIN = 100               # rolling walk-forward train 日
-WALK_TEST = 20                 # test 日
-WALK_STEP = 20                 # 前移
+WALK_TRAIN = 100  # rolling walk-forward train 日
+WALK_TEST = 20  # test 日
+WALK_STEP = 20  # 前移
 
 
 def day_cluster_permutation(surv_by_day, raw_by_day, n_perm=N_PERM, seed=PERM_SEED):
@@ -65,12 +66,15 @@ def day_cluster_permutation(surv_by_day, raw_by_day, n_perm=N_PERM, seed=PERM_SE
 def fetch_index_bars():
     """baostock sh.000001 日K close（regime=bull MA20 gate，不限流）。"""
     import baostock as bs  # noqa: PLC0415
+
     bars = []
     try:
         bs.login()
         rs = bs.query_history_k_data_plus(
-            "sh.000001", "date,close",
-            start_date="2025-11-01", end_date="2026-09-05",
+            "sh.000001",
+            "date,close",
+            start_date="2025-11-01",
+            end_date="2026-09-05",
         )
         while rs.error_code == "0" and rs.next():
             d = rs.get_row_data()
@@ -91,7 +95,7 @@ def compute_index_ma20(index_bars):
         if i < 19:
             is_bull[dates[i]] = False
             continue
-        ma20 = sum(closes[i - 19:i + 1]) / 20
+        ma20 = sum(closes[i - 19 : i + 1]) / 20
         is_bull[dates[i]] = closes[i] > ma20
     return is_bull
 
@@ -118,7 +122,7 @@ def run_platform_breakout_lift():
             continue
         for d_idx in range(20, len(bars) - 4):  # ≥20 回看 ∧ ≥4 前向（bars 非等长）
             D = bars[d_idx].get("date")
-            pat = scan_patterns(code, bars[:d_idx + 1], sector_bars=None)  # 切片 gotcha
+            pat = scan_patterns(code, bars[: d_idx + 1], sector_bars=None)  # 切片 gotcha
             c1 = pat.consolidation_days is not None and pat.consolidation_days >= 5
             c2 = pat.volume_breakout_ratio is not None and pat.volume_breakout_ratio > 2
             if not (c1 and c2):
@@ -164,12 +168,14 @@ def run_platform_breakout_lift():
         p = (sum(1 for n in nulls if n >= obs_lift) / len(nulls)) if nulls else 1.0
         verdict = four_state(obs_lift, obs["surv_n_pooled"])
         results[name] = {
-            "lift": obs_lift, "n": obs["surv_n_pooled"], "p_value": round(p, 4),
-            "alpha_adj": ALPHA_ADJ, "verdict": verdict,
+            "lift": obs_lift,
+            "n": obs["surv_n_pooled"],
+            "p_value": round(p, 4),
+            "alpha_adj": ALPHA_ADJ,
+            "verdict": verdict,
             "is_significant": p < ALPHA_ADJ,
         }
-        print(f"  {name}: lift={obs_lift} n={obs['surv_n_pooled']} p={p:.4f} "
-              f"verdict={verdict} sig={p < ALPHA_ADJ}")
+        print(f"  {name}: lift={obs_lift} n={obs['surv_n_pooled']} p={p:.4f} verdict={verdict} sig={p < ALPHA_ADJ}")
 
     # regime=bull subset (H1-3)
     results_bull = {}
@@ -179,7 +185,9 @@ def run_platform_breakout_lift():
         obs_lift = obs["winrate_lift_avg"]
         p = (sum(1 for n in nulls if n >= obs_lift) / len(nulls)) if nulls else 1.0
         results_bull[name] = {
-            "lift": obs_lift, "n": obs["surv_n_pooled"], "p_value": round(p, 4),
+            "lift": obs_lift,
+            "n": obs["surv_n_pooled"],
+            "p_value": round(p, 4),
             "is_significant": p < ALPHA_ADJ,
         }
 
@@ -187,7 +195,7 @@ def run_platform_breakout_lift():
     all_dates = sorted(raw_by_day.keys())
     wf_results = []
     for start in range(0, max(0, len(all_dates) - WALK_TRAIN - WALK_TEST + 1), WALK_STEP):
-        test_dates = set(all_dates[start + WALK_TRAIN:start + WALK_TRAIN + WALK_TEST])
+        test_dates = set(all_dates[start + WALK_TRAIN : start + WALK_TRAIN + WALK_TEST])
         if not test_dates:
             continue
         for name, surv in arms:
@@ -195,24 +203,32 @@ def run_platform_breakout_lift():
             test_raw = {d: r for d, r in raw_by_day.items() if d in test_dates}
             if test_surv and test_raw:
                 wf_obs = day_paired_lift(test_surv, test_raw)
-                wf_results.append({
-                    "window_start": start, "arm": name,
-                    "test_lift": wf_obs["winrate_lift_avg"],
-                    "test_n": wf_obs["surv_n_pooled"],
-                })
+                wf_results.append(
+                    {
+                        "window_start": start,
+                        "arm": name,
+                        "test_lift": wf_obs["winrate_lift_avg"],
+                        "test_n": wf_obs["surv_n_pooled"],
+                    }
+                )
 
     matrix = {
         "pre_register_commit": "74295b9",
         "params": {
-            "tight": TIGHT_THRESHOLD, "path": list(DEFAULT_PATH_PARAMS),
-            "alpha_adj": ALPHA_ADJ, "n_perm": N_PERM, "null_model": "within-day survivor resampling",
+            "tight": TIGHT_THRESHOLD,
+            "path": list(DEFAULT_PATH_PARAMS),
+            "alpha_adj": ALPHA_ADJ,
+            "n_perm": N_PERM,
+            "null_model": "within-day survivor resampling",
         },
         "n_events": n_events,
         "overall": results,
         "regime_bull": results_bull,
         "walk_forward_windows": wf_results,
-        "note": ("H1-H3 vs raw; day_paired_lift 非池化; within-day survivor resampling null; "
-                 "Bonferroni K=8 α_adj=0.00625; rolling walk-forward train 不优化; regime=bull subset"),
+        "note": (
+            "H1-H3 vs raw; day_paired_lift 非池化; within-day survivor resampling null; "
+            "Bonferroni K=8 α_adj=0.00625; rolling walk-forward train 不优化; regime=bull subset"
+        ),
     }
     out_dir = Path(ROOT / "backend" / ".scratch" / "s153-platform-breakout-lift")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -254,8 +270,11 @@ def run_platform_breakout_lift():
             params={"arm": _arm_name, "tight": TIGHT_THRESHOLD, "path": list(DEFAULT_PATH_PARAMS)},
         )
         s168_verdicts[_arm_name] = {
-            "status": _v.status, "selection_lift": _v.selection_lift,
-            "n": _v.n, "days_robust": _v.days_robust, "note": _v.note,
+            "status": _v.status,
+            "selection_lift": _v.selection_lift,
+            "n": _v.n,
+            "days_robust": _v.days_robust,
+            "note": _v.note,
         }
     matrix["s168_verdicts"] = s168_verdicts
     return matrix

@@ -1,6 +1,7 @@
 """
 LimitUp auction router.
 """
+
 from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime
 from pydantic import BaseModel, Field
@@ -14,16 +15,19 @@ router = APIRouter(tags=["limitup"])
 
 
 @router.get("/api/limitup/auction/top")
-async def get_auction_top(date: str = Query(None, description="交易日期 YYYY-MM-DD"), n: int = Query(50, ge=1, le=100, description="返回候选股数量")) -> Dict[str, Any]:
+async def get_auction_top(
+    date: str = Query(None, description="交易日期 YYYY-MM-DD"),
+    n: int = Query(50, ge=1, le=100, description="返回候选股数量"),
+) -> Dict[str, Any]:
     """
     获取指定日期的竞价爆量 TOP N 候选股。
-    
+
     盘后批量分析涨停池数据，生成次日竞价预案。
     非实时扫描，而是历史竞价模式回放 + 次日预案生成。
     """
     if date is None:
         date = datetime.now(_ls.BEIJING_TZ).strftime("%Y-%m-%d")
-    
+
     try:
         screener = asc.get_screener()
         result = screener.analyze(date)

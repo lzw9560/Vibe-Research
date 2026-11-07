@@ -12,6 +12,7 @@ tracking_pool.current_status 是 **tracking 级 label**（admit/tracking/decayed
 NOT workflow_state.WorkflowStatus enum（R5/R6 对抗审修正：实际 transition 走
 WATCHING→FILTERED reason='decayed'，不加新 DECAYED 态保 _ALLOWED_TRANSITIONS 不破）。
 """
+
 from __future__ import annotations
 
 import json
@@ -119,10 +120,7 @@ def get_active_tracks(current_status: str = "tracking") -> list[TrackingRecord]:
             "WHERE current_status = ?",
             (current_status,),
         ).fetchall()
-        return [
-            TrackingRecord(r[0], r[1], r[2] or "", r[3] or "{}", r[4] or "admit", int(r[5] or 0))
-            for r in rows
-        ]
+        return [TrackingRecord(r[0], r[1], r[2] or "", r[3] or "{}", r[4] or "admit", int(r[5] or 0)) for r in rows]
 
 
 def update_tracking_status(
@@ -141,8 +139,7 @@ def update_tracking_status(
             )
         else:
             conn.execute(
-                "UPDATE candidate_tracking_pool SET current_status=? "
-                "WHERE code=? AND first_admit_date=?",
+                "UPDATE candidate_tracking_pool SET current_status=? WHERE code=? AND first_admit_date=?",
                 (new_status, code, first_admit_date),
             )
 

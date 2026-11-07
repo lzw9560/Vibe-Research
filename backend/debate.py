@@ -132,8 +132,13 @@ def collect_dossier(code: str):
             except Exception as e:  # noqa: BLE001 — 单项失败只记缺口
                 sec = {"title": spec[2], "tool": spec[0], "data": {"error": str(e)}, "ok": False}
             done[sec["title"]] = sec
-            yield {"type": "dossier_progress", "title": sec["title"], "ok": sec["ok"],
-                   "loaded": len(done), "total": total}
+            yield {
+                "type": "dossier_progress",
+                "title": sec["title"],
+                "ok": sec["ok"],
+                "loaded": len(done),
+                "total": total,
+            }
 
     for spec in seq:  # 走 em_get 的，保持串行以尊重节流
         try:
@@ -141,8 +146,7 @@ def collect_dossier(code: str):
         except Exception as e:  # noqa: BLE001
             sec = {"title": spec[2], "tool": spec[0], "data": {"error": str(e)}, "ok": False}
         done[sec["title"]] = sec
-        yield {"type": "dossier_progress", "title": sec["title"], "ok": sec["ok"],
-               "loaded": len(done), "total": total}
+        yield {"type": "dossier_progress", "title": sec["title"], "ok": sec["ok"], "loaded": len(done), "total": total}
 
     sections, missing = [], []
     for _n, _e, title, _p, _ok in _DOSSIER_SPEC:  # 按清单顺序还原，保证底稿可读性稳定
@@ -191,23 +195,23 @@ _ROLE_PROMPTS = {
 1. **核心论点**（一句话）
 2. **支撑证据**（3-5 条，每条：论据 + 依据的具体数据）
 3. **这套逻辑成立的前提**（列出你的论点依赖哪些条件继续成立）
-""" + _COMMON_RULES,
-
+"""
+    + _COMMON_RULES,
     "bear": """你是一名**空方研究员**。基于底稿，找出这家公司基本面与估值上的风险与疑点，尽可能有力地质疑。
 输出格式：
 1. **核心质疑**（一句话）
 2. **风险证据**（3-5 条，每条：疑点 + 依据的具体数据）
 3. **这套逻辑成立的前提**（列出你的质疑依赖哪些条件继续成立）
-""" + _COMMON_RULES,
-
+"""
+    + _COMMON_RULES,
     "bull_rebut": """你是那名**多方研究员**。上面是空方的质疑。逐条回应：哪些质疑你承认（承认就明说），
 哪些你认为有数据可以反驳（给出数据），哪些属于双方都没有数据、只能存疑。不要重复第一轮的论述。
-""" + _COMMON_RULES,
-
+"""
+    + _COMMON_RULES,
     "bear_rebut": """你是那名**空方研究员**。上面是多方的论述。逐条回应：哪些论点你承认，
 哪些你认为有数据可以反驳（给出数据），哪些属于双方都没有数据、只能存疑。不要重复第一轮的质疑。
-""" + _COMMON_RULES,
-
+"""
+    + _COMMON_RULES,
     "referee": """你是**中立主持人**。你的任务不是裁决谁对谁错，更不是给出投资建议，而是把这场辩论的价值沉淀下来。
 
 输出格式：
@@ -247,10 +251,11 @@ def _build_messages(stage: str, facts: str, transcript: list[dict]) -> list[dict
             continue  # 首轮陈述：多方不看任何人，空方只看多方
         user_parts.append(f"【{_STAGE_LABEL[t['stage']]}的发言】\n{t['content']}")
     if not user_parts:
-        return [{"role": "system", "content": system},
-                {"role": "user", "content": "请基于底稿开始你的陈述。"}]
-    return [{"role": "system", "content": system},
-            {"role": "user", "content": "\n\n".join(user_parts) + "\n\n请按你的角色要求输出。"}]
+        return [{"role": "system", "content": system}, {"role": "user", "content": "请基于底稿开始你的陈述。"}]
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": "\n\n".join(user_parts) + "\n\n请按你的角色要求输出。"},
+    ]
 
 
 def run_debate_stream(cfg: dict, code: str, rounds: int = 1):
@@ -269,9 +274,11 @@ def run_debate_stream(cfg: dict, code: str, rounds: int = 1):
     if not any(not isinstance(s["data"], str) for s in dossier["sections"]):
         yield {"type": "error", "message": "未能取到任何客观数据，无法开始辩论（请检查代码是否正确、网络是否可达）"}
         return
-    yield {"type": "dossier",
-           "sections": [{"title": s["title"], "tool": s["tool"]} for s in dossier["sections"]],
-           "missing": dossier["missing"]}
+    yield {
+        "type": "dossier",
+        "sections": [{"title": s["title"], "tool": s["tool"]} for s in dossier["sections"]],
+        "missing": dossier["missing"],
+    }
 
     facts = dossier_text(dossier)
     transcript: list[dict] = []
@@ -298,8 +305,13 @@ def run_debate_stream(cfg: dict, code: str, rounds: int = 1):
             # 只发 error 的话这个角色会永远停在「生成中…」，并让「全部完成」判定不成立、
             # 连带后面能正常跑完的角色也存不进沉淀。
             yield {"type": "error", "stage": stage, "message": f"{_STAGE_LABEL[stage]}生成失败：{e}"}
-            yield {"type": "stage_done", "stage": stage, "label": _STAGE_LABEL[stage],
-                   "content": f"（本角色生成失败：{e}）", "failed": True}
+            yield {
+                "type": "stage_done",
+                "stage": stage,
+                "label": _STAGE_LABEL[stage],
+                "content": f"（本角色生成失败：{e}）",
+                "failed": True,
+            }
             continue  # 失败内容不进 transcript——不能把错误信息当论据喂给后面的角色
 
         content = "".join(buf).strip()

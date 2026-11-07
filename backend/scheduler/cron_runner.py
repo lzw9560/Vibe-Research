@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """CronScheduler 调度器——async ticker 循环 + stale run reap + fire-and-forget 任务执行。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -85,6 +86,7 @@ class CronScheduler:
     async def _tick(self) -> None:
         # R9：统一 BEIJING_TZ——now 带时区，cron 命中按北京时间比较（懒导入避免模块级重依赖）
         from limitup_screener import BEIJING_TZ
+
         now = datetime.now(BEIJING_TZ)
         # S150 R2：每轮 reap stale running run（>1300s 视挂死）→ DB 标 failed + discard
         # _running_task_ids，防 collect_once 挂死堵 dedup（根因 B 真修，与 R1 timeout 双保险）
@@ -117,13 +119,15 @@ class CronScheduler:
         # S190 R5：depends_on 门控
         if task.depends_on:
             from vr_paths import last_trading_date_str  # noqa: PLC0415
+
             today = last_trading_date_str()
             deps = [d.strip() for d in task.depends_on.split(",") if d.strip()]
             for dep_type in deps:
                 if not _manager.dependency_satisfied(dep_type, today):
                     logger.info(
                         "[scheduler] %s 跳过：依赖 %s 今日未 success/degraded",
-                        task.name, dep_type,
+                        task.name,
+                        dep_type,
                     )
                     return False
         return True
@@ -158,6 +162,7 @@ async def start_scheduler() -> None:
     """启动调度器（主循环 ticker）+ seed 默认任务。须在运行中的事件循环内 await（lifespan）。"""
     await get_scheduler().start()
     from scheduler.seed import _ensure_seed_tasks
+
     _ensure_seed_tasks()
 
 

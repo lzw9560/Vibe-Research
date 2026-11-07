@@ -1,6 +1,7 @@
 """
 LimitUp screener router.
 """
+
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query
@@ -28,32 +29,33 @@ def _check_threshold_sanity(params: LimitUpParamsBody) -> List[str]:
     warnings: List[str] = []
     try:
         from limitup_screener.data import get_db
+
         conn = get_db()
         row = conn.execute(
-            "SELECT MAX(total_score) as mx FROM gene_scores "
-            "WHERE date >= date('now', '-30 days')"
+            "SELECT MAX(total_score) as mx FROM gene_scores WHERE date >= date('now', '-30 days')"
         ).fetchone()
         conn.close()
         max_score = row["mx"] if row and row["mx"] is not None else None
         if max_score is not None:
             if params.gene_high_threshold > max_score:
                 warnings.append(
-                    f"高基因阈值 {params.gene_high_threshold} 高于近 30 日最高分 {max_score}，"
-                    f"high_gene 将恒为空"
+                    f"高基因阈值 {params.gene_high_threshold} 高于近 30 日最高分 {max_score}，high_gene 将恒为空"
                 )
             if params.gene_qualify_threshold > max_score:
                 warnings.append(
-                    f"合格阈值 {params.gene_qualify_threshold} 高于近 30 日最高分 {max_score}，"
-                    f"qualify 将恒为空"
+                    f"合格阈值 {params.gene_qualify_threshold} 高于近 30 日最高分 {max_score}，qualify 将恒为空"
                 )
     except Exception as e:  # noqa: BLE001
         import logging
+
         logging.getLogger(__name__).warning("查询失败不阻塞保存（降级）: %s", e)
     return warnings
 
 
 @router.get("/api/limitup/screener")
-async def limitup_screener(date: str = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")) -> Dict[str, Any]:
+async def limitup_screener(
+    date: str = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日"),
+) -> Dict[str, Any]:
     """获取今日/指定日期的全市场涨停股基因得分（客观数据，非行动建议）。"""
     try:
         result = await ls.get_screener_result(date)
@@ -90,6 +92,7 @@ async def trigger_screener() -> Dict[str, str]:
     """手动触发今日基因得分预计算（后台异步执行）。"""
     import asyncio
     import threading
+
     try:
         date_str = datetime.now().strftime("%Y-%m-%d")
         thread = threading.Thread(

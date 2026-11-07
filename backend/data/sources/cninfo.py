@@ -17,25 +17,49 @@ def investor_qa(code: str, page_size: int = 30) -> list[dict]:
     import requests
 
     try:
-        r1 = requests.post("https://irm.cninfo.com.cn/newircs/index/queryKeyboardInfo",
-                           data={"keyWord": code}, headers={"User-Agent": UA}, timeout=10)
+        r1 = requests.post(
+            "https://irm.cninfo.com.cn/newircs/index/queryKeyboardInfo",
+            data={"keyWord": code},
+            headers={"User-Agent": UA},
+            timeout=10,
+        )
         d1 = r1.json().get("data") or []
         if not d1:
             return []
         org_id = d1[0].get("secid")
-        params = {"_t": 1, "stockcode": code, "orgId": org_id, "pageSize": page_size,
-                  "pageNum": 1, "keyWord": "", "startDay": "", "endDay": ""}
-        rows = requests.post("https://irm.cninfo.com.cn/newircs/company/question",
-                             params=params, headers={"User-Agent": UA}, timeout=10).json().get("rows") or []
+        params = {
+            "_t": 1,
+            "stockcode": code,
+            "orgId": org_id,
+            "pageSize": page_size,
+            "pageNum": 1,
+            "keyWord": "",
+            "startDay": "",
+            "endDay": "",
+        }
+        rows = (
+            requests.post(
+                "https://irm.cninfo.com.cn/newircs/company/question",
+                params=params,
+                headers={"User-Agent": UA},
+                timeout=10,
+            )
+            .json()
+            .get("rows")
+            or []
+        )
     except Exception:
         return []
     out = []
     for it in rows:
         ts = it.get("pubDate")
-        out.append({
-            "company": it.get("companyShortName"),
-            "question": it.get("mainContent"), "answer": it.get("attachedContent"),
-            "answerer": it.get("attachedAuthor"),
-            "ask_time": datetime.fromtimestamp(ts / 1000).strftime("%Y-%m-%d %H:%M") if ts else "",
-        })
+        out.append(
+            {
+                "company": it.get("companyShortName"),
+                "question": it.get("mainContent"),
+                "answer": it.get("attachedContent"),
+                "answerer": it.get("attachedAuthor"),
+                "ask_time": datetime.fromtimestamp(ts / 1000).strftime("%Y-%m-%d %H:%M") if ts else "",
+            }
+        )
     return out

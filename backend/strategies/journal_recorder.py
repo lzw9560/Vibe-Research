@@ -27,6 +27,7 @@ gap-through-aware fill（open<=stop→fill=open, low<=stop→fill=stop*(1-eps)�
 一字跌停 sellability check。新 gross 写 gross_return_v2（冻结 gross_return 不动），
 exit_model_version="v2_gap_through_aware" 标记版本。
 """
+
 from __future__ import annotations
 
 import json
@@ -86,7 +87,8 @@ class JournalRecorder:
     """
 
     def __init__(
-        self, journal: TradeJournal | None = None,
+        self,
+        journal: TradeJournal | None = None,
         executor: Executor | None = None,
         bars_provider: BarsProvider | None = None,
     ) -> None:
@@ -94,6 +96,7 @@ class JournalRecorder:
         self._executor = executor or Executor()
         self._bars_provider = bars_provider or (lambda _code: [])
         from engine.paper_portfolio import PaperPortfolio  # noqa: PLC0415
+
         self._portfolio = PaperPortfolio(self._journal)
 
     def _arm_size(self, arm: str, base: float = DEFAULT_SIZE, regime: str | None = None) -> float:
@@ -115,7 +118,8 @@ class JournalRecorder:
     # 不在该表 → wire 会返"signal_id 不存在"。详见 audit-2026-09-20-v3。
 
     def run_daily(
-        self, target_date: str | None = None,
+        self,
+        target_date: str | None = None,
         arms: list[str] | None = None,
     ) -> dict:
         """每日盘后闭环管线（C1 orchestrator 顺序调用，非订阅）。
@@ -126,7 +130,10 @@ class JournalRecorder:
         arms = arms or DEFAULT_ARMS
         if target_date is None:
             from vr_paths import prev_trading_date_str  # noqa: PLC0415
-            target_date = prev_trading_date_str()  # S175 R4：T-1 信号日，T1OpenFill 在 T 成交（C5 fix no_t1_bar 误标 unbuyable）
+
+            target_date = (
+                prev_trading_date_str()
+            )  # S175 R4：T-1 信号日，T1OpenFill 在 T 成交（C5 fix no_t1_bar 误标 unbuyable）
 
         _logger.info("journal_recorder run_daily target_date=%s arms=%s", target_date, arms)
 
@@ -202,7 +209,8 @@ class JournalRecorder:
                 fill_status=FILL_ACCEPTED,
             )
             pr = path_return(
-                trades, bars,
+                trades,
+                bars,
                 stop_pct=BREAKOUT_STOP_PCT,
                 take_profit_pct=BREAKOUT_TAKE_PCT,
                 max_hold_days=BREAKOUT_MAX_HOLD,
@@ -263,7 +271,8 @@ class JournalRecorder:
                 fill_status=FILL_ACCEPTED,
             )
             pr = path_return(
-                trades, bars,
+                trades,
+                bars,
                 stop_pct=TREND_STOP_PCT,
                 take_profit_pct=TREND_TAKE_PCT,
                 max_hold_days=TREND_MAX_HOLD,
@@ -304,6 +313,7 @@ class JournalRecorder:
         if not hasattr(self, "_regime_cache") or self._regime_cache is None:
             try:
                 from tools.gap_regime_stratified import compute_regime_labels  # noqa: PLC0415
+
                 self._regime_cache = compute_regime_labels() or {}
             except Exception as e:  # noqa: BLE001
                 _logger.warning("compute_regime_labels 失败（regime=None 保守）: %s", e)
@@ -311,7 +321,10 @@ class JournalRecorder:
         return self._regime_cache.get(date)
 
     def _resolve_gap_exit(
-        self, bars: list[dict], d_idx: int, code: str,
+        self,
+        bars: list[dict],
+        d_idx: int,
+        code: str,
     ) -> tuple[float | None, str | None, dict]:
         """找 overnight gap 平仓的 exit price/date——D+1 一字跌停封死时找限跌打开日 open。
 
@@ -389,8 +402,7 @@ class JournalRecorder:
             if not bars:
                 continue
             d_idx = next(
-                (i for i, b in enumerate(bars)
-                 if str(b.get("date", ""))[:10] == pos.entry_date),
+                (i for i, b in enumerate(bars) if str(b.get("date", ""))[:10] == pos.entry_date),
                 None,
             )
             if d_idx is None or d_idx + 1 >= len(bars):
@@ -406,7 +418,10 @@ class JournalRecorder:
             regime = self._regime_for_date(pos.entry_date)
             size = self._arm_size("consecutive_relay", regime=regime)
             net_ratio, cost_pct, gross_ratio = gap_net_return(
-                entry_price, exit_price, entry_date=pos.entry_date, size=size,
+                entry_price,
+                exit_price,
+                entry_date=pos.entry_date,
+                size=size,
             )
             position_notional = entry_price * size
             net_pnl = net_ratio * position_notional
@@ -420,8 +435,7 @@ class JournalRecorder:
                 net_pnl=round(net_pnl, 2),
                 cost_pct=cost_pct,
                 exit_model_version=(
-                    "s211_overnight_gap" if exit_reason == "overnight_gap"
-                    else "s211_locked_gap_unlocked"
+                    "s211_overnight_gap" if exit_reason == "overnight_gap" else "s211_locked_gap_unlocked"
                 ),
             )
             if updated:
@@ -472,29 +486,39 @@ class JournalRecorder:
                 # D+1 bar 缺（T+1 guard）→ 'hold' is_realized=0
                 # entry_price=close_d（D 日 bar 已有，settle 时 exit=open[D+1] 补）
                 record = JournalRecord.create(
-                    arm="consecutive_relay", stock_code=code,
+                    arm="consecutive_relay",
+                    stock_code=code,
                     entry_price=close_d if close_d > 0 else None,
                     entry_date=target_date,
-                    exit_reason="hold", is_realized=0,
-                    fills_json=json.dumps({
-                        "optimism_flag": "d1_bar_missing_t1_guard",
-                        "lbc": cand.get("lbc"),
-                    }),
+                    exit_reason="hold",
+                    is_realized=0,
+                    fills_json=json.dumps(
+                        {
+                            "optimism_flag": "d1_bar_missing_t1_guard",
+                            "lbc": cand.get("lbc"),
+                        }
+                    ),
                 )
                 self._journal.insert(record)
                 continue
 
             # M5 财报季拉黑（DANGER_MONTHS 未披露 → 一字跌停风险，跳过交易）
             from routers.earnings_calendar import is_earnings_season_unsafe  # noqa: PLC0415
+
             if is_earnings_season_unsafe(code, target_date):
                 record = JournalRecord.create(
-                    arm="consecutive_relay", stock_code=code,
-                    entry_price=None, entry_date=target_date,
-                    exit_reason="earnings_season_blacklist", is_realized=1,
-                    fills_json=json.dumps({
-                        "blacklist_reason": "earnings_season_undisclosed",
-                        "lbc": cand.get("lbc"),
-                    }),
+                    arm="consecutive_relay",
+                    stock_code=code,
+                    entry_price=None,
+                    entry_date=target_date,
+                    exit_reason="earnings_season_blacklist",
+                    is_realized=1,
+                    fills_json=json.dumps(
+                        {
+                            "blacklist_reason": "earnings_season_undisclosed",
+                            "lbc": cand.get("lbc"),
+                        }
+                    ),
                 )
                 self._journal.insert(record)
                 n_earnings_blacklist += 1
@@ -503,13 +527,18 @@ class JournalRecorder:
             # D 日一字板 filter（入场日 close 买不到，survivorship 过滤）
             if _is_unbuyable_next_bar(bars[d_idx], code=code):
                 record = JournalRecord.create(
-                    arm="consecutive_relay", stock_code=code,
-                    entry_price=None, entry_date=target_date,
-                    exit_reason="unbuyable", is_realized=1,
-                    fills_json=json.dumps({
-                        "fill_reason": "d_day_unbuyable_一字板",
-                        "lbc": cand.get("lbc"),
-                    }),
+                    arm="consecutive_relay",
+                    stock_code=code,
+                    entry_price=None,
+                    entry_date=target_date,
+                    exit_reason="unbuyable",
+                    is_realized=1,
+                    fills_json=json.dumps(
+                        {
+                            "fill_reason": "d_day_unbuyable_一字板",
+                            "lbc": cand.get("lbc"),
+                        }
+                    ),
                 )
                 self._journal.insert(record)
                 n_unbuyable += 1
@@ -521,10 +550,12 @@ class JournalRecorder:
                 # D+1 一字跌停封死且限跌未打开（到 cache 末仍 locked）→ 卖不掉, 诚实记 None
                 # is_realized=0（settle 次日 cache 增长后若打开则 re-settle at 打开日 open）
                 record = JournalRecord.create(
-                    arm="consecutive_relay", stock_code=code,
+                    arm="consecutive_relay",
+                    stock_code=code,
                     entry_price=close_d if close_d > 0 else None,
                     entry_date=target_date,
-                    exit_reason="d1_onesell_locked_unsold", is_realized=0,
+                    exit_reason="d1_onesell_locked_unsold",
+                    is_realized=0,
                     fills_json=json.dumps({**info, "lbc": cand.get("lbc")}),
                 )
                 self._journal.insert(record)
@@ -535,15 +566,20 @@ class JournalRecorder:
             regime = self._regime_for_date(target_date)
             size = self._arm_size("consecutive_relay", regime=regime)
             net_ratio, cost_pct, gross_ratio = gap_net_return(
-                close_d, exit_price, entry_date=target_date, size=size,
+                close_d,
+                exit_price,
+                entry_date=target_date,
+                size=size,
             )
             position_notional = close_d * size
             net_pnl = net_ratio * position_notional
             exit_reason = "overnight_gap" if info["arm_path"] == "overnight_gap" else "locked_gap_unlocked"
 
             record = JournalRecord.create(
-                arm="consecutive_relay", stock_code=code,
-                entry_price=close_d, entry_date=target_date,
+                arm="consecutive_relay",
+                stock_code=code,
+                entry_price=close_d,
+                entry_date=target_date,
                 exit_price=exit_price,
                 exit_date=exit_date,
                 exit_reason=exit_reason,
@@ -551,15 +587,17 @@ class JournalRecorder:
                 cost_pct=cost_pct,
                 gross_return=round(gross_ratio * 100, 4),
                 is_realized=1,
-                fills_json=json.dumps({
-                    "net_ratio": round(net_ratio, 6),
-                    "gross_ratio": round(gross_ratio, 6),
-                    "cost_pct": cost_pct,
-                    "position_notional": round(position_notional, 2),
-                    "regime": regime,
-                    "lbc": cand.get("lbc"),
-                    **info,
-                }),
+                fills_json=json.dumps(
+                    {
+                        "net_ratio": round(net_ratio, 6),
+                        "gross_ratio": round(gross_ratio, 6),
+                        "cost_pct": cost_pct,
+                        "position_notional": round(position_notional, 2),
+                        "regime": regime,
+                        "lbc": cand.get("lbc"),
+                        **info,
+                    }
+                ),
             )
             self._journal.insert(record)
             n_buyable += 1
@@ -612,13 +650,18 @@ class JournalRecorder:
             if not filled.is_accepted():
                 # survivorship 过滤：涨停买不到（A5）
                 record = JournalRecord.create(
-                    arm="breakout", stock_code=cand.code,
-                    entry_price=None, entry_date=target_date,
-                    exit_reason="unbuyable", is_realized=1,
-                    fills_json=json.dumps({
-                        "fill_status": filled.fill_status,
-                        "fill_reason": filled.fill_reason,
-                    }),
+                    arm="breakout",
+                    stock_code=cand.code,
+                    entry_price=None,
+                    entry_date=target_date,
+                    exit_reason="unbuyable",
+                    is_realized=1,
+                    fills_json=json.dumps(
+                        {
+                            "fill_status": filled.fill_status,
+                            "fill_reason": filled.fill_reason,
+                        }
+                    ),
                 )
                 self._journal.insert(record)
                 n_unbuyable += 1
@@ -626,7 +669,8 @@ class JournalRecorder:
 
             n_buyable += 1
             pr = path_return(
-                filled, bars,
+                filled,
+                bars,
                 stop_pct=BREAKOUT_STOP_PCT,
                 take_profit_pct=BREAKOUT_TAKE_PCT,
                 max_hold_days=BREAKOUT_MAX_HOLD,
@@ -635,13 +679,18 @@ class JournalRecorder:
             if pr is None:
                 # T+1 guard 或数据不足 → 仍录 entry，标 unrealized
                 record = JournalRecord.create(
-                    arm="breakout", stock_code=cand.code,
-                    entry_price=filled.entry_price, entry_date=target_date,
-                    exit_reason="hold", is_realized=0,
-                    fills_json=json.dumps({
-                        "fill_status": filled.fill_status,
-                        "optimism_flag": "path_return_none_t1_guard",
-                    }),
+                    arm="breakout",
+                    stock_code=cand.code,
+                    entry_price=filled.entry_price,
+                    entry_date=target_date,
+                    exit_reason="hold",
+                    is_realized=0,
+                    fills_json=json.dumps(
+                        {
+                            "fill_status": filled.fill_status,
+                            "optimism_flag": "path_return_none_t1_guard",
+                        }
+                    ),
                 )
                 self._journal.insert(record)
                 continue
@@ -651,25 +700,30 @@ class JournalRecorder:
             pr.gross_return_pct / 100.0 * position_notional
 
             record = JournalRecord.create(
-                arm="breakout", stock_code=cand.code,
-                entry_price=filled.entry_price, entry_date=target_date,
+                arm="breakout",
+                stock_code=cand.code,
+                entry_price=filled.entry_price,
+                entry_date=target_date,
                 exit_price=pr.exit_price,  # S175 R6：PathReturn.exit_price（T2 三分支均设），非 position_notional/DEFAULT_SIZE=entry_price bug
-                exit_date=pr.exit_date, exit_reason=pr.exit_reason,
+                exit_date=pr.exit_date,
+                exit_reason=pr.exit_reason,
                 net_pnl=round(net_pnl, 2),
                 cost_pct=pr.cost_pct,
                 gross_return=pr.gross_return_pct,
                 is_realized=1,
-                fills_json=json.dumps({
-                    "won": pr.won,
-                    "return_pct": pr.return_pct,
-                    "exit_reason": pr.exit_reason,
-                    "exit_date": pr.exit_date,
-                    "cost_pct": pr.cost_pct,
-                    "gross_return_pct": pr.gross_return_pct,
-                    "optimism_flag": "gap_through_modeled_v2",
-                    "raw_exit_reason": pr.exit_reason,
-                    "position_notional": round(position_notional, 2),
-                }),
+                fills_json=json.dumps(
+                    {
+                        "won": pr.won,
+                        "return_pct": pr.return_pct,
+                        "exit_reason": pr.exit_reason,
+                        "exit_date": pr.exit_date,
+                        "cost_pct": pr.cost_pct,
+                        "gross_return_pct": pr.gross_return_pct,
+                        "optimism_flag": "gap_through_modeled_v2",
+                        "raw_exit_reason": pr.exit_reason,
+                        "position_notional": round(position_notional, 2),
+                    }
+                ),
             )
             self._journal.insert(record)
             n_realized += 1
@@ -717,13 +771,18 @@ class JournalRecorder:
             if not filled.is_accepted():
                 # survivorship 过滤：一字板封死买不到
                 record = JournalRecord.create(
-                    arm="post_first_board", stock_code=cand["code"],
-                    entry_price=None, entry_date=target_date,
-                    exit_reason="unbuyable", is_realized=1,
-                    fills_json=json.dumps({
-                        "fill_status": filled.fill_status,
-                        "fill_reason": filled.fill_reason,
-                    }),
+                    arm="post_first_board",
+                    stock_code=cand["code"],
+                    entry_price=None,
+                    entry_date=target_date,
+                    exit_reason="unbuyable",
+                    is_realized=1,
+                    fills_json=json.dumps(
+                        {
+                            "fill_status": filled.fill_status,
+                            "fill_reason": filled.fill_reason,
+                        }
+                    ),
                 )
                 self._journal.insert(record)
                 n_unbuyable += 1
@@ -731,7 +790,8 @@ class JournalRecorder:
 
             n_buyable += 1
             pr = path_return(
-                filled, bars,
+                filled,
+                bars,
                 stop_pct=POST_FIRST_BOARD_STOP_PCT,
                 take_profit_pct=POST_FIRST_BOARD_TAKE_PCT,
                 max_hold_days=POST_FIRST_BOARD_MAX_HOLD,
@@ -740,13 +800,18 @@ class JournalRecorder:
             if pr is None:
                 # T+1 guard 或数据不足 → 仍录 entry，标 unrealized 'hold'
                 record = JournalRecord.create(
-                    arm="post_first_board", stock_code=cand["code"],
-                    entry_price=filled.entry_price, entry_date=target_date,
-                    exit_reason="hold", is_realized=0,
-                    fills_json=json.dumps({
-                        "fill_status": filled.fill_status,
-                        "optimism_flag": "path_return_none_t1_guard",
-                    }),
+                    arm="post_first_board",
+                    stock_code=cand["code"],
+                    entry_price=filled.entry_price,
+                    entry_date=target_date,
+                    exit_reason="hold",
+                    is_realized=0,
+                    fills_json=json.dumps(
+                        {
+                            "fill_status": filled.fill_status,
+                            "optimism_flag": "path_return_none_t1_guard",
+                        }
+                    ),
                 )
                 self._journal.insert(record)
                 continue
@@ -755,27 +820,32 @@ class JournalRecorder:
             net_pnl = pr.return_pct / 100.0 * position_notional
 
             record = JournalRecord.create(
-                arm="post_first_board", stock_code=cand["code"],
-                entry_price=filled.entry_price, entry_date=target_date,
+                arm="post_first_board",
+                stock_code=cand["code"],
+                entry_price=filled.entry_price,
+                entry_date=target_date,
                 exit_price=pr.exit_price,
-                exit_date=pr.exit_date, exit_reason=pr.exit_reason,
+                exit_date=pr.exit_date,
+                exit_reason=pr.exit_reason,
                 net_pnl=round(net_pnl, 2),
                 cost_pct=pr.cost_pct,
                 gross_return=pr.gross_return_pct,
                 is_realized=1,
-                fills_json=json.dumps({
-                    "won": pr.won,
-                    "return_pct": pr.return_pct,
-                    "exit_reason": pr.exit_reason,
-                    "exit_date": pr.exit_date,
-                    "cost_pct": pr.cost_pct,
-                    "gross_return_pct": pr.gross_return_pct,
-                    "optimism_flag": "exploratory_paper_gap_through_modeled_v2",
-                    "raw_exit_reason": pr.exit_reason,
-                    "position_notional": round(position_notional, 2),
-                    "lbc": cand.get("lbc"),
-                    "zt_count_today": cand.get("zt_count_today"),
-                }),
+                fills_json=json.dumps(
+                    {
+                        "won": pr.won,
+                        "return_pct": pr.return_pct,
+                        "exit_reason": pr.exit_reason,
+                        "exit_date": pr.exit_date,
+                        "cost_pct": pr.cost_pct,
+                        "gross_return_pct": pr.gross_return_pct,
+                        "optimism_flag": "exploratory_paper_gap_through_modeled_v2",
+                        "raw_exit_reason": pr.exit_reason,
+                        "position_notional": round(position_notional, 2),
+                        "lbc": cand.get("lbc"),
+                        "zt_count_today": cand.get("zt_count_today"),
+                    }
+                ),
             )
             self._journal.insert(record)
             n_realized += 1
@@ -831,13 +901,18 @@ class JournalRecorder:
             if not filled.is_accepted():
                 # survivorship 过滤：涨停买不到（A5）
                 record = JournalRecord.create(
-                    arm="trend", stock_code=code,
-                    entry_price=None, entry_date=target_date,
-                    exit_reason="unbuyable", is_realized=1,
-                    fills_json=json.dumps({
-                        "fill_status": filled.fill_status,
-                        "fill_reason": filled.fill_reason,
-                    }),
+                    arm="trend",
+                    stock_code=code,
+                    entry_price=None,
+                    entry_date=target_date,
+                    exit_reason="unbuyable",
+                    is_realized=1,
+                    fills_json=json.dumps(
+                        {
+                            "fill_status": filled.fill_status,
+                            "fill_reason": filled.fill_reason,
+                        }
+                    ),
                 )
                 self._journal.insert(record)
                 n_unbuyable += 1
@@ -845,7 +920,8 @@ class JournalRecorder:
 
             n_buyable += 1
             pr = path_return(
-                filled, bars,
+                filled,
+                bars,
                 stop_pct=TREND_STOP_PCT,
                 take_profit_pct=TREND_TAKE_PCT,
                 max_hold_days=TREND_MAX_HOLD,
@@ -854,13 +930,18 @@ class JournalRecorder:
             if pr is None:
                 # T+1 guard 或数据不足 → 仍录 entry，标 unrealized
                 record = JournalRecord.create(
-                    arm="trend", stock_code=code,
-                    entry_price=filled.entry_price, entry_date=target_date,
-                    exit_reason="hold", is_realized=0,
-                    fills_json=json.dumps({
-                        "fill_status": filled.fill_status,
-                        "optimism_flag": "path_return_none_t1_guard",
-                    }),
+                    arm="trend",
+                    stock_code=code,
+                    entry_price=filled.entry_price,
+                    entry_date=target_date,
+                    exit_reason="hold",
+                    is_realized=0,
+                    fills_json=json.dumps(
+                        {
+                            "fill_status": filled.fill_status,
+                            "optimism_flag": "path_return_none_t1_guard",
+                        }
+                    ),
                 )
                 self._journal.insert(record)
                 continue
@@ -870,30 +951,35 @@ class JournalRecorder:
             pr.gross_return_pct / 100.0 * position_notional
 
             record = JournalRecord.create(
-                arm="trend", stock_code=code,
-                entry_price=filled.entry_price, entry_date=target_date,
+                arm="trend",
+                stock_code=code,
+                entry_price=filled.entry_price,
+                entry_date=target_date,
                 exit_price=pr.exit_price,  # PathReturn.exit_price（T2 三分支均设）
-                exit_date=pr.exit_date, exit_reason=pr.exit_reason,
+                exit_date=pr.exit_date,
+                exit_reason=pr.exit_reason,
                 net_pnl=round(net_pnl, 2),
                 cost_pct=pr.cost_pct,
                 gross_return=pr.gross_return_pct,
                 is_realized=1,
-                fills_json=json.dumps({
-                    "won": pr.won,
-                    "return_pct": pr.return_pct,
-                    "exit_reason": pr.exit_reason,
-                    "exit_date": pr.exit_date,
-                    "cost_pct": pr.cost_pct,
-                    "gross_return_pct": pr.gross_return_pct,
-                    "optimism_flag": "gap_through_modeled_v2",
-                    "raw_exit_reason": pr.exit_reason,
-                    "position_notional": round(position_notional, 2),
-                    "arm_params": {
-                        "stop_pct": TREND_STOP_PCT,
-                        "take_pct": TREND_TAKE_PCT,
-                        "max_hold": TREND_MAX_HOLD,
-                    },
-                }),
+                fills_json=json.dumps(
+                    {
+                        "won": pr.won,
+                        "return_pct": pr.return_pct,
+                        "exit_reason": pr.exit_reason,
+                        "exit_date": pr.exit_date,
+                        "cost_pct": pr.cost_pct,
+                        "gross_return_pct": pr.gross_return_pct,
+                        "optimism_flag": "gap_through_modeled_v2",
+                        "raw_exit_reason": pr.exit_reason,
+                        "position_notional": round(position_notional, 2),
+                        "arm_params": {
+                            "stop_pct": TREND_STOP_PCT,
+                            "take_pct": TREND_TAKE_PCT,
+                            "max_hold": TREND_MAX_HOLD,
+                        },
+                    }
+                ),
             )
             self._journal.insert(record)
             n_realized += 1
@@ -918,7 +1004,9 @@ class JournalRecorder:
         6. trade_journal.insert(is_realized=0)
         """
         from strategies.index_replication_floor import (  # noqa: PLC0415
-            build_position_batches, ETF_CODE)
+            build_position_batches,
+            ETF_CODE,
+        )
 
         batches = build_position_batches(one_shot=True, start_date=target_date)
         if not batches:
@@ -944,14 +1032,19 @@ class JournalRecorder:
 
             if not filled.is_accepted() or filled.entry_price is None:
                 record = JournalRecord.create(
-                    arm="floor", stock_code=etf_code,
-                    entry_price=None, entry_date=batch_date,
-                    exit_reason="unbuyable", is_realized=1,
-                    fills_json=json.dumps({
-                        "fill_status": filled.fill_status,
-                        "fill_reason": filled.fill_reason,
-                        "batch_amount": amount,
-                    }),
+                    arm="floor",
+                    stock_code=etf_code,
+                    entry_price=None,
+                    entry_date=batch_date,
+                    exit_reason="unbuyable",
+                    is_realized=1,
+                    fills_json=json.dumps(
+                        {
+                            "fill_status": filled.fill_status,
+                            "fill_reason": filled.fill_reason,
+                            "batch_amount": amount,
+                        }
+                    ),
                 )
                 self._journal.insert(record)
                 continue
@@ -965,19 +1058,24 @@ class JournalRecorder:
                 unrealized_pnl = round((current_close - entry_price) * DEFAULT_SIZE, 2)
 
             record = JournalRecord.create(
-                arm="floor", stock_code=etf_code,
-                entry_price=entry_price, entry_date=batch_date,
+                arm="floor",
+                stock_code=etf_code,
+                entry_price=entry_price,
+                entry_date=batch_date,
                 exit_reason="hold",  # C3：不主动平仓
                 is_realized=0,
                 unrealized_pnl=unrealized_pnl,
                 gross_return=round((current_close - entry_price) / entry_price * 100, 4)
-                if current_close and entry_price else None,
-                fills_json=json.dumps({
-                    "fill_status": filled.fill_status,
-                    "batch_amount": amount,
-                    "entry_commission_only": True,
-                    "mtm_track": "floor_c3_c6",
-                }),
+                if current_close and entry_price
+                else None,
+                fills_json=json.dumps(
+                    {
+                        "fill_status": filled.fill_status,
+                        "batch_amount": amount,
+                        "entry_commission_only": True,
+                        "mtm_track": "floor_c3_c6",
+                    }
+                ),
             )
             self._journal.insert(record)
             n_realized += 1
@@ -995,7 +1093,9 @@ class JournalRecorder:
         按 ETF close 重算 unrealized_pnl = (current_close - entry_price) × shares。
         """
         open_positions = self._journal.query_records(
-            arm="floor", is_realized=0, is_dead_arm=None,
+            arm="floor",
+            is_realized=0,
+            is_dead_arm=None,
         )
         updated = 0
         for pos in open_positions:
@@ -1006,7 +1106,8 @@ class JournalRecorder:
             if current_close is None:
                 continue
             unrealized = round(
-                (current_close - float(pos.entry_price)) * DEFAULT_SIZE, 2,
+                (current_close - float(pos.entry_price)) * DEFAULT_SIZE,
+                2,
             )
             if self._journal.update_unrealized(pos.signal_id, unrealized, current_close):
                 updated += 1
@@ -1029,27 +1130,35 @@ class JournalRecorder:
         position_notional = mock_entry * DEFAULT_SIZE
 
         net_ratio, cost_pct, gross_ratio = gap_net_return(
-            mock_entry, mock_exit, entry_date=target_date, size=DEFAULT_SIZE,
+            mock_entry,
+            mock_exit,
+            entry_date=target_date,
+            size=DEFAULT_SIZE,
         )
         net_pnl = net_ratio * position_notional
 
         record = JournalRecord.create(
-            arm="gap", stock_code="mock_gap",
-            entry_price=mock_entry, entry_date=target_date,
-            exit_price=mock_exit, exit_date=target_date,
+            arm="gap",
+            stock_code="mock_gap",
+            entry_price=mock_entry,
+            entry_date=target_date,
+            exit_price=mock_exit,
+            exit_date=target_date,
             exit_reason="signal",
             net_pnl=round(net_pnl, 2),
             cost_pct=cost_pct,
             gross_return=round(gross_ratio * 100, 4),
             is_realized=1,
             is_dead_arm=1,  # gap falsified，不参与聚合胜率但保留录
-            fills_json=json.dumps({
-                "net_ratio": net_ratio,
-                "gross_ratio": gross_ratio,
-                "cost_pct": cost_pct,
-                "position_notional": position_notional,
-                "note": "gap falsified (§44 cost illusion), retained for audit",
-            }),
+            fills_json=json.dumps(
+                {
+                    "net_ratio": net_ratio,
+                    "gross_ratio": gross_ratio,
+                    "cost_pct": cost_pct,
+                    "position_notional": position_notional,
+                    "note": "gap falsified (§44 cost illusion), retained for audit",
+                }
+            ),
         )
         self._journal.insert(record)
         return {
@@ -1068,14 +1177,19 @@ class JournalRecorder:
         trend 已于 S181 升为实臂（_process_trend），此处仅 limitup 残留 mock。
         """
         record = JournalRecord.create(
-            arm=arm, stock_code=f"mock_{arm}",
-            entry_price=10.0, entry_date=target_date,
-            exit_reason="hold", is_realized=0,
+            arm=arm,
+            stock_code=f"mock_{arm}",
+            entry_price=10.0,
+            entry_date=target_date,
+            exit_reason="hold",
+            is_realized=0,
             is_dead_arm=0,
-            fills_json=json.dumps({
-                "mock": True,
-                "note": f"{arm} paper arm, signal generator not yet wired",
-            }),
+            fills_json=json.dumps(
+                {
+                    "mock": True,
+                    "note": f"{arm} paper arm, signal generator not yet wired",
+                }
+            ),
         )
         self._journal.insert(record)
         return {
@@ -1112,10 +1226,7 @@ class JournalRecorder:
             return None
         candidates = bars
         if target_date is not None:
-            candidates = [
-                b for b in bars
-                if str(b.get("date", "") if isinstance(b, dict) else "")[:10] <= target_date
-            ]
+            candidates = [b for b in bars if str(b.get("date", "") if isinstance(b, dict) else "")[:10] <= target_date]
             if not candidates:
                 return None
         for bar in reversed(candidates):

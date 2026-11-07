@@ -12,6 +12,7 @@ bars-based indicators（compute_volume_rhythm/pullback/reversal_confirm）从 ba
 
 跑法：cd backend && .venv/bin/python tools/s205_strategy_harness.py [战法名]
 """
+
 import importlib
 import sqlite3
 import statistics
@@ -116,10 +117,7 @@ def compute_obs(
         cost_pct = cost_fn(open_d1, 100.0, D) if open_d1 > 0 else 0.0
         cost_dec = cost_pct / 100.0
         net = gap_ret - cost_dec
-        obs.append(
-            {"D": D, "code": code, "net": net, "win": 1 if net > 0 else 0,
-             "cost": cost_dec, "score": score}
-        )
+        obs.append({"D": D, "code": code, "net": net, "win": 1 if net > 0 else 0, "cost": cost_dec, "score": score})
     return obs
 
 
@@ -130,6 +128,7 @@ def main(战法: str = "ruozhuanqiang") -> dict:
         return {}
     cache = _load_kline_cache()
     import datetime  # noqa: PLC0415
+
     validate_or_reject(
         "baostock_kline",
         [b for bars in cache.values() for b in bars],
@@ -159,15 +158,16 @@ def main(战法: str = "ruozhuanqiang") -> dict:
 
     harness_mod = importlib.import_module(HARNESS_MODULES[战法])
     results = harness_mod.run(
-        returns=rets, dates=dts, regime_map=regime_map,
+        returns=rets,
+        dates=dts,
+        regime_map=regime_map,
         universe_by_day=universe_by_day,
         round_trip_cost=round(mean_cost, 6),
     )
     wr = sum(o["win"] for o in obs) / n_obs
     net_mean = statistics.mean(rets)
     print(
-        f"[{战法}] all net-WR: {wr*100:.2f}% net_mean={net_mean*100:.2f}% "
-        f"(扣 cost ~{mean_cost*100:.2f}%)",
+        f"[{战法}] all net-WR: {wr * 100:.2f}% net_mean={net_mean * 100:.2f}% (扣 cost ~{mean_cost * 100:.2f}%)",
         flush=True,
     )
     print(f"\n[{战法}] verdict:")
@@ -177,8 +177,13 @@ def main(战法: str = "ruozhuanqiang") -> dict:
             f"  {tag}: n={r.get('n_picks')} days={r.get('n_days')} "
             f"net_mean={r.get('net_mean_pct')} wr={r.get('win_rate')} verdict={st}"
         )
-    return {"results": results, "n_obs": n_obs, "days": days,
-            "net_mean_pct": round(net_mean * 100, 4), "net_wr": round(wr, 4)}
+    return {
+        "results": results,
+        "n_obs": n_obs,
+        "days": days,
+        "net_mean_pct": round(net_mean * 100, 4),
+        "net_wr": round(wr, 4),
+    }
 
 
 if __name__ == "__main__":

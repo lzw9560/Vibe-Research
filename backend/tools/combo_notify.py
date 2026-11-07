@@ -14,6 +14,7 @@ combo edge（5脚本全套 §44v3 确认 2026-10-29）：去涨停 +1.07% net t=
 walk-forward test t=3.20（衰减13%），R12 alpha +0.62% t=6.85（真选股非 size premium）。
 caveat：当前 regime 错（2026 弱市 gate=OFF）非 edge 假，等 regime 转向 + 60 天前向验证。
 """
+
 from __future__ import annotations
 
 import json
@@ -29,7 +30,9 @@ if bp not in sys.path:
 from tools.commander_runner import load_combo_5d_today, push_feishu  # noqa: E402
 from vr_paths import resolve_data_dir  # noqa: E402
 
-KLINE_DB = resolve_data_dir() / "baostock_kline_cache.db"  # 项目根 .vibe-research/（parents[1]=backend/.vibe-research 是 4096 stub，compute_gate 查 no such table kline 就是这 bug，2026-10-30 戳破）
+KLINE_DB = (
+    resolve_data_dir() / "baostock_kline_cache.db"
+)  # 项目根 .vibe-research/（parents[1]=backend/.vibe-research 是 4096 stub，compute_gate 查 no such table kline 就是这 bug，2026-10-30 戳破）
 
 
 def compute_gate(date: str | None = None) -> dict:
@@ -81,8 +84,10 @@ def compute_gate(date: str | None = None) -> dict:
     sm5 = statistics.mean(x["past5"] for x in srt[:dec])
     viable = breadth > 0.4 and sm5 > 0
     return {
-        "viable": viable, "n": len(by_date),
-        "breadth": round(breadth * 100, 1), "small_5d": round(sm5 * 100, 2),
+        "viable": viable,
+        "n": len(by_date),
+        "breadth": round(breadth * 100, 1),
+        "small_5d": round(sm5 * 100, 2),
     }
 
 
@@ -105,8 +110,10 @@ def main() -> None:
         f"【今日 top-20 候选】（去涨停，5日持有 nostop，次日 09:25 集合竞价买）",
     ]
     for i, p in enumerate(picks, 1):
-        pos_1pct = p['amount'] * 100  # 1%ADV 万元（amount亿×1e8×0.01=amount×1e6元=amount×100万，低冲击<10bps）
-        lines.append(f"  {i:>2}. {p['code']}: 涨{p['today_ret']}% gap{p['gap']}% 额{p['amount']}亿 仓≈{pos_1pct:.0f}万(1%ADV)")
+        pos_1pct = p["amount"] * 100  # 1%ADV 万元（amount亿×1e8×0.01=amount×1e6元=amount×100万，低冲击<10bps）
+        lines.append(
+            f"  {i:>2}. {p['code']}: 涨{p['today_ret']}% gap{p['gap']}% 额{p['amount']}亿 仓≈{pos_1pct:.0f}万(1%ADV)"
+        )
     lines += [
         "",
         "【怎么执行】",

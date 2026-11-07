@@ -30,18 +30,19 @@ class SentimentContext:
     一次采集、逐级下传；不可变（frozen=False 因 dataclass 默认，但调用方
     不应 mutate——如需修改建新实例）。
     """
-    source_date: str | None            # T-1 日期（数据来源日）
-    decision_date: str                 # T 日期（决策适用日）
-    weather_state: str | None          # 晴天/阴天/暴风雨/极端反弹/未知
-    sti_score: float | None            # T-1 STI 分数（S072：复盘用，选股链前端不展示；weather_state 计算内部用）
-    sti_phase: str | None              # T-1 STI 阶段（同上，复盘用不展示）
+
+    source_date: str | None  # T-1 日期（数据来源日）
+    decision_date: str  # T 日期（决策适用日）
+    weather_state: str | None  # 晴天/阴天/暴风雨/极端反弹/未知
+    sti_score: float | None  # T-1 STI 分数（S072：复盘用，选股链前端不展示；weather_state 计算内部用）
+    sti_phase: str | None  # T-1 STI 阶段（同上，复盘用不展示）
     fuse_state: dict[str, Any] | None  # 三条熔断规则状态
-    allowed_styles: list[str] = field(default_factory=list)   # 今日允许的战法 code 列表
+    allowed_styles: list[str] = field(default_factory=list)  # 今日允许的战法 code 列表
     forbidden_styles: list[str] = field(default_factory=list)  # 今日禁用的战法 code 列表
     composite_score: float | None = None  # 多因子综合分
-    factors: dict[str, Any] | None = None   # 5 因子明细
+    factors: dict[str, Any] | None = None  # 5 因子明细
     change_from_yesterday: float | None = None  # STI 较前日变化
-    data_status: str = "ok"            # ok | missing（T-1 数据缺失）
+    data_status: str = "ok"  # ok | missing（T-1 数据缺失）
 
     def to_dict(self) -> dict[str, Any]:
         """序列化为 JSON 安全结构（供简报响应/快照持久化）。"""
@@ -70,9 +71,7 @@ def _load_t1_sti_row(decision_date: str) -> dict[str, Any] | None:
     try:
         db = get_db()
         row = db.execute(
-            "SELECT * FROM sti_timeline "
-            "WHERE date < ? AND score IS NOT NULL "
-            "ORDER BY date DESC LIMIT 1",
+            "SELECT * FROM sti_timeline WHERE date < ? AND score IS NOT NULL ORDER BY date DESC LIMIT 1",
             (decision_date,),
         ).fetchone()
         return dict(row) if row else None
@@ -171,11 +170,7 @@ def _compute_weather_from_row(
     limit_up = _safe_float(t1_row.get("dimension_limit_up_count"))
 
     # 风险指标（0-100，越高=风险越低）——对齐 _calculate_risk_score
-    risk = 100 - (
-        min(limit_down * 2, 30)
-        + max(0, 30 - seal_rate)
-        + max(0, 20 - max_boards * 5)
-    )
+    risk = 100 - (min(limit_down * 2, 30) + max(0, 30 - seal_rate) + max(0, 20 - max_boards * 5))
     risk_score = max(0.0, min(100.0, risk))
 
     # 板块持续性 —— 对齐 _calculate_sector_continuity
@@ -188,9 +183,7 @@ def _compute_weather_from_row(
     # 舆情情绪 —— 对齐 _calculate_public_sentiment
     public_sentiment = min(100.0, max(0.0, (ad_ratio * 20) + (seal_rate * 0.3) + (limit_up - limit_down) * 2))
 
-    weather = _calculate_weather_state(
-        sti_score, risk_score, sector_continuity, capital_momentum, public_sentiment
-    )
+    weather = _calculate_weather_state(sti_score, risk_score, sector_continuity, capital_momentum, public_sentiment)
 
     factors = {
         "sti": {"score": sti_score, "weight": 0.40, "name": "STI 情绪温度"},

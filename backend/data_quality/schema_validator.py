@@ -17,6 +17,7 @@ anomaly（异常值）+ freshness（时效）。bad data → ``ok=False``，§44
 ``rows = validate_or_reject("baostock_kline", rows, as_of="2026-09-06")``，
 bad data 抛 ``DataQualityError``，verifier 不把脏数据当 verdict 输入。
 """
+
 from __future__ import annotations
 
 import logging
@@ -301,7 +302,8 @@ _EASTMONEY_BLOCK_TRADE = SourceSchema(
 
 #: schema 注册表（新增源只加一项）
 SCHEMA_REGISTRY: dict[str, SourceSchema] = {
-    s.source_id: s for s in (
+    s.source_id: s
+    for s in (
         _BAOSTOCK_KLINE,
         _THS_LIMIT_UP,
         _EM_ZT_TOPIC_POOL,
@@ -319,9 +321,8 @@ SCHEMA_REGISTRY: dict[str, SourceSchema] = {
 # 校验引擎
 # ---------------------------------------------------------------------------
 
-def _rows_of(
-    data: Any, shape: _Shape, list_fields: tuple[str, ...] = ()
-) -> tuple[list[dict], int]:
+
+def _rows_of(data: Any, shape: _Shape, list_fields: tuple[str, ...] = ()) -> tuple[list[dict], int]:
     """按 shape 把输入归一成待校验行列表 + row_count。
 
     list_of_dicts → data 本身；dict_of_dicts → data.values()（内层 dict）。
@@ -401,16 +402,18 @@ def _check_content(rows: list[dict], schema: SourceSchema) -> list[str]:
             va, vb = r.get(fa), r.get(fb)
             if not isinstance(va, (int, float)) or not isinstance(vb, (int, float)):
                 continue
-            bad = (op == ">=" and va < vb) or (op == "<=" and va > vb) or \
-                  (op == ">" and va <= vb) or (op == "<" and va >= vb)
+            bad = (
+                (op == ">=" and va < vb)
+                or (op == "<=" and va > vb)
+                or (op == ">" and va <= vb)
+                or (op == "<" and va >= vb)
+            )
             if bad:
                 errors.append(f"行{i} 完整性违反 {fa}{op}{fb} ({va}, {vb})")
     return errors
 
 
-def _check_freshness(
-    rows: list[dict], schema: SourceSchema, as_of: str | None
-) -> tuple[bool, str | None, str | None]:
+def _check_freshness(rows: list[dict], schema: SourceSchema, as_of: str | None) -> tuple[bool, str | None, str | None]:
     """时效检查：last_date 距 as_of 超 max_age_days → stale。
 
     as_of=None → 不校验（无法判定），返 (True, last_date, None)。
@@ -441,9 +444,7 @@ def _last_date(rows: list[dict], field: str | None) -> str | None:
     return max(dates) if dates else None
 
 
-def validate(
-    source_id: str, data: Any, as_of: str | None = None
-) -> SchemaValidationResult:
+def validate(source_id: str, data: Any, as_of: str | None = None) -> SchemaValidationResult:
     """校验单数据源（spec R1 五维），返不可变 :class:`SchemaValidationResult`。
 
     ``source_id`` 须在 :data:`SCHEMA_REGISTRY`；``data`` 为源函数返回值；
@@ -452,14 +453,18 @@ def validate(
     schema = SCHEMA_REGISTRY.get(source_id)
     if schema is None:
         return SchemaValidationResult(
-            source_id=source_id, ok=False, row_count=0,
+            source_id=source_id,
+            ok=False,
+            row_count=0,
             errors=(f"未知数据源 {source_id!r}（未在 SCHEMA_REGISTRY）",),
         )
 
     rows, row_count = _rows_of(data, schema.expected_shape, schema.list_fields)
     if row_count < 0:  # shape 不符
         return SchemaValidationResult(
-            source_id=source_id, ok=False, row_count=0,
+            source_id=source_id,
+            ok=False,
+            row_count=0,
             errors=(f"shape 不符：期望 {schema.expected_shape}，实际 {type(data).__name__}",),
         )
 
@@ -511,9 +516,7 @@ def _caller_script() -> str:
         return Path(path_str).name  # 不在 repo 内 → basename（不臆造路径）
 
 
-def validate_or_reject(
-    source_id: str, data: Any, as_of: str | None = None
-) -> Any:
+def validate_or_reject(source_id: str, data: Any, as_of: str | None = None) -> Any:
     """校验通过返原 data（不可变，原样返）；失败抛 :class:`DataQualityError`。
 
     §44 脚本接入点：``rows = validate_or_reject("baostock_kline", rows, as_of)``

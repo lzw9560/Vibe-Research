@@ -3,6 +3,7 @@
 compute MA20, and label each trading day's regime (strong=close>MA20 / weak=close<MA20).
 Caches result to .vibe-research/index_ma20_regime.json for downstream §44 lift scripts.
 """
+
 import datetime
 import json
 import sys
@@ -25,8 +26,11 @@ from data.sources.baostock_src import fetch_bars
 # end date 动态 today（原 hardcoded 2026-09-06 → cache 停在 09-06，consecutive_relay live regime=None）
 _end = datetime.date.today().strftime("%Y-%m-%d")
 bars = fetch_bars(
-    "sh.000001", "2004-01-04", _end,
-    fields="date,close", adjustflag="3",  # no adjust for index
+    "sh.000001",
+    "2004-01-04",
+    _end,
+    fields="date,close",
+    adjustflag="3",  # no adjust for index
 )
 if not bars:
     print("baostock fetch failed (login? query?)", file=sys.stderr)
@@ -73,4 +77,6 @@ print(f"date range: {closes[0][0]} -> {closes[-1][0]}")
 # quick distribution
 strong = sum(1 for v in regime.values() if v["regime"] == "strong")
 weak = sum(1 for v in regime.values() if v["regime"] == "weak")
-print(f"strong(bull): {strong} ({strong*100/len(regime):.1f}%)  weak(bear): {weak} ({weak*100/len(regime):.1f}%)")
+print(
+    f"strong(bull): {strong} ({strong * 100 / len(regime):.1f}%)  weak(bear): {weak} ({weak * 100 / len(regime):.1f}%)"
+)

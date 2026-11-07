@@ -3,6 +3,7 @@
 
 风控/纪律工具非 edge 基建。cap=0 时每日推"市场天气+不交易提醒"（纪律提醒非交易信号）。
 """
+
 import json
 import logging
 from pathlib import Path

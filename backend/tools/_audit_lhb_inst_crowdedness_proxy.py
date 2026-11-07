@@ -6,6 +6,7 @@
 用 proxy：inst_buy / 20d_avg_amt（机构买入额 / 20日均成交额）。
 proxy 阈值≠free_float 5%，但可看 >5% proxy 组是否显著更差（claim 方向验证）。
 """
+
 import json
 import sqlite3
 import statistics
@@ -32,8 +33,7 @@ STOP_PCT = -3.0
 def load_inst_dominant_picks() -> list:
     conn = sqlite3.connect(str(DT_DB))
     rows = conn.execute(
-        "SELECT trade_date, security_code, dept_name, buy, net "
-        "FROM dragon_tiger_rows WHERE side='buy' AND buy > 0"
+        "SELECT trade_date, security_code, dept_name, buy, net FROM dragon_tiger_rows WHERE side='buy' AND buy > 0"
     ).fetchall()
     conn.close()
     picks_by_dc: dict = defaultdict(list)
@@ -98,20 +98,20 @@ def compute_stop_intraday(code: str, trade_date: str) -> float | None:
 
 
 def normal_p(t: float) -> float:
-    return 2 * (1 - 0.5 * (1 + erf(abs(t) / (2 ** 0.5))))
+    return 2 * (1 - 0.5 * (1 + erf(abs(t) / (2**0.5))))
 
 
 def stats(rets: list) -> dict:
     n = len(rets)
     if n == 0:
-        return {'n': 0, 'mean': 0.0, 't': 0.0, 'p': 1.0, 'wr': 0.0}
+        return {"n": 0, "mean": 0.0, "t": 0.0, "p": 1.0, "wr": 0.0}
     mean = sum(rets) / n
     std = statistics.pstdev(rets) if n > 1 else 0.0
-    se = std / (n ** 0.5) if n > 0 else 0.0
+    se = std / (n**0.5) if n > 0 else 0.0
     t = mean / se if se > 0 else 0.0
     p = normal_p(t)
     wr = sum(1 for r in rets if r > 0) / n * 100
-    return {'n': n, 'mean': mean, 't': t, 'p': p, 'wr': wr}
+    return {"n": n, "mean": mean, "t": t, "p": p, "wr": wr}
 
 
 def audit_crowdedness() -> None:
@@ -120,7 +120,7 @@ def audit_crowdedness() -> None:
     print(f"inst_dominant picks: {len(picks)}\n")
 
     high = []  # proxy >= 5%
-    low = []   # proxy < 5%
+    low = []  # proxy < 5%
     for date, code, inst_buy, total_buy in picks:
         amt = get_20d_avg_amt(code, date)
         if not amt:
@@ -136,9 +136,15 @@ def audit_crowdedness() -> None:
 
     high_s = stats(high)
     low_s = stats(low)
-    print(f"  proxy>=5% (机构买/20d成交额): n={high_s['n']} mean={high_s['mean']:.3f}% WR={high_s['wr']:.1f}% t={high_s['t']:.2f} p={high_s['p']:.4f}")
-    print(f"  proxy<5%:                    n={low_s['n']} mean={low_s['mean']:.3f}% WR={low_s['wr']:.1f}% t={low_s['t']:.2f} p={low_s['p']:.4f}")
-    print(f"\n  → {'claim 方向成立（>=5% 组 mean 更低）' if high_s['mean'] < low_s['mean'] else 'claim 方向证否（>=5% 组未更差）'}")
+    print(
+        f"  proxy>=5% (机构买/20d成交额): n={high_s['n']} mean={high_s['mean']:.3f}% WR={high_s['wr']:.1f}% t={high_s['t']:.2f} p={high_s['p']:.4f}"
+    )
+    print(
+        f"  proxy<5%:                    n={low_s['n']} mean={low_s['mean']:.3f}% WR={low_s['wr']:.1f}% t={low_s['t']:.2f} p={low_s['p']:.4f}"
+    )
+    print(
+        f"\n  → {'claim 方向成立（>=5% 组 mean 更低）' if high_s['mean'] < low_s['mean'] else 'claim 方向证否（>=5% 组未更差）'}"
+    )
     print(f"  注：proxy=inst_buy/20d_amt 非用户 claim 的 free_float 阈值，proxy 5% 阈值须校准")
     print(f"  但如果 >5% 组显著更差，claim 方向成立（机构买占比高 → 次日差）")
 

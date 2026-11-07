@@ -120,7 +120,9 @@ def select_stable_features(
 
     mean_importance = {name: float(np.mean(vals)) for name, vals in scores.items()}
     sorted_names = sorted(
-        mean_importance, key=mean_importance.get, reverse=True  # type: ignore[arg-type]
+        mean_importance,
+        key=mean_importance.get,
+        reverse=True,  # type: ignore[arg-type]
     )
 
     kept = tuple(sorted_names[:max_features])

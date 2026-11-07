@@ -6,6 +6,7 @@ _full.py 全量 edge-confirmed（mean+0.390% day_t=9.02 p=0.0000 跨 regime 稳�
   train 2018-2022（5 年）/ test 2023-2026（4 年）
   gate: train mean>0 + test mean>0 + test p<0.05 + test Bonf×3<0.05 → edge-confirmed OOS
 """
+
 import json
 import sqlite3
 import statistics
@@ -27,8 +28,14 @@ DT_DB = DATA / "dragon_tiger_history.db"
 KLINE_DB = DATA / "baostock_kline_cache.db"
 
 INST_KEYWORDS = (
-    "机构专用", "总部", "高盛", "瑞银", "股通", "摩根",
-    "中信证券股份有限公司上海分公司", "国际金融",
+    "机构专用",
+    "总部",
+    "高盛",
+    "瑞银",
+    "股通",
+    "摩根",
+    "中信证券股份有限公司上海分公司",
+    "国际金融",
 )
 STOP_PCT = -3.0
 ALPHA = 0.05
@@ -38,8 +45,7 @@ TRAIN_END = "2022-12-31"  # train 2018-2022 / test 2023-2026
 def load_inst_dominant_picks() -> list:
     conn = sqlite3.connect(str(DT_DB))
     rows = conn.execute(
-        "SELECT trade_date, security_code, dept_name, buy, net "
-        "FROM dragon_tiger_rows WHERE side='buy' AND buy > 0"
+        "SELECT trade_date, security_code, dept_name, buy, net FROM dragon_tiger_rows WHERE side='buy' AND buy > 0"
     ).fetchall()
     conn.close()
     picks_by_dc: dict = defaultdict(list)
@@ -93,7 +99,7 @@ def compute_stop_intraday(code: str, trade_date: str, kline_cache: dict) -> floa
 
 
 def normal_p(t: float) -> float:
-    return 2 * (1 - 0.5 * (1 + erf(abs(t) / (2 ** 0.5))))
+    return 2 * (1 - 0.5 * (1 + erf(abs(t) / (2**0.5))))
 
 
 def stats(returns_by_date: dict, all_returns: list) -> dict:
@@ -102,7 +108,7 @@ def stats(returns_by_date: dict, all_returns: list) -> dict:
         return {}
     mean = statistics.mean(day_means)
     n_days = len(day_means)
-    se = statistics.stdev(day_means) / (n_days ** 0.5) if n_days > 1 else 0
+    se = statistics.stdev(day_means) / (n_days**0.5) if n_days > 1 else 0
     t = mean / se if se > 0 else 0
     n = len(all_returns)
     wr = sum(1 for r in all_returns if r > 0) / n * 100 if n else 0
@@ -137,13 +143,15 @@ def walk_forward() -> None:
             continue
         p_bonf = min(1.0, s["p"] * 3)
         v = "PASS" if p_bonf < ALPHA else "FAIL"
-        print(f"  {label}: n={s['n']} days={s['days']} mean={s['mean']:.3f}% "
-              f"median={s['median']:.3f}% WR={s['wr']:.1f}% t={s['t']:.2f} "
-              f"p={s['p']:.4f} Bonf×3={p_bonf:.4f} {v}")
+        print(
+            f"  {label}: n={s['n']} days={s['days']} mean={s['mean']:.3f}% "
+            f"median={s['median']:.3f}% WR={s['wr']:.1f}% t={s['t']:.2f} "
+            f"p={s['p']:.4f} Bonf×3={p_bonf:.4f} {v}"
+        )
 
     # walk-forward gate
     print(f"\n  walk-forward gate:")
-    train_s = stats(*[(() , [])])  # placeholder, 重新算
+    train_s = stats(*[((), [])])  # placeholder, 重新算
     # 重新取 train/test stats
     train_rbd: dict = defaultdict(list)
     train_ar: list = []

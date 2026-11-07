@@ -18,6 +18,7 @@ spec §6 A7 验收：用 0818 外围+内部数据预测 0819，概率分应高�
 流程：构造 0818 快照（push2his 外围 + datacenter SOX）→ 写 storm_snapshots/2026-08-18.json
 → predict_storm("2026-08-19") 读 0818 快照 → 概率分 + 因子明细。期望概率分高（0819 暴风雨前兆）。
 """
+
 from __future__ import annotations
 
 import json
@@ -35,17 +36,29 @@ UA_H = {"User-Agent": getattr(astock, "UA", "Mozilla/5.0")}
 SNAP_DIR = resolve_data_dir() / "storm_snapshots"
 
 IDX_SECID = {
-    "道琼斯": "100.DJIA", "标普500": "100.SPX", "纳斯达克": "100.NDX",
-    "恒生指数": "100.HSI", "恒生科技": "124.HSTECH", "富时A50": "100.XIN9",
-    "日经225": "100.N225", "韩国KOSPI": "100.KS11",
+    "道琼斯": "100.DJIA",
+    "标普500": "100.SPX",
+    "纳斯达克": "100.NDX",
+    "恒生指数": "100.HSI",
+    "恒生科技": "124.HSTECH",
+    "富时A50": "100.XIN9",
+    "日经225": "100.N225",
+    "韩国KOSPI": "100.KS11",
 }
 
 
 def fetch_idx_chg_0818(name: str, secid: str) -> dict | None:
     """push2his 取 0817+0818 close 算 0818 涨跌%（相对昨收，对齐 f170 语义）。"""
     url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
-    params = {"secid": secid, "klt": "101", "fqt": "0", "beg": "20260815", "end": "20260819",
-              "fields1": "f1,f2,f3", "fields2": "f51,f52,f53,f54,f55,f56"}
+    params = {
+        "secid": secid,
+        "klt": "101",
+        "fqt": "0",
+        "beg": "20260815",
+        "end": "20260819",
+        "fields1": "f1,f2,f3",
+        "fields2": "f51,f52,f53,f54,f55,f56",
+    }
     try:
         r = astock.em_get(url, params=params, headers=UA_H, timeout=10)
         kl = (r.json().get("data") or {}).get("klines") or []
@@ -64,12 +77,18 @@ def fetch_sox_0818() -> dict | None:
     """datacenter SOX report_date=0818（不需 ut，走 em_get）。"""
     try:
         rows = astock.eastmoney_datacenter(
-            "RPT_INDUSTRY_INDEX", filter_str='(INDICATOR_ID="EMI00055562")',
-            page_size=10, sort_columns="REPORT_DATE", sort_types="-1")
+            "RPT_INDUSTRY_INDEX",
+            filter_str='(INDICATOR_ID="EMI00055562")',
+            page_size=10,
+            sort_columns="REPORT_DATE",
+            sort_types="-1",
+        )
         for r in rows:
             if str(r.get("REPORT_DATE", ""))[:10] == "2026-08-18":
                 cr = r.get("CHANGE_RATE")
-                return {"name": "费城半导体", "change_pct": round(float(cr), 2)} if isinstance(cr, (int, float)) else None
+                return (
+                    {"name": "费城半导体", "change_pct": round(float(cr), 2)} if isinstance(cr, (int, float)) else None
+                )
         return None
     except Exception:  # noqa: BLE001
         return None
@@ -79,6 +98,7 @@ def build_0818_snapshot() -> dict:
     # S088 A7：并发 8 指数一次请求（串行 8 次 push2his 连打触发间歇限流，
     # 并发一次请求在限流窗口内同时发出，取到率更高）
     from concurrent.futures import ThreadPoolExecutor
+
     with ThreadPoolExecutor(max_workers=8) as ex:
         results = list(ex.map(lambda ns: fetch_idx_chg_0818(*ns), IDX_SECID.items()))
     indices: list[dict] = [r for r in results if r]
@@ -102,6 +122,7 @@ def main() -> None:
 
     print("=== predict_storm('2026-08-19') 读 0818 快照 ===")
     from strategies.storm_predictor import predict_storm  # noqa: PLC0415
+
     p = predict_storm("2026-08-19")
     print(f"概率分: {p.probability} | 风险: {p.risk_level} | 建议仓位: {p.suggested_position}")
     for f in p.factors:

@@ -14,6 +14,7 @@
 
 spec: `specs/S078-涨停历史snapshot数据地基/spec.md`
 """
+
 from __future__ import annotations
 
 import logging
@@ -85,6 +86,7 @@ def _get_conn() -> sqlite3.Connection:
 # 归一辅助
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _to_float(v) -> float | None:
     if v is None or isinstance(v, bool):
         return None
@@ -123,6 +125,7 @@ def _to_iso(d: str) -> str:
 # 采集 + 读取
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def snapshot_zt_pool(
     date: str | None = None,
     pool: list[dict] | None = None,
@@ -147,12 +150,14 @@ def snapshot_zt_pool(
     d_iso = _to_iso(date) if date else ""
     if not d_iso:
         from vr_paths import last_trading_date_str
+
         d_iso = last_trading_date_str()
     d_compact = d_iso.replace("-", "")
 
     source = "predefined"  # pool 预填
     if pool is None:
         import astock
+
         # S184 P0-2: em→ths→hithink fallback 链（w3pvh9q8f 数据丢失修复——em ~14 天 rolling 不可回补）
         try:
             pool = astock.em_zt_topic_pool("getTopicZTPool", d_compact, "fbt:asc") or []
@@ -165,9 +170,14 @@ def snapshot_zt_pool(
             try:
                 ths = astock.ths_limit_up_pool(d_compact) if hasattr(astock, "ths_limit_up_pool") else []
                 if ths:
-                    ths_pool = [{"c": t.get("code", ""), "n": t.get("name", ""),
-                             "lbc": 1 if str(t.get("high_days")) == "首板" else _to_int(t.get("high_days"))}
-                            for t in ths]
+                    ths_pool = [
+                        {
+                            "c": t.get("code", ""),
+                            "n": t.get("name", ""),
+                            "lbc": 1 if str(t.get("high_days")) == "首板" else _to_int(t.get("high_days")),
+                        }
+                        for t in ths
+                    ]
                     # S214 fix: ths 对历史日期 high_days 常返"首板"（端点缺连板数），
                     # 但"返了行"曾被当成功 block 了有正确 lbc>=2 的 hithink（实证
                     # 2025-10-15 等缺口日 source=ths 全 lbc=1/None，零连板——真市场
@@ -178,19 +188,25 @@ def snapshot_zt_pool(
                         source = "ths"
                     else:
                         _logger.info(
-                            "snapshot_zt_pool date=%s ths 全首板（零 lbc>=2，端点缺连板数）"
-                            "→ 降级 hithink", d_iso)
+                            "snapshot_zt_pool date=%s ths 全首板（零 lbc>=2，端点缺连板数）→ 降级 hithink", d_iso
+                        )
             except Exception as e:  # noqa: BLE001
                 _logger.warning("snapshot_zt_pool ths 失败 date=%s err=%s，降级 hithink", d_iso, e)
         if not pool:
             # 3. hithink（可回溯 2024-06）
             try:
                 from data.sources.hithink_src import limit_up_pool  # noqa: PLC0415
+
                 hkp = limit_up_pool(d_iso)
                 if hkp:
-                    pool = [{"c": h.get("code", ""), "n": h.get("name", ""),
-                             "lbc": _to_int(h.get("lbc") or h.get("continue_day_cnt"))}
-                            for h in hkp]
+                    pool = [
+                        {
+                            "c": h.get("code", ""),
+                            "n": h.get("name", ""),
+                            "lbc": _to_int(h.get("lbc") or h.get("continue_day_cnt")),
+                        }
+                        for h in hkp
+                    ]
                     source = "hithink"
             except Exception as e:  # noqa: BLE001
                 _logger.warning("snapshot_zt_pool hithink 失败 date=%s err=%s", d_iso, e)
@@ -206,26 +222,33 @@ def snapshot_zt_pool(
         code = str(it.get("c", "") or "").strip()
         if not code:
             continue
-        rows.append({
-            "date": d_iso, "code": code, "name": it.get("n"),
-            "lbc": _to_int(it.get("lbc")), "zbc": _to_float(it.get("zbc")),
-            "fbt": _to_float(it.get("fbt")), "fund": _to_float(it.get("fund")),
-            "zje": _to_float(it.get("zje")), "p": _to_float(it.get("p")),
-            "ltsz": _to_float(it.get("ltsz")), "fundamt": _to_float(it.get("fundamt")),
-            "hybk": it.get("hybk"), "source": source, "snapshot_at": snap_at,
-        })
+        rows.append(
+            {
+                "date": d_iso,
+                "code": code,
+                "name": it.get("n"),
+                "lbc": _to_int(it.get("lbc")),
+                "zbc": _to_float(it.get("zbc")),
+                "fbt": _to_float(it.get("fbt")),
+                "fund": _to_float(it.get("fund")),
+                "zje": _to_float(it.get("zje")),
+                "p": _to_float(it.get("p")),
+                "ltsz": _to_float(it.get("ltsz")),
+                "fundamt": _to_float(it.get("fundamt")),
+                "hybk": it.get("hybk"),
+                "source": source,
+                "snapshot_at": snap_at,
+            }
+        )
     if not rows:
         return 0
     conn = _get_conn()
     try:
         with _DB_LOCK:
             # final 保护：旧行已 is_final=1 且新数据 is_final=False → 拒绝覆盖
-            prev = conn.execute(
-                "SELECT is_final FROM zt_history WHERE date = ? LIMIT 1", (d_iso,)
-            ).fetchone()
+            prev = conn.execute("SELECT is_final FROM zt_history WHERE date = ? LIMIT 1", (d_iso,)).fetchone()
             if prev is not None and prev["is_final"] == 1 and not is_final:
-                _logger.warning(
-                    "snapshot_zt_pool date=%s 拒绝覆盖：旧行已 is_final=1，新数据非 final", d_iso)
+                _logger.warning("snapshot_zt_pool date=%s 拒绝覆盖：旧行已 is_final=1，新数据非 final", d_iso)
                 return 0
             # UPSERT 同日行：单事务 DELETE 旧日全行 + INSERT 新池（每日唯一，不残留旧时点残行）
             conn.execute("DELETE FROM zt_history WHERE date = ?", (d_iso,))
@@ -312,6 +335,7 @@ def list_history_dates() -> list[str]:
 if __name__ == "__main__":
     # 手动触发当日 snapshot（或传日期）
     import sys
+
     d = sys.argv[1] if len(sys.argv) > 1 else None
     n = snapshot_zt_pool(d)
     print(f"snapshot_zt_pool({d}): 写入 {n} 行")

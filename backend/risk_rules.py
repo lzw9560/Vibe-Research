@@ -22,6 +22,7 @@
 S166 fresh-impl（design-agnostic）。equity_curve/discipline/violations/rolling 算法参考自
 cb54a96 历史，非整文件复活。
 """
+
 from __future__ import annotations
 
 import json
@@ -37,12 +38,12 @@ _RULES_SCHEMA = 1
 # 风险宪法的默认值。全部是"用户自己的规矩"，不是推荐数值——不同资金量、不同打法的合理
 # 阈值差得远，这里只给一套能跑起来的初值。
 DEFAULT_RULES = {
-    "max_loss_per_trade_pct": 5.0,     # 单笔最大亏损（%）
-    "max_loss_per_day_pct": 8.0,       # 单日最大亏损（占当日投入）
-    "max_positions": 3,                # 最多同时持仓数
-    "max_trades_per_day": 5,           # 单日最多开仓笔数（防手痒）
-    "pause_after_losses": 3,           # 连亏几笔后应当停手
-    "max_unplanned_ratio": 0.2,        # 计划外交易占比上限
+    "max_loss_per_trade_pct": 5.0,  # 单笔最大亏损（%）
+    "max_loss_per_day_pct": 8.0,  # 单日最大亏损（占当日投入）
+    "max_positions": 3,  # 最多同时持仓数
+    "max_trades_per_day": 5,  # 单日最多开仓笔数（防手痒）
+    "pause_after_losses": 3,  # 连亏几笔后应当停手
+    "max_unplanned_ratio": 0.2,  # 计划外交易占比上限
 }
 
 _RULE_LABELS = {
@@ -106,8 +107,7 @@ def equity_curve(trades: list[dict]) -> dict:
     累计盈利多少没什么信息量。真正要看的是：距高点回撤多深、回撤多久没恢复、多久没创新高、
     连亏几次、盈利是不是高度依赖少数几笔。
     """
-    closed = [t for t in trades
-              if (t.get("settled") or {}).get("realized_pnl") is not None]
+    closed = [t for t in trades if (t.get("settled") or {}).get("realized_pnl") is not None]
     if not closed:
         return {"available": False, "reason": "还没有已平仓且填了成交明细的交易"}
 
@@ -130,8 +130,7 @@ def equity_curve(trades: list[dict]) -> dict:
             dd = peak - cum
             if dd > max_dd:
                 max_dd, max_dd_from = dd, dd_start
-        points.append({"date": d, "cum_pnl": round(cum, 2),
-                       "pnl": round(pnl, 2), "drawdown": round(peak - cum, 2)})
+        points.append({"date": d, "cum_pnl": round(cum, 2), "pnl": round(pnl, 2), "drawdown": round(peak - cum, 2)})
 
     pnls = [float(t["settled"]["realized_pnl"]) for t in closed]
     wins = [v for v in pnls if v > 0]
@@ -158,22 +157,18 @@ def equity_curve(trades: list[dict]) -> dict:
         "longest_underwater": longest_underwater,
         # ⚠️ 盈亏恰好为 0 的笔不进分母（同 journal 战绩与 rolling 的口径）：持平既不是赢也不是
         #    输，算进分母会把胜率稀释。
-        "win_rate": (round(len(wins) / (len(wins) + len(losses)), 3)
-                     if (wins or losses) else None),
+        "win_rate": (round(len(wins) / (len(wins) + len(losses)), 3) if (wins or losses) else None),
         "avg_win": round(mean(wins), 2) if wins else None,
         "avg_loss": round(mean(losses), 2) if losses else None,
         # 盈亏比与 Profit Factor——胜率单独看没用，得配上赔率
-        "payoff_ratio": (round(mean(wins) / abs(mean(losses)), 2)
-                         if wins and losses else None),
-        "profit_factor": (round(sum(wins) / abs(sum(losses)), 2)
-                          if losses and sum(losses) else None),
+        "payoff_ratio": (round(mean(wins) / abs(mean(losses)), 2) if wins and losses else None),
+        "profit_factor": (round(sum(wins) / abs(sum(losses)), 2) if losses and sum(losses) else None),
         "worst_losing_streak": worst_streak,
         "worst_trade": round(min(pnls), 2),
         # ⚠️ 这两个数最能揭穿"我其实是靠一两笔运气"：去掉最好的几笔之后还剩多少
         "net_without_best1": round(cum - (top[0] if top else 0), 2),
         "net_without_best3": round(cum - sum(top[:3]), 2),
-        "best_trade_share": (round(top[0] / cum, 3)
-                             if top and cum > 0 else None),
+        "best_trade_share": (round(top[0] / cum, 3) if top and cum > 0 else None),
     }
 
 
@@ -183,8 +178,9 @@ def discipline(trades: list[dict]) -> dict:
 
     这一张账最狠也最有用：它把"纪律"从一句口号变成一个可比的数字。
     """
-    scored = [t for t in trades if t.get("pnl_pct") is not None
-              or (t.get("settled") or {}).get("realized_pnl") is not None]
+    scored = [
+        t for t in trades if t.get("pnl_pct") is not None or (t.get("settled") or {}).get("realized_pnl") is not None
+    ]
     if not scored:
         return {"available": False, "reason": "还没有可统计的交易"}
 
@@ -197,8 +193,7 @@ def discipline(trades: list[dict]) -> dict:
         moneys = [money(t) for t in rows if money(t) is not None]
         return {
             "count": len(rows),
-            "win_rate": (round(sum(1 for v in pcts if v > 0) / len(pcts), 3)
-                         if pcts else None),
+            "win_rate": (round(sum(1 for v in pcts if v > 0) / len(pcts), 3) if pcts else None),
             "avg_pct": round(mean(pcts), 2) if pcts else None,
             "net_pnl": round(sum(moneys), 2) if moneys else None,
         }
@@ -214,17 +209,20 @@ def discipline(trades: list[dict]) -> dict:
         "planned": bucket(planned),
         "unplanned": bucket(unplanned),
         "untagged": bucket(untagged),
-        "execution_rate": (round(len(planned) / (len(planned) + len(unplanned)), 3)
-                           if (planned or unplanned) else None),
+        "execution_rate": (
+            round(len(planned) / (len(planned) + len(unplanned)), 3) if (planned or unplanned) else None
+        ),
         # ⭐ 最狠的一行：只做按计划的交易，账户会是什么样
         "what_if_only_planned": {
             "actual_net": round(sum(all_money), 2) if all_money else None,
             "planned_only_net": round(sum(planned_money), 2) if planned_money else None,
-            "cost_of_indiscipline": (round(sum(all_money) - sum(planned_money), 2)
-                                     if all_money and planned_money else None),
+            "cost_of_indiscipline": (
+                round(sum(all_money) - sum(planned_money), 2) if all_money and planned_money else None
+            ),
         },
-        "note": ("「计划外」的交易需要你自己在录入时标注——没标注的归到未标注，不猜。"
-                 "这不是市场分析，是你自己的行为统计。"),
+        "note": (
+            "「计划外」的交易需要你自己在录入时标注——没标注的归到未标注，不猜。这不是市场分析，是你自己的行为统计。"
+        ),
     }
 
 
@@ -268,7 +266,7 @@ def violations(trades: list[dict], rules: Optional[dict] = None) -> dict:
                 day_pnl[d] = day_pnl.get(d, 0.0) + float(v)
             continue
         pnl, sell_day = st.get("realized_pnl"), st.get("last_sell")
-        if pnl is not None and sell_day:   # 老记录没有按日拆分，退回整笔挂平仓日
+        if pnl is not None and sell_day:  # 老记录没有按日拆分，退回整笔挂平仓日
             day_pnl[sell_day] = day_pnl.get(sell_day, 0.0) + float(pnl)
     if not day_pnl:
         checked["max_loss_per_day_pct"] = "unavailable：没有带成交明细的已平仓交易，算不出单日盈亏"
@@ -280,16 +278,22 @@ def violations(trades: list[dict], rules: Optional[dict] = None) -> dict:
         for day, pnl in sorted(day_pnl.items()):
             pct = pnl / equity_base * 100
             if pct < -cap:
-                found.append({"date": day, "rule": "max_loss_per_day_pct",
-                              "label": _RULE_LABELS["max_loss_per_day_pct"],
-                              "limit": -cap, "actual": round(pct, 2),
-                              "detail": f"{day} 当日净亏 {round(pnl, 2)} 元，占账户 {round(pct, 2)}%"})
+                found.append(
+                    {
+                        "date": day,
+                        "rule": "max_loss_per_day_pct",
+                        "label": _RULE_LABELS["max_loss_per_day_pct"],
+                        "limit": -cap,
+                        "actual": round(pct, 2),
+                        "detail": f"{day} 当日净亏 {round(pnl, 2)} 元，占账户 {round(pct, 2)}%",
+                    }
+                )
 
     # ---- 最大持仓数：按代码统计每天同时持有几只 ----
     # ① 按代码聚合（同票分两笔建仓仍只占一个仓位）
     # ② 用持有区间判断，不维护逐事件游走计数器（当日买当日卖会被清掉再加回，虚高）
     # ③ 区间左闭右开 [建仓日, 平仓日)：卖出当天不再计入；当日进出做 T 不计任何一天
-    spans: list[tuple[str, str, Optional[str]]] = []   # (code, 建仓日, 平仓日或 None)
+    spans: list[tuple[str, str, Optional[str]]] = []  # (code, 建仓日, 平仓日或 None)
     # ⚠️ 用 all 不是 any：只要有一条记录没有成交明细，结论就是按日期近似，须如实标注
     approx = 0
     for t in trades:
@@ -304,47 +308,74 @@ def violations(trades: list[dict], rules: Optional[dict] = None) -> dict:
     if not spans:
         checked["max_positions"] = "unavailable：没有可用的建仓/平仓日期"
     else:
-        checked["max_positions"] = "checked" if approx == 0 else \
-            f"checked（其中 {approx} 条没有成交明细，按记录日期近似）"
+        checked["max_positions"] = (
+            "checked" if approx == 0 else f"checked（其中 {approx} 条没有成交明细，按记录日期近似）"
+        )
         cap_n = int(rules["max_positions"])
         days = sorted({d for _, s0, e0 in spans for d in (s0, e0) if d})
         for day in days:
             holding = {c for c, s0, e0 in spans if s0 <= day and (e0 is None or day < e0)}
             if len(holding) > cap_n:
-                found.append({"date": day, "rule": "max_positions",
-                              "label": _RULE_LABELS["max_positions"],
-                              "limit": cap_n, "actual": len(holding),
-                              "detail": f"{day} 同时持有 {len(holding)} 只"})
+                found.append(
+                    {
+                        "date": day,
+                        "rule": "max_positions",
+                        "label": _RULE_LABELS["max_positions"],
+                        "limit": cap_n,
+                        "actual": len(holding),
+                        "detail": f"{day} 同时持有 {len(holding)} 只",
+                    }
+                )
 
     for day, rows in sorted(by_day.items()):
         # 单日开仓笔数
         if len(rows) > rules["max_trades_per_day"]:
-            found.append({"date": day, "rule": "max_trades_per_day",
-                          "label": _RULE_LABELS["max_trades_per_day"],
-                          "limit": rules["max_trades_per_day"], "actual": len(rows),
-                          "detail": f"{day} 开仓 {len(rows)} 笔"})
+            found.append(
+                {
+                    "date": day,
+                    "rule": "max_trades_per_day",
+                    "label": _RULE_LABELS["max_trades_per_day"],
+                    "limit": rules["max_trades_per_day"],
+                    "actual": len(rows),
+                    "detail": f"{day} 开仓 {len(rows)} 笔",
+                }
+            )
         # 单笔亏损
         for t in rows:
             p = t.get("pnl_pct")
             if p is not None and p < -abs(rules["max_loss_per_trade_pct"]):
-                found.append({"date": day, "rule": "max_loss_per_trade_pct",
-                              "label": _RULE_LABELS["max_loss_per_trade_pct"],
-                              "limit": -abs(rules["max_loss_per_trade_pct"]), "actual": p,
-                              "detail": f"{t.get('name') or t.get('code')} 亏 {p}%"})
+                found.append(
+                    {
+                        "date": day,
+                        "rule": "max_loss_per_trade_pct",
+                        "label": _RULE_LABELS["max_loss_per_trade_pct"],
+                        "limit": -abs(rules["max_loss_per_trade_pct"]),
+                        "actual": p,
+                        "detail": f"{t.get('name') or t.get('code')} 亏 {p}%",
+                    }
+                )
         # 计划外占比
         tagged = [t for t in rows if t.get("as_planned") is not None]
         if tagged:
             un = sum(1 for t in tagged if t["as_planned"] is False)
             ratio = un / len(tagged)
             if ratio > rules["max_unplanned_ratio"]:
-                found.append({"date": day, "rule": "max_unplanned_ratio",
-                              "label": _RULE_LABELS["max_unplanned_ratio"],
-                              "limit": rules["max_unplanned_ratio"], "actual": round(ratio, 3),
-                              "detail": f"{day} 计划外 {un}/{len(tagged)} 笔"})
+                found.append(
+                    {
+                        "date": day,
+                        "rule": "max_unplanned_ratio",
+                        "label": _RULE_LABELS["max_unplanned_ratio"],
+                        "limit": rules["max_unplanned_ratio"],
+                        "actual": round(ratio, 3),
+                        "detail": f"{day} 计划外 {un}/{len(tagged)} 笔",
+                    }
+                )
 
     # 连亏后是否继续交易——只陈述历史事实，不下"该停手"的结论
-    closed = sorted((t for t in trades if t.get("pnl_pct") is not None),
-                    key=lambda t: (t.get("date") or "", t.get("created_at") or ""))
+    closed = sorted(
+        (t for t in trades if t.get("pnl_pct") is not None),
+        key=lambda t: (t.get("date") or "", t.get("created_at") or ""),
+    )
     streak, after_streak = 0, []
     limit = int(rules["pause_after_losses"])
     for t in closed:
@@ -353,9 +384,11 @@ def violations(trades: list[dict], rules: Optional[dict] = None) -> dict:
         streak = streak + 1 if t["pnl_pct"] < 0 else 0
     checked["max_trades_per_day"] = "checked"
     checked["max_loss_per_trade_pct"] = "checked"
-    checked["max_unplanned_ratio"] = "checked" if any(
-        t.get("as_planned") is not None for t in trades) else \
-        "unavailable：还没有标注过「按计划 / 计划外」的交易"
+    checked["max_unplanned_ratio"] = (
+        "checked"
+        if any(t.get("as_planned") is not None for t in trades)
+        else "unavailable：还没有标注过「按计划 / 计划外」的交易"
+    )
     checked["pause_after_losses"] = "checked"
 
     return {
@@ -372,8 +405,7 @@ def violations(trades: list[dict], rules: Optional[dict] = None) -> dict:
             "threshold": limit,
             "trades": len(after_streak),
             "avg_pct": round(mean(after_streak), 2) if after_streak else None,
-            "win_rate": (round(sum(1 for v in after_streak if v > 0) / len(after_streak), 3)
-                         if after_streak else None),
+            "win_rate": (round(sum(1 for v in after_streak if v > 0) / len(after_streak), 3) if after_streak else None),
         },
     }
 
@@ -408,11 +440,11 @@ def _window_stats(closed: list[dict]) -> dict:
         "win_rate": round(len(wins) / decided, 3) if decided else None,
         "avg_win": round(gross_win / len(wins), 2) if wins else None,
         "avg_loss": round(-gross_loss / len(losses), 2) if losses else None,
-        "payoff_ratio": (round((gross_win / len(wins)) / (gross_loss / len(losses)), 2)
-                         if wins and losses else None),
+        "payoff_ratio": (round((gross_win / len(wins)) / (gross_loss / len(losses)), 2) if wins and losses else None),
         "profit_factor": round(gross_win / gross_loss, 2) if gross_loss > 0 else None,
-        "execution_rate": (round(len(planned) / (len(planned) + len(unplanned)), 3)
-                           if (planned or unplanned) else None),
+        "execution_rate": (
+            round(len(planned) / (len(planned) + len(unplanned)), 3) if (planned or unplanned) else None
+        ),
         "date_from": (closed[0]["settled"].get("last_sell") or closed[0]["date"]),
         "date_to": (closed[-1]["settled"].get("last_sell") or closed[-1]["date"]),
     }
@@ -420,8 +452,7 @@ def _window_stats(closed: list[dict]) -> dict:
 
 def rolling(trades: list[dict]) -> dict:
     """终身 + 近 10/20/50 笔的并排对比。窗口按平仓日取最后 N 笔。"""
-    closed = [t for t in trades
-              if (t.get("settled") or {}).get("realized_pnl") is not None]
+    closed = [t for t in trades if (t.get("settled") or {}).get("realized_pnl") is not None]
     if not closed:
         return {"available": False, "reason": "还没有已平仓且填了成交明细的交易"}
     closed.sort(key=lambda t: (t["settled"].get("last_sell") or t["date"], t["created_at"]))
@@ -437,11 +468,12 @@ def rolling(trades: list[dict]) -> dict:
     life = out["lifetime"]
     if w10.get("enough") and w10.get("win_rate") is not None and life.get("win_rate") is not None:
         out["win_rate_drift"] = round(w10["win_rate"] - life["win_rate"], 3)
-    if (w10.get("enough") and w10.get("profit_factor") is not None
-            and life.get("profit_factor") is not None):
+    if w10.get("enough") and w10.get("profit_factor") is not None and life.get("profit_factor") is not None:
         out["profit_factor_drift"] = round(w10["profit_factor"] - life["profit_factor"], 2)
-    out["note"] = ("10 笔看状态、20 笔看节奏、50 笔看打法是否还成立。"
-                   "终身统计会把最近的退化藏起来——前面赚够了，最近一直亏，终身数字照样漂亮。")
+    out["note"] = (
+        "10 笔看状态、20 笔看节奏、50 笔看打法是否还成立。"
+        "终身统计会把最近的退化藏起来——前面赚够了，最近一直亏，终身数字照样漂亮。"
+    )
     return out
 
 
@@ -483,20 +515,25 @@ def render(rep: dict) -> str:
         + (f"，Profit Factor {eq['profit_factor']}" if eq.get("profit_factor") else "")
     )
     if eq.get("best_trade_share") is not None:
-        lines.append(f"· 盈利集中度：最好一笔占净利 {eq['best_trade_share']:.0%}；"
-                     f"去掉最好 1 笔剩 {eq['net_without_best1']}，"
-                     f"去掉最好 3 笔剩 {eq['net_without_best3']}")
+        lines.append(
+            f"· 盈利集中度：最好一笔占净利 {eq['best_trade_share']:.0%}；"
+            f"去掉最好 1 笔剩 {eq['net_without_best1']}，"
+            f"去掉最好 3 笔剩 {eq['net_without_best3']}"
+        )
     if dp.get("available") and dp.get("execution_rate") is not None:
         wi = dp["what_if_only_planned"]
         seg = f"· 纪律：执行率 {dp['execution_rate']:.0%}"
         if wi.get("cost_of_indiscipline") is not None:
-            seg += (f"；只做按计划的交易，净盈亏会是 {wi['planned_only_net']}"
-                    f"（实际 {wi['actual_net']}，差 {wi['cost_of_indiscipline']}）")
+            seg += (
+                f"；只做按计划的交易，净盈亏会是 {wi['planned_only_net']}"
+                f"（实际 {wi['actual_net']}，差 {wi['cost_of_indiscipline']}）"
+            )
         lines.append(seg)
     if vi.get("available") and vi.get("violation_count"):
-        lines.append(f"· 违反自设规则 {vi['violation_count']} 次"
-                     + ("（用的还是默认阈值，建议先按自己的习惯改一遍）"
-                        if vi.get("is_default_rules") else ""))
+        lines.append(
+            f"· 违反自设规则 {vi['violation_count']} 次"
+            + ("（用的还是默认阈值，建议先按自己的习惯改一遍）" if vi.get("is_default_rules") else "")
+        )
     return "\n".join(lines)
 
 
@@ -537,10 +574,14 @@ def _save_cooldown(cooldown_until: str) -> None:
     """写冷却状态（atomic_write_json，不臆造）。"""
     os.makedirs(_risk_dir(), exist_ok=True)
     from datetime import datetime
-    atomic_write_json(_cooldown_path(), {
-        "cooldown_until": cooldown_until,
-        "saved_at": datetime.now().isoformat(),
-    })
+
+    atomic_write_json(
+        _cooldown_path(),
+        {
+            "cooldown_until": cooldown_until,
+            "saved_at": datetime.now().isoformat(),
+        },
+    )
 
 
 def loss_breaker_enforce(journal=None, initial_capital=None) -> dict:
@@ -571,11 +612,13 @@ def loss_breaker_enforce(journal=None, initial_capital=None) -> dict:
     # lazy import：仅 journal=None 时 import TradeJournal（避 deflated_sharpe transitive）
     if journal is None:
         from engine.trade_journal import TradeJournal
+
         journal = TradeJournal()
     # initial_capital fallback（import 失败用 100000.0 与 trade_journal 一致）
     if initial_capital is None:
         try:
             from engine.trade_journal import DEFAULT_INITIAL_CAPITAL
+
             initial_capital = DEFAULT_INITIAL_CAPITAL
         except ImportError:  # noqa: BLE001 deflated_sharpe 等可选依赖缺失
             initial_capital = 100000.0
@@ -584,23 +627,16 @@ def loss_breaker_enforce(journal=None, initial_capital=None) -> dict:
 
     records = journal.query_records(arm=None, is_dead_arm=None)
     # 只算持仓（is_realized=0）且有 unrealized_pnl 的
-    open_records = [
-        r for r in records
-        if not r.is_realized and r.unrealized_pnl is not None
-    ]
+    open_records = [r for r in records if not r.is_realized and r.unrealized_pnl is not None]
 
     # per-code 浮亏 %（占账户，负数=亏）
     by_code: dict[str, float] = {}
     for r in open_records:
-        pct = (float(r.unrealized_pnl) / initial_capital * 100
-               if initial_capital > 0 else 0.0)
+        pct = float(r.unrealized_pnl) / initial_capital * 100 if initial_capital > 0 else 0.0
         by_code[r.stock_code] = by_code.get(r.stock_code, 0.0) + pct
 
     total_unrealized = sum(float(r.unrealized_pnl) for r in open_records)
-    total_account_loss_pct = (
-        total_unrealized / initial_capital * 100
-        if initial_capital > 0 else 0.0
-    )
+    total_account_loss_pct = total_unrealized / initial_capital * 100 if initial_capital > 0 else 0.0
 
     # 读现有冷却（未到期返日期，过期返 None）
     cooldown_until = _load_cooldown(today)
@@ -608,7 +644,8 @@ def loss_breaker_enforce(journal=None, initial_capital=None) -> dict:
     # per-code enforce
     states = {
         code: evaluate_loss_breaker(
-            code, today,
+            code,
+            today,
             realized_loss_pct=loss_pct,
             total_account_loss_pct=total_account_loss_pct,
             cooldown_until=cooldown_until,
@@ -617,8 +654,9 @@ def loss_breaker_enforce(journal=None, initial_capital=None) -> dict:
     }
 
     # 合计 > 8% → block_new；任一 code block_new 也触发
-    is_blocked_new = any(s.is_blocked_new for s in states.values()) or \
-        abs(total_account_loss_pct) > TOTAL_ACCOUNT_BLOCK_PCT
+    is_blocked_new = (
+        any(s.is_blocked_new for s in states.values()) or abs(total_account_loss_pct) > TOTAL_ACCOUNT_BLOCK_PCT
+    )
     # 冷却 enforce：冷却期内 → 强制 block_new（不重置，防振荡）
     if cooldown_until:
         is_blocked_new = True
@@ -649,7 +687,16 @@ def loss_breaker_enforce(journal=None, initial_capital=None) -> dict:
 
 
 __all__ = [
-    "DEFAULT_RULES", "load_rules", "save_rules", "equity_curve", "discipline",
-    "violations", "hold_days_of", "rolling", "report", "render",
-    "loss_breaker_enforce", "COOLDOWN_DAYS",
+    "DEFAULT_RULES",
+    "load_rules",
+    "save_rules",
+    "equity_curve",
+    "discipline",
+    "violations",
+    "hold_days_of",
+    "rolling",
+    "report",
+    "render",
+    "loss_breaker_enforce",
+    "COOLDOWN_DAYS",
 ]

@@ -35,6 +35,7 @@ Swap path_return (simulate_holding -3/+8/3, D+1-open→D+4-close) → gap_net_re
 (accounting.py:262, D-close→D+1-open, no stop/take). late_lock definition + em fbt
 data source IDENTICAL to zt_pool_seal_time_lift.py — only the return window changes.
 """
+
 import datetime
 import json
 import sqlite3
@@ -106,9 +107,7 @@ def load_em_fbt_lookup() -> dict:
         conn = sqlite3.connect(str(ZT_HISTORY_DB), timeout=10)
         conn.row_factory = sqlite3.Row
         try:
-            for r in conn.execute(
-                "SELECT date, code, fbt FROM zt_history WHERE source='em' AND fbt IS NOT NULL"
-            ):
+            for r in conn.execute("SELECT date, code, fbt FROM zt_history WHERE source='em' AND fbt IS NOT NULL"):
                 fl = _hhmmss(r["fbt"])
                 if fl and fl != "000000":
                     lookup[(r["date"], str(r["code"]).zfill(6))] = fl
@@ -137,11 +136,18 @@ def build_obs(kline: dict, fbt_lookup: dict) -> list[dict]:
         net_ratio, cost_pct, gross_ratio = gap_net_return(close_d, open_d1, d_iso, 100.0)
         net_pct = net_ratio * 100.0  # ratio→percentage points (与 path harness net 同单位)
         is_late = fl > "140000"
-        obs.append({
-            "D": d_iso, "code": code, "first_lock": fl, "is_late": is_late,
-            "net_pct": net_pct, "gross_pct": gross_ratio * 100.0, "cost_pct": cost_pct,
-            "win": 1 if net_pct > 0 else 0,
-        })
+        obs.append(
+            {
+                "D": d_iso,
+                "code": code,
+                "first_lock": fl,
+                "is_late": is_late,
+                "net_pct": net_pct,
+                "gross_pct": gross_ratio * 100.0,
+                "cost_pct": cost_pct,
+                "win": 1 if net_pct > 0 else 0,
+            }
+        )
     return obs
 
 
@@ -193,9 +199,11 @@ def main() -> None:
         return
     wr_all = sum(o["win"] for o in obs) / len(obs)
     mean_all = statistics.mean(o["net_pct"] for o in obs)
-    print(f"\nGAP window (D收→D+1开) all: n={len(obs)} days={days} "
-          f"net_mean={mean_all:.3f}% net_WR={wr_all*100:.1f}% "
-          f"(扣 cost~{sum(o['cost_pct'] for o in obs)/len(obs):.2f}%)")
+    print(
+        f"\nGAP window (D收→D+1开) all: n={len(obs)} days={days} "
+        f"net_mean={mean_all:.3f}% net_WR={wr_all * 100:.1f}% "
+        f"(扣 cost~{sum(o['cost_pct'] for o in obs) / len(obs):.2f}%)"
+    )
     print(f"late_lock(首封>14:00): n={len(late_obs)} days={late_days}\n")
 
     # winrate lift (comparable to path harness)
@@ -203,7 +211,7 @@ def main() -> None:
     if wl:
         wl_lift, wl_n = wl
         st = "VALIDATED(≥2)" if wl_lift >= 2 else ("未validated(≥1)" if wl_lift >= 1 else "劣于随机")
-        print(f"  late_lock winrate-lift = {wl_lift:.3f}x (n={wl_n}) vs all {wr_all*100:.1f}% | {st}")
+        print(f"  late_lock winrate-lift = {wl_lift:.3f}x (n={wl_n}) vs all {wr_all * 100:.1f}% | {st}")
     # mean lift (gap is continuous return — mean more honest than winrate)
     ml = mean_lift(obs, "is_late", mean_all)
     if ml:
@@ -236,13 +244,17 @@ def main() -> None:
             round_trip_cost=round(sum(o["cost_pct"] for o in obs) / len(obs), 4) if obs else 0.0,
             script="tools/zt_pool_seal_time_lift_gap.py",
             params={
-                "arm": "late_lock", "window": "gap(D收→D+1开)",
-                "source": "em_fbt(akshare+zt_history)", "cutoff": "14:00:00",
+                "arm": "late_lock",
+                "window": "gap(D收→D+1开)",
+                "source": "em_fbt(akshare+zt_history)",
+                "cutoff": "14:00:00",
                 "realizability": "sealed_at_close(not_tradeable)",
             },
         )
-        print(f"\n[§44] zt_pool_seal_time_gap:late_lock → status={v.status} "
-              f"selection_lift={v.selection_lift} n={v.n} days_robust={v.days_robust}")
+        print(
+            f"\n[§44] zt_pool_seal_time_gap:late_lock → status={v.status} "
+            f"selection_lift={v.selection_lift} n={v.n} days_robust={v.days_robust}"
+        )
         print(f"       note: {v.note}")
     else:
         print(f"\n[§44] skips (n={len(rets)}<2 survivors)")

@@ -6,6 +6,7 @@ entry_gap 是 T+1 open（次日）——选股时（T 收盘）不知道，直�
 对比不限 gap（轮11 real-exec net +0.336%）vs 限 T 日 gap < 3%/2%/1%/0.5%。
 去 gap rank（动量+小盘），mode=filtered。
 """
+
 from __future__ import annotations
 
 import statistics
@@ -51,8 +52,16 @@ def stats(dates: list, by_date: dict, gap_limit: float | None = None) -> dict | 
     t = m / se if se > 0 else 0
     eg = [x["entry_gap"] for x in all_picks]
     eg_mean = statistics.mean(eg) if eg else 0
-    return {"n_days": len(daily_mean), "n_picks": len(all_picks), "mean": m,
-            "median": med, "wr": wr, "net": m - COST, "t": t, "eg_mean": eg_mean}
+    return {
+        "n_days": len(daily_mean),
+        "n_picks": len(all_picks),
+        "mean": m,
+        "median": med,
+        "wr": wr,
+        "net": m - COST,
+        "t": t,
+        "eg_mean": eg_mean,
+    }
 
 
 def main() -> None:
@@ -61,11 +70,18 @@ def main() -> None:
     print(f"\n=== combo real-exec 限 T 日 gap（去 gap rank mode=filtered，{len(all_d)} 日）===\n")
     print(f"{'口径':<14}{'days':>6}{'picks':>7}{'net':>10}{'mean':>10}{'median':>10}{'WR':>7}{'t':>7}{'entry_gap':>11}")
     print("-" * 82)
-    for label, lim in [("不限(轮11)", None), ("限gap<3%", 0.03), ("限gap<2%", 0.02),
-                       ("限gap<1%", 0.01), ("限gap<0.5%", 0.005)]:
+    for label, lim in [
+        ("不限(轮11)", None),
+        ("限gap<3%", 0.03),
+        ("限gap<2%", 0.02),
+        ("限gap<1%", 0.01),
+        ("限gap<0.5%", 0.005),
+    ]:
         r = stats(all_d, by_date, gap_limit=lim)
         if r:
-            print(f"{label:<14}{r['n_days']:>6}{r['n_picks']:>7}{r['net']*100:>+9.3f}%{r['mean']*100:>+9.3f}%{r['median']*100:>+9.3f}%{r['wr']*100:>6.1f}%{r['t']:>6.2f}{r['eg_mean']*100:>+10.3f}%")
+            print(
+                f"{label:<14}{r['n_days']:>6}{r['n_picks']:>7}{r['net'] * 100:>+9.3f}%{r['mean'] * 100:>+9.3f}%{r['median'] * 100:>+9.3f}%{r['wr'] * 100:>6.1f}%{r['t']:>6.2f}{r['eg_mean'] * 100:>+10.3f}%"
+            )
     print()
     # 最佳 gap_limit 的 regime 分层 + walk-forward（如果限 gap 提升）
     base = stats(all_d, by_date, gap_limit=None)
@@ -77,9 +93,11 @@ def main() -> None:
             best_net = r["net"]
             best_lim = lim
     if best_lim is not None:
-        print(f"最佳 gap_limit = {best_lim}（net {best_net*100:+.3f}% vs 不限 {base['net']*100:+.3f}%，提升 {(best_net-base['net'])*100:+.3f}%）")
+        print(
+            f"最佳 gap_limit = {best_lim}（net {best_net * 100:+.3f}% vs 不限 {base['net'] * 100:+.3f}%，提升 {(best_net - base['net']) * 100:+.3f}%）"
+        )
     else:
-        print(f"限 gap 未提升（不限 net {base['net']*100:+.3f}% 最高）→ entry gap 优化空间不在限 T 日 gap")
+        print(f"限 gap 未提升（不限 net {base['net'] * 100:+.3f}% 最高）→ entry gap 优化空间不在限 T 日 gap")
 
 
 if __name__ == "__main__":

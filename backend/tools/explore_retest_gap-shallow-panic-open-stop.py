@@ -28,6 +28,7 @@ Fake-edge 5-pattern audit (if flipped):
 
 Run: cd backend && .venv/bin/python tools/explore_retest_gap-shallow-panic-open-stop.py
 """
+
 from __future__ import annotations
 
 import json
@@ -40,6 +41,7 @@ from typing import Any, Callable
 
 # Import FIXED limit_for_code from _factor_helpers (6-digit prefix, not sz30/sh68)
 import sys
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from _factor_helpers import limit_for_code  # noqa: E402
 
@@ -57,15 +59,16 @@ ZT_DB = DATA / "zt_history.db"
 
 TURN_THRESHOLD = 20.0
 VR5_THRESHOLD = 2.0
-SLIPPAGE = 0.002   # 0.2% slippage for gap-through fills (R6)
-STOP = -0.03       # -3% stop
-COST_PCT = 0.3     # 0.3% round-trip cost (small caps)
+SLIPPAGE = 0.002  # 0.2% slippage for gap-through fills (R6)
+STOP = -0.03  # -3% stop
+COST_PCT = 0.3  # 0.3% round-trip cost (small caps)
 ALPHA = 0.05
 
 
 # ---------------------------------------------------------------------------
 # Data loading (reused from explore_gap_shallow_panic_cap3)
 # ---------------------------------------------------------------------------
+
 
 def load_kline_db() -> dict[str, list[dict]]:
     conn = sqlite3.connect(str(KLINE_DB))
@@ -96,16 +99,14 @@ def vol_ratio_5(bars: list[dict], idx: int) -> float | None:
     vol = bars[idx].get("volume")
     if not vol:
         return None
-    pv = [b.get("volume") for b in bars[idx - 5:idx]]
+    pv = [b.get("volume") for b in bars[idx - 5 : idx]]
     if any(v is None or v == 0 for v in pv):
         return None
     avg5 = sum(pv) / 5.0
     return vol / avg5 if avg5 else None
 
 
-def gen_watchlist_codes(
-    t: str, all_bars: dict[str, list[dict]], zt_t: set[str]
-) -> list[str]:
+def gen_watchlist_codes(t: str, all_bars: dict[str, list[dict]], zt_t: set[str]) -> list[str]:
     out: list[str] = []
     for code, bars in all_bars.items():
         tbar = None
@@ -135,6 +136,7 @@ def gen_watchlist_codes(
 # Record building (FIXED limit_for_code)
 # ---------------------------------------------------------------------------
 
+
 def build_records(
     end_date: str = "2026-09-17",
     days: int = 560,
@@ -148,11 +150,7 @@ def build_records(
         return [], 0
     end_idx = cal.index(end_date)
     date_idx = {d: i for i, d in enumerate(cal)}
-    pairs = [
-        (cal[i], cal[i + 1])
-        for i in range(max(0, end_idx - days), end_idx)
-        if i + 1 < len(cal)
-    ]
+    pairs = [(cal[i], cal[i + 1]) for i in range(max(0, end_idx - days), end_idx) if i + 1 < len(cal)]
 
     records: list[dict[str, Any]] = []
     for t, t1 in pairs:
@@ -192,19 +190,21 @@ def build_records(
                 t2bar.get("close"),
             ):
                 continue
-            records.append({
-                "code": code,
-                "t": t,
-                "t1": t1,
-                "t2": t2,
-                "gap": round(gap, 4),
-                "t1_open": t1_open,
-                "t1_close": t1_close,
-                "t2_open": t2bar["open"],
-                "t2_high": t2bar["high"],
-                "t2_low": t2bar["low"],
-                "t2_close": t2bar["close"],
-            })
+            records.append(
+                {
+                    "code": code,
+                    "t": t,
+                    "t1": t1,
+                    "t2": t2,
+                    "gap": round(gap, 4),
+                    "t1_open": t1_open,
+                    "t1_close": t1_close,
+                    "t2_open": t2bar["open"],
+                    "t2_high": t2bar["high"],
+                    "t2_low": t2bar["low"],
+                    "t2_close": t2bar["close"],
+                }
+            )
     return records, len(pairs)
 
 
@@ -224,6 +224,7 @@ def apply_cap(records: list[dict], cap: int | None) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Return functions
 # ---------------------------------------------------------------------------
+
 
 def realistic_stop_ret(r: dict, stop: float = STOP) -> float:
     """R6 realistic: gap-through → t2_open*(1-slip), else stop_price, else t2_close."""
@@ -274,6 +275,7 @@ def t2_intraday_ret(r: dict) -> float:
 # NEW METHODOLOGY 1: BH (Benjamini-Hochberg) FDR
 # ---------------------------------------------------------------------------
 
+
 def bh_fdr(p_list: list[float], alpha: float = 0.05) -> dict[str, Any]:
     """Benjamini-Hochberg FDR procedure.
 
@@ -293,8 +295,7 @@ def bh_fdr(p_list: list[float], alpha: float = 0.05) -> dict[str, Any]:
     """
     m = len(p_list)
     if m == 0:
-        return {"n_tests": 0, "alpha": alpha, "discoveries": [],
-                "n_discoveries": 0, "bh_threshold_for_smallest": 0.0}
+        return {"n_tests": 0, "alpha": alpha, "discoveries": [], "n_discoveries": 0, "bh_threshold_for_smallest": 0.0}
 
     # Sort with original indices
     indexed = sorted(enumerate(p_list), key=lambda x: x[1])
@@ -311,13 +312,15 @@ def bh_fdr(p_list: list[float], alpha: float = 0.05) -> dict[str, Any]:
     for i, (orig_idx, p) in enumerate(indexed, 1):
         threshold = (i / m) * alpha
         passes = i <= largest_k
-        results.append({
-            "orig_index": orig_idx,
-            "p_value": p,
-            "rank": i,
-            "bh_threshold": round(threshold, 6),
-            "passes": passes,
-        })
+        results.append(
+            {
+                "orig_index": orig_idx,
+                "p_value": p,
+                "rank": i,
+                "bh_threshold": round(threshold, 6),
+                "passes": passes,
+            }
+        )
 
     return {
         "n_tests": m,
@@ -331,6 +334,7 @@ def bh_fdr(p_list: list[float], alpha: float = 0.05) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # NEW METHODOLOGY 2: per-trade t + HAC (Newey-West)
 # ---------------------------------------------------------------------------
+
 
 def norm_sf_positive(t: float) -> float:
     """One-sided p for POSITIVE edge test: P(Z > t). Direction matters."""
@@ -359,8 +363,7 @@ def per_trade_t_hac(
     """
     n = len(rets)
     if n == 0:
-        return {"n_trades": 0, "mean": 0.0, "hac_se": 0.0, "t": 0.0,
-                "p_one_sided": 1.0, "lag": 0, "sensitivity": {}}
+        return {"n_trades": 0, "mean": 0.0, "hac_se": 0.0, "t": 0.0, "p_one_sided": 1.0, "lag": 0, "sensitivity": {}}
 
     # Order by date (stable sort preserves within-day order)
     paired = sorted(zip(dates, rets), key=lambda x: x[0])
@@ -447,6 +450,7 @@ def per_trade_t_hac(
 # NEW METHODOLOGY 3: rolling 4-window walk-forward
 # ---------------------------------------------------------------------------
 
+
 def rolling_walk_forward(
     records: list[dict],
     ret_fn: Callable[[dict], float],
@@ -470,8 +474,7 @@ def rolling_walk_forward(
     n_dates = len(all_dates)
 
     if n_dates < n_windows:
-        return {"status": "too_few_dates", "n_dates": n_dates,
-                "n_windows": n_windows, "windows": []}
+        return {"status": "too_few_dates", "n_dates": n_dates, "n_windows": n_windows, "windows": []}
 
     # Split dates into n_windows quarters
     quarter_size = n_dates // n_windows
@@ -497,14 +500,20 @@ def rolling_walk_forward(
         test_rets = [x for x in test_rets if x is not None]
 
         if not test_rets:
-            windows.append({
-                "window": w + 1,
-                "train_n": len(train_rets), "test_n": 0,
-                "train_n_days": len(train_dates), "test_n_days": len(test_dates),
-                "train_ev": 0.0, "test_ev": 0.0,
-                "test_hac_t": 0.0, "test_hac_p": 1.0,
-                "status": "empty_test",
-            })
+            windows.append(
+                {
+                    "window": w + 1,
+                    "train_n": len(train_rets),
+                    "test_n": 0,
+                    "train_n_days": len(train_dates),
+                    "test_n_days": len(test_dates),
+                    "train_ev": 0.0,
+                    "test_ev": 0.0,
+                    "test_hac_t": 0.0,
+                    "test_hac_p": 1.0,
+                    "status": "empty_test",
+                }
+            )
             continue
 
         train_ev = sum(train_rets) / len(train_rets) if train_rets else 0.0
@@ -514,23 +523,26 @@ def rolling_walk_forward(
         test_dates_list = [r["t1"] for r in test_recs if ret_fn(r) is not None]
         hac = per_trade_t_hac(test_rets, test_dates_list)
 
-        windows.append({
-            "window": w + 1,
-            "train_n": len(train_rets), "test_n": len(test_rets),
-            "train_n_days": len(train_dates), "test_n_days": len(test_dates),
-            "train_ev": round(train_ev, 4),
-            "test_ev": round(test_ev, 4),
-            "test_hac_t": hac["t"],
-            "test_hac_p": hac["p_one_sided"],
-            "test_hac_lag": hac["lag"],
-            "status": "ok",
-        })
+        windows.append(
+            {
+                "window": w + 1,
+                "train_n": len(train_rets),
+                "test_n": len(test_rets),
+                "train_n_days": len(train_dates),
+                "test_n_days": len(test_dates),
+                "train_ev": round(train_ev, 4),
+                "test_ev": round(test_ev, 4),
+                "test_hac_t": hac["t"],
+                "test_hac_p": hac["p_one_sided"],
+                "test_hac_lag": hac["lag"],
+                "status": "ok",
+            }
+        )
 
     # Summary: how many test windows have positive EV + significant p
     positive_windows = sum(1 for w in windows if w["test_ev"] > 0)
     significant_windows = sum(1 for w in windows if w["test_hac_p"] < ALPHA)
-    positive_and_sig = sum(1 for w in windows
-                           if w["test_ev"] > 0 and w["test_hac_p"] < ALPHA)
+    positive_and_sig = sum(1 for w in windows if w["test_ev"] > 0 and w["test_hac_p"] < ALPHA)
 
     return {
         "status": "ok",
@@ -548,6 +560,7 @@ def rolling_walk_forward(
 # Per-day-mean stats (original methodology, for comparison)
 # ---------------------------------------------------------------------------
 
+
 def per_day_stats(records: list[dict], ret_fn: Callable[[dict], float]) -> dict[str, Any]:
     by_day: dict[str, list[float]] = defaultdict(list)
     for r in records:
@@ -557,9 +570,15 @@ def per_day_stats(records: list[dict], ret_fn: Callable[[dict], float]) -> dict[
     n = len(day_means)
     n_trades = sum(len(by_day[d]) for d in sorted_days)
     if n == 0:
-        return {"n_days": 0, "n_trades": 0, "per_trade_ev": 0.0,
-                "per_day_mean_ev": 0.0, "day_clustered_t": 0.0,
-                "p_one_sided": 1.0, "day_means_chrono": []}
+        return {
+            "n_days": 0,
+            "n_trades": 0,
+            "per_trade_ev": 0.0,
+            "per_day_mean_ev": 0.0,
+            "day_clustered_t": 0.0,
+            "p_one_sided": 1.0,
+            "day_means_chrono": [],
+        }
     per_trade_rets = [ret_fn(r) for r in records]
     per_trade_ev = sum(per_trade_rets) / n_trades if n_trades else 0.0
     mean = sum(day_means) / n
@@ -568,7 +587,8 @@ def per_day_stats(records: list[dict], ret_fn: Callable[[dict], float]) -> dict[
     t = mean / se if se > 0 else 0.0
     p_one = 0.5 * (1 - math.erf(abs(t) / math.sqrt(2)))
     return {
-        "n_days": n, "n_trades": n_trades,
+        "n_days": n,
+        "n_trades": n_trades,
         "per_trade_ev": round(per_trade_ev, 4),
         "per_day_mean_ev": round(mean, 4),
         "day_clustered_t": round(t, 4),
@@ -581,6 +601,7 @@ def per_day_stats(records: list[dict], ret_fn: Callable[[dict], float]) -> dict[
 # Main: re-test with new methodology
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     print("=" * 78)
     print("RE-TEST: gap(-3,-2] open_stop — less-conservative methodology")
@@ -588,9 +609,7 @@ def main() -> None:
     print("=" * 78)
 
     print("\n加载数据…")
-    all_records, npairs = build_records(
-        end_date="2026-09-17", days=560, gap_lo=-100.0, gap_hi=100.0
-    )
+    all_records, npairs = build_records(end_date="2026-09-17", days=560, gap_lo=-100.0, gap_hi=100.0)
     if not all_records:
         print("ERR: no records")
         return
@@ -634,7 +653,9 @@ def main() -> None:
     print(f"  p_one_sided = {c_orig['p_one_sided']:.6f}")
 
     print(f"\n原 verdict: edge-falsified (close_ev {c_orig['per_day_mean_ev']:+.4f}% ≤ 0)")
-    print(f"原 Bonf×9 p = {min(s_orig['p_one_sided'] * 9, 1.0):.6f} (pass={'YES' if s_orig['p_one_sided']*9 < ALPHA else 'NO'})")
+    print(
+        f"原 Bonf×9 p = {min(s_orig['p_one_sided'] * 9, 1.0):.6f} (pass={'YES' if s_orig['p_one_sided'] * 9 < ALPHA else 'NO'})"
+    )
 
     # ==================================================================
     # SECTION B: NEW METHODOLOGY 1 — BH FDR 5% (replaces Bonferroni×9)
@@ -659,14 +680,16 @@ def main() -> None:
             capped_sub = apply_cap(sub, cap_val)
             stats = per_day_stats(capped_sub, realistic_stop_ret)
             grid_p_values.append(stats["p_one_sided"])
-            grid_info.append({
-                "combo": f"gap{gw_name}+cap{cap_name}",
-                "n_trades": stats["n_trades"],
-                "n_days": stats["n_days"],
-                "ev": stats["per_day_mean_ev"],
-                "t": stats["day_clustered_t"],
-                "p": stats["p_one_sided"],
-            })
+            grid_info.append(
+                {
+                    "combo": f"gap{gw_name}+cap{cap_name}",
+                    "n_trades": stats["n_trades"],
+                    "n_days": stats["n_days"],
+                    "ev": stats["per_day_mean_ev"],
+                    "t": stats["day_clustered_t"],
+                    "p": stats["p_one_sided"],
+                }
+            )
 
     bh_result = bh_fdr(grid_p_values, alpha=ALPHA)
     n_tests = bh_result["n_tests"]
@@ -677,9 +700,11 @@ def main() -> None:
     print("-" * 80)
     for info, disc in zip(grid_info, bh_result["discoveries"]):
         marker = " <-- MAIN" if info["combo"] == "gap[-3,-2)+cap3" else ""
-        print(f"{info['combo']:<24} {info['n_trades']:>8} {info['n_days']:>6} "
-              f"{info['ev']:>+7.4f}% {info['t']:>+8.4f} {info['p']:>10.6f} "
-              f"{'PASS' if disc['passes'] else 'fail':>8}{marker}")
+        print(
+            f"{info['combo']:<24} {info['n_trades']:>8} {info['n_days']:>6} "
+            f"{info['ev']:>+7.4f}% {info['t']:>+8.4f} {info['p']:>10.6f} "
+            f"{'PASS' if disc['passes'] else 'fail':>8}{marker}"
+        )
 
     main_combo_info = next(g for g in grid_info if g["combo"] == "gap[-3,-2)+cap3")
     main_disc = next(d for d in bh_result["discoveries"] if d["orig_index"] == grid_info.index(main_combo_info))
@@ -687,8 +712,7 @@ def main() -> None:
     print(f"\nmain combo (gap[-3,-2)+cap3):")
     print(f"  p_raw = {main_combo_info['p']:.6f}")
     print(f"  Bonferroni p (×9) = {min(main_combo_info['p'] * 9, 1.0):.6f}")
-    print(f"  BH FDR pass = {bh_main_pass} (rank={main_disc['rank']}, "
-          f"threshold={main_disc['bh_threshold']})")
+    print(f"  BH FDR pass = {bh_main_pass} (rank={main_disc['rank']}, threshold={main_disc['bh_threshold']})")
 
     # ==================================================================
     # SECTION C: NEW METHODOLOGY 2 — per-trade t + HAC (replaces per-day-mean t)
@@ -739,13 +763,17 @@ def main() -> None:
     rwf = rolling_walk_forward(capped3, realistic_stop_ret, n_windows=4)
     print(f"\nstatus: {rwf['status']}  n_dates={rwf.get('n_dates', 0)}")
     if rwf["status"] == "ok":
-        print(f"\n{'win':>4} {'train_n':>8} {'train_ev':>10} {'test_n':>8} "
-              f"{'test_n_days':>12} {'test_ev':>10} {'test_HAC_t':>10} {'test_HAC_p':>10}")
+        print(
+            f"\n{'win':>4} {'train_n':>8} {'train_ev':>10} {'test_n':>8} "
+            f"{'test_n_days':>12} {'test_ev':>10} {'test_HAC_t':>10} {'test_HAC_p':>10}"
+        )
         print("-" * 82)
         for w in rwf["windows"]:
-            print(f"{w['window']:>4} {w['train_n']:>8} {w['train_ev']:>+9.4f}% "
-                  f"{w['test_n']:>8} {w['test_n_days']:>12} {w['test_ev']:>+9.4f}% "
-                  f"{w['test_hac_t']:>+10.4f} {w['test_hac_p']:>10.6f}")
+            print(
+                f"{w['window']:>4} {w['train_n']:>8} {w['train_ev']:>+9.4f}% "
+                f"{w['test_n']:>8} {w['test_n_days']:>12} {w['test_ev']:>+9.4f}% "
+                f"{w['test_hac_t']:>+10.4f} {w['test_hac_p']:>10.6f}"
+            )
         print(f"\npositive test windows: {rwf['positive_test_windows']}/{rwf['n_test_windows']}")
         print(f"significant (HAC p<{ALPHA}): {rwf['significant_test_windows']}/{rwf['n_test_windows']}")
         print(f"positive AND significant: {rwf['positive_and_significant']}/{rwf['n_test_windows']}")
@@ -755,8 +783,9 @@ def main() -> None:
     print(f"\nclose_ev rolling 4-window WF:")
     if rwf_close["status"] == "ok":
         for w in rwf_close["windows"]:
-            print(f"  win{w['window']}: test_ev={w['test_ev']:+.4f}% "
-                  f"HAC_t={w['test_hac_t']:+.4f} p={w['test_hac_p']:.6f}")
+            print(
+                f"  win{w['window']}: test_ev={w['test_ev']:+.4f}% HAC_t={w['test_hac_t']:+.4f} p={w['test_hac_p']:.6f}"
+            )
         print(f"  positive: {rwf_close['positive_test_windows']}/{rwf_close['n_test_windows']}")
 
     # ==================================================================
@@ -770,10 +799,14 @@ def main() -> None:
     entry_at_limit = sum(1 for r in capped3 if r["t1_open"] >= r.get("t1_close", 0) * 0.999)
     print(f"\n1. entry 涨停价溢价:")
     print(f"   entry = T+1 open (after gap-DOWN in [-3,-2)), NOT at limit-up")
-    print(f"   trades with t1_open >= t1_close: {entry_at_limit}/{len(capped3)} "
-          f"({entry_at_limit/max(len(capped3),1)*100:.1f}%)")
-    print(f"   → {'CLEAN' if entry_at_limit < len(capped3)*0.05 else 'SUSPICIOUS'}: "
-          f"gap-down entry is below T close, not at limit-up premium")
+    print(
+        f"   trades with t1_open >= t1_close: {entry_at_limit}/{len(capped3)} "
+        f"({entry_at_limit / max(len(capped3), 1) * 100:.1f}%)"
+    )
+    print(
+        f"   → {'CLEAN' if entry_at_limit < len(capped3) * 0.05 else 'SUSPICIOUS'}: "
+        f"gap-down entry is below T close, not at limit-up premium"
+    )
 
     # Pattern 2: survivorship — all watchlist stocks included, no filtering by survival
     print(f"\n2. survivorship:")
@@ -790,15 +823,19 @@ def main() -> None:
     overnight = [close_ev_ret(r) for r in capped3 if r.get("t1_close") and r["t1_close"] != 0]
     t2_intra = [t2_intraday_ret(r) for r in capped3]
     print(f"   open_stop decomposition (per-trade mean):")
-    print(f"     T+1 intraday (open→close)  = {sum(t1_intra)/len(t1_intra):+.4f}%")
-    print(f"     overnight (T+1 close→T+2 open) = {sum(overnight)/len(overnight):+.4f}%")
-    print(f"     T+2 intraday (open→close) = {sum(t2_intra)/len(t2_intra):+.4f}%")
-    print(f"     sum = {sum(t1_intra)/len(t1_intra) + sum(overnight)/len(overnight) + sum(t2_intra)/len(t2_intra):+.4f}%")
+    print(f"     T+1 intraday (open→close)  = {sum(t1_intra) / len(t1_intra):+.4f}%")
+    print(f"     overnight (T+1 close→T+2 open) = {sum(overnight) / len(overnight):+.4f}%")
+    print(f"     T+2 intraday (open→close) = {sum(t2_intra) / len(t2_intra):+.4f}%")
+    print(
+        f"     sum = {sum(t1_intra) / len(t1_intra) + sum(overnight) / len(overnight) + sum(t2_intra) / len(t2_intra):+.4f}%"
+    )
     print(f"     open_stop actual = {hac_open['mean']:+.4f}%")
-    t1_intra_share = (sum(t1_intra)/len(t1_intra)) / hac_open['mean'] * 100 if hac_open['mean'] != 0 else 0
-    print(f"   → {'FAKE EDGE' if c_orig['per_day_mean_ev'] < 0 else 'CLEAN'}: "
-          f"close_ev = {c_orig['per_day_mean_ev']:+.4f}% "
-          f"({'negative = overnight leakage, T+1 intraday recovery is the edge' if c_orig['per_day_mean_ev'] < 0 else 'positive = genuine overnight drift'})")
+    t1_intra_share = (sum(t1_intra) / len(t1_intra)) / hac_open["mean"] * 100 if hac_open["mean"] != 0 else 0
+    print(
+        f"   → {'FAKE EDGE' if c_orig['per_day_mean_ev'] < 0 else 'CLEAN'}: "
+        f"close_ev = {c_orig['per_day_mean_ev']:+.4f}% "
+        f"({'negative = overnight leakage, T+1 intraday recovery is the edge' if c_orig['per_day_mean_ev'] < 0 else 'positive = genuine overnight drift'})"
+    )
     print(f"   T+1 intraday contributes {t1_intra_share:.0f}% of open_stop EV")
 
     # Pattern 4: 拥挤倒 U — in-sample strong, OOS decay
@@ -809,8 +846,10 @@ def main() -> None:
         print(f"   train EVs: {['%.4f' % e for e in train_evs]}")
         print(f"   test  EVs: {['%.4f' % e for e in test_evs]}")
         consistent = all(e > 0 for e in test_evs)
-        print(f"   → {'CONSISTENT' if consistent else 'INCONSISTENT'}: "
-              f"{'all' if consistent else 'not all'} test windows positive")
+        print(
+            f"   → {'CONSISTENT' if consistent else 'INCONSISTENT'}: "
+            f"{'all' if consistent else 'not all'} test windows positive"
+        )
         if not consistent:
             neg_windows = [w["window"] for w in rwf["windows"] if w["test_ev"] <= 0]
             print(f"   negative test windows: {neg_windows}")
@@ -824,17 +863,18 @@ def main() -> None:
     over_credit = ideal_ev - real_ev
     sp_fn = lambda r: r["t1_open"] * (1 + STOP)
     trig_total = sum(1 for r in capped3 if r["t2_low"] <= sp_fn(r))
-    gap_through = sum(1 for r in capped3
-                      if r["t2_low"] <= sp_fn(r) and r["t2_open"] <= sp_fn(r))
+    gap_through = sum(1 for r in capped3 if r["t2_low"] <= sp_fn(r) and r["t2_open"] <= sp_fn(r))
     print(f"   ideal EV (over-credit) = {ideal_ev:+.4f}%")
     print(f"   realistic EV (R6) = {real_ev:+.4f}%")
     print(f"   over-credit = {over_credit:+.4f}%")
-    print(f"   stop triggered: {trig_total}/{len(capped3)} ({trig_total/max(len(capped3),1)*100:.1f}%)")
+    print(f"   stop triggered: {trig_total}/{len(capped3)} ({trig_total / max(len(capped3), 1) * 100:.1f}%)")
     if trig_total:
-        print(f"   gap-through: {gap_through} ({gap_through/max(trig_total,1)*100:.1f}% of triggers)")
-    print(f"   → {'SUSPICIOUS' if over_credit > 0.3 else 'CLEAN'}: "
-          f"over-credit = {over_credit:+.4f}% "
-          f"({'R6 matters >0.3%' if over_credit > 0.3 else 'R6 correction small'})")
+        print(f"   gap-through: {gap_through} ({gap_through / max(trig_total, 1) * 100:.1f}% of triggers)")
+    print(
+        f"   → {'SUSPICIOUS' if over_credit > 0.3 else 'CLEAN'}: "
+        f"over-credit = {over_credit:+.4f}% "
+        f"({'R6 matters >0.3%' if over_credit > 0.3 else 'R6 correction small'})"
+    )
 
     # ==================================================================
     # SECTION F: New verdict (less-conservative methodology)
@@ -868,11 +908,15 @@ def main() -> None:
         for w in rwf["windows"]:
             sig = "SIG" if w["test_hac_p"] < ALPHA else "ns"
             pos = "+" if w["test_ev"] > 0 else "-"
-            print(f"  win{w['window']}: train_EV={w['train_ev']:+.4f}% → "
-                  f"test_EV={w['test_ev']:+.4f}% HAC_t={w['test_hac_t']:+.4f} "
-                  f"p={w['test_hac_p']:.4f} [{pos}{sig}]")
-        print(f"  positive: {rwf['positive_test_windows']}/{rwf['n_test_windows']}, "
-              f"significant: {rwf['significant_test_windows']}/{rwf['n_test_windows']}")
+            print(
+                f"  win{w['window']}: train_EV={w['train_ev']:+.4f}% → "
+                f"test_EV={w['test_ev']:+.4f}% HAC_t={w['test_hac_t']:+.4f} "
+                f"p={w['test_hac_p']:.4f} [{pos}{sig}]"
+            )
+        print(
+            f"  positive: {rwf['positive_test_windows']}/{rwf['n_test_windows']}, "
+            f"significant: {rwf['significant_test_windows']}/{rwf['n_test_windows']}"
+        )
 
     # --- Verdict logic (frozen before running) ---
     # Using less-conservative methodology but keeping honest constraints:
@@ -897,8 +941,7 @@ def main() -> None:
         print(f"  2. n_days = {n_days} < 60 → UNDERPOWERED")
     elif hac_p >= ALPHA and not bh_main_pass:
         verdict = "edge-falsified"
-        reason = (f"HAC p = {hac_p:.6f} >= {ALPHA} AND BH FDR fail "
-                  f"(neither per-trade HAC nor BH FDR significant)")
+        reason = f"HAC p = {hac_p:.6f} >= {ALPHA} AND BH FDR fail (neither per-trade HAC nor BH FDR significant)"
         print(f"  3. HAC p = {hac_p:.6f} >= {ALPHA} + BH fail → FALSIFIED")
     elif hac_p >= ALPHA:
         # HAC fails but BH passes (less conservative multiple testing)
@@ -911,30 +954,37 @@ def main() -> None:
         print(f"  4. net EV = {net_ev:+.4f}% <= 0 → FALSIFIED")
     elif rwf["status"] == "ok" and rwf["positive_test_windows"] < rwf["n_test_windows"] / 2:
         verdict = "edge-falsified"
-        reason = (f"rolling WF: only {rwf['positive_test_windows']}/{rwf['n_test_windows']} "
-                  f"test windows positive (majority negative = not robust OOS)")
+        reason = (
+            f"rolling WF: only {rwf['positive_test_windows']}/{rwf['n_test_windows']} "
+            f"test windows positive (majority negative = not robust OOS)"
+        )
         print(f"  5. rolling WF majority negative → FALSIFIED")
     elif close_ev_val <= 0:
         # open_stop passes HAC + BH + net + rolling WF, but close_ev negative
         # = T+1 intraday leakage fake edge (pattern #3)
         verdict = "exploratory"
-        reason = (f"open_stop passes HAC/BH/net/WF but close_ev = {close_ev_val:+.4f}% ≤ 0 "
-                  f"(T+1 intraday leakage: edge from gap-down recovery, not overnight drift)")
+        reason = (
+            f"open_stop passes HAC/BH/net/WF but close_ev = {close_ev_val:+.4f}% ≤ 0 "
+            f"(T+1 intraday leakage: edge from gap-down recovery, not overnight drift)"
+        )
         print(f"  6. close_ev = {close_ev_val:+.4f}% ≤ 0 → EXPLORATORY (intraday leakage)")
         print(f"     open_stop edge comes from T+1 intraday recovery, NOT overnight drift")
         print(f"     close_ev HAC t = {close_ev_hac_t:+.4f} (strongly negative)")
     elif rwf["status"] == "ok" and rwf["significant_test_windows"] < rwf["n_test_windows"] / 2:
         verdict = "exploratory"
-        reason = (f"rolling WF: only {rwf['significant_test_windows']}/{rwf['n_test_windows']} "
-                  f"test windows HAC-significant (OOS not consistently significant)")
+        reason = (
+            f"rolling WF: only {rwf['significant_test_windows']}/{rwf['n_test_windows']} "
+            f"test windows HAC-significant (OOS not consistently significant)"
+        )
         print(f"  6b. rolling WF not consistently significant → EXPLORATORY")
     else:
         verdict = "edge-confirmed"
-        reason = ("all checks pass: HAC p<0.05, BH FDR pass, net EV>0, "
-                  "rolling WF majority positive+significant, close_ev>0")
+        reason = (
+            "all checks pass: HAC p<0.05, BH FDR pass, net EV>0, rolling WF majority positive+significant, close_ev>0"
+        )
         print(f"  7. all pass + close_ev > 0 → EDGE-CONFIRMED")
 
-    flipped = (verdict != "edge-falsified")
+    flipped = verdict != "edge-falsified"
 
     print(f"\n>>> 新方法学判定: {verdict}")
     print(f">>> 原因: {reason}")
@@ -972,11 +1022,13 @@ def main() -> None:
     print(f"flipped                 : {flipped}")
     print(f"")
     print(f"--- 假 edge 审计 ---")
-    print(f"1. entry 涨停价溢价    : {'CLEAN' if entry_at_limit < len(capped3)*0.05 else 'SUSPICIOUS'}")
+    print(f"1. entry 涨停价溢价    : {'CLEAN' if entry_at_limit < len(capped3) * 0.05 else 'SUSPICIOUS'}")
     print(f"2. survivorship         : CLEAN (all watchlist picks counted)")
     print(f"3. T+1 日内泄漏         : {'FAKE EDGE' if close_ev_val < 0 else 'CLEAN'} (close_ev={close_ev_val:+.4f}%)")
     print(f"4. 拥挤倒 U             : see rolling WF above")
-    print(f"5. fill 虚构            : {'SUSPICIOUS' if over_credit > 0.3 else 'CLEAN'} (over-credit={over_credit:+.4f}%)")
+    print(
+        f"5. fill 虚构            : {'SUSPICIOUS' if over_credit > 0.3 else 'CLEAN'} (over-credit={over_credit:+.4f}%)"
+    )
 
 
 if __name__ == "__main__":

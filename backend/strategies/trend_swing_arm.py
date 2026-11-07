@@ -12,6 +12,7 @@ plan: specs/S181-trend-band-arm/plan.md
 Deferred：zt 动量分量（S182）、新闻/政策催化剂（S183）——本骨架不含。
 §44 harness（板块级 rotation 信号验证）另 spec，不在此范围。
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,11 +26,11 @@ if str(_ROOT) not in sys.path:
 _LOGGER = logging.getLogger("vibe-research")
 
 #: swing trade 参数（§44 未验 paper params，spec R5）。
-TREND_STOP_PCT: float = -6.0       # 止损 -6%（swing 容忍更大回撤 vs breakout -4%）
-TREND_TAKE_PCT: float = 15.0       # 止盈 +15%（swing 目标更大 vs breakout +8%）
-TREND_MAX_HOLD: int = 10           # 最大持仓 10 交易日（2 周 vs breakout 3 天）
-TREND_TOP_N: int = 5               # 每日选 top N 候选
-TREND_TOP_SECTORS: int = 5         # trending sectors 上限
+TREND_STOP_PCT: float = -6.0  # 止损 -6%（swing 容忍更大回撤 vs breakout -4%）
+TREND_TAKE_PCT: float = 15.0  # 止盈 +15%（swing 目标更大 vs breakout +8%）
+TREND_MAX_HOLD: int = 10  # 最大持仓 10 交易日（2 周 vs breakout 3 天）
+TREND_TOP_N: int = 5  # 每日选 top N 候选
+TREND_TOP_SECTORS: int = 5  # trending sectors 上限
 
 
 def _identify_trending_sectors(date: str) -> list[dict]:
@@ -51,6 +52,7 @@ def _identify_trending_sectors(date: str) -> list[dict]:
     flow_map: dict[str, float] = {}
     try:
         import market  # noqa: PLC0415
+
         for s in market._sectors():
             flow_map[str(s.get("name", ""))] = float(s.get("net", 0) or 0)
     except Exception:
@@ -68,17 +70,23 @@ def _identify_trending_sectors(date: str) -> list[dict]:
             continue
         net = flow_map.get(ind)
         if net is None:
-            fund_weight = 1.0          # 板块名不匹配 → 中性不排除
+            fund_weight = 1.0  # 板块名不匹配 → 中性不排除
         elif net > 0:
             fund_weight = 1.0 + min(net / 10.0, 1.0)  # 净流入加分（上限 +1.0）
         else:
-            fund_weight = 0.5          # 净流出降权不排除
+            fund_weight = 0.5  # 净流出降权不排除
         composite = round(modifier * fund_weight, 3)
-        trending.append({
-            "industry": ind, "phase": phase, "modifier": modifier,
-            "zt_count_today": zt_today, "fund_flow_net": net,
-            "composite_score": composite, "phase_note": note,
-        })
+        trending.append(
+            {
+                "industry": ind,
+                "phase": phase,
+                "modifier": modifier,
+                "zt_count_today": zt_today,
+                "fund_flow_net": net,
+                "composite_score": composite,
+                "phase_note": note,
+            }
+        )
 
     trending.sort(key=lambda x: x["composite_score"], reverse=True)
     for i, s in enumerate(trending[:TREND_TOP_SECTORS]):
@@ -103,6 +111,7 @@ def select_trend_candidates(date: str | None = None) -> list[dict]:
 
     if date is None:
         from vr_paths import prev_trading_date_str  # noqa: PLC0415
+
         date = prev_trading_date_str()
 
     top = _identify_trending_sectors(date)
@@ -116,24 +125,29 @@ def select_trend_candidates(date: str | None = None) -> list[dict]:
     try:
         from candidate_funnel.sources._filters import classify_tradability  # noqa: PLC0415
         from candidate_funnel.sources.st_play_radar import load_st_play_radar  # noqa: PLC0415
+
         radar = load_st_play_radar()
         kept: list[dict] = []
         for c in candidates:
-            keep, _reason, st_play = classify_tradability(
-                c.get("name", ""), str(c.get("code", "")), radar)
+            keep, _reason, st_play = classify_tradability(c.get("name", ""), str(c.get("code", "")), radar)
             if keep:
                 kept.append({**c, "st_play": st_play} if st_play else c)
         candidates = kept
     except Exception as e:  # noqa: BLE001
-        _LOGGER.warning("trend_swing_arm tradability 不可用（降级不阻塞）: %s", e)  # tradability 不可用 → 不过滤（降级不阻塞）
+        _LOGGER.warning(
+            "trend_swing_arm tradability 不可用（降级不阻塞）: %s", e
+        )  # tradability 不可用 → 不过滤（降级不阻塞）
 
     score_map = {s["industry"]: s["composite_score"] for s in top}
     candidates.sort(key=lambda c: c.get("sector_rank") or 999)
     return [
         {
-            "code": c.get("code", ""), "name": c.get("name", ""),
-            "sector": c.get("sector", ""), "sector_rank": c.get("sector_rank"),
-            "close": c.get("close"), "pattern": None,
+            "code": c.get("code", ""),
+            "name": c.get("name", ""),
+            "sector": c.get("sector", ""),
+            "sector_rank": c.get("sector_rank"),
+            "close": c.get("close"),
+            "pattern": None,
             "strategy_score": score_map.get(c.get("sector", "")),
         }
         for c in candidates[:TREND_TOP_N]
@@ -176,8 +190,10 @@ def trend_arm_report(journal) -> dict:
         **status,
         "aggregate_stats": agg,
         "params": {
-            "stop_pct": TREND_STOP_PCT, "take_profit_pct": TREND_TAKE_PCT,
-            "max_hold_days": TREND_MAX_HOLD, "top_n": TREND_TOP_N,
+            "stop_pct": TREND_STOP_PCT,
+            "take_profit_pct": TREND_TAKE_PCT,
+            "max_hold_days": TREND_MAX_HOLD,
+            "top_n": TREND_TOP_N,
         },
         "note": "题材/政策趋势驱动（非纯动量），§44 未验证；paper tracking 不推荐真金",
         "risk_disclaimer": "历史统计特征，市场有风险",
@@ -200,6 +216,7 @@ if __name__ == "__main__":
         print(json.dumps(select_trend_candidates(args.date), ensure_ascii=False, indent=2))
     elif args.cmd in ("status", "report"):
         from engine.trade_journal import TradeJournal  # noqa: PLC0415
+
         tj = TradeJournal()
         fn = trend_arm_status if args.cmd == "status" else trend_arm_report
         print(json.dumps(fn(tj), ensure_ascii=False, indent=2))

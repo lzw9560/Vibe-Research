@@ -68,7 +68,10 @@ def _code_from_bar(bar: Any) -> str:
 
 
 def build_ztpool_items_from_klines(
-    code: str, name: str, bars: list, target_date: str,
+    code: str,
+    name: str,
+    bars: list,
+    target_date: str,
 ) -> tuple[list[ZTPoolItem], ZTPoolItem | None]:
     """从 K 线序列构造历史涨停 ZTPoolItem 列表 + 当日 pool_item（若涨停）。
 
@@ -131,20 +134,23 @@ def _baostock_bars_to_bars(code: str, end_date: str) -> list:
     if not raw:
         return []
     from types import SimpleNamespace  # noqa: PLC0415
+
     bars: list = []
     for d in raw:
         try:
             dt = str(d.get("date", ""))[:10]
             if not dt or dt > end_date:
                 continue
-            bars.append(SimpleNamespace(
-                date=dt,
-                open=float(d.get("open", 0) or 0),
-                high=float(d.get("high", 0) or 0),
-                low=float(d.get("low", 0) or 0),
-                close=float(d.get("close", 0) or 0),
-                code=code,
-            ))
+            bars.append(
+                SimpleNamespace(
+                    date=dt,
+                    open=float(d.get("open", 0) or 0),
+                    high=float(d.get("high", 0) or 0),
+                    low=float(d.get("low", 0) or 0),
+                    close=float(d.get("close", 0) or 0),
+                    code=code,
+                )
+            )
         except (TypeError, ValueError):
             continue
     return bars
@@ -168,6 +174,7 @@ def _get_kline_bars(code: str, end_date: str, lookback_days: int = LOOKBACK_DAYS
     # 备用源：TickFlow
     try:
         from data.sources.tickflow import fetch_klines_as_bars
+
         bars = fetch_klines_as_bars(code, count=lookback_days + 20)
         result = [b for b in bars if (b.date or "")[:10] <= end_date]
         if result:
@@ -257,7 +264,7 @@ async def rebuild_date(
 
     # 分批 gather，每批 _CONCURRENCY 个
     for i in range(0, len(codes), _CONCURRENCY):
-        batch = codes[i:i + _CONCURRENCY]
+        batch = codes[i : i + _CONCURRENCY]
         batch_results = await asyncio.gather(*[_process_code(c) for c in batch], return_exceptions=True)
         for r in batch_results:
             if isinstance(r, GeneScore):
@@ -272,6 +279,7 @@ async def _get_db_codes() -> list[str]:
     """从 DB 取所有曾出现的 code 列表（去重）。"""
     try:
         from limitup_screener.data import get_db
+
         conn = get_db()
         rows = conn.execute("SELECT DISTINCT code FROM gene_scores").fetchall()
         conn.close()

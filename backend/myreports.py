@@ -44,9 +44,7 @@ def _migrate_legacy() -> None:
         os.replace(tmp, REPORTS_DIR)  # 同盘原子改名：复制中断不会留半套研报挡住下次重试
     except OSError as e:
         # 迁移失败不阻塞启动，但要出声——旧数据原样保留在 _OLD_DEFAULT_DIR，可手工复制
-        logging.getLogger("vibe-research").warning(
-            "研报数据迁移失败（旧数据仍在 %s）: %s", _OLD_DEFAULT_DIR, e
-        )
+        logging.getLogger("vibe-research").warning("研报数据迁移失败（旧数据仍在 %s）: %s", _OLD_DEFAULT_DIR, e)
 
 
 _migrate_legacy()
@@ -55,14 +53,29 @@ _LOCK = threading.Lock()  # 索引读-改-写串行化（与 portfolio.py 同款
 MAX_BYTES = 25 * 1024 * 1024  # 单文件上限 25MB
 # 允许的文档类型（白名单——不存可执行 / 网页等，避免下载回放风险）
 ALLOWED_EXT = {
-    ".pdf", ".doc", ".docx", ".txt", ".md", ".markdown",
-    ".csv", ".xls", ".xlsx", ".ppt", ".pptx",
-    ".png", ".jpg", ".jpeg", ".webp",
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".txt",
+    ".md",
+    ".markdown",
+    ".csv",
+    ".xls",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
 }
 
 # 文件名关键词 → 行业标签（顺序即优先级，先命中先用）。纯文件名匹配、零依赖、离线可用。
 _INDUSTRY_KEYWORDS: list[tuple[str, list[str]]] = [
-    ("人形机器人", ["人形", "机器人", "humanoid", "谐波", "丝杠", "滚柱", "灵巧手", "减速器", "optimus", "宇树", "特斯拉"]),
+    (
+        "人形机器人",
+        ["人形", "机器人", "humanoid", "谐波", "丝杠", "滚柱", "灵巧手", "减速器", "optimus", "宇树", "特斯拉"],
+    ),
     ("光互联", ["光互联", "硅光", "cpo", "光模块", "磷化铟", "inp", "光芯片", "源杰", "中际旭创", "天孚"]),
     ("HBM存储", ["hbm", "存储", "内存", "dram", "长鑫", "美光", "海力士", "颗粒", "闪存", "nand"]),
     ("AI算力", ["算力", "gpu", "英伟达", "nvidia", "服务器", "液冷", "pcb", "交换机", "cowos", "沪电", "工业富联"]),

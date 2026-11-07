@@ -22,6 +22,7 @@
 
 用法：python tools/gene_score_directionality.py
 """
+
 from __future__ import annotations
 
 import logging
@@ -97,6 +98,7 @@ def main() -> int:
         conn.close()
 
     from collections import defaultdict
+
     by_date: dict[str, list[tuple]] = defaultdict(list)
     for d, code, score, unb, won in rows:
         by_date[d].append((code, score, 1 if unb else 0, won))
@@ -111,8 +113,7 @@ def main() -> int:
             dec_rows.append((d, dec, unb, -1 if won is None else (1 if won else 0)))
     # 每 decile 聚合
     # n_total = 全体分位行（buyable+unbuyable+unsettled）；n_unb = 不可买；n_buy_settled = 可买且有 path
-    stats: dict[int, dict] = {d: {"n_buy": 0, "wins": 0, "n_total": 0, "n_unb": 0}
-                               for d in range(1, N_DECILES + 1)}
+    stats: dict[int, dict] = {d: {"n_buy": 0, "wins": 0, "n_total": 0, "n_unb": 0} for d in range(1, N_DECILES + 1)}
     for _d, dec, unb, won in dec_rows:
         stats[dec]["n_total"] += 1
         if unb:
@@ -127,8 +128,7 @@ def main() -> int:
     total_wins = sum(s["wins"] for s in stats.values())
     overall_wr = total_wins / total_n * 100 if total_n else 0.0
     decile_nums = list(range(1, N_DECILES + 1))
-    winrates = [stats[d]["wins"] / stats[d]["n_buy"] * 100 if stats[d]["n_buy"] else 0.0
-                for d in decile_nums]
+    winrates = [stats[d]["wins"] / stats[d]["n_buy"] * 100 if stats[d]["n_buy"] else 0.0 for d in decile_nums]
 
     print("\n" + "=" * 92)
     print("gene total_score 方向性分析：universe 按 rank-within-date decile 分桶")
@@ -143,15 +143,14 @@ def main() -> int:
         lo, hi = _wilson_pct(s["wins"], s["n_buy"])
         band = "lowest" if d == 1 else ("highest" if d == N_DECILES else "")
         unb_rate = f"{s['n_unb'] / s['n_total'] * 100:.1f}" if s["n_total"] else "0.0"
-        print(f"{d:<8}{band:<10}{s['n_buy']:<8}{s['wins']:<8}{wr:<11.2f}"
-              f"[{lo:.1f},{hi:.1f}]{'':<6}{unb_rate:<8}")
+        print(f"{d:<8}{band:<10}{s['n_buy']:<8}{s['wins']:<8}{wr:<11.2f}[{lo:.1f},{hi:.1f}]{'':<6}{unb_rate:<8}")
     print("-" * 92)
 
     rho = _spearman_rho([float(d) for d in decile_nums], winrates)
     d10, d1 = winrates[-1], winrates[0]
     print(f"\nSpearman rho（decile 序 vs path_winrate）= {rho:+.3f}")
     print(f"  rho < 0 → score 反向预测（高分 winrate 更低）；rho > 0 → 正向；|rho|<0.3 弱。")
-    print(f"decile10(高) winrate={d10:.2f}%  vs  decile1(低) winrate={d1:.2f}%  →  Δ={d10-d1:+.2f}pp")
+    print(f"decile10(高) winrate={d10:.2f}%  vs  decile1(低) winrate={d1:.2f}%  →  Δ={d10 - d1:+.2f}pp")
     print(f"  Δ<0 → 高分更差（反向）；Δ>0 → 高分更好（正向，与 §44 top-gene 劣于随机一致）")
 
     # 数据缺口 caveat

@@ -11,6 +11,7 @@ vs 其他策略：
 - A组T+10: 2026年mean-3.16% (反转)
 - 本策略: p=0.0001 mean+6.24% WR93% (强显著)
 """
+
 from __future__ import annotations
 
 import logging
@@ -37,13 +38,13 @@ logger = logging.getLogger("rsi_timing")
 
 #: 策略参数
 RSI_PARAMS = {
-    "rsi_threshold": 30,        # RSI<30触发买入
+    "rsi_threshold": 30,  # RSI<30触发买入
     # 固定20天退出优于RSI>60退出（+52% vs +31%）
     # "rsi_exit": 60,  # 备用：RSI>60退出
-    "rsi_period": 14,            # RSI计算周期
-    "hold_days": 20,             # 最长持有20天
-    "take_profit_pct": 0.30,     # +30%止盈（夏普1.90最优——10%触发率但保住尾部）
-    "stop_loss_pct": -0.08,     # -8%止损（历史上0次触发）
+    "rsi_period": 14,  # RSI计算周期
+    "hold_days": 20,  # 最长持有20天
+    "take_profit_pct": 0.30,  # +30%止盈（夏普1.90最优——10%触发率但保住尾部）
+    "stop_loss_pct": -0.08,  # -8%止损（历史上0次触发）
     "indices": {
         "000001.SH": {"name": "上证", "threshold": 30, "mean": 3.62, "wr": 81, "p": 0.0002, "n": 27},
         "399006.SZ": {"name": "创业板", "threshold": 25, "mean": 6.24, "wr": 93, "p": 0.0001, "n": 14},
@@ -57,6 +58,7 @@ RSI_PARAMS = {
 @dataclass
 class RSISignal:
     """RSI择时信号。"""
+
     index_code: str
     index_name: str
     current_rsi: float
@@ -64,11 +66,11 @@ class RSISignal:
     is_triggered: bool
     hold_days: int
     stop_loss_pct: float
-    expected_return: float     # 历史mean
-    win_rate: float            # 历史WR
+    expected_return: float  # 历史mean
+    win_rate: float  # 历史WR
     p_value: float
     sample_size: int
-    max_drawdown_mean: float   # 持有期间平均最大浮亏
+    max_drawdown_mean: float  # 持有期间平均最大浮亏
     detail: str = ""
 
 
@@ -76,7 +78,7 @@ def calculate_rsi(closes: list[float], period: int = 14) -> float:
     """计算RSI。"""
     if len(closes) < period + 1:
         return 50.0
-    changes = [closes[i] - closes[i-1] for i in range(len(closes) - period, len(closes))]
+    changes = [closes[i] - closes[i - 1] for i in range(len(closes) - period, len(closes))]
     gains = [c for c in changes if c > 0]
     losses = [-c for c in changes if c < 0]
     avg_gain = sum(gains) / len(changes) if gains else 0
@@ -92,10 +94,18 @@ def check_rsi_signal(index_code: str, closes: list[float]) -> RSISignal:
     params = RSI_PARAMS["indices"].get(index_code)
     if not params:
         return RSISignal(
-            index_code=index_code, index_name="未知", current_rsi=50,
-            threshold=30, is_triggered=False, hold_days=20,
-            stop_loss_pct=-0.08, expected_return=0, win_rate=0,
-            p_value=1, sample_size=0, max_drawdown_mean=0,
+            index_code=index_code,
+            index_name="未知",
+            current_rsi=50,
+            threshold=30,
+            is_triggered=False,
+            hold_days=20,
+            stop_loss_pct=-0.08,
+            expected_return=0,
+            win_rate=0,
+            p_value=1,
+            sample_size=0,
+            max_drawdown_mean=0,
         )
 
     rsi = calculate_rsi(closes, RSI_PARAMS["rsi_period"])
@@ -142,6 +152,7 @@ __all__ = [
 # RSI+MACD金叉组合信号（最强：mean+9.53% WR100% p=0.0000）
 # ===========================================================================
 
+
 def calc_ema(data: list[float], period: int) -> list[float]:
     """计算EMA。"""
     if not data:
@@ -174,16 +185,17 @@ def has_golden_cross(dif: list[float], dea: list[float], idx: int, window: int =
 @dataclass
 class RsiMacdSignal:
     """RSI+MACD组合信号。"""
+
     index_name: str
     rsi: float
     rsi_triggered: bool
     macd_dif: float
     macd_dea: float
     macd_hist: float
-    is_golden_cross: bool          # 当前金叉
-    has_recent_cross: bool         # 10天内金叉
-    combo_signal: str              # "买入"(RSI+金叉) / "等待"(RSI触发但MACD未金叉) / "无信号"
-    expected_60d: float            # 60天预期收益
+    is_golden_cross: bool  # 当前金叉
+    has_recent_cross: bool  # 10天内金叉
+    combo_signal: str  # "买入"(RSI+金叉) / "等待"(RSI触发但MACD未金叉) / "无信号"
+    expected_60d: float  # 60天预期收益
     win_rate_60d: float
     detail: str = ""
 

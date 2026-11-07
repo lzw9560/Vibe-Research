@@ -30,6 +30,7 @@
   cd /Users/lizhiwei/project/code/stock/Vibe-Research/backend
   .venv/bin/python tools/explore_event_tom.py
 """
+
 from __future__ import annotations
 import json
 import sys
@@ -53,17 +54,18 @@ DATA = resolve_data_dir()
 INDEX_CACHE = DATA / "index_ohlc_cache.json"
 
 # ---------- constants ----------
-COST_ETF = 0.001          # 0.10% round-trip (ETF: commission+spread+impact)
-COST_LOW = 0.0005          # 0.05% (deep discount + liquid)
-COST_HIGH = 0.0015         # 0.15% (conservative)
+COST_ETF = 0.001  # 0.10% round-trip (ETF: commission+spread+impact)
+COST_LOW = 0.0005  # 0.05% (deep discount + liquid)
+COST_HIGH = 0.0015  # 0.15% (conservative)
 ALPHA = 0.05
-N_CROSS_FACTOR = 3         # top 3 in 15-candidate sweep → Bonferroni ×3*2=6
-N_HOLD = 4                 # T+1 open → T+4 close (4-day hold)
-START_YEAR = 2018          # walk-forward window start
+N_CROSS_FACTOR = 3  # top 3 in 15-candidate sweep → Bonferroni ×3*2=6
+N_HOLD = 4  # T+1 open → T+4 close (4-day hold)
+START_YEAR = 2018  # walk-forward window start
 END_YEAR = 2026
 
 
 # ---------- data loading ----------
+
 
 def load_index() -> list[dict]:
     """Load sh.000001 daily bars."""
@@ -83,6 +85,7 @@ def bar_map(bars: list[dict]) -> dict[str, dict]:
 
 # ---------- month-end identification ----------
 
+
 def find_month_ends(calendar: list[str]) -> list[int]:
     """Return indices i where calendar[i] is the LAST trading day of its month.
     (calendar[i+1] is in a different month, or i is the last bar.)"""
@@ -98,6 +101,7 @@ def find_month_ends(calendar: list[str]) -> list[int]:
 
 
 # ---------- TOM window construction ----------
+
 
 def build_tom_windows(
     calendar: list[str],
@@ -131,15 +135,17 @@ def build_tom_windows(
         if not entry_open or not exit_close or entry_open <= 0:
             continue
         ret = (exit_close - entry_open) / entry_open * 100
-        picks.append({
-            "signal_date": signal_date,
-            "entry_date": entry_date,
-            "exit_date": exit_date,
-            "entry_open": entry_open,
-            "exit_close": exit_close,
-            "ret": ret,
-            "month": signal_date[:7],
-        })
+        picks.append(
+            {
+                "signal_date": signal_date,
+                "entry_date": entry_date,
+                "exit_date": exit_date,
+                "entry_open": entry_open,
+                "exit_close": exit_close,
+                "ret": ret,
+                "month": signal_date[:7],
+            }
+        )
     return picks
 
 
@@ -179,11 +185,11 @@ def build_benchmark_windows(
 
 # ---------- stats ----------
 
+
 def ev_stats(rets: list[float]) -> dict:
     n = len(rets)
     if n == 0:
-        return {"n": 0, "ev": 0.0, "std": 0.0, "t": 0.0,
-                "ci_lo": 0.0, "ci_hi": 0.0, "wr": 0.0, "median": 0.0}
+        return {"n": 0, "ev": 0.0, "std": 0.0, "t": 0.0, "ci_lo": 0.0, "ci_hi": 0.0, "wr": 0.0, "median": 0.0}
     mean = sum(rets) / n
     std = statistics.pstdev(rets) if n > 1 else 0.0
     se = std / sqrt(n) if n > 0 else 0.0
@@ -192,9 +198,16 @@ def ev_stats(rets: list[float]) -> dict:
     ci_hi = mean + 1.96 * se if se > 0 else mean
     wr = sum(1 for x in rets if x > 0) / n
     med = statistics.median(rets)
-    return {"n": n, "ev": round(mean, 4), "std": round(std, 4),
-            "t": round(t, 2), "ci_lo": round(ci_lo, 4), "ci_hi": round(ci_hi, 4),
-            "wr": round(wr * 100, 1), "median": round(med, 4)}
+    return {
+        "n": n,
+        "ev": round(mean, 4),
+        "std": round(std, 4),
+        "t": round(t, 2),
+        "ci_lo": round(ci_lo, 4),
+        "ci_hi": round(ci_hi, 4),
+        "wr": round(wr * 100, 1),
+        "median": round(med, 4),
+    }
 
 
 def day_paired_t_one_sample(rets: list[float]) -> dict:
@@ -207,8 +220,7 @@ def day_paired_t_one_sample(rets: list[float]) -> dict:
     se = std / sqrt(n) if n > 0 else 0.0
     t = mean / se if se > 0 else 0.0
     p = norm_sf_positive(t)
-    return {"n_days": n, "mean": round(mean, 4), "std": round(std, 4),
-            "t": round(t, 2), "p_one_sided": round(p, 6)}
+    return {"n_days": n, "mean": round(mean, 4), "std": round(std, 4), "t": round(t, 2), "p_one_sided": round(p, 6)}
 
 
 def two_sample_t(a: list[float], b: list[float]) -> dict:
@@ -229,9 +241,14 @@ def two_sample_t(a: list[float], b: list[float]) -> dict:
     df = num / den if den > 0 else na + nb - 2
     # one-sided p via normal approx (large df) — conservative
     p = norm_sf_positive(t)
-    return {"t": round(t, 2), "p_one_sided": round(p, 6),
-            "diff": round(ma - mb, 4), "df": round(df, 1),
-            "mean_a": round(ma, 4), "mean_b": round(mb, 4)}
+    return {
+        "t": round(t, 2),
+        "p_one_sided": round(p, 6),
+        "diff": round(ma - mb, 4),
+        "df": round(df, 1),
+        "mean_a": round(ma, 4),
+        "mean_b": round(mb, 4),
+    }
 
 
 def permutation_test(a: list[float], b: list[float], n_perm: int = 10000) -> dict:
@@ -242,6 +259,7 @@ def permutation_test(a: list[float], b: list[float], n_perm: int = 10000) -> dic
     pooled = a + b
     obs_diff = sum(a) / na - sum(b) / nb
     import random
+
     rng = random.Random(42)
     count = 0
     for _ in range(n_perm):
@@ -253,11 +271,11 @@ def permutation_test(a: list[float], b: list[float], n_perm: int = 10000) -> dic
         if perm_diff >= obs_diff:
             count += 1
     p = (count + 1) / (n_perm + 1)
-    return {"p_one_sided": round(p, 6), "observed_diff": round(obs_diff, 4),
-            "n_perm": n_perm}
+    return {"p_one_sided": round(p, 6), "observed_diff": round(obs_diff, 4), "n_perm": n_perm}
 
 
 # ---------- walk-forward ----------
+
 
 def walk_forward_4win(picks: list[dict], hold: int = N_HOLD) -> dict:
     """4 windows × 2 years: 2018-19, 2020-21, 2022-23, 2024-26.
@@ -305,6 +323,7 @@ def walk_forward_4win(picks: list[dict], hold: int = N_HOLD) -> dict:
 
 # ---------- temporal decay (flaw 5: 拥挤倒U) ----------
 
+
 def temporal_decay(picks: list[dict]) -> dict:
     """Split into early/late halves. If late << early → crowding decay (倒U)."""
     ps = sorted(picks, key=lambda p: p["signal_date"])
@@ -313,13 +332,18 @@ def temporal_decay(picks: list[dict]) -> dict:
     late = [p["ret"] for p in ps[mid:]]
     early_s = ev_stats(early)
     late_s = ev_stats(late)
-    decay = ((early_s["ev"] - late_s["ev"]) / abs(early_s["ev"]) * 100
-             if early_s["ev"] != 0 else 0)
-    return {"early_ev": early_s["ev"], "late_ev": late_s["ev"],
-            "decay_pct": round(decay, 1), "early_n": len(early), "late_n": len(late)}
+    decay = (early_s["ev"] - late_s["ev"]) / abs(early_s["ev"]) * 100 if early_s["ev"] != 0 else 0
+    return {
+        "early_ev": early_s["ev"],
+        "late_ev": late_s["ev"],
+        "decay_pct": round(decay, 1),
+        "early_n": len(early),
+        "late_n": len(late),
+    }
 
 
 # ---------- entry gap check (flaw 6: R6) ----------
+
 
 def entry_gap_check(picks: list[dict], bmap: dict[str, dict]) -> dict:
     """Check if T+1 opens have large gaps from T close (R6 concern).
@@ -337,12 +361,18 @@ def entry_gap_check(picks: list[dict], bmap: dict[str, dict]) -> dict:
     if not gaps:
         return {"n": 0, "mean_gap": 0, "max_gap": 0}
     s = ev_stats(gaps)
-    return {"n": s["n"], "mean_gap": s["ev"], "std_gap": s["std"],
-            "max_gap": max(gaps), "min_gap": min(gaps),
-            "pct_gap_gt_1pct": round(sum(1 for g in gaps if abs(g) > 1) / len(gaps) * 100, 1)}
+    return {
+        "n": s["n"],
+        "mean_gap": s["ev"],
+        "std_gap": s["std"],
+        "max_gap": max(gaps),
+        "min_gap": min(gaps),
+        "pct_gap_gt_1pct": round(sum(1 for g in gaps if abs(g) > 1) / len(gaps) * 100, 1),
+    }
 
 
 # ---------- main ----------
+
 
 def main():
     bars = load_index()
@@ -357,20 +387,17 @@ def main():
     print(f"月末日数 (全史): {len(month_ends)}")
     print(f"分析区间: {START_YEAR}-{END_YEAR}")
     print(f"Hold: T+1 open → T+{N_HOLD} close ({N_HOLD}-day hold)")
-    print(f"成本: ETF {COST_ETF*100:.2f}% round-trip (sensitivity {COST_LOW*100}-{COST_HIGH*100}%)")
+    print(f"成本: ETF {COST_ETF * 100:.2f}% round-trip (sensitivity {COST_LOW * 100}-{COST_HIGH * 100}%)")
     print(f"先验: 0.30 (机制 sound: 日历驱动 price-insensitive demand)")
-    print(f"Bonferroni: ×{N_CROSS_FACTOR}*2={N_CROSS_FACTOR*2} (top 3 in 15-candidate sweep)")
+    print(f"Bonferroni: ×{N_CROSS_FACTOR}*2={N_CROSS_FACTOR * 2} (top 3 in 15-candidate sweep)")
 
     # ---- build TOM picks ----
-    tom_picks = build_tom_windows(calendar, bmap, month_ends, hold=N_HOLD,
-                                  start_year=START_YEAR)
+    tom_picks = build_tom_windows(calendar, bmap, month_ends, hold=N_HOLD, start_year=START_YEAR)
     tom_rets = [p["ret"] for p in tom_picks]
     tom_dates = set(p["signal_date"] for p in tom_picks)
 
     # ---- benchmark (non-TOM 4-day windows) ----
-    bench_rets = build_benchmark_windows(calendar, bmap, hold=N_HOLD,
-                                         tom_signal_dates=tom_dates,
-                                         start_year=START_YEAR)
+    bench_rets = build_benchmark_windows(calendar, bmap, hold=N_HOLD, tom_signal_dates=tom_dates, start_year=START_YEAR)
 
     # ---- basic stats ----
     print(f"\n{'=' * 70}")
@@ -384,7 +411,7 @@ def main():
     print(f"  WR={tom_s['wr']}% t={tom_s['t']} CI[{tom_s['ci_lo']},{tom_s['ci_hi']}]")
     for cost, label in [(COST_LOW, "low"), (COST_ETF, "base"), (COST_HIGH, "high")]:
         net = tom_s["ev"] - cost * 100
-        print(f"  net EV ({label} {cost*100:.2f}%): {net:.4f}%")
+        print(f"  net EV ({label} {cost * 100:.2f}%): {net:.4f}%")
     print(f"\nBenchmark (非TOM 随机4日窗口):")
     print(f"  n={bench_s['n']} mean={bench_s['ev']}% std={bench_s['std']}%")
     print(f"  WR={bench_s['wr']}% median={bench_s['median']}%")
@@ -411,7 +438,7 @@ def main():
     # ---- two-sample (TOM vs benchmark) ----
     ts = two_sample_t(tom_rets, bench_rets)
     print(f"\nWelch t (TOM vs benchmark, H0: TOM_mean = bench_mean):")
-    print(f"  diff={ts['diff']}% t={ts['t']} df={ts.get('df','?')} p_one_sided={ts['p_one_sided']}")
+    print(f"  diff={ts['diff']}% t={ts['t']} df={ts.get('df', '?')} p_one_sided={ts['p_one_sided']}")
 
     # ---- permutation test ----
     perm = permutation_test(tom_rets, bench_rets, n_perm=10000)
@@ -425,14 +452,16 @@ def main():
     wf = walk_forward_4win(tom_picks, hold=N_HOLD)
     print(f"\nper-window EV:")
     for w in wf["windows"]:
-        print(f"  {w['window']}: n={w.get('n',0)} EV={w.get('ev',0)}% WR={w.get('wr',0)}% t={w.get('t',0)}")
+        print(f"  {w['window']}: n={w.get('n', 0)} EV={w.get('ev', 0)}% WR={w.get('wr', 0)}% t={w.get('t', 0)}")
     tr = wf["train_ev"]
     te = wf["test_ev"]
     print(f"\n50/50 split:")
     print(f"  train: n={wf['n_train']} EV={tr['ev']}% t={tr['t']} day_t={wf['train_day_t']['t']}")
-    print(f"  test:  n={wf['n_test']} EV={te['ev']}% t={te['t']} day_t={wf['test_day_t']['t']} "
-          f"p={wf['test_day_t']['p_one_sided']}")
-    decay = ((tr['ev'] - te['ev']) / abs(tr['ev']) * 100 if tr['ev'] != 0 else 0)
+    print(
+        f"  test:  n={wf['n_test']} EV={te['ev']}% t={te['t']} day_t={wf['test_day_t']['t']} "
+        f"p={wf['test_day_t']['p_one_sided']}"
+    )
+    decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
     print(f"  decay: {decay:.0f}% (train→test)")
 
     # ---- temporal decay (flaw 5) ----
@@ -447,15 +476,16 @@ def main():
     print(f"  2. survivorship — N/A (买全市场指数, 无个股退市偏差) [PASS]")
     print(f"  3. exit 一字 over-credit — N/A (ETF 无一字, 指数连续定价) [PASS]")
     print(f"  4. T+1 日内泄漏 — 用 close_ev (T+{N_HOLD} close) 非 open_ev [PASS]")
-    print(f"  5. 拥挤倒U — early EV={td['early_ev']}% late EV={td['late_ev']}% "
-          f"decay={td['decay_pct']}%")
+    print(f"  5. 拥挤倒U — early EV={td['early_ev']}% late EV={td['late_ev']}% decay={td['decay_pct']}%")
     if td["decay_pct"] > 50 and td["late_ev"] < td["early_ev"]:
         print(f"     ⚠️ 触发: late << early, 可能拥挤衰减 (倒U)")
         flaws.append("5")
     else:
         print(f"     [PASS] 无显著衰减")
-    print(f"  6. R6 gap-through fill — entry gap: mean={eg['mean_gap']}% "
-          f"max={eg['max_gap']:.2f}% pct>1%={eg.get('pct_gap_gt_1pct',0)}%")
+    print(
+        f"  6. R6 gap-through fill — entry gap: mean={eg['mean_gap']}% "
+        f"max={eg['max_gap']:.2f}% pct>1%={eg.get('pct_gap_gt_1pct', 0)}%"
+    )
     if abs(eg.get("mean_gap", 0)) > 0.5:
         print(f"     ⚠️ 触发: T+1 open 有系统性 gap, 需加滑点")
         flaws.append("6")
@@ -463,7 +493,7 @@ def main():
         print(f"     [PASS] entry gap 小")
     print(f"  7. timing mismatch — benchmark 同窗口 (非TOM 4日) [PASS]")
     cost_net = tom_s["ev"] - COST_ETF * 100
-    print(f"  8. 成本乐观 — ETF {COST_ETF*100:.2f}% round-trip, net EV={cost_net:.4f}% [PASS]")
+    print(f"  8. 成本乐观 — ETF {COST_ETF * 100:.2f}% round-trip, net EV={cost_net:.4f}% [PASS]")
     print(f"  9. phantom alpha — raw_ev=gross (指数实际收益) 非 BHAR phantom [PASS]")
     print(f"  10. 退化 OLS — N/A (单因子无 orthogonalize) [PASS]")
     print(f"\n  触发 flaw: {flaws if flaws else '无 (1-4,10 结构性 N/A; 5,6 未触发)'}")
@@ -472,20 +502,18 @@ def main():
     print(f"\n{'=' * 70}")
     print(f"五、Robustness: 3-day hold (T+3 close)")
     print(f"{'=' * 70}")
-    tom_picks3 = build_tom_windows(calendar, bmap, month_ends, hold=3,
-                                   start_year=START_YEAR)
+    tom_picks3 = build_tom_windows(calendar, bmap, month_ends, hold=3, start_year=START_YEAR)
     tom_rets3 = [p["ret"] for p in tom_picks3]
     s3 = ev_stats(tom_rets3)
-    bench_rets3 = build_benchmark_windows(calendar, bmap, hold=3,
-                                          tom_signal_dates=set(p["signal_date"] for p in tom_picks3),
-                                          start_year=START_YEAR)
+    bench_rets3 = build_benchmark_windows(
+        calendar, bmap, hold=3, tom_signal_dates=set(p["signal_date"] for p in tom_picks3), start_year=START_YEAR
+    )
     bench_s3 = ev_stats(bench_rets3)
     bhar3 = s3["ev"] - bench_s3["ev"]
     lift3 = s3["ev"] / bench_s3["ev"] if abs(bench_s3["ev"]) > 1e-6 else 0
     dt3 = day_paired_t_one_sample(tom_rets3)
     p_bonf3 = bonferroni_p(dt3["p_one_sided"], n_tests)
-    print(f"  n={s3['n']} gross_EV={s3['ev']}% net={s3['ev']-COST_ETF*100:.4f}% "
-          f"WR={s3['wr']}% t={s3['t']}")
+    print(f"  n={s3['n']} gross_EV={s3['ev']}% net={s3['ev'] - COST_ETF * 100:.4f}% WR={s3['wr']}% t={s3['t']}")
     print(f"  BHAR={bhar3:.4f}% lift={lift3:.3f}x")
     print(f"  day_t={dt3['t']} p={dt3['p_one_sided']} Bonf={p_bonf3:.6f}")
 
@@ -539,12 +567,13 @@ def main():
         wf_test_p_bonf = bonferroni_p(wf_test_p, n_tests)
         if wf_test_p_bonf >= ALPHA:
             verdict = "exploratory"
-            reason = (f"OOS test EV={wf_test}% > 0 but test_p={wf_test_p} "
-                      f"Bonf={wf_test_p_bonf} >= {ALPHA} (not significant OOS)")
+            reason = (
+                f"OOS test EV={wf_test}% > 0 but test_p={wf_test_p} "
+                f"Bonf={wf_test_p_bonf} >= {ALPHA} (not significant OOS)"
+            )
         else:
             verdict = "edge-confirmed"
-            reason = (f"gross+net>0, Bonf PASS, lift={lift:.3f}x>2, "
-                      f"OOS test_EV={wf_test}% significant")
+            reason = f"gross+net>0, Bonf PASS, lift={lift:.3f}x>2, OOS test_EV={wf_test}% significant"
 
     print(f"\n  → VERDICT: {verdict}")
     print(f"  → REASON: {reason}")

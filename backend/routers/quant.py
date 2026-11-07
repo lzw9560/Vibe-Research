@@ -5,6 +5,7 @@ M4 /api/transport/em-health — em_get 防封健康度（复用 circuit_breaker.
 
 守工程底线：不臆造（缺数据返 data_status=empty）/ 私有数据不进 / em_get 防封（M4 只报状态不裸调）。
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict
@@ -59,13 +60,10 @@ def expectation_gap(
             if prev_close and open_price:
                 try:
                     gap_pct = (float(open_price) - float(prev_close)) / float(prev_close) * 100
-                    vol_ratio = (
-                        float(cur_vol) / float(prev_vol)
-                        if prev_vol and float(prev_vol) > 0
-                        else None
-                    )
+                    vol_ratio = float(cur_vol) / float(prev_vol) if prev_vol and float(prev_vol) > 0 else None
                 except (TypeError, ValueError, ZeroDivisionError) as e:  # noqa: BLE001
                     import logging
+
                     logging.getLogger(__name__).debug("quant gap_pct/vol_ratio 计算失败 code=%s: %s", code, e)
         return {
             "data": {
@@ -119,9 +117,7 @@ def em_health() -> Dict[str, Any]:
             for name, br in breakers.items()
         }
         any_open = any(d["state"] == "open" for d in details.values())
-        em_details = {
-            k: v for k, v in details.items() if "eastmoney" in k or "em" in k
-        }
+        em_details = {k: v for k, v in details.items() if "eastmoney" in k or "em" in k}
         return {
             "data": {
                 "breakers": details,

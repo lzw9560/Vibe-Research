@@ -8,6 +8,7 @@
 
 采样：inst_dominant 5000 + lhb_mixed 5000 + inst_selling 全部 2381（baostock kline N+1 慢）。
 """
+
 import json
 import sqlite3
 import random
@@ -30,8 +31,14 @@ DT_DB = DATA / "dragon_tiger_history.db"
 KLINE_DB = DATA / "baostock_kline_cache.db"
 
 INST_KEYWORDS = (
-    "机构专用", "总部", "高盛", "瑞银", "股通", "摩根",
-    "中信证券股份有限公司上海分公司", "国际金融",
+    "机构专用",
+    "总部",
+    "高盛",
+    "瑞银",
+    "股通",
+    "摩根",
+    "中信证券股份有限公司上海分公司",
+    "国际金融",
 )
 ALPHA = 0.05
 
@@ -106,14 +113,14 @@ def day_paired_t(returns_by_date: dict) -> tuple:
         return None, 0, None
     mean = statistics.mean(day_means)
     n = len(day_means)
-    se = statistics.stdev(day_means) / (n ** 0.5) if n > 1 else 0
+    se = statistics.stdev(day_means) / (n**0.5) if n > 1 else 0
     t = mean / se if se > 0 else 0
     return mean, n, t
 
 
 def normal_p(t: float) -> float:
     """正态近似 p 值（探索性，粗略）。"""
-    return 2 * (1 - 0.5 * (1 + erf(abs(t) / (2 ** 0.5))))
+    return 2 * (1 - 0.5 * (1 + erf(abs(t) / (2**0.5))))
 
 
 def audit_nextday(sample_n: int = 5000) -> dict:
@@ -143,12 +150,19 @@ def audit_nextday(sample_n: int = 5000) -> dict:
         sorted_r = sorted(all_returns)
         median = sorted_r[n_picks // 2] if n_picks else 0
         results[layer_name] = {
-            "n_picks": n_picks, "n_days": n_days, "mean": mean,
-            "median": median, "wr": wr, "t": t,
+            "n_picks": n_picks,
+            "n_days": n_days,
+            "mean": mean,
+            "median": median,
+            "wr": wr,
+            "t": t,
         }
-        print(f"  {layer_name}: n={n_picks} days={n_days} "
-              f"mean={mean:.3f}% median={median:.3f}% WR={wr:.1f}% day_t={t:.2f}" if mean is not None
-              else f"  {layer_name}: n={n_picks} 数据不足")
+        print(
+            f"  {layer_name}: n={n_picks} days={n_days} "
+            f"mean={mean:.3f}% median={median:.3f}% WR={wr:.1f}% day_t={t:.2f}"
+            if mean is not None
+            else f"  {layer_name}: n={n_picks} 数据不足"
+        )
 
     # Bonferroni ×3
     print(f"\n  Bonferroni ×3（三层）:")

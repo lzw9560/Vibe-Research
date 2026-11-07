@@ -7,6 +7,7 @@ via kline_cache_store.upsert_bars so _factor_helpers.load_kline_db reads them.
 防封: sleep 0.4s between calls, circuit breaker auto-trips on hithink 429/5xx.
 Skips codes already cached. Writes progress to stdout.
 """
+
 from __future__ import annotations
 import sys
 import time
@@ -26,15 +27,16 @@ ZT_DB = DATA / "zt_history.db"
 START = "2024-06-01"
 END = "2026-10-01"
 
+
 def _ms(d: str) -> int:
     dt = datetime.fromisoformat(d, tzinfo=timezone(timedelta(hours=8)))
     return int(dt.timestamp() * 1000)
 
+
 def main(max_codes: int = 3000) -> None:
     conn = sqlite3.connect(str(ZT_DB))
     rows = conn.execute(
-        "SELECT code, COUNT(*) c FROM zt_history WHERE COALESCE(lbc,0)>=2 "
-        "GROUP BY code ORDER BY c DESC"
+        "SELECT code, COUNT(*) c FROM zt_history WHERE COALESCE(lbc,0)>=2 GROUP BY code ORDER BY c DESC"
     ).fetchall()
     conn.close()
     print(f"relay codes by event count: {len(rows)} total", flush=True)
@@ -68,11 +70,13 @@ def main(max_codes: int = 3000) -> None:
         done += 1
         if done % 50 == 0:
             el = time.time() - t0
-            print(f"  progress: {done} fetched, {skipped} skipped, {failed} failed, "
-                  f"{el:.0f}s, {done/el*60:.1f}/min", flush=True)
+            print(
+                f"  progress: {done} fetched, {skipped} skipped, {failed} failed, {el:.0f}s, {done / el * 60:.1f}/min",
+                flush=True,
+            )
         time.sleep(0.4)
-    print(f"DONE: {done} fetched, {skipped} skipped, {failed} failed, "
-          f"{time.time()-t0:.0f}s", flush=True)
+    print(f"DONE: {done} fetched, {skipped} skipped, {failed} failed, {time.time() - t0:.0f}s", flush=True)
+
 
 if __name__ == "__main__":
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 3000

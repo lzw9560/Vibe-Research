@@ -5,6 +5,7 @@ Server酱3 发送提醒服务
 职责：
 1. 通过 Server酱3 API 发送 Server酱3 消息
 """
+
 import logging
 from typing import Optional
 import requests
@@ -18,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 
 class Serverchan3Sender:
-    
     def __init__(self, config: Config):
         """
         初始化 Server酱3 配置
@@ -26,8 +26,8 @@ class Serverchan3Sender:
         Args:
             config: 配置对象
         """
-        self._serverchan3_sendkey = getattr(config, 'serverchan3_sendkey', None)
-        
+        self._serverchan3_sendkey = getattr(config, "serverchan3_sendkey", None)
+
     def send_to_serverchan3(
         self,
         content: str,
@@ -65,14 +65,14 @@ class Serverchan3Sender:
 
         # 处理消息标题
         if title is None:
-            date_str = datetime.now().strftime('%Y-%m-%d')
+            date_str = datetime.now().strftime("%Y-%m-%d")
             title = f"📈 股票分析报告 - {date_str}"
 
         try:
             # 根据 sendkey 格式构造 URL
             sendkey = self._serverchan3_sendkey
-            if sendkey.startswith('sctp'):
-                match = re.match(r'sctp(\d+)t', sendkey)
+            if sendkey.startswith("sctp"):
+                match = re.match(r"sctp(\d+)t", sendkey)
                 if match:
                     num = match.group(1)
                     url = f"https://{num}.push.ft07.com/send/{sendkey}.send"
@@ -83,16 +83,10 @@ class Serverchan3Sender:
                 url = f"https://sctapi.ftqq.com/{sendkey}.send"
 
             # 构建请求参数
-            params = {
-                'title': title,
-                'desp': content,
-                'options': {}
-            }
+            params = {"title": title, "desp": content, "options": {}}
 
             # 发送请求
-            headers = {
-                'Content-Type': 'application/json;charset=utf-8'
-            }
+            headers = {"Content-Type": "application/json;charset=utf-8"}
             response = requests.post(url, json=params, headers=headers, timeout=timeout_seconds or 10)
 
             if response.status_code == 200:
@@ -107,5 +101,6 @@ class Serverchan3Sender:
         except Exception as e:
             logger.error(f"发送 Server酱3 消息失败: {e}")
             import traceback
+
             logger.debug(traceback.format_exc())
             return False

@@ -10,6 +10,7 @@
 依赖：intraday_microstructure.db + baostock_kline_cache.db
 跑法：cd backend && .venv/bin/python tools/explore_ofi_edge.py
 """
+
 import json
 import sqlite3
 import statistics
@@ -40,9 +41,15 @@ def load_kline_bars(code: str) -> list[dict]:
         bars = json.loads(row[0])
     except Exception:
         return []
-    out = [{"date": str(b.get("date",""))[:10], "open": float(b.get("open",0) or 0),
-            "close": float(b.get("close",0) or 0)}
-           for b in bars if b.get("date") and float(b.get("open",0) or 0)>0]
+    out = [
+        {
+            "date": str(b.get("date", ""))[:10],
+            "open": float(b.get("open", 0) or 0),
+            "close": float(b.get("close", 0) or 0),
+        }
+        for b in bars
+        if b.get("date") and float(b.get("open", 0) or 0) > 0
+    ]
     out.sort(key=lambda x: x["date"])
     return out
 
@@ -51,9 +58,9 @@ def find_next_open(bars: list[dict], date: str) -> tuple[float, float, float, fl
     """返 (prev_close, open, close, next_open)。prev_close=前一交易日 close（判 entry 一字涨停）。"""
     for i, b in enumerate(bars):
         if b["date"] == date:
-            prev_c = bars[i-1]["close"] if i > 0 else 0.0
+            prev_c = bars[i - 1]["close"] if i > 0 else 0.0
             if i + 1 < len(bars):
-                return (prev_c, b["open"], b["close"], bars[i+1]["open"])
+                return (prev_c, b["open"], b["close"], bars[i + 1]["open"])
             return None
     return None
 
@@ -72,8 +79,7 @@ def main() -> dict:
     for date, code, ofi, ofi_abs, ba_press, seal, ts in rows:
         key = (date, code)
         if key not in early:
-            early[key] = {"ofi": ofi, "ofi_abs": ofi_abs, "ba_press": ba_press,
-                          "seal": seal, "ts": ts}
+            early[key] = {"ofi": ofi, "ofi_abs": ofi_abs, "ba_press": ba_press, "seal": seal, "ts": ts}
     print(f"OFI snapshots: {len(rows)}, early (date,code): {len(early)}", flush=True)
 
     obs: list[dict] = []
@@ -92,16 +98,20 @@ def main() -> dict:
         # + 一字跌停（ofi<=0.05 全卖盘买不到）+ open=涨停价（prev_close>0 时）
         entry_open_pct = (open_p - prev_close) / prev_close * 100 if prev_close > 0 else 0
         is_entry_locked = (info["ofi"] or 0) <= 0.05 or entry_open_pct >= 9.5 or info["seal"] is not None
-        obs.append({
-            "date": date, "code": code,
-            "ofi": float(info["ofi"] or 0),
-            "ofi_abs": float(info["ofi_abs"] or 0),
-            "ba_press": float(info["ba_press"] or 0),
-            "seal": info["seal"],
-            "edge": edge, "win": 1 if edge > 0 else 0,
-            "next_locked": is_next_locked,
-            "entry_locked": is_entry_locked,
-        })
+        obs.append(
+            {
+                "date": date,
+                "code": code,
+                "ofi": float(info["ofi"] or 0),
+                "ofi_abs": float(info["ofi_abs"] or 0),
+                "ba_press": float(info["ba_press"] or 0),
+                "seal": info["seal"],
+                "edge": edge,
+                "win": 1 if edge > 0 else 0,
+                "next_locked": is_next_locked,
+                "entry_locked": is_entry_locked,
+            }
+        )
     n = len(obs)
     days = len(set(o["date"] for o in obs))
     print(f"obs={n} days={days} (join kline 后)", flush=True)
@@ -113,7 +123,7 @@ def main() -> dict:
     wr = sum(o["win"] for o in obs) / n
     net_mean = statistics.mean(rets)
     print(f"\n=== 全样本 T+1 edge（early OFI）===")
-    print(f"n={n} days={days} net_mean={net_mean*100:.2f}% WR={wr*100:.2f}%")
+    print(f"n={n} days={days} net_mean={net_mean * 100:.2f}% WR={wr * 100:.2f}%")
 
     # 分组 by OFI 分位（深挖不同阈值稳健性）
     buckets = {"OFI 0.7-0.8": [], "OFI 0.8-0.9": [], "OFI 0.9-0.95": [], "OFI>=0.95": []}
@@ -137,7 +147,7 @@ def main() -> dict:
         g_wr = sum(o["win"] for o in group) / len(group)
         g_mean = statistics.mean(g_rets)
         g_days = len(set(o["date"] for o in group))
-        print(f"  {name}: n={len(group)} days={g_days} net_mean={g_mean*100:.2f}% WR={g_wr*100:.2f}%")
+        print(f"  {name}: n={len(group)} days={g_days} net_mean={g_mean * 100:.2f}% WR={g_wr * 100:.2f}%")
 
     # §44 v3 R1+R3 filter
     obs_r1 = [o for o in obs if not o["entry_locked"]]
@@ -149,11 +159,14 @@ def main() -> dict:
     high_f = [o for o in obs_f if o["ofi"] >= 0.7]
     if high_f:
         hf_rets = [o["edge"] for o in high_f]
-        print(f"  filter 后 高OFI(>=0.7): n={len(high_f)} net_mean={statistics.mean(hf_rets)*100:.2f}% WR={sum(o['win'] for o in high_f)/len(high_f)*100:.2f}%")
+        print(
+            f"  filter 后 高OFI(>=0.7): n={len(high_f)} net_mean={statistics.mean(hf_rets) * 100:.2f}% WR={sum(o['win'] for o in high_f) / len(high_f) * 100:.2f}%"
+        )
         print(f"  （vs filter 前 高OFI +6.24% WR 78%——若衰减多则涨停封板溢价 over-credit）")
 
     try:
         from s44_verifier.stats import day_clustered_t_test
+
         dts = [o["date"] for o in obs_f]
         rets_f = [o["edge"] for o in obs_f]
         res = day_clustered_t_test(rets_f, dts)
@@ -167,7 +180,7 @@ def main() -> dict:
     print(f"  ✓ entry=open 市场价（非涨停价）")
     print(f"  ✓ exit=次日 open T+1 + R3 filter 次日一字")
     print(f"  ⚠ days={days}<60 → exploratory only")
-    return {"n": n, "days": days, "net_mean_pct": round(net_mean*100, 4)}
+    return {"n": n, "days": days, "net_mean_pct": round(net_mean * 100, 4)}
 
 
 if __name__ == "__main__":

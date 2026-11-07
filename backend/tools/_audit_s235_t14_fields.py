@@ -13,6 +13,7 @@ Phase B T14：实测 hithink-finance market auction-snapshot 字段完整性，
 结论：反核三因子字段全，T14 PASS。603778 今天量比 4.69>4.5 但额占比 2.66%<10% + 高开 1.25%<2% → 不触发反核。
 Phase B feishu 接线仍暂缓（预期 FAIL + T+1 致命），但 10/8 后审计验证（用真实竞价数据跑反核评分）可做。
 """
+
 from __future__ import annotations
 import json
 import subprocess
@@ -22,8 +23,15 @@ THSCODE = "603778.SH"  # 测试标的
 
 def pull_auction_final(thscode: str) -> dict:
     cmd = [
-        "hithink-finance", "market", "auction-snapshot",
-        "--thscodes", thscode, "--stage", "final", "--format", "json",
+        "hithink-finance",
+        "market",
+        "auction-snapshot",
+        "--thscodes",
+        thscode,
+        "--stage",
+        "final",
+        "--format",
+        "json",
     ]
     out = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     d = json.loads(out.stdout or "{}")
@@ -56,9 +64,17 @@ def main() -> None:
     print(f"thscode: {a.get('thscode')}, name: {a.get('name')}")
     print(f"auction_phase: {a.get('auction_phase')}, data_status: {a.get('data_status')}")
     print(f"\n字段完整性：")
-    for k in ["auction_price", "auction_volume", "auction_amount",
-              "auction_volume_ratio", "auction_yesterday_ratio_pct", "auction_pct",
-              "pre_close_price", "open_price", "float_market_cap"]:
+    for k in [
+        "auction_price",
+        "auction_volume",
+        "auction_amount",
+        "auction_volume_ratio",
+        "auction_yesterday_ratio_pct",
+        "auction_pct",
+        "pre_close_price",
+        "open_price",
+        "float_market_cap",
+    ]:
         print(f"  {k}: {a.get(k)}")
     r = check_reversal_factors(a)
     print(f"\n反核三因子：")

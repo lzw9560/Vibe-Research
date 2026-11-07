@@ -23,10 +23,7 @@ BEHAVIOR_SPECS: tuple[FeatureSpec, ...] = (
         availability_offset=0,
         stage="s1",
         compliance_flag="ok",
-        description=(
-            "短期反转：过去1-5日累计收益（%）。A股最强负向因子之一，"
-            "反映短期动量反转效应。"
-        ),
+        description=("短期反转：过去1-5日累计收益（%）。A股最强负向因子之一，反映短期动量反转效应。"),
     ),
     FeatureSpec(
         name="abnormal_turnover",
@@ -35,10 +32,7 @@ BEHAVIOR_SPECS: tuple[FeatureSpec, ...] = (
         availability_offset=0,
         stage="s1",
         compliance_flag="ok",
-        description=(
-            "异常换手率/量比：当日换手率/成交量相对于近期均值的倍数。"
-            "散户注意力代理变量，通常负向。"
-        ),
+        description=("异常换手率/量比：当日换手率/成交量相对于近期均值的倍数。散户注意力代理变量，通常负向。"),
     ),
     FeatureSpec(
         name="auction_signal",
@@ -84,6 +78,7 @@ BEHAVIOR_SPECS: tuple[FeatureSpec, ...] = (
 
 # ── Registration ────────────────────────────────────────────────────
 
+
 def register_behavior(registry: Registry) -> None:
     """Register all behavior FeatureSpecs into the given Registry.
 
@@ -95,6 +90,7 @@ def register_behavior(registry: Registry) -> None:
 
 
 # ── Pure computation (no side effects, no network) ──────────────────
+
 
 def short_term_reversal_ret(bars: list[dict], window: int = 5) -> float | None:
     """Return the cumulative return (%) over the last *window* trading days.
@@ -127,9 +123,7 @@ def short_term_reversal_ret(bars: list[dict], window: int = 5) -> float | None:
     return (new - old) / old * 100
 
 
-def abnormal_turnover_ratio(
-    volumes: list[float | None], avg_window: int = 5
-) -> float | None:
+def abnormal_turnover_ratio(volumes: list[float | None], avg_window: int = 5) -> float | None:
     """Compute the volume ratio (量比): today's volume / avg of past *avg_window* days.
 
     Parameters

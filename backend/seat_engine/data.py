@@ -25,14 +25,17 @@ def _migrate_schema() -> None:
     """建表（幂等，模块 import 时自动跑）。"""
     Path(_DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     sql = (
-        Path(__file__).resolve().parent.parent
-        / "migrations" / "seat_engine" / "20260823-001_create_seat_profiles.sql"
+        Path(__file__).resolve().parent.parent / "migrations" / "seat_engine" / "20260823-001_create_seat_profiles.sql"
     ).read_text(encoding="utf-8")
-    MigrationManager(db_path=_DB_PATH).upgrade([{
-        "version": "20260823-001",
-        "name": "create_seat_profiles",
-        "sql": sql,
-    }])
+    MigrationManager(db_path=_DB_PATH).upgrade(
+        [
+            {
+                "version": "20260823-001",
+                "name": "create_seat_profiles",
+                "sql": sql,
+            }
+        ]
+    )
 
 
 # 模块 import 时自动建表（幂等），镜像 limitup_sti/__init__.py 模式
@@ -40,6 +43,7 @@ try:
     _migrate_schema()
 except Exception as e:  # noqa: BLE001
     import logging
+
     logging.getLogger(__name__).warning("seat_engine schema 迁移失败（继续，首次 import 可能无表）: %s", e)
 
 
@@ -153,7 +157,11 @@ def save_profiles_to_db(profiles: dict) -> None:
                         data.get("stock_cooldown", 0),
                         data.get("last_seen", ""),
                         data.get("seat_type", "inactive"),
-                        name, name, name, name, name,  # COALESCE 子查询的 seat_name 参数
+                        name,
+                        name,
+                        name,
+                        name,
+                        name,  # COALESCE 子查询的 seat_name 参数
                         now,
                     ),
                 )

@@ -24,6 +24,7 @@ PBO = fraction of splits where the IS-best strategy lands at or below the
 OOS median (lambda <= 0). A high PBO means "the configuration that looked
 best in-sample is no better than a coin flip out-of-sample" -> overfit.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

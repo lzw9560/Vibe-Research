@@ -7,6 +7,7 @@
     @network_retry
     def fetch_daily_bars(...): ...
 """
+
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # 网络瞬态失败 retry：3 次 + 指数 backoff（2-60s）+ 只 retry 网络异常（Timeout/Connection/OSError）

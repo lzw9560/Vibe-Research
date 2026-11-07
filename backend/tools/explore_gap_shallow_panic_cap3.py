@@ -22,6 +22,7 @@
 
 跑法：cd backend && .venv/bin/python -m tools.explore_gap_shallow_panic_cap3
 """
+
 from __future__ import annotations
 
 import json
@@ -56,6 +57,7 @@ STOP = -0.03  # -3% stop
 # Data loading (复用 explore_s232_stop_verify 模式)
 # ---------------------------------------------------------------------------
 
+
 def load_kline_db() -> dict[str, list[dict]]:
     """从 SQLite 读 kline（code -> sorted bars）。"""
     conn = sqlite3.connect(str(KLINE_DB))
@@ -87,16 +89,14 @@ def vol_ratio_5(bars: list[dict], idx: int) -> float | None:
     vol = bars[idx].get("volume")
     if not vol:
         return None
-    pv = [b.get("volume") for b in bars[idx - 5:idx]]
+    pv = [b.get("volume") for b in bars[idx - 5 : idx]]
     if any(v is None or v == 0 for v in pv):
         return None
     avg5 = sum(pv) / 5.0
     return vol / avg5 if avg5 else None
 
 
-def gen_watchlist_codes(
-    t: str, all_bars: dict[str, list[dict]], zt_t: set[str]
-) -> list[str]:
+def gen_watchlist_codes(t: str, all_bars: dict[str, list[dict]], zt_t: set[str]) -> list[str]:
     """S232 watchlist codes: turn>20% + vr5>2, not limit-up, not ST。"""
     out: list[str] = []
     for code, bars in all_bars.items():
@@ -127,6 +127,7 @@ def gen_watchlist_codes(
 # Record building
 # ---------------------------------------------------------------------------
 
+
 def build_records(
     end_date: str = "2026-09-17",
     days: int = 560,
@@ -147,11 +148,7 @@ def build_records(
         return [], 0
     end_idx = cal.index(end_date)
     date_idx = {d: i for i, d in enumerate(cal)}
-    pairs = [
-        (cal[i], cal[i + 1])
-        for i in range(max(0, end_idx - days), end_idx)
-        if i + 1 < len(cal)
-    ]
+    pairs = [(cal[i], cal[i + 1]) for i in range(max(0, end_idx - days), end_idx) if i + 1 < len(cal)]
 
     records: list[dict[str, Any]] = []
     for t, t1 in pairs:
@@ -211,6 +208,7 @@ def build_records(
 # Cap per day (shallowest-gap-first)
 # ---------------------------------------------------------------------------
 
+
 def apply_cap(records: list[dict], cap: int | None) -> list[dict]:
     """Apply cap per day: sort by gap descending (shallowest first), take top cap.
 
@@ -231,6 +229,7 @@ def apply_cap(records: list[dict], cap: int | None) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Return calculations
 # ---------------------------------------------------------------------------
+
 
 def realistic_stop_ret(r: dict, stop: float = STOP) -> float:
     """R6 realistic fill: gap-through → t2_open*(1-slip), else stop_price, else t2_close."""
@@ -272,9 +271,8 @@ def close_ev_ret(r: dict) -> float:
 # Per-day-mean t-test (day-clustering)
 # ---------------------------------------------------------------------------
 
-def per_day_stats(
-    records: list[dict], ret_fn: Callable[[dict], float]
-) -> dict[str, Any]:
+
+def per_day_stats(records: list[dict], ret_fn: Callable[[dict], float]) -> dict[str, Any]:
     """Group by t1 date → daily mean return → one-sample t-test on day-means.
 
     Effective N = n_days (not n_trades), accounting for same-day regime sharing.
@@ -330,9 +328,8 @@ def per_day_stats(
 # Walk-forward OOS (split-half)
 # ---------------------------------------------------------------------------
 
-def walk_forward(
-    records: list[dict], ret_fn: Callable[[dict], float]
-) -> dict[str, Any]:
+
+def walk_forward(records: list[dict], ret_fn: Callable[[dict], float]) -> dict[str, Any]:
     """Split day-means chronologically: first half train, second half test.
 
     risk-path 专家 split-half: 前半 +0.92%/t=1.52 → 后半 -0.12%/t=-0.17 衰减.
@@ -368,11 +365,7 @@ def walk_forward(
 
     train_ev, train_t, n_train = half_stats(train)
     test_ev, test_t, n_test = half_stats(test)
-    decay = (
-        round((test_ev - train_ev) / abs(train_ev) * 100, 1)
-        if train_ev != 0
-        else None
-    )
+    decay = round((test_ev - train_ev) / abs(train_ev) * 100, 1) if train_ev != 0 else None
 
     return {
         "train_ev": train_ev,
@@ -388,6 +381,7 @@ def walk_forward(
 # ---------------------------------------------------------------------------
 # Bonferroni grid (gap-width × cap)
 # ---------------------------------------------------------------------------
+
 
 def bonferroni_grid(all_records: list[dict]) -> dict[str, Any]:
     """3 gap-widths × 3 caps = 9 combos, Bonferroni p/9."""
@@ -420,9 +414,7 @@ def bonferroni_grid(all_records: list[dict]) -> dict[str, Any]:
     n_combos = len(combos)
     bonf_alpha = 0.05 / n_combos
 
-    main = next(
-        c for c in combos if c["gap_width"] == "[-3,-2)" and c["cap"] == "3"
-    )
+    main = next(c for c in combos if c["gap_width"] == "[-3,-2)" and c["cap"] == "3")
     main_p = main["p_one_sided"]
     main_bonf_p = min(main_p * n_combos, 1.0)
 
@@ -440,6 +432,7 @@ def bonferroni_grid(all_records: list[dict]) -> dict[str, Any]:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     print("=" * 72)
     print("P2 实验：诚实重跑 gap(-3,-2] 浅恐慌子组 + cap=3/day 集中度")
@@ -448,9 +441,7 @@ def main() -> None:
 
     print("\n加载数据…")
     # Wide gap range to capture ALL watchlist picks (for n_picks_total)
-    all_records, npairs = build_records(
-        end_date="2026-09-17", days=560, gap_lo=-100.0, gap_hi=100.0
-    )
+    all_records, npairs = build_records(end_date="2026-09-17", days=560, gap_lo=-100.0, gap_hi=100.0)
     if not all_records:
         print("ERR: no records")
         return
@@ -551,18 +542,10 @@ def main() -> None:
     # Gap-through stats
     sp_fn = lambda r: r["t1_open"] * (1 + STOP)
     trig_total = sum(1 for r in capped3 if r["t2_low"] <= sp_fn(r))
-    gap_through = sum(
-        1
-        for r in capped3
-        if r["t2_low"] <= sp_fn(r) and r["t2_open"] <= sp_fn(r)
-    )
-    print(
-        f"stop triggered: {trig_total}/{len(capped3)} ({trig_total / len(capped3) * 100:.1f}%)"
-    )
+    gap_through = sum(1 for r in capped3 if r["t2_low"] <= sp_fn(r) and r["t2_open"] <= sp_fn(r))
+    print(f"stop triggered: {trig_total}/{len(capped3)} ({trig_total / len(capped3) * 100:.1f}%)")
     if trig_total:
-        print(
-            f"  gap-through: {gap_through} ({gap_through / trig_total * 100:.1f}% of triggers)"
-        )
+        print(f"  gap-through: {gap_through} ({gap_through / trig_total * 100:.1f}% of triggers)")
 
     # ==================================================================
     # 4. cap=3 vs no cap comparison
@@ -618,28 +601,16 @@ def main() -> None:
     # open_stop walk-forward
     wf_open = walk_forward(capped3, realistic_stop_ret)
     print(f"\n[open_stop, cap=3]")
-    print(
-        f"  train: EV={wf_open['train_ev']:+.4f}%  t={wf_open['train_t']:+.4f}  "
-        f"n_days={wf_open['n_train']}"
-    )
-    print(
-        f"  test:  EV={wf_open['test_ev']:+.4f}%  t={wf_open['test_t']:+.4f}  "
-        f"n_days={wf_open['n_test']}"
-    )
+    print(f"  train: EV={wf_open['train_ev']:+.4f}%  t={wf_open['train_t']:+.4f}  n_days={wf_open['n_train']}")
+    print(f"  test:  EV={wf_open['test_ev']:+.4f}%  t={wf_open['test_t']:+.4f}  n_days={wf_open['n_test']}")
     if wf_open["decay_pct"] is not None:
         print(f"  decay = {wf_open['decay_pct']:+.1f}% (test vs |train|)")
 
     # close_ev walk-forward
     wf_close = walk_forward(valid_close_c3, close_ev_ret)
     print(f"\n[close_ev, cap=3]")
-    print(
-        f"  train: EV={wf_close['train_ev']:+.4f}%  t={wf_close['train_t']:+.4f}  "
-        f"n_days={wf_close['n_train']}"
-    )
-    print(
-        f"  test:  EV={wf_close['test_ev']:+.4f}%  t={wf_close['test_t']:+.4f}  "
-        f"n_days={wf_close['n_test']}"
-    )
+    print(f"  train: EV={wf_close['train_ev']:+.4f}%  t={wf_close['train_t']:+.4f}  n_days={wf_close['n_train']}")
+    print(f"  test:  EV={wf_close['test_ev']:+.4f}%  t={wf_close['test_t']:+.4f}  n_days={wf_close['n_test']}")
     if wf_close["decay_pct"] is not None:
         print(f"  decay = {wf_close['decay_pct']:+.1f}% (test vs |train|)")
 
@@ -666,14 +637,8 @@ def main() -> None:
                 best_wf = wf
 
     print(f"best on train: {best_name}")
-    print(
-        f"  train: EV={best_wf['train_ev']:+.4f}%  t={best_wf['train_t']:+.4f}  "
-        f"n_days={best_wf['n_train']}"
-    )
-    print(
-        f"  test:  EV={best_wf['test_ev']:+.4f}%  t={best_wf['test_t']:+.4f}  "
-        f"n_days={best_wf['n_test']}"
-    )
+    print(f"  train: EV={best_wf['train_ev']:+.4f}%  t={best_wf['train_t']:+.4f}  n_days={best_wf['n_train']}")
+    print(f"  test:  EV={best_wf['test_ev']:+.4f}%  t={best_wf['test_t']:+.4f}  n_days={best_wf['n_test']}")
     if best_wf.get("decay_pct") is not None:
         print(f"  decay = {best_wf['decay_pct']:+.1f}%")
 
@@ -683,10 +648,7 @@ def main() -> None:
     print("\n" + "=" * 72)
     print("7. risk-path 复现检查")
     print("=" * 72)
-    print(
-        "\nrisk-path 报: gap(-3,-2] n=295 per-trade EV=+0.843% t=2.16, "
-        "cap=3 per-day-mean EV=+1.273% t=2.34"
-    )
+    print("\nrisk-path 报: gap(-3,-2] n=295 per-trade EV=+0.843% t=2.16, cap=3 per-day-mean EV=+1.273% t=2.34")
     print(f"我们 (cap=3, open_stop R6 realistic):")
     print(f"  n_trades          = {s_c3['n_trades']}  (risk-path: n=295)")
     print(f"  per_trade_EV      = {s_c3['per_trade_ev']:+.4f}%  (risk-path: +0.843%)")
@@ -753,13 +715,7 @@ def main() -> None:
             f"Bonferroni fail (p={bonf['main_bonf_p']:.4f}), "
             f"not robust enough to confirm"
         )
-    elif (
-        open_ev > 0
-        and open_t > 2
-        and bonf_pass
-        and wf_test_ev > 0
-        and close_ev > 0
-    ):
+    elif open_ev > 0 and open_t > 2 and bonf_pass and wf_test_ev > 0 and close_ev > 0:
         verdict = "edge-confirmed"
         reason = "all checks pass: EV>0, t>2, Bonferroni pass, walk-forward test>0, close_ev>0"
     else:

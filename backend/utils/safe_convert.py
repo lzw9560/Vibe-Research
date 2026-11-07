@@ -4,6 +4,7 @@
 统一 float 转换逻辑：处理 None / int/float / "3.2%" / "1,234" 等形状。
 default 参数控制失败行为：None→返 None（notification 用），0.0→返 0.0（data_processing 用）。
 """
+
 from __future__ import annotations
 
 from typing import Any

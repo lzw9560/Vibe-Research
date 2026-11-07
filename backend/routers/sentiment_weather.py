@@ -7,6 +7,7 @@ Provides market weather state, multi-factor scoring, strategy recommendations, a
 - CRUD future（熔断/pardon 管理操作，评估接 or 删，暂保留标 future）: weather/pardon/outcome,
   weather/fuse/history, weather/fuse/update
 """
+
 from fastapi import APIRouter, HTTPException, Query, Request
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
@@ -28,9 +29,13 @@ def _get_db() -> sqlite3.Connection:
     return conn
 
 
-def _calculate_weather_state(sti_score: Optional[float], risk_score: float,
-                              sector_continuity: float, capital_momentum: float,
-                              public_sentiment: float) -> Dict[str, Any]:
+def _calculate_weather_state(
+    sti_score: Optional[float],
+    risk_score: float,
+    sector_continuity: float,
+    capital_momentum: float,
+    public_sentiment: float,
+) -> Dict[str, Any]:
     """
     Calculate market weather state based on multi-factor weighted scoring.
 
@@ -51,11 +56,11 @@ def _calculate_weather_state(sti_score: Optional[float], risk_score: float,
 
     # Weighted composite score
     composite = (
-        sti_score * 0.40 +
-        risk_score * 0.20 +
-        sector_continuity * 0.25 +
-        capital_momentum * 0.10 +
-        public_sentiment * 0.05
+        sti_score * 0.40
+        + risk_score * 0.20
+        + sector_continuity * 0.25
+        + capital_momentum * 0.10
+        + public_sentiment * 0.05
     )
 
     # Determine weather state
@@ -94,11 +99,11 @@ def _get_latest_sti() -> Dict[str, Any]:
     """
     try:
         from vr_paths import last_trading_date_str  # noqa: PLC0415
+
         _as_of = last_trading_date_str()
         db = _get_db()
         row = db.execute(
-            "SELECT * FROM sti_timeline WHERE date <= ? AND score IS NOT NULL "
-            "ORDER BY date DESC LIMIT 1",
+            "SELECT * FROM sti_timeline WHERE date <= ? AND score IS NOT NULL ORDER BY date DESC LIMIT 1",
             (_as_of,),
         ).fetchone()
         if row is None:
@@ -124,11 +129,11 @@ def _calculate_risk_score() -> float:
     """
     try:
         from vr_paths import last_trading_date_str  # noqa: PLC0415
+
         _as_of = last_trading_date_str()
         db = _get_db()
         row = db.execute(
-            "SELECT * FROM sti_timeline WHERE date <= ? AND score IS NOT NULL "
-            "ORDER BY date DESC LIMIT 1",
+            "SELECT * FROM sti_timeline WHERE date <= ? AND score IS NOT NULL ORDER BY date DESC LIMIT 1",
             (_as_of,),
         ).fetchone()
         if row is None:
@@ -141,9 +146,9 @@ def _calculate_risk_score() -> float:
 
         # Risk score: lower risk = higher score
         risk = 100 - (
-            min(limit_down * 2, 30) +  # 跌停越多风险越高
-            max(0, 30 - seal_rate) +     # 封板率越低风险越高
-            max(0, 20 - max_boards * 5)  # 连板高度越低风险越高
+            min(limit_down * 2, 30)  # 跌停越多风险越高
+            + max(0, 30 - seal_rate)  # 封板率越低风险越高
+            + max(0, 20 - max_boards * 5)  # 连板高度越低风险越高
         )
         return max(0, min(100, risk))
     except Exception:
@@ -161,11 +166,11 @@ def _calculate_sector_continuity() -> float:
     # For now, use STI advance/decline ratio as proxy
     try:
         from vr_paths import last_trading_date_str  # noqa: PLC0415
+
         _as_of = last_trading_date_str()
         db = _get_db()
         row = db.execute(
-            "SELECT * FROM sti_timeline WHERE date <= ? AND score IS NOT NULL "
-            "ORDER BY date DESC LIMIT 1",
+            "SELECT * FROM sti_timeline WHERE date <= ? AND score IS NOT NULL ORDER BY date DESC LIMIT 1",
             (_as_of,),
         ).fetchone()
         if row is None:
@@ -188,11 +193,11 @@ def _calculate_capital_momentum() -> float:
     """
     try:
         from vr_paths import last_trading_date_str  # noqa: PLC0415
+
         _as_of = last_trading_date_str()
         db = _get_db()
         row = db.execute(
-            "SELECT * FROM sti_timeline WHERE date <= ? AND score IS NOT NULL "
-            "ORDER BY date DESC LIMIT 1",
+            "SELECT * FROM sti_timeline WHERE date <= ? AND score IS NOT NULL ORDER BY date DESC LIMIT 1",
             (_as_of,),
         ).fetchone()
         if row is None:
@@ -220,11 +225,11 @@ def _calculate_public_sentiment() -> float:
     """
     try:
         from vr_paths import last_trading_date_str  # noqa: PLC0415
+
         _as_of = last_trading_date_str()
         db = _get_db()
         row = db.execute(
-            "SELECT * FROM sti_timeline WHERE date <= ? AND score IS NOT NULL "
-            "ORDER BY date DESC LIMIT 1",
+            "SELECT * FROM sti_timeline WHERE date <= ? AND score IS NOT NULL ORDER BY date DESC LIMIT 1",
             (_as_of,),
         ).fetchone()
         if row is None:
@@ -260,10 +265,7 @@ def get_weather_latest() -> Dict[str, Any]:
         public_sentiment = _calculate_public_sentiment()
 
         # Calculate weather state
-        weather = _calculate_weather_state(
-            sti_score, risk_score, sector_continuity,
-            capital_momentum, public_sentiment
-        )
+        weather = _calculate_weather_state(sti_score, risk_score, sector_continuity, capital_momentum, public_sentiment)
 
         return {
             "data": {
@@ -315,10 +317,7 @@ def get_weather_factors() -> Dict[str, Any]:
         capital_momentum = _calculate_capital_momentum()
         public_sentiment = _calculate_public_sentiment()
 
-        weather = _calculate_weather_state(
-            sti_score, risk_score, sector_continuity,
-            capital_momentum, public_sentiment
-        )
+        weather = _calculate_weather_state(sti_score, risk_score, sector_continuity, capital_momentum, public_sentiment)
 
         return {
             "data": {
@@ -385,10 +384,7 @@ def get_weather_strategy() -> Dict[str, Any]:
         capital_momentum = _calculate_capital_momentum()
         public_sentiment = _calculate_public_sentiment()
 
-        weather = _calculate_weather_state(
-            sti_score, risk_score, sector_continuity,
-            capital_momentum, public_sentiment
-        )
+        weather = _calculate_weather_state(sti_score, risk_score, sector_continuity, capital_momentum, public_sentiment)
         weather_state = weather["weather_state"]
 
         # Strategy mapping based on weather state
@@ -581,6 +577,7 @@ def _evaluate_cancel_fuse() -> dict:
     非交易时段/无快照 → data_status=missing，不臆造。
     """
     from config import default_config  # noqa: PLC0415
+
     threshold = getattr(default_config, "SEAL_CANCEL_FUSE_AMOUNT", 30_000_000.0)
     try:
         from risk.seal_intraday_collector import get_latest_snapshots  # noqa: PLC0415
@@ -647,6 +644,7 @@ def get_weather_timeline(days: int = Query(30, ge=1, le=365)) -> Dict[str, Any]:
     """获取天气历史趋势（近N天）。"""
     try:
         from vr_paths import last_trading_date_str  # noqa: PLC0415
+
         _as_of = last_trading_date_str()
         db = _get_db()
         rows = db.execute(
@@ -664,18 +662,21 @@ def get_weather_timeline(days: int = Query(30, ge=1, le=365)) -> Dict[str, Any]:
             public_sentiment = _calculate_public_sentiment_for_date(r["date"])
 
             weather = _calculate_weather_state(
-                sti_score, risk_score, sector_continuity,
-                capital_momentum, public_sentiment
+                sti_score, risk_score, sector_continuity, capital_momentum, public_sentiment
             )
 
-            timeline.append({
-                "date": r["date"],
-                "sti_score": round(sti_score, 2) if sti_score else None,
-                "weather_state": weather["weather_state"],
-                "composite_score": weather["composite_score"],
-                "phase": r["phase"],
-                "change_from_yesterday": round(float(r["change_from_yesterday"]), 2) if r["change_from_yesterday"] else None,
-            })
+            timeline.append(
+                {
+                    "date": r["date"],
+                    "sti_score": round(sti_score, 2) if sti_score else None,
+                    "weather_state": weather["weather_state"],
+                    "composite_score": weather["composite_score"],
+                    "phase": r["phase"],
+                    "change_from_yesterday": round(float(r["change_from_yesterday"]), 2)
+                    if r["change_from_yesterday"]
+                    else None,
+                }
+            )
 
         # Calculate stats
         stats = {
@@ -706,11 +707,7 @@ def _calculate_risk_score_for_date(date: str) -> float:
         seal_rate = float(row["dimension_seal_rate"]) if row["dimension_seal_rate"] else 0
         max_boards = float(row["dimension_max_boards"]) if row["dimension_max_boards"] else 0
 
-        risk = 100 - (
-            min(limit_down * 2, 30) +
-            max(0, 30 - seal_rate) +
-            max(0, 20 - max_boards * 5)
-        )
+        risk = 100 - (min(limit_down * 2, 30) + max(0, 30 - seal_rate) + max(0, 20 - max_boards * 5))
         return max(0, min(100, risk))
     except Exception:
         return 50.0
@@ -804,6 +801,7 @@ def get_weather_events(days: int = Query(30, ge=1, le=365)) -> Dict[str, Any]:
 # S065：weather_history 持久化——compute 快照计算（HTTP 查询端点已删，盘后写回仍用）
 # =============================================================================
 
+
 def compute_weather_snapshot(date: str) -> Dict[str, Any]:
     """计算某日 weather 快照（纯函数，复用 _calculate_*_for_date）。
 
@@ -823,8 +821,11 @@ def compute_weather_snapshot(date: str) -> Dict[str, Any]:
     capital_momentum = _calculate_capital_momentum_for_date(date)
     public_sentiment = _calculate_public_sentiment_for_date(date)
     weather = _calculate_weather_state(
-        sti_score, risk_score, sector_continuity,
-        capital_momentum, public_sentiment,
+        sti_score,
+        risk_score,
+        sector_continuity,
+        capital_momentum,
+        public_sentiment,
     )
     return {
         "date": date,
@@ -845,9 +846,7 @@ def _get_latest_sti_for_date(date: str) -> Dict[str, Any]:
     """读 sti_timeline 某日行（不取 latest，按 date 精确查）。"""
     try:
         db = _get_db()
-        row = db.execute(
-            "SELECT * FROM sti_timeline WHERE date = ?", (date,)
-        ).fetchone()
+        row = db.execute("SELECT * FROM sti_timeline WHERE date = ?", (date,)).fetchone()
         if row is None:
             return {"score": None, "phase": None, "date": date}
         return {
@@ -864,6 +863,7 @@ def _get_latest_sti_for_date(date: str) -> Dict[str, Any]:
 # =============================================================================
 # V2.0.3 新增：竞价阶段指标
 # =============================================================================
+
 
 @router.get("/api/sentiment/weather/auction")
 def get_weather_auction() -> Dict[str, Any]:
@@ -905,7 +905,13 @@ def get_weather_auction() -> Dict[str, Any]:
             },
         ]
 
-        return {"data": {"auction_metrics": auction_metrics, "phase": phase, "source": "mock 待接线（v5 专家 A：placeholder 非真实竞价数据，硬编码 metrics）"}}
+        return {
+            "data": {
+                "auction_metrics": auction_metrics,
+                "phase": phase,
+                "source": "mock 待接线（v5 专家 A：placeholder 非真实竞价数据，硬编码 metrics）",
+            }
+        }
     except Exception as e:
         raise HTTPException(502, f"竞价指标查询异常：{e}") from e
 
@@ -913,6 +919,7 @@ def get_weather_auction() -> Dict[str, Any]:
 # =============================================================================
 # V2.0.3 新增：封单风险数据
 # =============================================================================
+
 
 @router.get("/api/sentiment/weather/seal-risk")
 def get_weather_seal_risk() -> Dict[str, Any]:
@@ -934,7 +941,12 @@ def get_weather_seal_risk() -> Dict[str, Any]:
             }
         ]
 
-        return {"data": {"seal_risk_metrics": seal_risk_metrics, "source": "mock 待接线（v5 专家 A：placeholder 非实时盘口数据，硬编码）"}}
+        return {
+            "data": {
+                "seal_risk_metrics": seal_risk_metrics,
+                "source": "mock 待接线（v5 专家 A：placeholder 非实时盘口数据，硬编码）",
+            }
+        }
     except Exception as e:
         raise HTTPException(502, f"封单风险查询异常：{e}") from e
 
@@ -942,6 +954,7 @@ def get_weather_seal_risk() -> Dict[str, Any]:
 # =============================================================================
 # V2.0.3 新增：仓位熔断赦免管理
 # =============================================================================
+
 
 @router.get("/api/sentiment/weather/pardon")
 def get_weather_pardon() -> Dict[str, Any]:
@@ -958,6 +971,7 @@ def get_weather_pardon() -> Dict[str, Any]:
             cleanup_expired_pardons()
         except Exception as e:  # noqa: BLE001
             import logging
+
             logging.getLogger(__name__).warning("sentiment_weather cleanup 失败（降级，不阻塞）: %s", e)
 
         pardon_records = get_all_pardon_records(limit=100)
@@ -1048,6 +1062,7 @@ def submit_weather_pardon_outcome(data: Dict[str, Any]) -> Dict[str, Any]:
 # V2.0.3 新增：熔断规则历史与更新
 # =============================================================================
 
+
 @router.get("/api/sentiment/weather/fuse/history")
 def get_weather_fuse_history(days: int = Query(30, ge=1, le=365)) -> Dict[str, Any]:
     """获取熔断规则触发历史（S056：R1 仓位熔断触发/解除记录）。
@@ -1114,10 +1129,7 @@ def get_exit_signals(date: str = Query(..., description="交易日 YYYY-MM-DD"))
         import astock
 
         holdings = wsr.list_states(date)
-        holding_codes = [
-            h for h in holdings
-            if h.get("status") == "holding"
-        ]
+        holding_codes = [h for h in holdings if h.get("status") == "holding"]
 
         if not holding_codes:
             return {
@@ -1163,17 +1175,19 @@ def get_exit_signals(date: str = Query(..., description="交易日 YYYY-MM-DD"))
 
             # 判定
             no_gap = change_pct is not None and float(change_pct) <= EXIT_SIGNAL_NO_GAP_THRESHOLD
-            below_ma = (price is not None and ma_price is not None and float(price) < ma_price)
+            below_ma = price is not None and ma_price is not None and float(price) < ma_price
 
             if change_pct is None and price is None:
                 missing_count += 1
-                signals.append({
-                    "code": code,
-                    "name": name,
-                    "signal": None,
-                    "reason": "行情数据未取得",
-                    "data_status": "missing",
-                })
+                signals.append(
+                    {
+                        "code": code,
+                        "name": name,
+                        "signal": None,
+                        "reason": "行情数据未取得",
+                        "data_status": "missing",
+                    }
+                )
                 continue
 
             if no_gap or below_ma:
@@ -1183,27 +1197,31 @@ def get_exit_signals(date: str = Query(..., description="交易日 YYYY-MM-DD"))
                     reasons.append(f"竞价未高开({change_pct}%)")
                 if below_ma:
                     reasons.append(f"开盘破{EXIT_SIGNAL_MA_DAYS}日均线({price}<{ma_price:.2f})")
-                signals.append({
-                    "code": code,
-                    "name": name,
-                    "signal": "强制离场",
-                    "reason": "；".join(reasons),
-                    "change_pct": change_pct,
-                    "price": price,
-                    "ma_price": round(ma_price, 2) if ma_price else None,
-                    "data_status": "ok",
-                })
+                signals.append(
+                    {
+                        "code": code,
+                        "name": name,
+                        "signal": "强制离场",
+                        "reason": "；".join(reasons),
+                        "change_pct": change_pct,
+                        "price": price,
+                        "ma_price": round(ma_price, 2) if ma_price else None,
+                        "data_status": "ok",
+                    }
+                )
             else:
-                signals.append({
-                    "code": code,
-                    "name": name,
-                    "signal": None,
-                    "reason": "竞价高开且站稳均线",
-                    "change_pct": change_pct,
-                    "price": price,
-                    "ma_price": round(ma_price, 2) if ma_price else None,
-                    "data_status": "ok",
-                })
+                signals.append(
+                    {
+                        "code": code,
+                        "name": name,
+                        "signal": None,
+                        "reason": "竞价高开且站稳均线",
+                        "change_pct": change_pct,
+                        "price": price,
+                        "ma_price": round(ma_price, 2) if ma_price else None,
+                        "data_status": "ok",
+                    }
+                )
 
         return {
             "data": {
@@ -1231,7 +1249,11 @@ def macro_snapshot() -> Dict[str, Any]:
     宏观展示是参考层（非 sizing 杠杆，不碰 §44v2/lift_for_arm）。
     """
     from predict.features.macro import (  # noqa: PLC0415
-        MACRO_SPECS, FRED_SERIES, get_fred_api_key, fetch_fred_series, parse_fred_observations,
+        MACRO_SPECS,
+        FRED_SERIES,
+        get_fred_api_key,
+        fetch_fred_series,
+        parse_fred_observations,
     )
     from vr_paths import resolve_data_dir  # noqa: PLC0415
 
@@ -1281,6 +1303,7 @@ def macro_snapshot() -> Dict[str, Any]:
     try:
         from strategies.storm_predictor import predict_storm  # noqa: PLC0415
         from datetime import datetime as _dt  # noqa: PLC0415
+
         today_str = _dt.now().strftime("%Y-%m-%d")
         storm = predict_storm(today_str)
         weather_cap = {

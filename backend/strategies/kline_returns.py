@@ -9,6 +9,7 @@
 供 R2（每日 T+1 回填 forward_test picks + universe）+ retroactive backfill 共用。
 诚实：缺 next_bar 标 None（不臆造）；baostock 不可用返空 dict（调用方降级）。
 """
+
 from __future__ import annotations
 
 import logging
@@ -62,6 +63,7 @@ def _is_unbuyable_next_bar(nb: dict, code: str = "") -> bool:
     dict/SimpleNamespace（原版只支持 dict .get，engine 版超集）。
     """
     from engine.bar_utils import is_unbuyable_next_bar  # noqa: PLC0415
+
     return is_unbuyable_next_bar(nb, code=code)
 
 
@@ -81,8 +83,12 @@ def _bar_get(bar: object, key: str, default: float = 0.0) -> float | str:
 
 
 def simulate_holding(
-    bars: list, signal_date: str, stop_pct: float, take_profit_pct: float,
-    max_hold_days: int, code: str = "",
+    bars: list,
+    signal_date: str,
+    stop_pct: float,
+    take_profit_pct: float,
+    max_hold_days: int,
+    code: str = "",
 ) -> dict | None:
     """S145 R1 + S162 拆分重构：委托 Executor.fill + Accounting.path_return（非复用）。
 
@@ -108,18 +114,30 @@ def simulate_holding(
     if not bars:
         return None
     t = Trades(
-        code=code, signal_date=signal_date, fill_type=FILL_T_PLUS_1_OPEN,
-        direction="long", size=DEFAULT_LOT_SIZE,
+        code=code,
+        signal_date=signal_date,
+        fill_type=FILL_T_PLUS_1_OPEN,
+        direction="long",
+        size=DEFAULT_LOT_SIZE,
     )
     filled = Executor().execute(t, bars, T1OpenFill())
     return path_return_as_dict(
-        filled, bars, stop_pct, take_profit_pct, max_hold_days, apply_cost=False,
+        filled,
+        bars,
+        stop_pct,
+        take_profit_pct,
+        max_hold_days,
+        apply_cost=False,
     )
 
 
 def simulate_holding_with_confirm(
-    bars: list, signal_date: str, cons_max_high: float | None,
-    stop_pct: float, take_profit_pct: float, max_hold_days: int,
+    bars: list,
+    signal_date: str,
+    cons_max_high: float | None,
+    stop_pct: float,
+    take_profit_pct: float,
+    max_hold_days: int,
 ) -> dict | None:
     """S153 R6：D+1 收盘确认突破后入场 D+2（无 look-ahead）。T1.2 CRITICAL1 修。
 
@@ -133,8 +151,7 @@ def simulate_holding_with_confirm(
     """
     if not bars or cons_max_high is None:
         return None
-    idx = next((i for i, b in enumerate(bars)
-                if str(_bar_get(b, "date", ""))[:10] == signal_date), None)
+    idx = next((i for i, b in enumerate(bars) if str(_bar_get(b, "date", ""))[:10] == signal_date), None)
     if idx is None or idx + 2 >= len(bars):  # 前置 guard（防 IndexError）
         return None
     d1_high = _bar_get(bars[idx], "high", 0)  # signal_date=D+1 当日 high（收盘方知）
@@ -171,7 +188,9 @@ def _match_next_bar(bars: list[dict], signal_date: str) -> tuple[dict | None, di
 
 
 def compute_returns_for_codes(
-    signal_date: str, codes: list[str], lookback_days: int = 5,
+    signal_date: str,
+    codes: list[str],
+    lookback_days: int = 5,
     strategy_params_map: dict[str, dict] | None = None,
 ) -> dict[str, dict[str, float | None]]:
     """对一批 codes 算 signal_date 的 T+1 收益（return_open2close/close2close/next_pctChg）
@@ -211,20 +230,26 @@ def compute_returns_for_codes(
             sb, nb, nnb = _match_next_bar(bars, signal_date)
             if nb is None or nb.get("open") in (None, 0, 0.0):
                 out[code] = {
-                    "return_open2close": None, "return_close2close": None,
-                    "next_pctChg": None, "return_open2next_close": None,
+                    "return_open2close": None,
+                    "return_close2close": None,
+                    "next_pctChg": None,
+                    "return_open2next_close": None,
                     "is_unbuyable": False,
-                    "return_path": None, "is_win_path": None, "exit_reason": None,
+                    "return_path": None,
+                    "is_win_path": None,
+                    "exit_reason": None,
                 }
                 continue
-            next_open = nb["open"]      # T+1 开盘 = 买入价（信号 T 盘后知，买 T+1 开盘）
-            next_close = nb["close"]     # T+1 收盘
+            next_open = nb["open"]  # T+1 开盘 = 买入价（信号 T 盘后知，买 T+1 开盘）
+            next_close = nb["close"]  # T+1 收盘
             sig_close = sb["close"] if sb else None
             o2c = round((next_close - next_open) / next_open * 100, 4) if next_open else None
             c2c = round((next_close - sig_close) / sig_close * 100, 4) if sig_close else None
             # S144 R5：return_open2next_close = (T+2 close - T+1 open)/T+1 open*100（可实现 T+1 口径）
             nnb_close = nnb["close"] if nnb and nnb.get("close") else None
-            o2nc = round((nnb_close - next_open) / next_open * 100, 4) if (nnb_close is not None and next_open) else None
+            o2nc = (
+                round((nnb_close - next_open) / next_open * 100, 4) if (nnb_close is not None and next_open) else None
+            )
             # S144 R1：一字板涨停封死（T+1=买入日 不可买）检测。传 code 启用 board-aware 阈值。
             is_unbuyable = _is_unbuyable_next_bar(nb, code=code)
             # S145 R2：path-dependent 收益（SL/TP/max_hold 模拟）。unbuyable → path=NULL（不可买无意义）。
@@ -234,8 +259,11 @@ def compute_returns_for_codes(
             else:
                 params = (strategy_params_map or {}).get(code) or DEFAULT_PATH_PARAMS
                 sim = simulate_holding(
-                    bars, signal_date,
-                    params["stop_pct"], params["take_profit_pct"], params["max_hold_days"],
+                    bars,
+                    signal_date,
+                    params["stop_pct"],
+                    params["take_profit_pct"],
+                    params["max_hold_days"],
                     code=code,
                 )
                 if sim is None:

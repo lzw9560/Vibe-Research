@@ -30,6 +30,7 @@ Reuses (no modification to existing harnesses):
   - compute_regime_labels from gap_regime_stratified
   - _wilson CI helper
 """
+
 from __future__ import annotations
 
 import sys
@@ -100,8 +101,7 @@ def binary_framing_stratified(
                 d_zt.add(code)
         daily.append((d, tag, zt_by_ind, d_zt, zt[d1]))
 
-    print(f"\n=== sector_heat BINARY framing, regime-stratified "
-          f"(zt_history {len(daily)} tagged day-pairs) ===")
+    print(f"\n=== sector_heat BINARY framing, regime-stratified (zt_history {len(daily)} tagged day-pairs) ===")
     if n_untagged:
         print(f"[regime] {n_untagged} day-pairs had no regime tag (skipped)")
 
@@ -112,8 +112,7 @@ def binary_framing_stratified(
     print("regime distribution (signal days D):")
     for r in REGIMES:
         c = reg_counts.get(r, 0)
-        print(f"  {r:5s}: {c} day-pairs"
-              f"{' (UNDERPOWERED <60)' if 0 < c < 60 else ''}")
+        print(f"  {r:5s}: {c} day-pairs{' (UNDERPOWERED <60)' if 0 < c < 60 else ''}")
 
     for name, thresh in DEFS:
         # per-regime accumulators
@@ -121,10 +120,8 @@ def binary_framing_stratified(
         for _, tag, zt_by_ind, d_zt, d1_zt in daily:
             hot_inds = {ind for ind, c in zt_by_ind.items() if c >= thresh}
             all_inds = set(zt_by_ind.keys())
-            hot_mem = [c for c, ind in industry.items()
-                       if ind in hot_inds and c not in d_zt]
-            cold_mem = [c for c, ind in industry.items()
-                        if ind not in all_inds and c not in d_zt]
+            hot_mem = [c for c, ind in industry.items() if ind in hot_inds and c not in d_zt]
+            cold_mem = [c for c, ind in industry.items() if ind not in all_inds and c not in d_zt]
             if not hot_mem or not cold_mem:
                 continue
             a = acc[tag]
@@ -142,9 +139,11 @@ def binary_framing_stratified(
         phr = phn / phm if phm else 0.0
         pcr = pcn / pcm if pcm else 0.0
         plift = phr / pcr if pcr else 0.0
-        print(f"  POOLED (all regimes): hot {phn}/{phm}={phr*100:.3f}%  "
-              f"cold {pcn}/{pcm}={pcr*100:.3f}%  lift={plift:.3f}x "
-              f"-> {_verdict(plift)}  [sanity vs memory 1.819]")
+        print(
+            f"  POOLED (all regimes): hot {phn}/{phm}={phr * 100:.3f}%  "
+            f"cold {pcn}/{pcm}={pcr * 100:.3f}%  lift={plift:.3f}x "
+            f"-> {_verdict(plift)}  [sanity vs memory 1.819]"
+        )
 
         for r in REGIMES:
             a = acc[r]
@@ -161,10 +160,12 @@ def binary_framing_stratified(
             clo, chi = _wilson(cn, cm)
             sig = "CI不重叠" if hlo > chi else "CI重叠"
             under = " UNDERPOWERED(<60d, exploratory)" if n_days < 60 else ""
-            print(f"  {r:5s}: n_days={n_days}  "
-                  f"hot {hn}/{hm}={hr*100:.3f}%[{hlo*100:.2f},{hhi*100:.2f}]  "
-                  f"cold {cn}/{cm}={cr*100:.3f}%[{clo*100:.2f},{chi*100:.2f}]  "
-                  f"lift={lift:.3f}x -> {_verdict(lift)}({sig}){under}")
+            print(
+                f"  {r:5s}: n_days={n_days}  "
+                f"hot {hn}/{hm}={hr * 100:.3f}%[{hlo * 100:.2f},{hhi * 100:.2f}]  "
+                f"cold {cn}/{cm}={cr * 100:.3f}%[{clo * 100:.2f},{chi * 100:.2f}]  "
+                f"lift={lift:.3f}x -> {_verdict(lift)}({sig}){under}"
+            )
 
 
 def main() -> None:
@@ -184,9 +185,11 @@ def main() -> None:
     regime_dates = set(regime_map.keys())
     calendar = sorted(zt_dates | regime_dates)
     cal_idx = {d: i for i, d in enumerate(calendar)}
-    print(f"industry map: {len(industry)} codes | zt pools: {len(zt)} days | "
-          f"regime labels: {len(regime_map)} dates | "
-          f"calendar: {len(calendar)} trading days")
+    print(
+        f"industry map: {len(industry)} codes | zt pools: {len(zt)} days | "
+        f"regime labels: {len(regime_map)} dates | "
+        f"calendar: {len(calendar)} trading days"
+    )
 
     binary_framing_stratified(zt, industry, calendar, cal_idx, regime_map)
 
@@ -194,8 +197,10 @@ def main() -> None:
     print("bull also >2.0  -> REAL signal (un-freeze condition 3: 2nd edge)")
     print("only bear >2.0  -> bear artifact (archive, same as late_lock)")
     print("both <2.0       -> unvalidated, keep weight_multiplier=0.5, R3 monitor")
-    print("\ncaveat: <60 day-pairs in a regime = underpowered (§44 v2). "
-          "Bonferroni K=2 (bull,bear) mild; range is secondary.")
+    print(
+        "\ncaveat: <60 day-pairs in a regime = underpowered (§44 v2). "
+        "Bonferroni K=2 (bull,bear) mild; range is secondary."
+    )
 
 
 if __name__ == "__main__":

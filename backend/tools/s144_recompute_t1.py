@@ -8,6 +8,7 @@
 用法：
   python tools/s144_recompute_t1.py [--limit N]   # N=处理的 signal_date 数（默认全部）
 """
+
 from __future__ import annotations
 
 import argparse
@@ -21,8 +22,10 @@ if str(backend_dir) not in sys.path:
 
 from config import GENE_SCORES_DB_PATH
 from strategies.forward_test import (
-    _ensure_table, get_forward_test_summary,
-    record_actual_returns, record_universe_returns,
+    _ensure_table,
+    get_forward_test_summary,
+    record_actual_returns,
+    record_universe_returns,
 )
 from strategies.kline_returns import compute_returns_for_codes
 
@@ -36,15 +39,19 @@ def main(limit: int | None = None) -> int:
     logger.info("schema 迁移完成（_ensure_table 加列）")
 
     import sqlite3
+
     conn = sqlite3.connect(GENE_SCORES_DB_PATH)
     try:
         # 取有 picks 但 o2nc 未回填的 signal_date（按日降序，优先近期）
-        dates = [r[0] for r in conn.execute(
-            "SELECT DISTINCT signal_date FROM forward_test_records "
-            "WHERE return_open2next_close IS NULL "
-            "AND return_open2close IS NOT NULL "  # 已 settled（o2c 有），需补 o2nc
-            "ORDER BY signal_date DESC"
-        ).fetchall()]
+        dates = [
+            r[0]
+            for r in conn.execute(
+                "SELECT DISTINCT signal_date FROM forward_test_records "
+                "WHERE return_open2next_close IS NULL "
+                "AND return_open2close IS NOT NULL "  # 已 settled（o2c 有），需补 o2nc
+                "ORDER BY signal_date DESC"
+            ).fetchall()
+        ]
     finally:
         conn.close()
     if limit:
@@ -64,10 +71,18 @@ def main(limit: int | None = None) -> int:
     for i, signal_date in enumerate(dates, 1):
         conn = sqlite3.connect(GENE_SCORES_DB_PATH)
         try:
-            pick_codes = [r[0] for r in conn.execute(
-                "SELECT DISTINCT code FROM forward_test_records WHERE signal_date=?", (signal_date,)).fetchall()]
-            uni_codes = [r[0] for r in conn.execute(
-                "SELECT DISTINCT code FROM universe_returns WHERE signal_date=?", (signal_date,)).fetchall()]
+            pick_codes = [
+                r[0]
+                for r in conn.execute(
+                    "SELECT DISTINCT code FROM forward_test_records WHERE signal_date=?", (signal_date,)
+                ).fetchall()
+            ]
+            uni_codes = [
+                r[0]
+                for r in conn.execute(
+                    "SELECT DISTINCT code FROM universe_returns WHERE signal_date=?", (signal_date,)
+                ).fetchall()
+            ]
         finally:
             conn.close()
         all_codes = list(dict.fromkeys(pick_codes + uni_codes))
@@ -77,17 +92,30 @@ def main(limit: int | None = None) -> int:
         if not returns_map:
             logger.warning("[%d/%d] %s baostock 不可用，中断", i, len(dates), signal_date)
             break
-        picks_returns = {c: returns_map[c] for c in pick_codes
-                         if c in returns_map and returns_map[c]["return_open2close"] is not None}
-        uni_returns = {c: returns_map[c] for c in uni_codes
-                       if c in returns_map and returns_map[c]["return_open2close"] is not None}
+        picks_returns = {
+            c: returns_map[c]
+            for c in pick_codes
+            if c in returns_map and returns_map[c]["return_open2close"] is not None
+        }
+        uni_returns = {
+            c: returns_map[c] for c in uni_codes if c in returns_map and returns_map[c]["return_open2close"] is not None
+        }
         n_picks = record_actual_returns(signal_date, picks_returns)
         n_uni = record_universe_returns(signal_date, uni_returns)
         n_unbuyable_pick = sum(1 for c in pick_codes if c in returns_map and returns_map[c].get("is_unbuyable"))
         n_unbuyable_uni = sum(1 for c in uni_codes if c in returns_map and returns_map[c].get("is_unbuyable"))
-        logger.info("[%d/%d] %s settled picks=%s/%s universe=%s/%s unbuyable(pick=%s uni=%s)",
-                    i, len(dates), signal_date, n_picks, len(pick_codes), n_uni, len(uni_codes),
-                    n_unbuyable_pick, n_unbuyable_uni)
+        logger.info(
+            "[%d/%d] %s settled picks=%s/%s universe=%s/%s unbuyable(pick=%s uni=%s)",
+            i,
+            len(dates),
+            signal_date,
+            n_picks,
+            len(pick_codes),
+            n_uni,
+            len(uni_codes),
+            n_unbuyable_pick,
+            n_unbuyable_uni,
+        )
 
     # 2. 打印 §44 verdict 双报
     print("\n" + "=" * 70)
@@ -98,7 +126,9 @@ def main(limit: int | None = None) -> int:
     print(f"win_rate(o2c 基线)={result.win_rate}% avg_return={result.avg_return}%")
     print(f"random_baseline={result.random_baseline_win_rate}% (settled={result.random_settled})")
     print(f"lift(buyable-only o2c)={result.lift}x | lift_unfiltered(原口径含污染)={result.lift_unfiltered}x")
-    print(f"win_rate_open2next_close(T+1 可实现)={result.win_rate_open2next_close}% (o2nc_settled={result.o2nc_settled})")
+    print(
+        f"win_rate_open2next_close(T+1 可实现)={result.win_rate_open2next_close}% (o2nc_settled={result.o2nc_settled})"
+    )
     print(f"unbuyable_count(一字板排除)={result.unbuyable_count}")
     print(f"validation_status={result.validation_status} passed={result.passed}")
     print(f"consecutive_loss={result.consecutive_loss}")

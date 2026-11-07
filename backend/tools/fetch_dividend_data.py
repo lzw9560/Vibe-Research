@@ -3,6 +3,7 @@
 
 Run in background; explore_event_dividend-exright.py reads the cache.
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -43,7 +44,7 @@ def get_long_range_codes() -> list[str]:
 
 def fetch_all() -> list[dict]:
     codes = get_long_range_codes()
-    print(f"[fetch] {len(codes)} long-range codes × {len(YEARS)} years = {len(codes)*len(YEARS)} calls")
+    print(f"[fetch] {len(codes)} long-range codes × {len(YEARS)} years = {len(codes) * len(YEARS)} calls")
     events: list[dict] = []
     lg = bs.login()
     print(f"[fetch] login: {lg.error_code} {lg.error_msg}")
@@ -59,15 +60,17 @@ def fetch_all() -> list[dict]:
                     oper_date = row[6]  # dividOperateDate
                     if not oper_date:
                         continue
-                    events.append({
-                        "code": code,
-                        "ex_date": oper_date,
-                        "year": yr,
-                        "cash_before_tax": _to_float(row[9]),
-                        "cash_after_tax": _to_float(row[10]),
-                        "stocks_ps": _to_float(row[11]),
-                        "reserve_to_stock": _to_float(row[13]),
-                    })
+                    events.append(
+                        {
+                            "code": code,
+                            "ex_date": oper_date,
+                            "year": yr,
+                            "cash_before_tax": _to_float(row[9]),
+                            "cash_after_tax": _to_float(row[10]),
+                            "stocks_ps": _to_float(row[11]),
+                            "reserve_to_stock": _to_float(row[13]),
+                        }
+                    )
             except Exception as e:
                 print(f"[fetch] ERROR {bs_code} {yr}: {e}", file=sys.stderr)
             time.sleep(0.15)
@@ -76,8 +79,10 @@ def fetch_all() -> list[dict]:
             elapsed = time.time() - t0
             rate = done / elapsed if elapsed > 0 else 0
             eta = (len(codes) - done) / rate if rate > 0 else 0
-            print(f"[fetch] {done}/{len(codes)} codes, {len(events)} events, "
-                  f"{elapsed:.0f}s elapsed, ETA {eta:.0f}s", flush=True)
+            print(
+                f"[fetch] {done}/{len(codes)} codes, {len(events)} events, {elapsed:.0f}s elapsed, ETA {eta:.0f}s",
+                flush=True,
+            )
     bs.logout()
     elapsed = time.time() - t0
     print(f"[fetch] DONE: {len(events)} events in {elapsed:.0f}s")

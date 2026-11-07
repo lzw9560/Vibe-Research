@@ -156,8 +156,10 @@ def _exec_tool(name: str, args: dict):
 # —— 防 SSRF：用户可自带 OpenAI 兼容端点，但后端替其发请求前要挡住指向云元数据/内网的地址 ——
 # M10 修复：_PUBLIC_MODE 改为函数动态求值，避免模块导入时 .env 未加载导致 SSRF 降级
 _METADATA_NETS = [ipaddress.ip_network("169.254.0.0/16"), ipaddress.ip_network("fe80::/10")]
-_PRIVATE_NETS = [ipaddress.ip_network(n) for n in
-                 ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "0.0.0.0/8", "::1/128", "fc00::/7")]
+_PRIVATE_NETS = [
+    ipaddress.ip_network(n)
+    for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "0.0.0.0/8", "::1/128", "fc00::/7")
+]
 
 
 def _is_public_mode() -> bool:
@@ -244,7 +246,8 @@ def _call_llm_once(cfg: dict, messages: list, use_tools: bool) -> dict:
     r = _LLM_SESSION.post(
         f"{base}/chat/completions",
         headers={"Authorization": f"Bearer {cfg['apiKey']}", "Content-Type": "application/json"},
-        json=payload, timeout=90,
+        json=payload,
+        timeout=90,
         allow_redirects=False,  # M8 修复：禁重定向，防 SSRF 绕过
         verify=_LLM_VERIFY_SSL,
     )
@@ -260,6 +263,7 @@ def _call_llm(cfg: dict, messages: list, use_tools: bool) -> dict:
     → 试下一个 cfg；全失败抛最后一个错。主端点 Tailscale relay 抖时备 LAN/另一 Tailscale 兜底。
     """
     import requests as _req  # noqa: PLC0415
+
     cfgs = [cfg] + (cfg.get("backup_cfgs") or [])
     last_err: Exception | None = None
     for c in cfgs:
@@ -286,9 +290,14 @@ def run_chat(cfg: dict, user_messages: list, context: str = "", fusion_output: d
     # S194 T4.2：注入融合研判到 context（fusion_output 由调用方算——飞书 bot 问股时跑信号适配器+检索+权重+融合）
     if fusion_output:
         from engine.fusion_layer import build_fusion_context  # noqa: PLC0415
+
         fusion_ctx = build_fusion_context(fusion_output)
         context = f"{context}\n\n{fusion_ctx}" if context else fusion_ctx
-    sys_prompt = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
+    sys_prompt = (
+        SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）")
+        if no_tools_cfg
+        else SYSTEM_PROMPT.format(context=context or "（无）")
+    )
     messages = [{"role": "system", "content": sys_prompt}]
     messages.extend(user_messages)
     trace: list[dict] = []
@@ -315,11 +324,13 @@ def run_chat(cfg: dict, user_messages: list, context: str = "", fusion_output: d
                 args = {}
             result = _exec_tool(name, args)
             trace.append({"tool": name, "args": args})
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tc.get("id", ""),
-                "content": json.dumps(result, ensure_ascii=False)[:_TOOL_RESULT_CAP],
-            })
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.get("id", ""),
+                    "content": json.dumps(result, ensure_ascii=False)[:_TOOL_RESULT_CAP],
+                }
+            )
 
     # 超过最大轮数，最后再要一次不带工具的收尾回答
     data = _call_llm(cfg, messages, use_tools=False)
@@ -344,6 +355,7 @@ def run_chat_cli(cfg: dict, user_messages: list, context: str = "") -> dict:
 # 流式版：yield 事件字典 {type: tool|delta|done|error}，供 /api/chat 以 NDJSON 推给前端
 # ---------------------------------------------------------------------------
 
+
 def _resolve_base(cfg: dict) -> str:
     base = cfg["baseURL"].rstrip("/")
     if not base.endswith(("/v1", "/v3", "/api/v3", "/v4")):
@@ -360,7 +372,9 @@ def _call_llm_stream(cfg: dict, messages: list, use_tools: bool):
     r = _LLM_SESSION.post(
         f"{_resolve_base(cfg)}/chat/completions",
         headers={"Authorization": f"Bearer {cfg['apiKey']}", "Content-Type": "application/json"},
-        json=payload, timeout=120, stream=True,
+        json=payload,
+        timeout=120,
+        stream=True,
         allow_redirects=False,  # M8 修复：禁重定向，防 SSRF 绕过
         verify=_LLM_VERIFY_SSL,
     )
@@ -400,7 +414,11 @@ def _iter_sse_deltas(resp):
 def run_chat_stream(cfg: dict, user_messages: list, context: str = ""):
     """API 接入流式：function-calling 循环，边流答案边推工具调用事件。"""
     no_tools_cfg = str(cfg.get("provider", "")) == "agnes"
-    sys_prompt = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
+    sys_prompt = (
+        SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）")
+        if no_tools_cfg
+        else SYSTEM_PROMPT.format(context=context or "（无）")
+    )
     messages = [{"role": "system", "content": sys_prompt}]
     messages.extend(user_messages)
     trace: list[dict] = []
@@ -411,7 +429,7 @@ def run_chat_stream(cfg: dict, user_messages: list, context: str = ""):
         text = data["choices"][0]["message"].get("content") or ""
         chunk_size = 4
         for i in range(0, len(text), chunk_size):
-            yield {"type": "delta", "text": text[i:i+chunk_size]}
+            yield {"type": "delta", "text": text[i : i + chunk_size]}
         yield {"type": "done", "trace": [], "rounds": 1}
         return
 
@@ -423,7 +441,7 @@ def run_chat_stream(cfg: dict, user_messages: list, context: str = ""):
             if delta.get("content"):
                 content_parts.append(delta["content"])
                 yield {"type": "delta", "text": delta["content"]}
-            for tc in (delta.get("tool_calls") or []):
+            for tc in delta.get("tool_calls") or []:
                 idx = tc.get("index")
                 if idx is None:
                     # 非标「OpenAI 兼容」网关可能不带 index：有 id 按 id 归位（新 id 开新槽），
@@ -446,14 +464,20 @@ def run_chat_stream(cfg: dict, user_messages: list, context: str = ""):
             return
 
         # 有工具调用：回填 assistant 消息 + 执行工具 + 推事件
-        messages.append({
-            "role": "assistant",
-            "content": "".join(content_parts) or None,
-            "tool_calls": [{
-                "id": tool_acc[i]["id"], "type": "function",
-                "function": {"name": tool_acc[i]["name"], "arguments": tool_acc[i]["arguments"]},
-            } for i in sorted(tool_acc)],
-        })
+        messages.append(
+            {
+                "role": "assistant",
+                "content": "".join(content_parts) or None,
+                "tool_calls": [
+                    {
+                        "id": tool_acc[i]["id"],
+                        "type": "function",
+                        "function": {"name": tool_acc[i]["name"], "arguments": tool_acc[i]["arguments"]},
+                    }
+                    for i in sorted(tool_acc)
+                ],
+            }
+        )
         for i in sorted(tool_acc):
             a = tool_acc[i]
             try:
@@ -463,10 +487,13 @@ def run_chat_stream(cfg: dict, user_messages: list, context: str = ""):
             yield {"type": "tool", "tool": a["name"], "args": args}
             result = _exec_tool(a["name"], args)
             trace.append({"tool": a["name"], "args": args})
-            messages.append({
-                "role": "tool", "tool_call_id": a["id"],
-                "content": json.dumps(result, ensure_ascii=False)[:_TOOL_RESULT_CAP],
-            })
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": a["id"],
+                    "content": json.dumps(result, ensure_ascii=False)[:_TOOL_RESULT_CAP],
+                }
+            )
 
     # 超过最大轮数：不带工具收尾（非流式一次拿完再吐）
     data = _call_llm(cfg, messages, use_tools=False)

@@ -6,6 +6,7 @@
 - 读盘：load_scores
 - 日期列表：list_score_dates
 """
+
 from __future__ import annotations
 
 import json
@@ -45,6 +46,7 @@ def save_scores(scored: list[dict], date: str, full_result: dict | None = None) 
     # PosixPath 对象（新引用），须重新绑定到当前 global 才能让 save 写到 tmp_path。
     # 直接读模块 global 而非用闭包变量（闭包 _SCORES_DIR 在模块加载时固化）。
     import strategies.first_board.persistence as _p
+
     scores_dir = _p._SCORES_DIR
     scores_dir.mkdir(parents=True, exist_ok=True)
     out_path = scores_dir / f"first_board_scores_{date}.json"

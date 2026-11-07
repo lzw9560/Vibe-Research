@@ -9,6 +9,7 @@
 非 100% 预测。数据源全用现有（get_global_indices/gene_scores/newsradar），
 衍生品(VIX/期权/期货)先跳过，估值水位 R4 先跳过（数据源待定，不臆造）。
 """
+
 from __future__ import annotations
 
 import logging
@@ -97,8 +98,12 @@ def _fred_vix_value() -> float | None:
     """
     try:
         from predict.features.macro import (  # noqa: PLC0415
-            get_fred_api_key, fetch_fred_series, parse_fred_observations, FRED_SERIES,
+            get_fred_api_key,
+            fetch_fred_series,
+            parse_fred_observations,
+            FRED_SERIES,
         )
+
         key = get_fred_api_key()
         if not key:
             return None
@@ -122,6 +127,7 @@ def _fomc_day_risk(d_iso: str) -> tuple[int | None, str]:
     try:
         import json  # noqa: PLC0415
         from vr_paths import resolve_data_dir  # noqa: PLC0415
+
         path = resolve_data_dir() / "fomc_calendar.json"
         if not path.exists():
             return None, ""
@@ -173,15 +179,11 @@ def _collect_global_factor(date: str) -> StormFactor:
 
     by_name = {i.get("name"): i for i in indices if isinstance(i, dict)}
     us = [by_name.get(n) for n in ("道琼斯", "标普500", "纳斯达克") if by_name.get(n)]
-    a50 = by_name.get("富时A50") or next(
-        (i for i in indices if "富时A50" in (i.get("name") or "")), None)
+    a50 = by_name.get("富时A50") or next((i for i in indices if "富时A50" in (i.get("name") or "")), None)
     hk = [i for i in indices if "恒生" in (i.get("name") or "")]
-    n225 = by_name.get("日经225") or next(
-        (i for i in indices if "日经" in (i.get("name") or "")), None)
-    kospi = by_name.get("韩国KOSPI") or next(
-        (i for i in indices if "KOSPI" in (i.get("name") or "")), None)
-    sox = by_name.get("费城半导体") or next(
-        (i for i in indices if "费城" in (i.get("name") or "")), None)
+    n225 = by_name.get("日经225") or next((i for i in indices if "日经" in (i.get("name") or "")), None)
+    kospi = by_name.get("韩国KOSPI") or next((i for i in indices if "KOSPI" in (i.get("name") or "")), None)
+    sox = by_name.get("费城半导体") or next((i for i in indices if "费城" in (i.get("name") or "")), None)
 
     def _chg(i: dict | None) -> float | None:
         v = i.get("change_pct") if i else None
@@ -255,8 +257,7 @@ def _load_sti_internal_signals(t1: str) -> tuple[float, float] | None:
         _sti.row_factory = sqlite3.Row
         try:
             row = _sti.execute(
-                "SELECT dimension_max_boards, raw_break_rate, source_ok "
-                "FROM sti_timeline WHERE date=?",
+                "SELECT dimension_max_boards, raw_break_rate, source_ok FROM sti_timeline WHERE date=?",
                 (t1,),
             ).fetchone()
             if row is None:
@@ -328,8 +329,10 @@ def _collect_internal_factor(date: str) -> StormFactor:
         sti_signals = _load_sti_internal_signals(t1)
         if sti_signals is None:
             return StormFactor(
-                "前日内部先行", 50.0,
-                f"T-1({t1}) STI 降级/缺行（连板高度/炸板率未知）", "missing",
+                "前日内部先行",
+                50.0,
+                f"T-1({t1}) STI 降级/缺行（连板高度/炸板率未知）",
+                "missing",
             )
         max_boards, break_rate = sti_signals
 
@@ -340,7 +343,9 @@ def _collect_internal_factor(date: str) -> StormFactor:
         rebound_score = max(0.0, min(100.0, 50 - avg_rebound * 2))  # 溢价<0 → 高分
         score = (height_score + break_score + rebound_score) / 3
 
-        detail = f"连板 {max_boards:.0f}板 / 炸板率 {break_rate:.0%} / 炸板后溢价 {avg_rebound:.1f} / 封板率 {avg_seal:.0f}%"
+        detail = (
+            f"连板 {max_boards:.0f}板 / 炸板率 {break_rate:.0%} / 炸板后溢价 {avg_rebound:.1f} / 封板率 {avg_seal:.0f}%"
+        )
         return StormFactor("前日内部先行", round(score, 1), detail, data_status)
     except Exception as exc:  # noqa: BLE001
         return StormFactor("前日内部先行", 50.0, f"采集失败: {exc}", "missing")
@@ -375,9 +380,9 @@ def _collect_news_factor(date: str) -> StormFactor:
             radar = newsradar.get_radar(force=False) or {}
             # fetch_radar 顶层是 industries 嵌套 items（无顶层 items 键）；扁平化聚合
             items = (
-                [it for ind in (radar.get("industries", []) or [])
-                 for it in (ind.get("items", []) or [])]
-                if isinstance(radar, dict) else []
+                [it for ind in (radar.get("industries", []) or []) for it in (ind.get("items", []) or [])]
+                if isinstance(radar, dict)
+                else []
             )
             if data_status == "ok":
                 data_status = "fallback_current"
@@ -407,8 +412,10 @@ def _collect_news_factor(date: str) -> StormFactor:
     total = bearish_count + bullish_count
     if total == 0:
         return StormFactor(
-            "新闻密度", 50.0,
-            f"[{src}] 总 {len(items)} 条 / 无强情绪词命中", "missing",
+            "新闻密度",
+            50.0,
+            f"[{src}] 总 {len(items)} 条 / 无强情绪词命中",
+            "missing",
         )
     # 利空占比 → 分（利空越多概率越高）；占比口径非差值，免总量膨胀失真
     ratio = bearish_count / total
@@ -477,12 +484,7 @@ def predict_storm(date: str | None = None) -> StormPrediction:
     calendar_f = _collect_calendar_factor(d)
 
     # 加权（外围 0.35 + 内部 0.35 + 新闻 0.20 + 日历 0.10；估值 R4 先跳过）
-    probability = (
-        global_f.score * 0.35
-        + internal_f.score * 0.35
-        + news_f.score * 0.20
-        + calendar_f.score * 0.10
-    )
+    probability = global_f.score * 0.35 + internal_f.score * 0.35 + news_f.score * 0.20 + calendar_f.score * 0.10
     probability = round(max(0.0, min(100.0, probability)), 1)
 
     risk_level, suggested_position = _probability_to_level(probability)

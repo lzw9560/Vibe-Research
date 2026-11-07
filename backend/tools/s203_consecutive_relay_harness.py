@@ -16,6 +16,7 @@ verify 内 ``effective_floor = max(0.003, cost*0.5)`` 只要 returns+cost 同口
 依赖：.vibe-research/baostock_kline_cache.json + zt_history.db + index_ma20_regime.json
 跑法：cd backend && .venv/bin/python tools/s203_consecutive_relay_harness.py
 """
+
 import sqlite3
 import statistics
 import sys
@@ -53,8 +54,7 @@ def _zt_history_picks_lbc2() -> list[tuple[str, str]]:
     conn = sqlite3.connect(str(ZT_DB))
     try:
         rows = conn.execute(
-            "SELECT date, code FROM zt_history WHERE lbc>=2 AND is_final=1 "
-            "ORDER BY date, code"
+            "SELECT date, code FROM zt_history WHERE lbc>=2 AND is_final=1 ORDER BY date, code"
         ).fetchall()
     finally:
         conn.close()
@@ -99,9 +99,7 @@ def compute_obs(
         cost_pct = cost_fn(open_d1, 100.0, D) if open_d1 > 0 else 0.0
         cost_dec = cost_pct / 100.0  # pct→decimal 同口径
         net = gap_ret - cost_dec
-        obs.append(
-            {"D": D, "code": code, "net": net, "win": 1 if net > 0 else 0, "cost": cost_dec}
-        )
+        obs.append({"D": D, "code": code, "net": net, "win": 1 if net > 0 else 0, "cost": cost_dec})
     return obs
 
 
@@ -113,6 +111,7 @@ def main() -> dict:
     cache = _load_kline_cache()
     # S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
     import datetime  # noqa: PLC0415
+
     validate_or_reject(
         "baostock_kline",
         [b for bars in cache.values() for b in bars],
@@ -144,8 +143,8 @@ def main() -> dict:
     wr = sum(o["win"] for o in obs) / n_obs
     net_mean = statistics.mean(rets)
     print(
-        f"all net-WR(连板接力 隔夜gap): {wr*100:.2f}% net_mean={net_mean*100:.2f}% "
-        f"(扣 cost ~{mean_cost_dec*100:.2f}%)",
+        f"all net-WR(连板接力 隔夜gap): {wr * 100:.2f}% net_mean={net_mean * 100:.2f}% "
+        f"(扣 cost ~{mean_cost_dec * 100:.2f}%)",
         flush=True,
     )
 
@@ -189,9 +188,7 @@ def main() -> dict:
             return {"decision": "insufficient", "n_test_days": 0, "n_train_days": 0}
         regime_rets = [p[0] for p in pairs]
         regime_dates = [p[1] for p in pairs]
-        chrono = chronological_holdout_event_check(
-            regime_rets, regime_dates, round_trip_cost=round(mean_cost_dec, 6)
-        )
+        chrono = chronological_holdout_event_check(regime_rets, regime_dates, round_trip_cost=round(mean_cost_dec, 6))
         n_test = chrono.get("n_test_days", 0) or 0
         # §44 v2: <30 test days = underpowered; adequate-power bar is >=60.
         chrono["underpowered"] = n_test < 30

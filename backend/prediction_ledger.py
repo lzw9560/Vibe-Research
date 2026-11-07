@@ -7,6 +7,7 @@
 
 状态机：pending → hit/miss/expired/voided（voided=K 线缺数）
 """
+
 from __future__ import annotations
 
 import logging
@@ -30,16 +31,17 @@ PREDICTION_STATUSES = {"pending", "hit", "miss", "expired", "voided"}
 @dataclass
 class Prediction:
     """单条预测。"""
-    stated_at: str           # 预测发出日
-    source: str              # funnel_candidate | strategy_hit | manual
-    code: str                # 股票代码
+
+    stated_at: str  # 预测发出日
+    source: str  # funnel_candidate | strategy_hit | manual
+    code: str  # 股票代码
     name: str = ""
-    signal_ref: str = ""     # funnel:final / 战法 code / 空
+    signal_ref: str = ""  # funnel:final / 战法 code / 空
     prediction_type: str = "next_day_premium"  # next_day_premium | strategy_outcome
     baseline_price: float = 0.0
-    expected: str = ">0"     # 预期方向
-    horizon: int = 1        # 验证周期（天数）
-    due_date: str = ""      # 到期日
+    expected: str = ">0"  # 预期方向
+    horizon: int = 1  # 验证周期（天数）
+    due_date: str = ""  # 到期日
     actual_return: float | None = None
     status: str = "pending"  # pending | hit | miss | expired | voided
     attribution: str = ""
@@ -53,13 +55,19 @@ def _migrate_schema(db_path: str = WINRATE_DB_PATH) -> None:
     manager = MigrationManager(db_path=db_path)
     sql = (
         Path(__file__).resolve().parent
-        / "migrations" / "prediction_ledger" / "20260812-001_create_prediction_ledger.sql"
+        / "migrations"
+        / "prediction_ledger"
+        / "20260812-001_create_prediction_ledger.sql"
     ).read_text(encoding="utf-8")
-    manager.upgrade([{
-        "version": "20260812-001",
-        "name": "create_prediction_ledger",
-        "sql": sql,
-    }])
+    manager.upgrade(
+        [
+            {
+                "version": "20260812-001",
+                "name": "create_prediction_ledger",
+                "sql": sql,
+            }
+        ]
+    )
 
 
 def _get_conn(db_path: str = WINRATE_DB_PATH) -> sqlite3.Connection:
@@ -110,9 +118,20 @@ def add_prediction(p: Prediction, db_path: str = WINRATE_DB_PATH) -> int | None:
                  baseline_price, expected, horizon, due_date, status, attribution)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (p.stated_at, p.source, p.signal_ref or None, p.code, p.name or None,
-                 p.prediction_type, p.baseline_price or None, p.expected or None,
-                 p.horizon, p.due_date, p.status, p.attribution or None),
+                (
+                    p.stated_at,
+                    p.source,
+                    p.signal_ref or None,
+                    p.code,
+                    p.name or None,
+                    p.prediction_type,
+                    p.baseline_price or None,
+                    p.expected or None,
+                    p.horizon,
+                    p.due_date,
+                    p.status,
+                    p.attribution or None,
+                ),
             )
             conn.commit()
             if cur.rowcount > 0:
@@ -178,9 +197,9 @@ def get_due_predictions(as_of: str, db_path: str = WINRATE_DB_PATH) -> list[Pred
         conn.close()
 
 
-def verify_prediction(pred_id: int, actual_return: float | None,
-                      status: str, attribution: str = "",
-                      db_path: str = WINRATE_DB_PATH) -> bool:
+def verify_prediction(
+    pred_id: int, actual_return: float | None, status: str, attribution: str = "", db_path: str = WINRATE_DB_PATH
+) -> bool:
     """写验证结果。status ∈ {hit, miss, voided}。幂等：已验证的不重写。"""
     if status not in {"hit", "miss", "voided"}:
         raise ValueError(f"非法验证 status: {status}")
@@ -201,8 +220,7 @@ def verify_prediction(pred_id: int, actual_return: float | None,
         conn.close()
 
 
-def list_predictions(days: int = 30, source: str = "",
-                     db_path: str = WINRATE_DB_PATH) -> list[Prediction]:
+def list_predictions(days: int = 30, source: str = "", db_path: str = WINRATE_DB_PATH) -> list[Prediction]:
     """账本列表：最近 N 天，可按 source 过滤。"""
     cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     conn = _get_conn(db_path)
@@ -222,8 +240,7 @@ def list_predictions(days: int = 30, source: str = "",
         conn.close()
 
 
-def compute_hit_rate(source: str = "", days: int = 30,
-                     db_path: str = WINRATE_DB_PATH) -> dict[str, Any]:
+def compute_hit_rate(source: str = "", days: int = 30, db_path: str = WINRATE_DB_PATH) -> dict[str, Any]:
     """命中率统计：按 source 分桶。n<10 标注样本不足。
 
     返回 [{source, total, hit, miss, voided, hit_rate, sample_sufficient}]。
@@ -260,16 +277,18 @@ def compute_hit_rate(source: str = "", days: int = 30,
             verified = (r["hit"] or 0) + (r["miss"] or 0)
             hit = r["hit"] or 0
             rate = round(hit / verified, 4) if verified else None
-            result.append({
-                "source": r["source"],
-                "total": r["total"],
-                "hit": hit,
-                "miss": r["miss"] or 0,
-                "voided": r["voided"] or 0,
-                "hit_rate": rate,
-                "sample_sufficient": verified >= 10,
-                "verified": verified,
-            })
+            result.append(
+                {
+                    "source": r["source"],
+                    "total": r["total"],
+                    "hit": hit,
+                    "miss": r["miss"] or 0,
+                    "voided": r["voided"] or 0,
+                    "hit_rate": rate,
+                    "sample_sufficient": verified >= 10,
+                    "verified": verified,
+                }
+            )
         return result
     finally:
         conn.close()

@@ -5,6 +5,7 @@
 gap 跳空不可买。本脚本审：① median/WR（lottery vs 稳）② 扣成本后还正否
 ③ 去掉 gap 的组合（动量+小盘）是否独立 OOS（gap 不可交易）。
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -39,7 +40,7 @@ def main() -> None:
         if len(bars) < 26:
             continue
         for i in range(5, len(bars) - 1):
-            prev_c = float(bars[i-1].get("close", 0) or 0)
+            prev_c = float(bars[i - 1].get("close", 0) or 0)
             o = float(bars[i].get("open", 0) or 0)
             c = float(bars[i].get("close", 0) or 0)
             amt = float(bars[i].get("amount", 0) or 0)
@@ -47,7 +48,7 @@ def main() -> None:
                 continue
             today_ret = (c - prev_c) / prev_c
             gap = (o - prev_c) / prev_c
-            nxt_c = float(bars[i+1].get("close", 0) or 0)
+            nxt_c = float(bars[i + 1].get("close", 0) or 0)
             if not nxt_c:
                 continue
             nxt_ret = (nxt_c - c) / c
@@ -86,7 +87,15 @@ def main() -> None:
         std = statistics.pstdev(daily_mean) if len(daily_mean) > 1 else 0
         se = std / (len(daily_mean) ** 0.5) if len(daily_mean) else 0
         t = m / se if se > 0 else 0
-        return {"n_days": len(daily_mean), "mean": m, "median": med, "wr": wr, "net": net, "t": t, "n_picks": len(all_picks)}
+        return {
+            "n_days": len(daily_mean),
+            "mean": m,
+            "median": med,
+            "wr": wr,
+            "net": net,
+            "t": t,
+            "n_picks": len(all_picks),
+        }
 
     train = sorted(d for d in by_date if d < SPLIT)
     test = sorted(d for d in by_date if d >= SPLIT)
@@ -97,9 +106,15 @@ def main() -> None:
         if not tr or not te:
             continue
         print(f"--- {label} ---")
-        print(f"  train: mean {tr['mean']*100:+.4f}% median {tr['median']*100:+.4f}% WR {tr['wr']*100:.1f}% t={tr['t']:.2f} (n_days={tr['n_days']})")
-        print(f"  test:  mean {te['mean']*100:+.4f}% median {te['median']*100:+.4f}% WR {te['wr']*100:.1f}% t={te['t']:.2f}")
-        print(f"         扣成本({COST}%): net {te['net']*100:+.4f}%  | median {'正(稳)' if te['median']>0 else '负(lottery)'} | WR {'>50%' if te['wr']>0.5 else '<50%'}")
+        print(
+            f"  train: mean {tr['mean'] * 100:+.4f}% median {tr['median'] * 100:+.4f}% WR {tr['wr'] * 100:.1f}% t={tr['t']:.2f} (n_days={tr['n_days']})"
+        )
+        print(
+            f"  test:  mean {te['mean'] * 100:+.4f}% median {te['median'] * 100:+.4f}% WR {te['wr'] * 100:.1f}% t={te['t']:.2f}"
+        )
+        print(
+            f"         扣成本({COST}%): net {te['net'] * 100:+.4f}%  | median {'正(稳)' if te['median'] > 0 else '负(lottery)'} | WR {'>50%' if te['wr'] > 0.5 else '<50%'}"
+        )
         oos = te["t"] > 2.4 and te["mean"] > 0
         print(f"  OOS(Bonf×3,t>2.4): {'✅' if oos else '❌'}")
         print()

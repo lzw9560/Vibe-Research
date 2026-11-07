@@ -13,6 +13,7 @@ Two reproducibility criteria (spec §2 R4):
 Storage: SQLite in ``<VR_DATA_DIR>/verifier_recorder/recorder.db``
 (.vibe-research subdirectory, gitignored, never in git).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -200,9 +201,7 @@ class Recorder:
         finally:
             conn.close()
 
-    def latest_snapshot_ids_by_dimension(
-        self, dimension_ids: list[str]
-    ) -> dict[str, str]:
+    def latest_snapshot_ids_by_dimension(self, dimension_ids: list[str]) -> dict[str, str]:
         """Batch lookup: dimension_id → latest data_snapshot_id.
 
         Queries ``params.dimension_id`` (JSON field) for each dimension.

@@ -15,6 +15,7 @@
 合规（CLAUDE.md §1 弱合规）：本模块只做「事件接入 → AI 对话 → 回复」
 管道，不预置标的、不建议；方向性研判由 chat 层 SYSTEM_PROMPT 约束。
 """
+
 from __future__ import annotations
 
 import json
@@ -52,13 +53,13 @@ def start_feishu_ws() -> None:
         return
 
     import os
+
     # 用 FEISHU_BOT_* 新配置（独立于原有 FEISHU_APP_* 通知配置）
     app_id = os.environ.get("FEISHU_BOT_APP_ID", "")
     app_secret = os.environ.get("FEISHU_BOT_APP_SECRET", "")
     if not app_id or not app_secret:
         logger.warning(
-            "飞书 bot app_id/secret 未配置（FEISHU_BOT_APP_ID/FEISHU_BOT_APP_SECRET），"
-            "WebSocket 长连接不可用"
+            "飞书 bot app_id/secret 未配置（FEISHU_BOT_APP_ID/FEISHU_BOT_APP_SECRET），WebSocket 长连接不可用"
         )
         return
 
@@ -175,6 +176,7 @@ def _handle_message(text: str, chat_id: str) -> None:
     reply = None
     try:
         import chat
+
         cfg = chat._get_env_llm_config()
         if cfg.get("baseURL") and cfg.get("apiKey"):
             result = chat.run_chat(cfg, [{"role": "user", "content": text}], context=kg_context)
@@ -200,6 +202,7 @@ def _send_message(chat_id: str, text: str) -> None:
         return
 
     import os
+
     app_id = os.environ.get("FEISHU_BOT_APP_ID", "")
     app_secret = os.environ.get("FEISHU_BOT_APP_SECRET", "")
     if not app_id or not app_secret:
@@ -213,13 +216,7 @@ def _send_message(chat_id: str, text: str) -> None:
             CreateMessageRequestBody,
         )
 
-        cli = (
-            lark.Client.builder()
-            .app_id(app_id)
-            .app_secret(app_secret)
-            .domain(lark.FEISHU_DOMAIN)
-            .build()
-        )
+        cli = lark.Client.builder().app_id(app_id).app_secret(app_secret).domain(lark.FEISHU_DOMAIN).build()
 
         body = (
             CreateMessageRequestBody.builder()
@@ -229,12 +226,7 @@ def _send_message(chat_id: str, text: str) -> None:
             .uuid(str(__import__("uuid").uuid4()))
             .build()
         )
-        req = (
-            CreateMessageRequest.builder()
-            .receive_id_type("chat_id")
-            .request_body(body)
-            .build()
-        )
+        req = CreateMessageRequest.builder().receive_id_type("chat_id").request_body(body).build()
 
         resp = cli.im.v1.message.create(req)
         if resp and resp.success():

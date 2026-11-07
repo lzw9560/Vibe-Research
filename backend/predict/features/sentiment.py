@@ -38,6 +38,7 @@ SENTIMENT_SPECS: tuple[FeatureSpec, ...] = (
 
 # ── Registration ────────────────────────────────────────────────────
 
+
 def register_sentiment(registry: Registry) -> None:
     """Register all sentiment FeatureSpecs into the given Registry.
 

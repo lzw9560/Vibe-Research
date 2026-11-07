@@ -79,9 +79,7 @@ def intraday_framework_payload(head: str = "short_sector") -> dict[str, Any]:
     }
 
 
-def prediction_payload(
-    head: str, stage: str, date: str | None = None
-) -> dict[str, Any]:
+def prediction_payload(head: str, stage: str, date: str | None = None) -> dict[str, Any]:
     """Build the cascade-snapshot payload for *head* / *stage* (sync, reusable).
 
     Shared by the HTTP route and the chat AI tool.

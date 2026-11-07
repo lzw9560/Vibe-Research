@@ -33,6 +33,7 @@ stop 对隔夜 gap-down 是仪式非保护（s144 path_lift<1）：止损价只�
 S166 fresh-impl（design-agnostic）。positions/report 算法参考自 cb54a96 历史，非整文件复活。
 R3 honest_risk_labels 为 S166 新增（诚实风险标签）。
 """
+
 from __future__ import annotations
 
 import json
@@ -89,10 +90,8 @@ def save_equity_base(value: float) -> dict:
 
 def _open_shares(trade: dict) -> float:
     """还在手上的股数 = 买入总量 − 卖出总量。"""
-    bought = sum(float(f.get("shares") or 0) for f in (trade.get("fills") or [])
-                 if f.get("side") == "buy")
-    sold = sum(float(f.get("shares") or 0) for f in (trade.get("fills") or [])
-               if f.get("side") == "sell")
+    bought = sum(float(f.get("shares") or 0) for f in (trade.get("fills") or []) if f.get("side") == "buy")
+    sold = sum(float(f.get("shares") or 0) for f in (trade.get("fills") or []) if f.get("side") == "sell")
     return max(0.0, bought - sold)
 
 
@@ -110,11 +109,16 @@ def positions(trades: list[dict]) -> list[dict]:
         stop = t.get("planned_stop")
         capital = round(float(cost) * shares, 2)
         item = {
-            "id": t.get("id"), "code": t.get("code"), "name": t.get("name"),
+            "id": t.get("id"),
+            "code": t.get("code"),
+            "name": t.get("name"),
             "date": st.get("first_buy") or t.get("date"),
             "playbook": t.get("playbook"),
-            "shares": shares, "avg_cost": float(cost), "capital": capital,
-            "planned_stop": stop, "planned_target": t.get("planned_target"),
+            "shares": shares,
+            "avg_cost": float(cost),
+            "capital": capital,
+            "planned_stop": stop,
+            "planned_target": t.get("planned_target"),
         }
         if stop:
             # 止损价高于成本时 in-risk 为 0（max(0, cost-stop)=0）。注：这不等于"已经锁定
@@ -146,8 +150,7 @@ def report() -> dict:
 
     pos = positions(trades)
     if not pos:
-        return {"available": False,
-                "reason": "当前没有未平仓的持仓（需要填了成交明细、且还没卖完的记录）"}
+        return {"available": False, "reason": "当前没有未平仓的持仓（需要填了成交明细、且还没卖完的记录）"}
 
     bounded = [p for p in pos if p["bounded"]]
     unbounded = [p for p in pos if not p["bounded"]]
@@ -171,9 +174,11 @@ def report() -> dict:
         "unbounded_count": len(unbounded),
         "unbounded_capital": unbounded_capital,
         "equity_base": base,
-        "rules": {"max_loss_per_trade_pct": per_trade_limit,
-                  "max_positions": max_positions,
-                  "is_default": bool(rules.get("_is_default"))},
+        "rules": {
+            "max_loss_per_trade_pct": per_trade_limit,
+            "max_positions": max_positions,
+            "is_default": bool(rules.get("_is_default")),
+        },
         # R3 诚实风险标签（grill #8）：不宣称"core 风控保护"
         "risk_status": honest_risk_labels(bounded, unbounded),
     }
@@ -181,14 +186,13 @@ def report() -> dict:
         out["at_risk_of_equity_pct"] = round(total_risk / base * 100, 2)
         out["capital_of_equity_pct"] = round(total_capital / base * 100, 2)
         if per_trade_limit:
-            over = [p for p in bounded
-                    if p["at_risk"] / base * 100 > float(per_trade_limit) + 1e-9]
+            over = [p for p in bounded if p["at_risk"] / base * 100 > float(per_trade_limit) + 1e-9]
             out["over_per_trade_limit"] = [
-                {"name": p["name"], "code": p["code"],
-                 "pct_of_equity": round(p["at_risk"] / base * 100, 2)} for p in over]
+                {"name": p["name"], "code": p["code"], "pct_of_equity": round(p["at_risk"] / base * 100, 2)}
+                for p in over
+            ]
     else:
-        out["equity_base_hint"] = ("填了账户规模才能给占比 —— 绝对金额说明不了"
-                                   "'这个风险相对我的账户算大还是小'。")
+        out["equity_base_hint"] = "填了账户规模才能给占比 —— 绝对金额说明不了'这个风险相对我的账户算大还是小'。"
     if max_positions and len(pos) > int(max_positions):
         out["over_position_limit"] = {"actual": len(pos), "limit": int(max_positions)}
     # 未设边界的必须显式提示，不能让它静静地不出现在总数里
@@ -196,7 +200,8 @@ def report() -> dict:
         out["unbounded_note"] = (
             f"另有 {len(unbounded)} 笔**未设计划止损**、占用本金 "
             f"{unbounded_capital:,.0f} 元，最坏情况无从估计 —— "
-            "它们没有算进上面的总在险，所以那个数字是**下限**。")
+            "它们没有算进上面的总在险，所以那个数字是**下限**。"
+        )
     return out
 
 
@@ -208,24 +213,28 @@ def honest_risk_labels(bounded: list[dict], unbounded: list[dict]) -> dict:
     """
     labels = []
     if bounded:
-        labels.append({
-            "key": "stop_gap_down_ritual",
-            "text": (f"{len(bounded)} 笔设了计划止损，但 stop 对隔夜 gap-down 是仪式非保护"
-                     "（s144 path_lift<1）——隔夜跳空可击穿止损价开盘，实际成交远劣于计划止损，"
-                     "止损只在能成交的价位生效。设了止损 ≠ 亏不到那。"),
-        })
+        labels.append(
+            {
+                "key": "stop_gap_down_ritual",
+                "text": (
+                    f"{len(bounded)} 笔设了计划止损，但 stop 对隔夜 gap-down 是仪式非保护"
+                    "（s144 path_lift<1）——隔夜跳空可击穿止损价开盘，实际成交远劣于计划止损，"
+                    "止损只在能成交的价位生效。设了止损 ≠ 亏不到那。"
+                ),
+            }
+        )
     if unbounded:
-        labels.append({
-            "key": "unbounded_unknown",
-            "text": (f"{len(unbounded)} 笔未设计划止损，最坏情况无从估计——不按 0 混进总在险，"
-                     "那是下限不是全貌。"),
-        })
+        labels.append(
+            {
+                "key": "unbounded_unknown",
+                "text": (f"{len(unbounded)} 笔未设计划止损，最坏情况无从估计——不按 0 混进总在险，那是下限不是全貌。"),
+            }
+        )
     return {
         "labels": labels,
-        "kill_switch_note": "kill_switch 是通知级非阻断（grill #8），不阻止已发出的单——"
-                            "不是 core 风控保护。",
+        "kill_switch_note": "kill_switch 是通知级非阻断（grill #8），不阻止已发出的单——不是 core 风控保护。",
         "honest_summary": "真实风控 = 仓位 sizing + gap-down 诚实标，非 'core 风控保护'。"
-                          "在险金额是基于已设止损的**下限**，gap-down 实际亏损可能远超此数。",
+        "在险金额是基于已设止损的**下限**，gap-down 实际亏损可能远超此数。",
     }
 
 
@@ -237,8 +246,7 @@ def render(rep: dict) -> str:
     if not rep.get("available"):
         return ""
     lines = [f"· 在险资金（{rep['position_count']} 笔在场）："]
-    tail = (f"，占账户 {rep['at_risk_of_equity_pct']:.1f}%"
-            if rep.get("at_risk_of_equity_pct") is not None else "")
+    tail = f"，占账户 {rep['at_risk_of_equity_pct']:.1f}%" if rep.get("at_risk_of_equity_pct") is not None else ""
     lines.append(f"  - 有边界的合计在险 {rep['total_at_risk']:,.0f} 元{tail}")
     if rep.get("unbounded_note"):
         lines.append("  ⚠️ " + rep["unbounded_note"].replace("**", ""))
@@ -249,6 +257,10 @@ def render(rep: dict) -> str:
 
 
 __all__ = [
-    "load_equity_base", "save_equity_base", "positions", "report", "render",
+    "load_equity_base",
+    "save_equity_base",
+    "positions",
+    "report",
+    "render",
     "honest_risk_labels",
 ]

@@ -6,6 +6,7 @@ DRY 复用 G5 e664353 范式：gap_regime_stratified + wire_verdict。
 auction_signal BLOCKER（无免费源）→ harness picks 空 → underpowered。
 picks by D-day regime -> day-paired event lift -> wire_verdict.
 """
+
 from __future__ import annotations
 
 import sys
@@ -52,8 +53,7 @@ def run(
         stats = regime_stats(rets, by_day)
 
         if len(rets) < 2:
-            results[tag] = {**stats, "verdict_status": "skipped",
-                            "verdict_note": f"n={len(rets)} < 2"}
+            results[tag] = {**stats, "verdict_status": "skipped", "verdict_note": f"n={len(rets)} < 2"}
             continue
 
         regime_dates: list[str] = []
@@ -62,10 +62,13 @@ def run(
 
         v = wire_verdict(
             line_id=f"{STRATEGY_NAME}_regime:{tag}",
-            returns=rets, edge_type="event",
-            frozen_commit=frozen_commit, dates=regime_dates,
+            returns=rets,
+            edge_type="event",
+            frozen_commit=frozen_commit,
+            dates=regime_dates,
             n_comparisons=N_COMPARISONS_PER_FAMILY,
-            round_trip_cost=round_trip_cost, script=SCRIPT_PATH,
+            round_trip_cost=round_trip_cost,
+            script=SCRIPT_PATH,
             params={"regime": tag, "strategy": STRATEGY_NAME},
         )
         results[tag] = {**stats, "verdict_status": v.status, "verdict_note": v.note}

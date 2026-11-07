@@ -7,6 +7,7 @@ S102：运行时拼接「历史战绩」段（win_rate/avg_return/sample_size + 
 战绩从 run_strategy_backtest（12h 缓存）取；缓存未命中时异步触发预计算不阻塞返回
 （卡片查询是高频热路径，不能等 ~2min 满回测）。战绩差（win<50% 且 n>=30）标红警告。
 """
+
 from __future__ import annotations
 
 import threading
@@ -57,18 +58,12 @@ def _build_backtest_section(code: str) -> str:
     if not cached:
         # 缓存未命中：异步触发预计算（节流），本次返"待算"不阻塞
         _trigger_backtest_async(code)
-        return (
-            "\n## 历史战绩\n"
-            "战绩计算中（首次查询触发，约 2min，12h 缓存后秒回）。\n"
-        )
+        return "\n## 历史战绩\n战绩计算中（首次查询触发，约 2min，12h 缓存后秒回）。\n"
 
     results = _CACHE.get(cache_key, [])
     result = next((r for r in results if r.strategy_code == code), None)
     if result is None or result.sample_size == 0:
-        return (
-            "\n## 历史战绩\n"
-            "无样本（该战法在回测窗口内未命中）。\n"
-        )
+        return "\n## 历史战绩\n无样本（该战法在回测窗口内未命中）。\n"
 
     n = result.sample_size
     win = result.win_rate
@@ -110,6 +105,7 @@ def _trigger_backtest_async(code: str) -> None:
     def _run() -> None:
         try:
             from strategies.strategy_backtest import run_strategy_backtest
+
             run_strategy_backtest(60)  # 填 12h 缓存
         except Exception:  # noqa: BLE001 — 异步预计算失败静默
             pass
@@ -148,4 +144,3 @@ def _insert_before_section(card: str, section_name: str, insert_text: str) -> st
     if idx == -1:
         return card.rstrip() + "\n" + insert_text
     return card[:idx] + insert_text + card[idx:]
-

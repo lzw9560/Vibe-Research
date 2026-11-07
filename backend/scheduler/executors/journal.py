@@ -14,6 +14,7 @@ call-point wiring 点火（S175 P0 最关键）。
 依赖：kline_refresh 16:30 已刷 baostock_kline_cache.json（A股 bars）；
 ETF bars 走 fetch_etf_hist（akshare push2delay，非 cache）。
 """
+
 from __future__ import annotations
 
 import logging
@@ -49,6 +50,7 @@ def trade_journal_daily(payload: Dict[str, Any]) -> Dict[str, Any]:
     # drawdown_breaker 接生产路径（从 API 层移 executor，overlay stub deferred）。
     # PaperPortfolio() 默认 DB = recorder 同一 trade_journal.db（resolve_data_dir）。
     from engine.paper_portfolio import PaperPortfolio  # noqa: PLC0415
+
     pp = PaperPortfolio()
     equity = pp.equity()
     drawdown_status = pp.drawdown_status()
@@ -58,10 +60,12 @@ def trade_journal_daily(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         import sys  # noqa: PLC0415
         from pathlib import Path  # noqa: PLC0415
+
         tp = str(Path(__file__).resolve().parents[2] / "tools")  # backend/tools
         if tp not in sys.path:
             sys.path.insert(0, tp)
         from combo_5d_daily_record import record_combo_5d  # noqa: E402
+
         combo_recorded = record_combo_5d()
         logger.info("[combo_5d_record] recorded=%s picks (pending, T+1 open + T+5 exit 待 settle)", combo_recorded)
     except Exception as e:  # noqa: BLE001
@@ -73,21 +77,30 @@ def trade_journal_daily(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         import sys  # noqa: PLC0415
         from pathlib import Path  # noqa: PLC0415
+
         tp = str(Path(__file__).resolve().parents[2] / "tools")  # backend/tools
         if tp not in sys.path:
             sys.path.insert(0, tp)
         from combo_5d_settle import settle_combo_5d  # noqa: E402
+
         combo_settled = settle_combo_5d()
     except Exception as e:  # noqa: BLE001
         logger.warning("[combo_5d_settle] failed: %s", repr(e)[:200])
         combo_settled = f"error: {repr(e)[:200]}"
     logger.info(
         "trade_journal_daily done: settled=%s arms=%s floor_mtm=%s equity=%s combo_5d_settled=%s",
-        settled, results, mtm, equity, combo_settled,
+        settled,
+        results,
+        mtm,
+        equity,
+        combo_settled,
     )
     return {
-        "settled_pending": settled, "arms": results, "floor_mtm": mtm,
-        "equity": equity, "drawdown_status": drawdown_status,
+        "settled_pending": settled,
+        "arms": results,
+        "floor_mtm": mtm,
+        "equity": equity,
+        "drawdown_status": drawdown_status,
         "combo_5d_settled": combo_settled,
     }
 
@@ -100,6 +113,7 @@ def loss_breaker_enforce(payload: Dict[str, Any]) -> Dict[str, Any]:
     intraday_mult 由用户 review 决定（T6 只接 gate，memory 标涉生产仓位）。
     """
     from risk_rules import loss_breaker_enforce as _enforce
+
     try:
         result = _enforce()
         return {

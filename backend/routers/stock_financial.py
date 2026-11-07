@@ -1,6 +1,7 @@
 """
 Stock financial router.
 """
+
 from fastapi import APIRouter, HTTPException, Query
 import time as _time
 from typing import Any, Callable, Dict, Tuple
@@ -33,10 +34,12 @@ def _cached(endpoint: str, code: str, ttl: int, fetch: Callable, valid: Callable
 
 # ---- Routes ----
 
+
 @router.get("/api/margin")
 def margin(code: str = Query(...)) -> Dict[str, Any]:
     """融资融券明细（东财，日级）。缓存 30 分钟。"""
     from routers.common import _validate
+
     code = _validate(code)
     try:
         return {"data": _cached("margin", code, 1800, lambda: astock.margin_trading(code))}
@@ -48,6 +51,7 @@ def margin(code: str = Query(...)) -> Dict[str, Any]:
 def block_trade(code: str = Query(...)) -> Dict[str, Any]:
     """大宗交易（东财）。缓存 30 分钟。"""
     from routers.common import _validate
+
     code = _validate(code)
     try:
         return {"data": _cached("block", code, 1800, lambda: astock.block_trade(code))}
@@ -59,6 +63,7 @@ def block_trade(code: str = Query(...)) -> Dict[str, Any]:
 def holders(code: str = Query(...)) -> Dict[str, Any]:
     """股东户数变化（东财，季度级）。缓存 30 分钟。"""
     from routers.common import _validate
+
     code = _validate(code)
     try:
         return {"data": _cached("holders", code, 1800, lambda: astock.holder_num_change(code))}
@@ -70,6 +75,7 @@ def holders(code: str = Query(...)) -> Dict[str, Any]:
 def dividend(code: str = Query(...)) -> Dict[str, Any]:
     """分红送转历史（东财）。缓存 30 分钟。"""
     from routers.common import _validate
+
     code = _validate(code)
     try:
         return {"data": _cached("dividend", code, 1800, lambda: astock.dividend_history(code))}
@@ -82,6 +88,7 @@ def fund_flow(code: str = Query(...)) -> Dict[str, Any]:
     """个股资金流（东财 push2his，120 日主力净流入）。缓存 15 分钟。
     注：push2his 对部分大陆住宅 IP 有间歇风控，可能返回空（非代码问题）。"""
     from routers.common import _validate
+
     code = _validate(code)
     try:
         return {"data": _cached("fundflow", code, 900, lambda: astock.stock_fund_flow_120d(code))}
@@ -93,10 +100,18 @@ def fund_flow(code: str = Query(...)) -> Dict[str, Any]:
 def dragon_tiger(code: str = Query(...)) -> Dict[str, Any]:
     """龙虎榜：该股近期上榜记录 + 买卖席位 + 机构净买（东财）。缓存 30 分钟。"""
     from routers.common import _validate
+
     code = _validate(code)
     try:
-        return {"data": _cached("dt", code, 1800, lambda: astock.dragon_tiger_board(code),
-                                valid=lambda v: bool(v.get("records")) if isinstance(v, dict) else bool(v))}
+        return {
+            "data": _cached(
+                "dt",
+                code,
+                1800,
+                lambda: astock.dragon_tiger_board(code),
+                valid=lambda v: bool(v.get("records")) if isinstance(v, dict) else bool(v),
+            )
+        }
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"龙虎榜异常：{e}") from e
 
@@ -105,10 +120,18 @@ def dragon_tiger(code: str = Query(...)) -> Dict[str, Any]:
 def lockup(code: str = Query(...)) -> Dict[str, Any]:
     """限售解禁日历：历史解禁 + 未来 90 天待解禁（东财）。缓存 30 分钟。"""
     from routers.common import _validate
+
     code = _validate(code)
     try:
-        return {"data": _cached("lockup", code, 1800, lambda: astock.lockup_expiry(code),
-                                valid=lambda v: bool(v.get("history") or v.get("upcoming")) if isinstance(v, dict) else bool(v))}
+        return {
+            "data": _cached(
+                "lockup",
+                code,
+                1800,
+                lambda: astock.lockup_expiry(code),
+                valid=lambda v: bool(v.get("history") or v.get("upcoming")) if isinstance(v, dict) else bool(v),
+            )
+        }
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"解禁日历异常：{e}") from e
 
@@ -117,10 +140,18 @@ def lockup(code: str = Query(...)) -> Dict[str, Any]:
 def blocks(code: str = Query(...)) -> Dict[str, Any]:
     """个股所属板块/概念归属（东财 slist）。缓存 30 分钟。"""
     from routers.common import _validate
+
     code = _validate(code)
     try:
-        return {"data": _cached("blocks", code, 1800, lambda: astock.concept_blocks(code, raise_on_failure=True),
-                                valid=lambda v: bool(v.get("boards")) if isinstance(v, dict) else bool(v))}
+        return {
+            "data": _cached(
+                "blocks",
+                code,
+                1800,
+                lambda: astock.concept_blocks(code, raise_on_failure=True),
+                valid=lambda v: bool(v.get("boards")) if isinstance(v, dict) else bool(v),
+            )
+        }
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"板块归属异常：{e}") from e
 
@@ -129,6 +160,7 @@ def blocks(code: str = Query(...)) -> Dict[str, Any]:
 def hot_concepts(code: str = Query(...)) -> Dict[str, Any]:
     """个股当下被市场归到哪些概念在炒（东财热门概念命中）。缓存 15 分钟。"""
     from routers.common import _validate
+
     code = _validate(code)
     try:
         return {"data": _cached("hotcon", code, 900, lambda: astock.hot_concepts(code))}
@@ -140,6 +172,7 @@ def hot_concepts(code: str = Query(...)) -> Dict[str, Any]:
 def investor_qa(code: str = Query(...)) -> Dict[str, Any]:
     """互动易问答（巨潮）：投资者提问 + 公司回复。缓存 15 分钟。"""
     from routers.common import _validate
+
     code = _validate(code)
     try:
         return {"data": _cached("irm", code, 900, lambda: astock.investor_qa(code))}

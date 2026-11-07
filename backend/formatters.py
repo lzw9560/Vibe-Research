@@ -61,24 +61,24 @@ def slice_at_max_bytes(content: str, max_bytes: int = MIN_MAX_BYTES) -> str:
 
 def markdown_to_plain_text(markdown: str) -> str:
     """简单 Markdown 转纯文本。"""
-    text = re.sub(r'#{1,6}\s+', '', markdown)
-    text = re.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', text)
-    text = re.sub(r'`{1,3}[^`]*`{1,3}', '', text)
-    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
-    text = re.sub(r'!\[([^\]]*)\]\([^)]+\)', '', text)
-    text = re.sub(r'[-*_]{3,}', '', text)
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = re.sub(r"#{1,6}\s+", "", markdown)
+    text = re.sub(r"\*{1,2}([^*]+)\*{1,2}", r"\1", text)
+    text = re.sub(r"`{1,3}[^`]*`{1,3}", "", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", "", text)
+    text = re.sub(r"[-*_]{3,}", "", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
 
 def markdown_to_html_document(markdown: str) -> str:
     """简单 Markdown 转 HTML。"""
     html = markdown
-    html = re.sub(r'#{1,6}\s+(.*)', r'<h>\1</h>', html)
-    html = re.sub(r'\*{1,2}([^*]+)\*{1,2}', r'<b>\1</b>', html)
-    html = re.sub(r'`{1,3}([^`]*)`{1,3}', r'<code>\1</code>', html)
-    html = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'<a href="\2">\1</a>', html)
-    html = html.replace('\n', '<br/>')
+    html = re.sub(r"#{1,6}\s+(.*)", r"<h>\1</h>", html)
+    html = re.sub(r"\*{1,2}([^*]+)\*{1,2}", r"<b>\1</b>", html)
+    html = re.sub(r"`{1,3}([^`]*)`{1,3}", r"<code>\1</code>", html)
+    html = re.sub(r"\[([^\]]+)\]\([^)]+\)", r'<a href="\2">\1</a>', html)
+    html = html.replace("\n", "<br/>")
     return f"<html><body>{html}</body></html>"
 
 

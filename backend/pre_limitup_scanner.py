@@ -10,6 +10,7 @@
 真 edge 问题在 T10 executor entry/exit 规则（止盈止损从波动股提 trade edge），并行设计。
 zero em_get（zt_history.db + gene_scores.db 离线）。pit guard T-1 only。
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -66,6 +67,7 @@ def _sector_zt_count(date: str, industry: str) -> int:
         return 0
     try:
         from strategies.sector_cycle import _get_zt_count_by_date_industry
+
         return _get_zt_count_by_date_industry(date, industry)
     except Exception:  # noqa: BLE001 — sector_cycle 失败降级 0（不臆造）
         return 0
@@ -86,6 +88,7 @@ def scan_pre_limitup(run_date: str, previous_trade_day: str | None = None) -> li
         # T-1 = 前一交易日（非日历日 -1，跨周末/节假日取非交易日→0 picks）
         try:
             from vr_paths import prev_trading_date_str  # lazy import 避循环
+
             previous_trade_day = prev_trading_date_str(datetime.strptime(run_date, "%Y-%m-%d").date())
         except Exception:
             previous_trade_day = run_date
@@ -93,13 +96,15 @@ def scan_pre_limitup(run_date: str, previous_trade_day: str | None = None) -> li
     candidates: list[dict[str, Any]] = []
     for fb in _zt_history_lbc1(previous_trade_day):
         zt_count = _sector_zt_count(previous_trade_day, fb["hybk"])
-        candidates.append({
-            "code": fb["code"],
-            "sector_rank": None,  # MVP（gene_scores 无 sector_rank 列；early_admission 只快照不判定）
-            "zt_count_today": zt_count,
-            "lbc": 1,
-            "high_gene": 0,  # DROPPED（死阈值 + 证否 0.942x，不扫 cutoff 反 data dredging）
-        })
+        candidates.append(
+            {
+                "code": fb["code"],
+                "sector_rank": None,  # MVP（gene_scores 无 sector_rank 列；early_admission 只快照不判定）
+                "zt_count_today": zt_count,
+                "lbc": 1,
+                "high_gene": 0,  # DROPPED（死阈值 + 证否 0.942x，不扫 cutoff 反 data dredging）
+            }
+        )
     return candidates
 
 

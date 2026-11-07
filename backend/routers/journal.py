@@ -10,6 +10,7 @@ chat/ai.tools；journal/at_risk/risk_rules/excursion/attribution/inbox 均为个
 
 S166 fresh-impl（design-agnostic）。路由结构参考自 cb54a96 历史，非整文件复活。
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict
@@ -40,6 +41,7 @@ async def journal_closed_loop(limit: int = Query(500, ge=1, le=5000)) -> Dict[st
     S173 闭环账本（模拟/纸面臂胜率闭环），与 journal/list（手动真实成交）分离。
     后端未就绪 → 各 section 如实呈现空/available:False（不臆造 mock 交易）。
     """
+
     def _build() -> dict:
         tj = TradeJournal()
         records = tj.query_records(is_dead_arm=None, limit=limit)
@@ -48,13 +50,18 @@ async def journal_closed_loop(limit: int = Query(500, ge=1, le=5000)) -> Dict[st
             "available": True,
             "records": [
                 {
-                    "signal_id": r.signal_id, "arm": r.arm,
+                    "signal_id": r.signal_id,
+                    "arm": r.arm,
                     "stock_code": r.stock_code,
-                    "entry_price": r.entry_price, "entry_date": r.entry_date,
-                    "exit_price": r.exit_price, "exit_date": r.exit_date,
+                    "entry_price": r.entry_price,
+                    "entry_date": r.entry_date,
+                    "exit_price": r.exit_price,
+                    "exit_date": r.exit_date,
                     "exit_reason": r.exit_reason,
-                    "net_pnl": r.net_pnl, "pnl_unit": r.pnl_unit,
-                    "cost_pct": r.cost_pct, "gross_return": r.gross_return,
+                    "net_pnl": r.net_pnl,
+                    "pnl_unit": r.pnl_unit,
+                    "cost_pct": r.cost_pct,
+                    "gross_return": r.gross_return,
                     "is_realized": r.is_realized,
                     "unrealized_pnl": r.unrealized_pnl,
                     "is_dead_arm": r.is_dead_arm,
@@ -63,6 +70,7 @@ async def journal_closed_loop(limit: int = Query(500, ge=1, le=5000)) -> Dict[st
             ],
             "aggregate": aggregate,
         }
+
     return await asyncio.to_thread(_build)
 
 
@@ -74,19 +82,23 @@ async def journal_winrate_trends(arm: str | None = Query(None)) -> Dict[str, Any
     空表返 {available:True, trends:[]}，前端显空态占位（需 ≥30 真实成交才有统计意义）。
     不接入 AI prompt（守个人数据隔离，同 closed-loop）。
     """
+
     def _build() -> dict:
         tj = TradeJournal()
         trends = tj.query_winrate_trends(arm=arm)
         return {"available": True, "trends": trends}
+
     return await asyncio.to_thread(_build)
 
 
 @router.get("/api/journal/drawdown-status")
 async def journal_drawdown_status() -> Dict[str, Any]:
     """drawdown 熔断状态：per-arm + portfolio equity/回撤/size_multiplier。"""
+
     def _build() -> dict:
         breaker = DrawdownBreaker()
         return breaker.full_status()
+
     return await asyncio.to_thread(_build)
 
 
@@ -124,9 +136,18 @@ async def journal_add(body: AddTradeBody) -> Dict[str, Any]:
     """记一笔交易（自动钉上当时市场环境快照）。"""
     try:
         return await asyncio.to_thread(
-            journal.add_trade, body.date, body.code, body.name, body.playbook,
-            body.pnl_pct, body.as_planned, body.note, body.fills,
-            body.planned_stop, body.planned_target)
+            journal.add_trade,
+            body.date,
+            body.code,
+            body.name,
+            body.playbook,
+            body.pnl_pct,
+            body.as_planned,
+            body.note,
+            body.fills,
+            body.planned_stop,
+            body.planned_target,
+        )
     except ValueError as e:
         raise HTTPException(400, f"参数错误：{e}") from e
     except RuntimeError as e:
@@ -153,14 +174,17 @@ async def journal_update(
     planned_target 无法经 API 清空。
     """
     body = body or UpdateTradeBody()
-    fs = body.model_fields_set          # Pydantic v2：显式提供的字段集
+    fs = body.model_fields_set  # Pydantic v2：显式提供的字段集
     unset = journal._UNSET
+
     # 显式提供（含 null=清空）→ 传值；未传 → _UNSET（保持原值）
     def _opt(field: str, default):
         return getattr(body, field) if field in fs else default
+
     try:
         return await asyncio.to_thread(
-            journal.update_trade, trade_id,
+            journal.update_trade,
+            trade_id,
             fills=_opt("fills", None),
             note=_opt("note", None),
             as_planned=_opt("as_planned", unset),

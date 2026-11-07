@@ -19,6 +19,7 @@ combo 是小盘动量 edge，regime-dependent：小盘熊段赔（10-21 批 -3% 
   cd backend && .venv/bin/python tools/ashare_regime_monitor.py          # 打印当前 regime
   cd backend && .venv/bin/python tools/ashare_regime_monitor.py --log    # 打印 + 写 regime_gate_combo_log 表
 """
+
 from __future__ import annotations
 
 import argparse
@@ -70,9 +71,9 @@ def main(args) -> None:
 
     above60 = 0
     total = 0
-    small_5d = []   # decile0-1 (最小 20%)
+    small_5d = []  # decile0-1 (最小 20%)
     small_20d = []
-    large_5d = []   # decile8-9 (最大 20%)
+    large_5d = []  # decile8-9 (最大 20%)
     caps = []
     for code, bars in parsed:
         idx = None
@@ -108,23 +109,25 @@ def main(args) -> None:
     caps.sort()
     n = len(caps)
     small = caps[: n // 5]  # decile0-1
-    large = caps[4 * n // 5:]  # decile8-9
+    large = caps[4 * n // 5 :]  # decile8-9
     sm5 = statistics.mean(r for _, r, _ in small) if small else 0
     sm20 = statistics.mean(r20 for _, _, r20 in small) if small else 0
     lg5 = statistics.mean(r for _, r, _ in large) if large else 0
     spread = sm5 - lg5
 
     print(f"=== A股 regime 监控（as of {modal}）===")
-    print(f"breadth (>60MA): {breadth*100:.1f}%  {'弱(<30)' if breadth < 0.3 else '中(30-50)' if breadth < 0.5 else '强(>50)'}")
-    print(f"小盘 decile0-1 5d: {sm5*100:+.2f}%  20d: {sm20*100:+.2f}%  {'熊(负)' if sm5 < 0 else '牛(正)'}")
-    print(f"大盘 decile8-9 5d: {lg5*100:+.2f}%")
-    print(f"小盘-大盘 spread 5d: {spread*100:+.2f}%  {'小盘领崩' if spread < 0 else '小盘领涨'}")
+    print(
+        f"breadth (>60MA): {breadth * 100:.1f}%  {'弱(<30)' if breadth < 0.3 else '中(30-50)' if breadth < 0.5 else '强(>50)'}"
+    )
+    print(f"小盘 decile0-1 5d: {sm5 * 100:+.2f}%  20d: {sm20 * 100:+.2f}%  {'熊(负)' if sm5 < 0 else '牛(正)'}")
+    print(f"大盘 decile8-9 5d: {lg5 * 100:+.2f}%")
+    print(f"小盘-大盘 spread 5d: {spread * 100:+.2f}%  {'小盘领崩' if spread < 0 else '小盘领涨'}")
     print()
     # combo 可启门：FROZEN 阈值（breadth > BREADTH_FLOOR AND 小盘 5d > SM5_FLOOR）
     viable = breadth > BREADTH_FLOOR and sm5 > SM5_FLOOR
     not_viable_reason = ("小盘未止跌" if sm5 <= SM5_FLOOR else "") + ("广度未回升" if breadth <= BREADTH_FLOOR else "")
     action = "✅ 可启" if viable else f"❌ 不可启——{not_viable_reason}"
-    print(f"combo 可启门（breadth>{BREADTH_FLOOR*100:.0f}% AND 小盘5d>{SM5_FLOOR*100:.0f}%）: {action}")
+    print(f"combo 可启门（breadth>{BREADTH_FLOOR * 100:.0f}% AND 小盘5d>{SM5_FLOOR * 100:.0f}%）: {action}")
     if not viable:
         print("  → combo 暂停（regime 不匹配小盘动量），等小盘止跌+breadth 回升再启")
 
@@ -150,8 +153,7 @@ def _log_gate(date, breadth, sm5, sm20, lg5, spread, viable, action) -> None:
             "INSERT OR REPLACE INTO regime_gate_combo_log "
             "(date, breadth, sm5, sm20, lg5, spread, viable, combo_action, logged_at) "
             "VALUES (?,?,?,?,?,?,?,?,?)",
-            (date, breadth, sm5, sm20, lg5, spread, 1 if viable else 0, action,
-             datetime.datetime.now().isoformat()),
+            (date, breadth, sm5, sm20, lg5, spread, 1 if viable else 0, action, datetime.datetime.now().isoformat()),
         )
         conn.commit()
         print(f"[log] regime_gate_combo_log 写入 date={date} viable={1 if viable else 0}")

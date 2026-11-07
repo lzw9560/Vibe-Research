@@ -18,6 +18,7 @@ adjustment factor applies to ALL bars equally (pre and post ex). So the
 return from T open to T+k close is adjustment-invariant (the script's
 own comment confirms this: "前复权对除权日后的收益无影响").
 """
+
 import json
 import sqlite3
 import statistics
@@ -152,22 +153,24 @@ def build_dividend_picks(events, code_map, calendar, index_map):
         if i_t_open <= 0 or i_t_close <= 0 or i_t1_open <= 0:
             continue
 
-        picks.append({
-            "code": code,
-            "ex_date": ex_date,
-            "t_open": t_open,
-            "t_close": t_close,
-            "t1_open": t1_open,
-            "t1_close": t1_close,
-            "t3_close": t3_close,
-            "t5_close": t5_close,
-            "i_t_open": i_t_open,
-            "i_t_close": i_t_close,
-            "i_t1_open": i_t1_open,
-            "i_t1_close": i_t1_close,
-            "i_t3_close": i_t3_close,
-            "i_t5_close": i_t5_close,
-        })
+        picks.append(
+            {
+                "code": code,
+                "ex_date": ex_date,
+                "t_open": t_open,
+                "t_close": t_close,
+                "t1_open": t1_open,
+                "t1_close": t1_close,
+                "t3_close": t3_close,
+                "t5_close": t5_close,
+                "i_t_open": i_t_open,
+                "i_t_close": i_t_close,
+                "i_t1_open": i_t1_open,
+                "i_t1_close": i_t1_close,
+                "i_t3_close": i_t3_close,
+                "i_t5_close": i_t5_close,
+            }
+        )
     return picks
 
 
@@ -180,8 +183,7 @@ def ev_stats(rets):
     se = std / sqrt(n) if n > 0 else 0.0
     t = mean / se if se > 0 else 0.0
     wr = sum(1 for x in rets if x > 0) / n
-    return {"n": n, "ev": round(mean, 4), "std": round(std, 4),
-            "t": round(t, 2), "wr": round(wr * 100, 1)}
+    return {"n": n, "ev": round(mean, 4), "std": round(std, 4), "t": round(t, 2), "wr": round(wr * 100, 1)}
 
 
 def norm_sf_positive(t):
@@ -201,8 +203,7 @@ def day_paired_t(rets_by_date):
     se = std / sqrt(n) if n > 0 else 0.0
     t = mean / se if se > 0 else 0.0
     p = norm_sf_positive(t)
-    return {"n_days": n, "mean": round(mean, 4), "t": round(t, 2),
-            "p": round(p, 8)}
+    return {"n_days": n, "mean": round(mean, 4), "t": round(t, 2), "p": round(p, 8)}
 
 
 def bonferroni_p(p_raw, n_tests):
@@ -246,14 +247,11 @@ def analyze_entry(picks, label, entry_fn, exit_fn, bhar_fn):
     p_bonf = bonferroni_p(bhar_dt["p"], 8)  # ×4 strategies × 2 windows
 
     print(f"\n  {label}:")
-    print(f"    raw EV:  gross={raw_s['ev']:+.4f}% net={raw_net:+.4f}% "
-          f"WR={raw_s['wr']}% t={raw_s['t']} n={raw_s['n']}")
+    print(f"    raw EV:  gross={raw_s['ev']:+.4f}% net={raw_net:+.4f}% WR={raw_s['wr']}% t={raw_s['t']} n={raw_s['n']}")
     print(f"    raw day-t: n_days={raw_dt['n_days']} t={raw_dt['t']} p={raw_dt['p']}")
-    print(f"    BHAR:    gross={bhar_s['ev']:+.4f}% net={bhar_net:+.4f}% "
-          f"WR={bhar_s['wr']}% t={bhar_s['t']}")
-    print(f"    BHAR day-t: n_days={bhar_dt['n_days']} t={bhar_dt['t']} "
-          f"p={bhar_dt['p']} Bonf×8={p_bonf:.6f}")
-    print(f"    beta_leak = raw-BHAR = {raw_s['ev']-bhar_s['ev']:+.4f}%")
+    print(f"    BHAR:    gross={bhar_s['ev']:+.4f}% net={bhar_net:+.4f}% WR={bhar_s['wr']}% t={bhar_s['t']}")
+    print(f"    BHAR day-t: n_days={bhar_dt['n_days']} t={bhar_dt['t']} p={bhar_dt['p']} Bonf×8={p_bonf:.6f}")
+    print(f"    beta_leak = raw-BHAR = {raw_s['ev'] - bhar_s['ev']:+.4f}%")
 
     if bhar_s["ev"] < 0:
         v = "FALSIFIED (BHAR<0)"
@@ -266,10 +264,18 @@ def analyze_entry(picks, label, entry_fn, exit_fn, bhar_fn):
     else:
         v = "survives"
     print(f"    verdict: {v}")
-    return {"label": label, "raw_ev": raw_s["ev"], "bhar_ev": bhar_s["ev"],
-            "bhar_net": bhar_net, "bhar_t": bhar_dt["t"], "bhar_p": bhar_dt["p"],
-            "p_bonf": p_bonf, "verdict": v, "n": raw_s["n"],
-            "n_days": bhar_dt["n_days"]}
+    return {
+        "label": label,
+        "raw_ev": raw_s["ev"],
+        "bhar_ev": bhar_s["ev"],
+        "bhar_net": bhar_net,
+        "bhar_t": bhar_dt["t"],
+        "bhar_p": bhar_dt["p"],
+        "p_bonf": p_bonf,
+        "verdict": v,
+        "n": raw_s["n"],
+        "n_days": bhar_dt["n_days"],
+    }
 
 
 def main():
@@ -289,8 +295,7 @@ def main():
     picks = build_dividend_picks(events, code_map, calendar, index_map)
     n_dates = len(set(p["ex_date"] for p in picks))
     ex_dates = sorted(set(p["ex_date"] for p in picks))
-    print(f"[build] dividend picks: {len(picks)} across {n_dates} days "
-          f"({ex_dates[0]} ~ {ex_dates[-1]})")
+    print(f"[build] dividend picks: {len(picks)} across {n_dates} days ({ex_dates[0]} ~ {ex_dates[-1]})")
 
     if not picks:
         print("[ERROR] no picks")
@@ -301,68 +306,74 @@ def main():
     # --- Entry A: T open → T+3 close (ex-date open, 3-day hold) ---
     print("\n--- Entry A: T open → T+3 close (ex-date open, captures full 填权) ---")
     r = analyze_entry(
-        picks, "T_open→T3_close",
+        picks,
+        "T_open→T3_close",
         entry_fn=lambda p: p["t_open"],
         exit_fn=lambda p: p["t3_close"],
-        bhar_fn=lambda p, e, x: ((x - e) / e * 100) -
-            ((p["i_t3_close"] - p["i_t_open"]) / p["i_t_open"] * 100)
+        bhar_fn=lambda p, e, x: ((x - e) / e * 100) - ((p["i_t3_close"] - p["i_t_open"]) / p["i_t_open"] * 100),
     )
-    if r: results.append(r)
+    if r:
+        results.append(r)
 
     # --- Entry A5: T open → T+5 close (ex-date open, 5-day hold) ---
     print("\n--- Entry A5: T open → T+5 close (ex-date open, 5-day hold) ---")
     r = analyze_entry(
-        picks, "T_open→T5_close",
+        picks,
+        "T_open→T5_close",
         entry_fn=lambda p: p["t_open"],
         exit_fn=lambda p: p["t5_close"],
-        bhar_fn=lambda p, e, x: ((x - e) / e * 100) -
-            ((p["i_t5_close"] - p["i_t_open"]) / p["i_t_open"] * 100)
+        bhar_fn=lambda p, e, x: ((x - e) / e * 100) - ((p["i_t5_close"] - p["i_t_open"]) / p["i_t_open"] * 100),
     )
-    if r: results.append(r)
+    if r:
+        results.append(r)
 
     # --- Entry B: T close → T+3 close (ex-date close, 3-day hold) ---
     print("\n--- Entry B: T close → T+3 close (ex-date close) ---")
     r = analyze_entry(
-        picks, "T_close→T3_close",
+        picks,
+        "T_close→T3_close",
         entry_fn=lambda p: p["t_close"],
         exit_fn=lambda p: p["t3_close"],
-        bhar_fn=lambda p, e, x: ((x - e) / e * 100) -
-            ((p["i_t3_close"] - p["i_t_close"]) / p["i_t_close"] * 100)
+        bhar_fn=lambda p, e, x: ((x - e) / e * 100) - ((p["i_t3_close"] - p["i_t_close"]) / p["i_t_close"] * 100),
     )
-    if r: results.append(r)
+    if r:
+        results.append(r)
 
     # --- Entry C: T+1 open → T+3 close (ORIGINAL script entry) ---
     print("\n--- Entry C: T+1 open → T+3 close (ORIGINAL script entry) ---")
     r = analyze_entry(
-        picks, "T1_open→T3_close",
+        picks,
+        "T1_open→T3_close",
         entry_fn=lambda p: p["t1_open"],
         exit_fn=lambda p: p["t3_close"],
-        bhar_fn=lambda p, e, x: ((x - e) / e * 100) -
-            ((p["i_t3_close"] - p["i_t1_open"]) / p["i_t1_open"] * 100)
+        bhar_fn=lambda p, e, x: ((x - e) / e * 100) - ((p["i_t3_close"] - p["i_t1_open"]) / p["i_t1_open"] * 100),
     )
-    if r: results.append(r)
+    if r:
+        results.append(r)
 
     # --- Entry C5: T+1 open → T+5 close (ORIGINAL, 4-day hold) ---
     print("\n--- Entry C5: T+1 open → T+5 close (ORIGINAL, 4-day hold) ---")
     r = analyze_entry(
-        picks, "T1_open→T5_close",
+        picks,
+        "T1_open→T5_close",
         entry_fn=lambda p: p["t1_open"],
         exit_fn=lambda p: p["t5_close"],
-        bhar_fn=lambda p, e, x: ((x - e) / e * 100) -
-            ((p["i_t5_close"] - p["i_t1_open"]) / p["i_t1_open"] * 100)
+        bhar_fn=lambda p, e, x: ((x - e) / e * 100) - ((p["i_t5_close"] - p["i_t1_open"]) / p["i_t1_open"] * 100),
     )
-    if r: results.append(r)
+    if r:
+        results.append(r)
 
     # --- Entry D: T+1 close → T+3 close (alternative) ---
     print("\n--- Entry D: T+1 close → T+3 close (alternative) ---")
     r = analyze_entry(
-        picks, "T1_close→T3_close",
+        picks,
+        "T1_close→T3_close",
         entry_fn=lambda p: p["t1_close"],
         exit_fn=lambda p: p["t3_close"],
-        bhar_fn=lambda p, e, x: ((x - e) / e * 100) -
-            ((p["i_t3_close"] - p["i_t1_close"]) / p["i_t1_close"] * 100)
+        bhar_fn=lambda p, e, x: ((x - e) / e * 100) - ((p["i_t3_close"] - p["i_t1_close"]) / p["i_t1_close"] * 100),
     )
-    if r: results.append(r)
+    if r:
+        results.append(r)
 
     # ================================================================
     # SUMMARY
@@ -370,11 +381,12 @@ def main():
     print("\n" + "=" * 78)
     print("SUMMARY: entry timing comparison (BHAR net%)")
     print("=" * 78)
-    print(f"{'entry→exit':<24} {'BHAR_gross':>10} {'BHAR_net':>9} "
-          f"{'day_t':>7} {'p_bonf':>9} {'verdict'}")
+    print(f"{'entry→exit':<24} {'BHAR_gross':>10} {'BHAR_net':>9} {'day_t':>7} {'p_bonf':>9} {'verdict'}")
     for r in results:
-        print(f"{r['label']:<24} {r['bhar_ev']:>+10.4f} {r['bhar_net']:>+9.4f} "
-              f"{r['bhar_t']:>7} {r['p_bonf']:>9.6f} {r['verdict']}")
+        print(
+            f"{r['label']:<24} {r['bhar_ev']:>+10.4f} {r['bhar_net']:>+9.4f} "
+            f"{r['bhar_t']:>7} {r['p_bonf']:>9.6f} {r['verdict']}"
+        )
 
     # ================================================================
     # DIAGNOSTIC: overnight gaps
@@ -386,22 +398,19 @@ def main():
     # T open → T close (ex-date intraday)
     intraday = [(p["t_close"] - p["t_open"]) / p["t_open"] * 100 for p in picks]
     print(f"\n  ex-date intraday (T open → T close):")
-    print(f"    mean={statistics.mean(intraday):+.4f}% "
-          f"median={statistics.median(intraday):+.4f}%")
+    print(f"    mean={statistics.mean(intraday):+.4f}% median={statistics.median(intraday):+.4f}%")
 
     # T close → T+1 open (overnight after ex-date)
     overnight = [(p["t1_open"] - p["t_close"]) / p["t_close"] * 100 for p in picks]
     print(f"\n  overnight (T close → T+1 open):")
-    print(f"    mean={statistics.mean(overnight):+.4f}% "
-          f"median={statistics.median(overnight):+.4f}%")
+    print(f"    mean={statistics.mean(overnight):+.4f}% median={statistics.median(overnight):+.4f}%")
     gap_up = sum(1 for g in overnight if g > 0)
-    print(f"    gap_up: {gap_up}/{len(overnight)} ({gap_up/len(overnight)*100:.1f}%)")
+    print(f"    gap_up: {gap_up}/{len(overnight)} ({gap_up / len(overnight) * 100:.1f}%)")
 
     # T open → T+1 open (full ex-date to next open)
     full = [(p["t1_open"] - p["t_open"]) / p["t_open"] * 100 for p in picks]
     print(f"\n  full ex-date→next open (T open → T+1 open):")
-    print(f"    mean={statistics.mean(full):+.4f}% "
-          f"median={statistics.median(full):+.4f}%")
+    print(f"    mean={statistics.mean(full):+.4f}% median={statistics.median(full):+.4f}%")
 
 
 if __name__ == "__main__":

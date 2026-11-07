@@ -25,6 +25,7 @@ kline_resolver / refresh）不依赖存储细节（SQLite/JSON/mmap 可换）。
 
 工程底线：不臆造——code 不存在/查询失败返 []，不补默认值。
 """
+
 from __future__ import annotations
 
 import json
@@ -66,12 +67,7 @@ def _get_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(str(_db_path()), check_same_thread=False, isolation_level=None)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS kline ("
-        "  code TEXT PRIMARY KEY,"
-        "  bars_json TEXT NOT NULL"
-        ") WITHOUT ROWID"
-    )
+    conn.execute("CREATE TABLE IF NOT EXISTS kline (  code TEXT PRIMARY KEY,  bars_json TEXT NOT NULL) WITHOUT ROWID")
     _conn = conn
     return conn
 

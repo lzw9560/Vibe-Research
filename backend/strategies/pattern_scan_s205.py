@@ -13,6 +13,7 @@
 data_source 声明在 s205_registry.py DIMENSION_REGISTRY（不臆造）。
 纯函数：同输入→同输出，无副作用，不写 DB/不调网络。
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -49,9 +50,7 @@ def compute_auction_signal(code: str, date: str, **kwargs: Any) -> float:
 
 
 # ── T2f: expectation_gap_reversal（预期差反包）─────────────────────
-def compute_expectation_gap_reversal(
-    code: str, date: str, bars: list[dict] | None = None, **kwargs: Any
-) -> float:
+def compute_expectation_gap_reversal(code: str, date: str, bars: list[dict] | None = None, **kwargs: Any) -> float:
     """预期差反包：T-1 close + T open 差（高开%）+ 开盘量比代理。
 
     无竞价量免费源→用 T 日 open vs T-1 close 差（高开%）+ T 日 volume vs T-1 volume 比。

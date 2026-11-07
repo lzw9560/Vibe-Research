@@ -10,6 +10,7 @@
     cd backend && .venv/bin/python -m scripts.backfill_raw_break_rate
     cd backend && .venv/bin/python -m scripts.backfill_raw_break_rate --dry-run
 """
+
 from __future__ import annotations
 
 import argparse
@@ -25,9 +26,7 @@ from market import _emotion  # noqa: E402
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="幂等回填 sti_timeline.raw_break_rate（仅写 NULL 行）"
-    )
+    parser = argparse.ArgumentParser(description="幂等回填 sti_timeline.raw_break_rate（仅写 NULL 行）")
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -43,9 +42,7 @@ def main() -> None:
 
     try:
         rows = conn.execute(
-            "SELECT date FROM sti_timeline "
-            "WHERE raw_break_rate IS NULL AND score IS NOT NULL "
-            "ORDER BY date ASC"
+            "SELECT date FROM sti_timeline WHERE raw_break_rate IS NULL AND score IS NOT NULL ORDER BY date ASC"
         ).fetchall()
     except Exception as exc:
         print(f"[FATAL] 查询 raw_break_rate 缺失行失败：{exc}")
@@ -76,6 +73,7 @@ def main() -> None:
         try:
             from vr_paths import is_trading_day as _is_trading_day
             from datetime import datetime as _dt
+
             if not _is_trading_day(_dt.strptime(d, "%Y-%m-%d").date()):
                 print(f"  {d}: skip（非交易日：周末/节假日，守卫拦截）")
                 skipped += 1
@@ -121,8 +119,7 @@ def main() -> None:
             conn = sqlite3.connect(STI_TIMELINE_DB_PATH)
             try:
                 cur = conn.execute(
-                    "UPDATE sti_timeline SET raw_break_rate=? WHERE date=? "
-                    "AND raw_break_rate IS NULL",
+                    "UPDATE sti_timeline SET raw_break_rate=? WHERE date=? AND raw_break_rate IS NULL",
                     (br_val, d),
                 )
                 conn.commit()

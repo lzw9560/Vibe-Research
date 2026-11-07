@@ -6,20 +6,21 @@ from enum import Enum
 
 class NotificationChannel(Enum):
     """通知渠道类型"""
-    WECHAT = "wechat"      # 企业微信
-    FEISHU = "feishu"      # 飞书
+
+    WECHAT = "wechat"  # 企业微信
+    FEISHU = "feishu"  # 飞书
     TELEGRAM = "telegram"  # Telegram
-    EMAIL = "email"        # 邮件
+    EMAIL = "email"  # 邮件
     PUSHOVER = "pushover"  # Pushover（手机/桌面推送）
-    NTFY = "ntfy"          # ntfy
-    GOTIFY = "gotify"      # Gotify
+    NTFY = "ntfy"  # ntfy
+    GOTIFY = "gotify"  # Gotify
     PUSHPLUS = "pushplus"  # PushPlus（国内推送服务）
     SERVERCHAN3 = "serverchan3"  # Server酱3（手机APP推送服务）
-    CUSTOM = "custom"      # 自定义 Webhook
-    DISCORD = "discord"    # Discord 机器人 (Bot)
-    SLACK = "slack"        # Slack
+    CUSTOM = "custom"  # 自定义 Webhook
+    DISCORD = "discord"  # Discord 机器人 (Bot)
+    SLACK = "slack"  # Slack
     ASTRBOT = "astrbot"
-    UNKNOWN = "unknown"    # 未知
+    UNKNOWN = "unknown"  # 未知
 
 
 class ChannelDetector:

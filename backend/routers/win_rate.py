@@ -1,6 +1,7 @@
 """
 Win rate router.
 """
+
 from __future__ import annotations
 
 import logging
@@ -14,8 +15,6 @@ from win_rate_tracker import WinRateTracker
 router = APIRouter(tags=["winrate"])
 _logger = logging.getLogger(__name__)
 _tracker = WinRateTracker()
-
-
 
 
 __all__ = ["router"]
@@ -39,9 +38,13 @@ def _shadow_comparison_impl(window_days: int, tracker: WinRateTracker) -> Dict[s
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
-    rows = [dict(r) for r in conn.execute(
-        "SELECT * FROM winrate_records WHERE entry_date >= ? ORDER BY entry_date DESC", (since,),
-    ).fetchall()]
+    rows = [
+        dict(r)
+        for r in conn.execute(
+            "SELECT * FROM winrate_records WHERE entry_date >= ? ORDER BY entry_date DESC",
+            (since,),
+        ).fetchall()
+    ]
     conn.close()
 
     # follow 桶：signal_source ∈ (funnel_candidate, strategy_hit)
@@ -163,9 +166,16 @@ def _daily_review_impl(date: str, tracker: WinRateTracker) -> Dict[str, Any]:
     # pushed：当日快照
     snap = load_snapshot(today)
     if not snap:
-        return {"date": today, "no_snapshot": True, "pushed": [], "bought": [], "missed": [],
-                "prev_day_missed": {"items": [], "summary": None},
-                "missing_kline": 0, "disclaimer": "历史统计特征，市场有风险，研究参考"}
+        return {
+            "date": today,
+            "no_snapshot": True,
+            "pushed": [],
+            "bought": [],
+            "missed": [],
+            "prev_day_missed": {"items": [], "summary": None},
+            "missing_kline": 0,
+            "disclaimer": "历史统计特征，市场有风险，研究参考",
+        }
 
     finals = snap.get("final_candidates") or []
     # 从 gene_scores.db 补 total_score（DiagnosisCard 无 gene_score 字段）
@@ -179,12 +189,14 @@ def _daily_review_impl(date: str, tracker: WinRateTracker) -> Dict[str, Any]:
         if not isinstance(fc, dict) or not fc.get("code"):
             continue
         code = fc["code"]
-        pushed.append({
-            "code": code,
-            "name": fc.get("name") or "",
-            "gene_score": gene_map.get(code) if code in gene_map else fc.get("gene_score"),
-            "strategies": [],  # 战法匹配在回测引擎，非单股持久化字段；诚实留空
-        })
+        pushed.append(
+            {
+                "code": code,
+                "name": fc.get("name") or "",
+                "gene_score": gene_map.get(code) if code in gene_map else fc.get("gene_score"),
+                "strategies": [],  # 战法匹配在回测引擎，非单股持久化字段；诚实留空
+            }
+        )
     pushed_codes = {p["code"] for p in pushed}
 
     # bought：当日 holding 记录（entry 约等于 trade_date）
@@ -198,7 +210,8 @@ def _daily_review_impl(date: str, tracker: WinRateTracker) -> Dict[str, Any]:
             "status": s["status"],
             "placeholder": "待判定",
         }
-        for s in states if s.get("status") == "holding"
+        for s in states
+        if s.get("status") == "holding"
     ]
     bought_codes = {b["code"] for b in bought}
 
@@ -207,6 +220,7 @@ def _daily_review_impl(date: str, tracker: WinRateTracker) -> Dict[str, Any]:
 
     # prev_day_missed：上一交易日的 missed，次日收益
     from datetime import datetime as _dt, timedelta as _td
+
     try:
         prev_td = _dt.strptime(today, "%Y-%m-%d").date()
         prev_td = _dt.strptime(last_trading_date_str(prev_td - _td(days=1)), "%Y-%m-%d").date()
@@ -263,6 +277,7 @@ async def daily_review(date: Optional[str] = Query(None, description="YYYY-MM-DD
     无快照诚实返回 no_snapshot=true；零外部调用。
     """
     from vr_paths import last_trading_date_str  # noqa: PLC0415
+
     # 非交易日（周末/节假日）回退到最近交易日——周六默认显示周五数据（语义正确）。
     target = date or last_trading_date_str()
     try:

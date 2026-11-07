@@ -7,6 +7,7 @@ Idempotent：signal_id = combo_5d_{signal_date}_{code}，INSERT OR REPLACE 覆�
 
 用法：cd backend && .venv/bin/python tools/combo_5d_daily_record.py [--date YYYY-MM-DD]
 """
+
 from __future__ import annotations
 import sys
 from pathlib import Path

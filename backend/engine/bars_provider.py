@@ -19,6 +19,7 @@ journal_recorder 注入此 provider 替代默认 `lambda _code: []`（BREAK-2 �
 **重算范式（S088）**：模块级 _cache 懒加载，`reload()` 清 cache 供 kline_refresh
 后重读。不读结果 cache（_CACHE 是 raw bars 缓存非聚合结果）。
 """
+
 from __future__ import annotations
 
 import logging
@@ -71,9 +72,12 @@ def _baostock_etf_hist(code: str) -> list[dict]:
         bs.login()
         end = datetime.now().strftime("%Y-%m-%d")
         rs = bs.query_history_k_data_plus(
-            bs_code, "date,open,high,low,close",
-            start_date="2020-01-01", end_date=end,
-            frequency="d", adjustflag="2",  # 2=qfq 前复权
+            bs_code,
+            "date,open,high,low,close",
+            start_date="2020-01-01",
+            end_date=end,
+            frequency="d",
+            adjustflag="2",  # 2=qfq 前复权
         )
         if rs.error_code != "0":
             _logger.warning("bars_provider: baostock ETF %s query 失败: %s", code, rs.error_msg)
@@ -82,11 +86,15 @@ def _baostock_etf_hist(code: str) -> list[dict]:
         while (rs.error_code == "0") and rs.next():
             d = rs.get_row_data()
             try:
-                rows.append({
-                    "date": str(d[0]),
-                    "open": float(d[1]), "high": float(d[2]),
-                    "low": float(d[3]), "close": float(d[4]),
-                })
+                rows.append(
+                    {
+                        "date": str(d[0]),
+                        "open": float(d[1]),
+                        "high": float(d[2]),
+                        "low": float(d[3]),
+                        "close": float(d[4]),
+                    }
+                )
             except (TypeError, ValueError, IndexError):
                 continue
         return rows
@@ -174,6 +182,7 @@ class KlineCacheBarsProvider:
         raw: list[dict] = []
         try:
             from tools.fetch_etf_tracking import fetch_etf_hist  # noqa: PLC0415
+
             raw = fetch_etf_hist(code)
         except ImportError:
             _logger.warning("bars_provider: fetch_etf_hist 不可用，ETF %s 走 baostock fallback", code)

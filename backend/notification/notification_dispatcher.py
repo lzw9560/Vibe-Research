@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """通知分发 Mixin"""
+
 from __future__ import annotations
 import json
 
@@ -68,28 +69,24 @@ class NotificationDispatcherMixin:
     @staticmethod
     def _resolve_ntfy(config: Any) -> bool:
         from notification.senders.ntfy_sender import resolve_ntfy_endpoint
+
         server_url, topic = resolve_ntfy_endpoint(getattr(config, "ntfy_url", None))
         return bool(server_url and topic)
 
     @staticmethod
     def _resolve_gotify(config: Any) -> bool:
         from notification.senders.gotify_sender import resolve_gotify_message_endpoint
+
         endpoint = resolve_gotify_message_endpoint(getattr(config, "gotify_url", None))
         return bool(endpoint and (getattr(config, "gotify_token", None) or "").strip())
 
     @staticmethod
     def _resolve_discord_bot(config: Any) -> bool:
-        return bool(
-            getattr(config, "discord_bot_token", None)
-            and getattr(config, "discord_main_channel_id", None)
-        )
+        return bool(getattr(config, "discord_bot_token", None) and getattr(config, "discord_main_channel_id", None))
 
     @staticmethod
     def _resolve_slack_bot(config: Any) -> bool:
-        return bool(
-            getattr(config, "slack_bot_token", None)
-            and getattr(config, "slack_channel_id", None)
-        )
+        return bool(getattr(config, "slack_bot_token", None) and getattr(config, "slack_channel_id", None))
 
     @staticmethod
     def detect_configured_channels(config: Any) -> List[NotificationChannel]:
@@ -180,7 +177,7 @@ class NotificationDispatcherMixin:
         names = [ChannelDetector.get_channel_name(ch) for ch in self._available_channels]
         if self._has_context_channel():
             names.append("钉钉会话")
-        return ', '.join(names)
+        return ", ".join(names)
 
     def evaluate_noise_control(
         self,
@@ -240,7 +237,9 @@ class NotificationDispatcherMixin:
         for candidate in (
             getattr(self._source_message, "chat_id", ""),
             raw_data.get("chat_id"),
-            raw_data.get("message", {}).get("chat", {}).get("id") if isinstance(raw_data.get("message"), dict) else None,
+            raw_data.get("message", {}).get("chat", {}).get("id")
+            if isinstance(raw_data.get("message"), dict)
+            else None,
         ):
             if isinstance(candidate, str) and candidate.strip():
                 return candidate.strip()
@@ -274,7 +273,7 @@ class NotificationDispatcherMixin:
     def _extract_feishu_reply_info(self) -> Optional[Dict[str, str]]:
         """
         从来源消息中提取飞书回复信息（用于 Stream 模式回复）
-        
+
         Returns:
             包含 chat_id 的字典，或 None
         """
@@ -292,20 +291,20 @@ class NotificationDispatcherMixin:
     def send_to_context(self, content: str) -> bool:
         """
         向基于消息上下文的渠道发送消息（例如钉钉 Stream 会话）
-        
+
         Args:
             content: Markdown 格式内容
         """
         return self._send_via_source_context(content)
-    
+
     def _send_via_source_context(self, content: str) -> bool:
         """
         使用消息上下文（如钉钉/飞书会话）发送一份报告
-        
+
         主要用于从机器人 Stream 模式触发的任务，确保结果能回到触发的会话。
         """
         success = False
-        
+
         # 尝试钉钉会话
         session_webhook = self._extract_dingtalk_session_webhook()
         if session_webhook:
@@ -347,56 +346,60 @@ class NotificationDispatcherMixin:
     def _send_feishu_stream_reply(self, chat_id: str, content: str) -> bool:
         """
         通过飞书 Stream 模式发送消息到指定会话
-        
+
         Args:
             chat_id: 飞书会话 ID
             content: 消息内容
-            
+
         Returns:
             是否发送成功
         """
         try:
             from notification.senders.feishu_sender import _ensure_feishu_sdk_loaded
+
             if not _ensure_feishu_sdk_loaded():
                 logger.warning("飞书 SDK 不可用，无法发送 Stream 回复")
                 return False
-            
+
             from config import default_config
+
             config = default_config
-            
-            app_id = getattr(config, 'feishu_app_id', None)
-            app_secret = getattr(config, 'feishu_app_secret', None)
-            
+
+            app_id = getattr(config, "feishu_app_id", None)
+            app_secret = getattr(config, "feishu_app_secret", None)
+
             if not app_id or not app_secret:
                 logger.warning("飞书 APP_ID 或 APP_SECRET 未配置")
                 return False
-            
+
             # 创建回复客户端
             from notification.senders.feishu_sender import _get_lark_client_builder, _get_create_message_request
+
             lark_client_builder = _get_lark_client_builder()
             _get_create_message_request()
-            
+
             from lark_oapi.api.im.v1 import CreateMessageRequest
+
             client = lark_client_builder(app_id, app_secret).build()
-            
+
             # 飞书文本消息有长度限制，需要分批发送
-            max_bytes = getattr(config, 'feishu_max_bytes', 20000)
-            content_bytes = len(content.encode('utf-8'))
-            
+            max_bytes = getattr(config, "feishu_max_bytes", 20000)
+            content_bytes = len(content.encode("utf-8"))
+
             if content_bytes > max_bytes:
                 return self._send_feishu_stream_chunked(client, chat_id, content, max_bytes)
-            
+
             request = CreateMessageRequest(
                 receive_id=chat_id,
                 request_body={
                     "receive_id": chat_id,
                     "msg_type": "text",
                     "content": json.dumps({"text": content}),
-                }
+                },
             )
             response = client.im.v1.message.create(request)
             return response.success()
-            
+
         except ImportError as e:
             logger.error(f"导入飞书 Stream 模块失败: {e}")
             return False
@@ -404,31 +407,25 @@ class NotificationDispatcherMixin:
             logger.error(f"飞书 Stream 回复异常: {e}")
             return False
 
-    def _send_feishu_stream_chunked(
-        self, 
-        client: Any, 
-        chat_id: str, 
-        content: str, 
-        max_bytes: int
-    ) -> bool:
+    def _send_feishu_stream_chunked(self, client: Any, chat_id: str, content: str, max_bytes: int) -> bool:
         """
         分批发送长消息到飞书（Stream 模式）
-        
+
         Args:
             client: Lark client 实例
             chat_id: 飞书会话 ID
             content: 完整消息内容
             max_bytes: 单条消息最大字节数
-            
+
         Returns:
             是否全部发送成功
         """
         import time
         from lark_oapi.api.im.v1 import CreateMessageRequest
-        
+
         def get_bytes(s: str) -> int:
-            return len(s.encode('utf-8'))
-        
+            return len(s.encode("utf-8"))
+
         # 按段落或分隔线分割
         if "\n---\n" in content:
             sections = content.split("\n---\n")
@@ -441,15 +438,15 @@ class NotificationDispatcherMixin:
             # 按行分割
             sections = content.split("\n")
             separator = "\n"
-        
+
         chunks = []
         current_chunk = []
         current_bytes = 0
         separator_bytes = get_bytes(separator)
-        
+
         for section in sections:
             section_bytes = get_bytes(section) + separator_bytes
-            
+
             if current_bytes + section_bytes > max_bytes:
                 if current_chunk:
                     chunks.append(separator.join(current_chunk))
@@ -458,34 +455,32 @@ class NotificationDispatcherMixin:
             else:
                 current_chunk.append(section)
                 current_bytes += section_bytes
-        
+
         if current_chunk:
             chunks.append(separator.join(current_chunk))
-        
+
         # 发送每个分块
         success = True
         for i, chunk in enumerate(chunks):
             if i > 0:
                 time.sleep(0.5)  # 避免请求过快
-            
+
             request = CreateMessageRequest(
                 receive_id=chat_id,
                 request_body={
                     "receive_id": chat_id,
                     "msg_type": "text",
                     "content": json.dumps({"text": chunk}),
-                }
+                },
             )
             response = client.im.v1.message.create(request)
             if not response.success():
                 success = False
-                logger.error(f"飞书 Stream 分块 {i+1}/{len(chunks)} 发送失败")
-        
+                logger.error(f"飞书 Stream 分块 {i + 1}/{len(chunks)} 发送失败")
+
         return success
 
-    def _should_use_image_for_channel(
-        self, channel: NotificationChannel, image_bytes: Optional[bytes]
-    ) -> bool:
+    def _should_use_image_for_channel(self, channel: NotificationChannel, image_bytes: Optional[bytes]) -> bool:
         """
         Decide whether to send as image for the given channel (Issue #289).
 
@@ -497,6 +492,7 @@ class NotificationDispatcherMixin:
             return False
         if channel == NotificationChannel.WECHAT:
             from notification.senders.wechat_sender import WECHAT_IMAGE_MAX_BYTES
+
             if len(image_bytes) > WECHAT_IMAGE_MAX_BYTES:
                 logger.warning(
                     "企业微信图片超限 (%d bytes)，回退为 Markdown 文本发送",
@@ -622,26 +618,26 @@ class NotificationDispatcherMixin:
         # Per-channel decision via _should_use_image_for_channel (see send() docstring for fallback rules).
         image_bytes = None
         channels_needing_image = {
-            ch for ch in target_channels
+            ch
+            for ch in target_channels
             if ch.value in self._markdown_to_image_channels
             and ch not in {NotificationChannel.NTFY, NotificationChannel.GOTIFY}
         }
         if channels_needing_image:
             try:
                 from notification.senders.feishu_sender import markdown_to_image
-                image_bytes = markdown_to_image(
-                    content, max_chars=self._markdown_to_image_max_chars
-                )
+
+                image_bytes = markdown_to_image(content, max_chars=self._markdown_to_image_max_chars)
                 if image_bytes:
-                    logger.info("Markdown 已转换为图片，将向 %s 发送图片",
-                                [ch.value for ch in channels_needing_image])
+                    logger.info("Markdown 已转换为图片，将向 %s 发送图片", [ch.value for ch in channels_needing_image])
                 elif channels_needing_image:
                     try:
                         engine = getattr(default_config, "md2img_engine", "wkhtmltoimage")
                     except Exception:
                         engine = "wkhtmltoimage"
                     hint = (
-                        "npm i -g markdown-to-file" if engine == "markdown-to-file"
+                        "npm i -g markdown-to-file"
+                        if engine == "markdown-to-file"
                         else "wkhtmltopdf (apt install wkhtmltopdf / brew install wkhtmltopdf)"
                     )
                     logger.warning(
@@ -651,7 +647,7 @@ class NotificationDispatcherMixin:
             except Exception as e:
                 logger.warning("Markdown 转图片失败: %s", e)
 
-        channel_names = ', '.join(ChannelDetector.get_channel_name(ch) for ch in target_channels)
+        channel_names = ", ".join(ChannelDetector.get_channel_name(ch) for ch in target_channels)
         logger.info(f"正在向 {len(target_channels)} 个渠道发送通知：{channel_names}")
 
         success_count = 0
@@ -747,35 +743,31 @@ class NotificationDispatcherMixin:
         )
         return bool(result.success)
 
-    def save_report_to_file(
-        self, 
-        content: str, 
-        filename: Optional[str] = None
-    ) -> str:
+    def save_report_to_file(self, content: str, filename: Optional[str] = None) -> str:
         """
         保存日报到本地文件
-        
+
         Args:
             content: 日报内容
             filename: 文件名（可选，默认按日期生成）
-            
+
         Returns:
             保存的文件路径
         """
         from pathlib import Path
-        
+
         if filename is None:
-            date_str = datetime.now().strftime('%Y%m%d')
+            date_str = datetime.now().strftime("%Y%m%d")
             filename = f"report_{date_str}.md"
-        
+
         # 确保 reports 目录存在（使用项目根目录下的 reports）
-        reports_dir = Path(__file__).parent.parent / 'reports'
+        reports_dir = Path(__file__).parent.parent / "reports"
         reports_dir.mkdir(parents=True, exist_ok=True)
-        
+
         filepath = reports_dir / filename
-        
-        with open(filepath, 'w', encoding='utf-8') as f:
+
+        with open(filepath, "w", encoding="utf-8") as f:
             f.write(content)
-        
+
         logger.info(f"日报已保存到: {filepath}")
         return str(filepath)

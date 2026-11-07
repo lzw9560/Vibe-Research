@@ -7,6 +7,7 @@ plan: specs/S172-红利低波指数复制臂/plan.md（§2.2）。
 长线底仓 hold——无 stop/take 触发（R6），不接 accounting（ETF 市场收益即净收益，
 管理费已含净值）。私有数据写 .vibe-research/etf_floor/（vr_paths 模式，gitignored）。
 """
+
 from __future__ import annotations
 
 import json
@@ -62,6 +63,7 @@ def _load_batches() -> list[dict]:
 # R4: 分批建仓调度
 # ---------------------------------------------------------------------------
 
+
 def build_position_batches(
     total: int = 100000,
     n_batches: int = 5,
@@ -85,8 +87,7 @@ def build_position_batches(
         first = next_trading_date() if not is_trading_day() else _date.today()
 
     if one_shot:
-        return [{"batch_idx": 0, "date": first.isoformat(),
-                 "amount": total, "status": "planned"}]
+        return [{"batch_idx": 0, "date": first.isoformat(), "amount": total, "status": "planned"}]
 
     per_batch = total // n_batches
     remainder = total - per_batch * n_batches
@@ -95,20 +96,21 @@ def build_position_batches(
     cursor = first
     for i in range(n_batches):
         amt = per_batch + (remainder if i == n_batches - 1 else 0)
-        plan.append({
-            "batch_idx": i,
-            "date": cursor.isoformat(),
-            "amount": amt,
-            "status": "planned",
-        })
+        plan.append(
+            {
+                "batch_idx": i,
+                "date": cursor.isoformat(),
+                "amount": amt,
+                "status": "planned",
+            }
+        )
         # 前进 interval_days 个交易日
         for _ in range(interval_days):
             cursor = next_trading_date(cursor)
     return plan
 
 
-def record_batch(batch_idx: int, date: str, price: float,
-                 shares: int, amount: float) -> dict:
+def record_batch(batch_idx: int, date: str, price: float, shares: int, amount: float) -> dict:
     """记录已执行的批次到 batches.json（atomic write）。
 
     返回写入的批次 dict。status 改为 'filled'。
@@ -140,6 +142,7 @@ def record_batch(batch_idx: int, date: str, price: float,
 # 持有状态
 # ---------------------------------------------------------------------------
 
+
 def hold_status() -> dict:
     """读 batches.json → 持仓状态汇总。
 
@@ -163,6 +166,7 @@ def hold_status() -> dict:
 # ---------------------------------------------------------------------------
 # R5: 周报
 # ---------------------------------------------------------------------------
+
 
 def weekly_report() -> dict:
     """周报：持仓市值 / 成本基 / 浮动盈亏 / 跟踪误差 / 累计收息。
@@ -198,6 +202,7 @@ def weekly_report() -> dict:
 
 if __name__ == "__main__":
     import argparse
+
     p = argparse.ArgumentParser(description="S172 ETF 红利低波 floor")
     sub = p.add_subparsers(dest="cmd")
     sub_plan = sub.add_parser("plan", help="生成分批建仓计划")

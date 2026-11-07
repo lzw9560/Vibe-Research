@@ -19,6 +19,7 @@ kill criteria：test net excess < +0.3%/月 OR t_nw < 2.9 OR 衰减 > 50%
 
 禁止外推：单因子月频 ≠ 基本面整体有/无 edge ≠ 短线有/无 edge。
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -47,15 +48,15 @@ REBALANCE_DAY = "last"  # 月末最后交易日调仓
 # ── akshare 字段映射（中文列名 → 英文因子名，列名带 (%) 后缀）──────────────────
 FIELD_MAP = {
     "日期": "stat_date",
-    "销售毛利率(%)": "gp_margin",      # gross margin (Hou-Xue-Zhang quality)
-    "销售净利率(%)": "np_margin",      # net margin
-    "净资产收益率(%)": "roe",          # ROE
-    "加权净资产收益率(%)": "roe_w",    # weighted ROE
-    "资产负债率(%)": "debt_ratio",    # leverage
+    "销售毛利率(%)": "gp_margin",  # gross margin (Hou-Xue-Zhang quality)
+    "销售净利率(%)": "np_margin",  # net margin
+    "净资产收益率(%)": "roe",  # ROE
+    "加权净资产收益率(%)": "roe_w",  # weighted ROE
+    "资产负债率(%)": "debt_ratio",  # leverage
     "主营业务收入增长率(%)": "rev_growth",  # revenue growth
-    "净利润增长率(%)": "ni_growth",   # NI growth
-    "每股净资产_调整后(元)": "bvps",   # book value per share (B/P 用，value 因子)
-    "加权每股收益(元)": "eps",         # 累计 EPS（Q1=3月/H1=6月/Q3=9月/年报=全年，TTM 须后算）
+    "净利润增长率(%)": "ni_growth",  # NI growth
+    "每股净资产_调整后(元)": "bvps",  # book value per share (B/P 用，value 因子)
+    "加权每股收益(元)": "eps",  # 累计 EPS（Q1=3月/H1=6月/Q3=9月/年报=全年，TTM 须后算）
 }
 
 
@@ -88,6 +89,7 @@ def cached_codes() -> set[str]:
 def backfill_one(code_bare: str) -> int:
     """单股 baostock code（6位裸）→ akshare 拉 + 存。返入库行数。"""
     import akshare as ak  # noqa: PLC0415
+
     try:
         df = ak.stock_financial_analysis_indicator(symbol=code_bare, start_year="2018")
     except Exception:
@@ -103,10 +105,19 @@ def backfill_one(code_bare: str) -> int:
             continue
         stat_date = stat_date[:10]
         # 初始化所有字段 None（防 akshare 某股缺列 → executemany binding 缺失）
-        row = {"code": code_bare, "stat_date": stat_date,
-               "gp_margin": None, "np_margin": None, "roe": None, "roe_w": None,
-               "debt_ratio": None, "rev_growth": None, "ni_growth": None,
-               "bvps": None, "eps": None}
+        row = {
+            "code": code_bare,
+            "stat_date": stat_date,
+            "gp_margin": None,
+            "np_margin": None,
+            "roe": None,
+            "roe_w": None,
+            "debt_ratio": None,
+            "rev_growth": None,
+            "ni_growth": None,
+            "bvps": None,
+            "eps": None,
+        }
         for cn, en in FIELD_MAP.items():
             if en == "stat_date":
                 continue  # 日期已单独处理，不 float 转换（否则 ValueError 覆盖为 None）
@@ -120,9 +131,12 @@ def backfill_one(code_bare: str) -> int:
     if not rows:
         return 0
     conn = sqlite3.connect(str(FUND_DB))
-    conn.executemany("""INSERT OR REPLACE INTO fundamentals
+    conn.executemany(
+        """INSERT OR REPLACE INTO fundamentals
         (code, stat_date, gp_margin, np_margin, roe, roe_w, debt_ratio, rev_growth, ni_growth, bvps, eps)
-        VALUES (:code, :stat_date, :gp_margin, :np_margin, :roe, :roe_w, :debt_ratio, :rev_growth, :ni_growth, :bvps, :eps)""", rows)
+        VALUES (:code, :stat_date, :gp_margin, :np_margin, :roe, :roe_w, :debt_ratio, :rev_growth, :ni_growth, :bvps, :eps)""",
+        rows,
+    )
     conn.commit()
     conn.close()
     return len(rows)
@@ -135,11 +149,12 @@ def backfill_all(universe: list[str]) -> None:
     print(f"backfill: {len(universe)} universe, {len(done)} cached, {len(todo)} todo")
     for i, code in enumerate(todo):
         n = backfill_one(code)
-        print(f"  [{i+1}/{len(todo)}] {code}: {n} rows", flush=True)
+        print(f"  [{i + 1}/{len(todo)}] {code}: {n} rows", flush=True)
         time.sleep(0.3)  # 防封 pacing
 
 
 # ── kline 价格（月频 close）──────────────────────────────────────────────────
+
 
 def load_monthly_prices() -> tuple[dict[str, dict[str, float]], list[str]]:
     """返 (code -> {month_end_date: close}, sorted month_end_dates).
@@ -182,6 +197,7 @@ def load_monthly_prices() -> tuple[dict[str, dict[str, float]], list[str]]:
 
 # ── PIT 对齐 ─────────────────────────────────────────────────────────────────
 
+
 def pit_pubdate(stat_date: str) -> str:
     """报告披露截止日（保守 PIT 估计）。
     Q1(03-31)→04-30, H1(06-30)→08-31, Q3(09-30)→10-31, 年报(12-31)→次年04-30."""
@@ -193,7 +209,7 @@ def pit_pubdate(stat_date: str) -> str:
     if m == 9:
         return f"{y}-10-31"
     if m == 12:
-        return f"{y+1}-04-30"
+        return f"{y + 1}-04-30"
     return stat_date  # fallback
 
 
@@ -207,11 +223,20 @@ def load_fundamentals_pit() -> dict[str, list[dict]]:
     conn.close()
     by_code: dict[str, list[dict]] = defaultdict(list)
     for code, sd, gp, np_, roe, debt, rg, nig, bvps, eps in rows:
-        by_code[code].append({
-            "pit": pit_pubdate(sd), "stat": sd,
-            "gp": gp, "np": np_, "roe": roe, "debt": debt, "rg": rg, "nig": nig,
-            "bvps": bvps, "eps": eps,
-        })
+        by_code[code].append(
+            {
+                "pit": pit_pubdate(sd),
+                "stat": sd,
+                "gp": gp,
+                "np": np_,
+                "roe": roe,
+                "debt": debt,
+                "rg": rg,
+                "nig": nig,
+                "bvps": bvps,
+                "eps": eps,
+            }
+        )
     return dict(by_code)
 
 
@@ -224,6 +249,7 @@ def latest_factor_pit(funds: list[dict], rebalance_date: str, field: str) -> flo
 
 
 # ── universe 选择（top liquidity）────────────────────────────────────────────
+
 
 def select_universe(size: int = UNIVERSE_SIZE) -> list[str]:
     """从 kline cache 选 top-size 按 average amount（most liquid, tradeable for 散户）.
@@ -247,8 +273,8 @@ def select_universe(size: int = UNIVERSE_SIZE) -> list[str]:
 
 # ── 月频 backtest ────────────────────────────────────────────────────────────
 
-def compute_monthly_returns(prices: dict[str, dict[str, float]],
-                            month_dates: list[str]) -> dict[str, dict[str, float]]:
+
+def compute_monthly_returns(prices: dict[str, dict[str, float]], month_dates: list[str]) -> dict[str, dict[str, float]]:
     """code -> {month_date: monthly_decimal_return}（close-to-close 月收益）."""
     rets: dict[str, dict[str, float]] = {}
     for code, md in prices.items():
@@ -263,10 +289,13 @@ def compute_monthly_returns(prices: dict[str, dict[str, float]],
     return rets
 
 
-def backtest_factor(factor_field: str, funds: dict[str, list[dict]],
-                    prices: dict[str, dict[str, float]],
-                    month_rets: dict[str, dict[str, float]],
-                    month_dates: list[str]) -> dict:
+def backtest_factor(
+    factor_field: str,
+    funds: dict[str, list[dict]],
+    prices: dict[str, dict[str, float]],
+    month_rets: dict[str, dict[str, float]],
+    month_dates: list[str],
+) -> dict:
     """单因子月频 long-only top-decile backtest.
     返 {monthly_excess: [...], train/test split, stats}."""
     # 用 2018-04 起的月末（前几月 warmup for PIT）
@@ -313,14 +342,19 @@ def backtest_factor(factor_field: str, funds: dict[str, list[dict]],
     mid = len(dates_used) // 2
     train, test = excess_rets[:mid], excess_rets[mid:]
     return {
-        "status": "ok", "n_months": len(excess_rets),
+        "status": "ok",
+        "n_months": len(excess_rets),
         "dates": dates_used,
-        "excess": excess_rets, "strategy": strategy_rets, "benchmark": benchmark_rets,
-        "train": train, "test": test,
+        "excess": excess_rets,
+        "strategy": strategy_rets,
+        "benchmark": benchmark_rets,
+        "train": train,
+        "test": test,
     }
 
 
 # ── stats（NW t for monthly）─────────────────────────────────────────────────
+
 
 def nw_t_monthly(rets: list[float], max_lag: int = 3) -> dict:
     """Newey-West t for monthly returns (Bartlett weights, lag ~3).
@@ -335,8 +369,7 @@ def nw_t_monthly(rets: list[float], max_lag: int = 3) -> dict:
     rho_sum = 0.0
     for lag in range(1, max_lag + 1):
         w = 1 - lag / (max_lag + 1)  # Bartlett
-        gamma_lag = sum(mean_centered[i] * mean_centered[i - lag]
-                        for i in range(lag, n)) / n
+        gamma_lag = sum(mean_centered[i] * mean_centered[i - lag] for i in range(lag, n)) / n
         rho_sum += w * gamma_lag / gamma0 if gamma0 > 0 else 0
     n_eff = n / (1 + 2 * rho_sum) if (1 + 2 * rho_sum) > 0 else n
     se = (gamma0 / n_eff) ** 0.5 * 100 if gamma0 > 0 else 0  # rets 已 ×100
@@ -354,17 +387,22 @@ def stats_block(rets: list[float], label: str, n_bonf: int) -> dict:
     nw = nw_t_monthly(rets)
     wr = sum(1 for x in rets if x > 0) / len(rets) * 100
     p_bonf = bonferroni_p(nw["p"], n_bonf)
-    print(f"  {label}: n={nw['n']} mean={nw['mean']:.4f}%/月 WR={wr:.1f}% "
-          f"t_nw={nw['t']} p={nw['p']} Bonf×{n_bonf}={p_bonf:.6f}")
+    print(
+        f"  {label}: n={nw['n']} mean={nw['mean']:.4f}%/月 WR={wr:.1f}% "
+        f"t_nw={nw['t']} p={nw['p']} Bonf×{n_bonf}={p_bonf:.6f}"
+    )
     return {**nw, "wr": round(wr, 1), "p_bonf": round(p_bonf, 6)}
 
 
 # ── composite quality factor ────────────────────────────────────────────────
 
-def backtest_composite(funds: dict[str, list[dict]],
-                       prices: dict[str, dict[str, float]],
-                       month_rets: dict[str, dict[str, float]],
-                       month_dates: list[str]) -> dict:
+
+def backtest_composite(
+    funds: dict[str, list[dict]],
+    prices: dict[str, dict[str, float]],
+    month_rets: dict[str, dict[str, float]],
+    month_dates: list[str],
+) -> dict:
     """composite quality = rank(gp) + rank(roe) + rank(np) - rank(debt).
     月频 cross-sectional rank 合成."""
     rebal_dates = [d for d in month_dates if d >= "2018-04-01"]
@@ -391,19 +429,20 @@ def backtest_composite(funds: dict[str, list[dict]],
             cand[code] = {"gp": gp, "roe": roe, "np": np_, "debt": debt}
         if len(cand) < 20:
             continue
+
         # cross-sectional rank（高 gp/roe/np 好，高 debt 坏）
         def rank_map(field: str, higher_better: bool = True) -> dict[str, float]:
             vals = [(c, v[field]) for c, v in cand.items() if v[field] is not None]
             vals.sort(key=lambda x: -x[1] if higher_better else x[1])
             n = len(vals)
             return {c: i / n for i, (c, _) in enumerate(vals)}  # 0=best
+
         rg = rank_map("gp", True)
         rr = rank_map("roe", True)
         rn = rank_map("np", True)
         rd_debt = rank_map("debt", False)  # 低 debt 好
-        scores = {c: rg.get(c, 0.5) + rr.get(c, 0.5) + rn.get(c, 0.5) + rd_debt.get(c, 0.5)
-                  for c in cand}
-        top = sorted(scores.items(), key=lambda x: x[1])[:max(5, len(cand) // 10)]
+        scores = {c: rg.get(c, 0.5) + rr.get(c, 0.5) + rn.get(c, 0.5) + rd_debt.get(c, 0.5) for c in cand}
+        top = sorted(scores.items(), key=lambda x: x[1])[: max(5, len(cand) // 10)]
         top_codes = [c for c, _ in top]
         s_r = statistics.mean(month_rets[c][rd] for c in top_codes)
         b_r = statistics.mean(month_rets[c][rd] for c in bench_codes)
@@ -416,13 +455,19 @@ def backtest_composite(funds: dict[str, list[dict]],
         return {"status": "too_few", "n": len(excess_rets)}
     mid = len(dates_used) // 2
     return {
-        "status": "ok", "n_months": len(excess_rets), "dates": dates_used,
-        "excess": excess_rets, "strategy": strategy_rets, "benchmark": benchmark_rets,
-        "train": excess_rets[:mid], "test": excess_rets[mid:],
+        "status": "ok",
+        "n_months": len(excess_rets),
+        "dates": dates_used,
+        "excess": excess_rets,
+        "strategy": strategy_rets,
+        "benchmark": benchmark_rets,
+        "train": excess_rets[:mid],
+        "test": excess_rets[mid:],
     }
 
 
 # ── 滑点敏感性（5 步验证 #3）─────────────────────────────────────────────────
+
 
 def slippage_sensitivity(factor_field: str, funds, prices, month_rets, month_dates) -> None:
     print(f"\n--- 滑点敏感性（{factor_field}，net @ 多 COST）---")
@@ -447,7 +492,7 @@ def slippage_sensitivity(factor_field: str, funds, prices, month_rets, month_dat
             if len(cand) < 20:
                 continue
             cand.sort(key=lambda x: -x[1])
-            top = [c for c, _ in cand[:max(5, len(cand) // 10)]]
+            top = [c for c, _ in cand[: max(5, len(cand) // 10)]]
             s_r = statistics.mean(month_rets[c][rd] for c in top)
             b_r = statistics.mean(month_rets[c][rd] for c in bench)
             excess.append((s_r - cost - b_r) * 100)
@@ -458,6 +503,7 @@ def slippage_sensitivity(factor_field: str, funds, prices, month_rets, month_dat
 
 def main() -> None:
     import argparse
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--backfill", action="store_true", help="先跑 backfill")
     ap.add_argument("--size", type=int, default=UNIVERSE_SIZE)
@@ -490,7 +536,7 @@ def main() -> None:
         ("ni_growth（净利润增长率）", "nig"),
     ]
     results: dict[str, dict] = {}
-    print(f"\n{'='*70}\n=== 月频 long-only top-decile backtest（2018-2026, PIT 对齐）===\n{'='*70}")
+    print(f"\n{'=' * 70}\n=== 月频 long-only top-decile backtest（2018-2026, PIT 对齐）===\n{'=' * 70}")
     for label, field in factors:
         print(f"\n--- {label} ---")
         r = backtest_factor(field, funds, prices, month_rets, month_dates)
@@ -519,17 +565,21 @@ def main() -> None:
         stats_block(rc["train"], "train(2018-2022)", N_BONF)
         stats_block(rc["test"], "test(2022-2026)", N_BONF)
         if rc["benchmark"]:
-            print(f"  benchmark mean: {statistics.mean(rc['benchmark']):.4f}%/月 | strategy: {statistics.mean(rc['strategy']):.4f}%/月")
+            print(
+                f"  benchmark mean: {statistics.mean(rc['benchmark']):.4f}%/月 | strategy: {statistics.mean(rc['strategy']):.4f}%/月"
+            )
 
     # 滑点敏感性（最强因子）
-    best_field = max((f for f in results if f != "composite"),
-                     key=lambda f: results[f].get("excess") and statistics.mean(results[f]["excess"]) or -999,
-                     default=None)
+    best_field = max(
+        (f for f in results if f != "composite"),
+        key=lambda f: results[f].get("excess") and statistics.mean(results[f]["excess"]) or -999,
+        default=None,
+    )
     if best_field:
         slippage_sensitivity(best_field, funds, prices, month_rets, month_dates)
 
     # ── 诚实 verdict ──
-    print(f"\n{'='*70}\n=== VERDICT（Bonf×{N_BONF}, walk-forward, kill criteria）===\n{'='*70}")
+    print(f"\n{'=' * 70}\n=== VERDICT（Bonf×{N_BONF}, walk-forward, kill criteria）===\n{'=' * 70}")
     for name, r in results.items():
         if r["status"] != "ok":
             continue
@@ -556,11 +606,15 @@ def main() -> None:
             print(f"    → exploratory: Bonf {p_bonf:.4f} >= {ALPHA} (not significant after ×{N_BONF})")
 
     # 存 result JSON
-    out = {name: {k: v for k, v in r.items() if k in ("status", "n_months")}
-           for name, r in results.items()}
-    out["_meta"] = {"universe_size": args.size, "n_bonf": N_BONF,
-                    "cost": COST, "survivorship_caveat": "≥6yr history stocks only"}
+    out = {name: {k: v for k, v in r.items() if k in ("status", "n_months")} for name, r in results.items()}
+    out["_meta"] = {
+        "universe_size": args.size,
+        "n_bonf": N_BONF,
+        "cost": COST,
+        "survivorship_caveat": "≥6yr history stocks only",
+    }
     import json as _json
+
     Path(__file__).parent / "_fundamental_quality_monthly_result.json"
     p = Path(__file__).parent / "_fundamental_quality_monthly_result.json"
     p.write_text(_json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")

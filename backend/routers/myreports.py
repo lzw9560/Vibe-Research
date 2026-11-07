@@ -1,6 +1,7 @@
 """
 MyReports router.
 """
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel

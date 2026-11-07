@@ -3,6 +3,7 @@
 
 复用 explore_s232_stop_verify 的 build_records，输出风险管理需要的真实分布。
 """
+
 from __future__ import annotations
 import math
 import statistics
@@ -77,7 +78,7 @@ def max_drawdown_pct(rets_pct, trades_per_day=1):
     peak = 1.0
     mdd = 0.0
     for r in rets_pct:
-        eq *= (1 + r / 100)
+        eq *= 1 + r / 100
         if eq > peak:
             peak = eq
         dd = (peak - eq) / peak
@@ -89,6 +90,7 @@ def max_drawdown_pct(rets_pct, trades_per_day=1):
 def by_day_concentration(records):
     """每天多少笔交易——同日 trades 高度相关（共市场 regime）。"""
     from collections import Counter
+
     days = Counter()
     for r in records:
         # records 没存 date，用 t1_open 排序无法恢复；用 index 近似
@@ -109,7 +111,11 @@ def main():
 
     print(f"=== n={n} trades ===\n")
 
-    for label, rets in [("baseline(no stop)", base), ("-3%stop IDEAL(over-credit)", ideal), ("-3%stop REALISTIC", real)]:
+    for label, rets in [
+        ("baseline(no stop)", base),
+        ("-3%stop IDEAL(over-credit)", ideal),
+        ("-3%stop REALISTIC", real),
+    ]:
         wins = [r for r in rets if r > 0]
         losses = [r for r in rets if r <= 0]
         s = ev_stats(rets)
@@ -132,10 +138,10 @@ def main():
         print(f"  EV={s['ev']}% std={s['std']}% t={s['t']} CI[{s['ci_lo']},{s['ci_hi']}]")
         print(f"  WR={wr:.1f}% (wins={len(wins)} losses={len(losses)})")
         print(f"  avg_win={avg_w:.2f}% avg_loss={avg_l:.2f}% R:R(b)={b:.2f}")
-        print(f"  worst5={ [round(x,2) for x in worst] }")
+        print(f"  worst5={[round(x, 2) for x in worst]}")
         print(f"  Kelly continuous f*={f_cont:.3f} (mu={mu:.4f} var={var:.4f})")
         print(f"  Kelly log-search  f*={f_log:.3f} (growth={g_log:.5f})")
-        print(f"  Kelly binary(approx) f*={max(f_bin,0):.3f}")
+        print(f"  Kelly binary(approx) f*={max(f_bin, 0):.3f}")
         print(f"  MaxDD={mdd:.1f}% final_equity={final_eq:.3f}x")
         print()
 
@@ -145,7 +151,15 @@ def main():
     import sqlite3
     import json
     from pathlib import Path
-    from explore_s232_stop_verify import load_kline_db, load_zt_by_date, vol_ratio_5, TURN_THRESHOLD, VR5_THRESHOLD, KLINE_DB
+    from explore_s232_stop_verify import (
+        load_kline_db,
+        load_zt_by_date,
+        vol_ratio_5,
+        TURN_THRESHOLD,
+        VR5_THRESHOLD,
+        KLINE_DB,
+    )
+
     # 简化：用 build_records 改造——直接重新跑一次带日期
     all_bars = load_kline_db()
     zt = load_zt_by_date()
@@ -163,37 +177,51 @@ def main():
             continue
         wl = []
         for code, bars in all_bars.items():
-            tbar = None; tidx = -1
+            tbar = None
+            tidx = -1
             for i, bb in enumerate(bars):
                 if bb.get("date") == t:
-                    tbar = bb; tidx = i; break
-            if tbar is None: continue
-            if code in zt_t: continue
-            if tbar.get("isST") in ("1", 1, True): continue
+                    tbar = bb
+                    tidx = i
+                    break
+            if tbar is None:
+                continue
+            if code in zt_t:
+                continue
+            if tbar.get("isST") in ("1", 1, True):
+                continue
             turn = tbar.get("turn")
-            if turn is None or turn <= TURN_THRESHOLD: continue
+            if turn is None or turn <= TURN_THRESHOLD:
+                continue
             vr5 = vol_ratio_5(bars, tidx)
-            if vr5 is None or vr5 <= VR5_THRESHOLD: continue
+            if vr5 is None or vr5 <= VR5_THRESHOLD:
+                continue
             wl.append(code)
         # count records with low-open on this t1
         cnt = 0
         for code in wl:
             bars = all_bars.get(code, [])
             tbar = next((bb for bb in bars if bb.get("date") == t), None)
-            if not tbar or tbar.get("close") is None: continue
+            if not tbar or tbar.get("close") is None:
+                continue
             t_close = tbar["close"]
             t1bar = next((bb for bb in bars if bb.get("date") == t1), None)
-            if not t1bar or t1bar.get("open") is None or t1bar["open"] == 0: continue
+            if not t1bar or t1bar.get("open") is None or t1bar["open"] == 0:
+                continue
             gap = (t1bar["open"] - t_close) / t_close * 100
-            if not (-5 <= gap < -2): continue
+            if not (-5 <= gap < -2):
+                continue
             zt_limit = 0.2 if code.startswith(("sz30", "sh68")) else 0.1
-            if t1bar["open"] >= t_close * (1 + zt_limit) * 0.999: continue
+            if t1bar["open"] >= t_close * (1 + zt_limit) * 0.999:
+                continue
             cnt += 1
         per_day[t1] = per_day.get(t1, 0) + cnt
     cnts = sorted(per_day.values(), reverse=True)
     active_days = [c for c in cnts if c > 0]
     print(f"  active trade days={len(active_days)}/{len(per_day)}")
-    print(f"  trades/day: max={max(cnts)} p90={cnts[len(cnts)//10]} median={statistics.median(cnts) if cnts else 0} mean={statistics.mean(cnts) if cnts else 0:.1f}")
+    print(
+        f"  trades/day: max={max(cnts)} p90={cnts[len(cnts) // 10]} median={statistics.median(cnts) if cnts else 0} mean={statistics.mean(cnts) if cnts else 0:.1f}"
+    )
     print(f"  top5 days trades: {cnts[:5]}")
     print(f"  → 同日 trades 共享 regime/市场情绪，effective N 远小于 {n}")
 

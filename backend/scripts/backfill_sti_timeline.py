@@ -13,6 +13,7 @@
     cd backend && .venv/bin/python -m scripts.backfill_sti_timeline
     cd backend && .venv/bin/python -m scripts.backfill_sti_timeline --start 2026-07-28 --dry-run
 """
+
 from __future__ import annotations
 
 import argparse
@@ -41,19 +42,20 @@ def _trading_days(start: str, end: str) -> list[str]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="回填 sti_timeline 历史交易日（precompute_daily，幂等不覆盖 zt_real）"
-    )
+    parser = argparse.ArgumentParser(description="回填 sti_timeline 历史交易日（precompute_daily，幂等不覆盖 zt_real）")
     parser.add_argument(
-        "--start", default="2026-07-28",
+        "--start",
+        default="2026-07-28",
         help="起始日期 YYYY-MM-DD（默认 2026-07-28，migrations 应用日）",
     )
     parser.add_argument(
-        "--end", default=None,
+        "--end",
+        default=None,
         help="结束日期 YYYY-MM-DD（默认最近交易日）",
     )
     parser.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="只打印将回填的交易日列表，不实际写库",
     )
     args = parser.parse_args()
@@ -93,9 +95,7 @@ def main() -> None:
             continue
 
         print(
-            f"  {d}: score={result.score} "
-            f"phase={result.phase.value if result.phase else None} "
-            f"zt_real={result.zt_real}"
+            f"  {d}: score={result.score} phase={result.phase.value if result.phase else None} zt_real={result.zt_real}"
         )
         written += 1
 

@@ -51,10 +51,7 @@ class MigrationManager:
         conn = self._get_connection()
         try:
             conn.executescript(sql)
-            conn.execute(
-                "INSERT INTO migrations (version, name) VALUES (?, ?)",
-                (version, name)
-            )
+            conn.execute("INSERT INTO migrations (version, name) VALUES (?, ?)", (version, name))
             conn.commit()
         finally:
             conn.close()
@@ -66,8 +63,4 @@ class MigrationManager:
             version = migration["version"]
             if version in applied:
                 continue
-            self.apply_migration(
-                version=version,
-                name=migration["name"],
-                sql=migration["sql"]
-            )
+            self.apply_migration(version=version, name=migration["name"], sql=migration["sql"])

@@ -16,6 +16,7 @@ index_stock_cons_weight_csindex 走 csindex.com.cn（非东财，无防封问题
 
 取数失败诚实降级返空（akshare_src chip_distribution 模式），不臆造。
 """
+
 from __future__ import annotations
 
 import logging
@@ -35,9 +36,11 @@ def _ak():
     """惰性 import akshare（akshare_src 模式，缺失 raise DependencyMissing）。"""
     try:
         import akshare as ak
+
         return ak
     except ImportError as e:
         from data.sources._common import DependencyMissing
+
         raise DependencyMissing("akshare 未安装：pip install akshare") from e
 
 
@@ -57,6 +60,7 @@ def _to_float(v) -> float | None:
 # ---------------------------------------------------------------------------
 # R1: ETF 512890 实时行情
 # ---------------------------------------------------------------------------
+
 
 def fetch_etf_quote(code: str = "512890") -> dict:
     """取 ETF 实时行情（fund_etf_spot_em 筛 code → dict）。
@@ -93,6 +97,7 @@ def fetch_etf_quote(code: str = "512890") -> dict:
 # R2: 930955 published 成分权重
 # ---------------------------------------------------------------------------
 
+
 def fetch_index_cons_weight(index: str = "930955") -> list[dict]:
     """取指数 published 成分 + 权重（index_stock_cons_weight_csindex → list[dict]）。
 
@@ -110,11 +115,13 @@ def fetch_index_cons_weight(index: str = "930955") -> list[dict]:
     out: list[dict] = []
     for _, r in df.iterrows():
         w = _to_float(r.get("权重"))
-        out.append({
-            "code": str(r.get("成分券代码", "")).zfill(6),
-            "name": str(r.get("成分券名称", "")),
-            "weight": w if w is not None else 0.0,
-        })
+        out.append(
+            {
+                "code": str(r.get("成分券代码", "")).zfill(6),
+                "name": str(r.get("成分券名称", "")),
+                "weight": w if w is not None else 0.0,
+            }
+        )
     return out
 
 
@@ -122,12 +129,14 @@ def fetch_index_cons_weight(index: str = "930955") -> list[dict]:
 # R3: 跟踪误差（ETF 历史收益 vs 指数历史收益）
 # ---------------------------------------------------------------------------
 
+
 def _parse_daily_returns(df, date_col: str = "日期", close_col: str = "收盘") -> list[dict]:
     """通用：akshare 历史 DataFrame → [{date, close, ret}] 按日期升序。
 
     ret = 前日 close → 当日 close 的涨跌幅（pct change），首条 ret=0.0。
     """
     import math
+
     if df is None or df.empty:
         return []
 
@@ -157,14 +166,18 @@ def fetch_etf_hist(code: str = "512890", start: str = "", end: str = "", retries
     加 retries=3 次重试（0.5s 间隔）修瞬时失败。全失败返 []，bars_provider 走 baostock fallback。
     """
     import time  # noqa: PLC0415
+
     ak = _ak()
     last_err: Exception | None = None
     for attempt in range(retries):
         try:
-            df = ak.fund_etf_hist_em(symbol=code, period="daily",
-                                     start_date=start or "20200101",
-                                     end_date=end or datetime.now().strftime("%Y%m%d"),
-                                     adjust="qfq")
+            df = ak.fund_etf_hist_em(
+                symbol=code,
+                period="daily",
+                start_date=start or "20200101",
+                end_date=end or datetime.now().strftime("%Y%m%d"),
+                adjust="qfq",
+            )
             return _parse_daily_returns(df)
         except Exception as e:
             last_err = e
@@ -181,9 +194,12 @@ def fetch_index_hist(symbol: str = "930955", start: str = "", end: str = "") -> 
     """
     ak = _ak()
     try:
-        df = ak.index_zh_a_hist(symbol=symbol, period="daily",
-                                start_date=start or "20200101",
-                                end_date=end or datetime.now().strftime("%Y%m%d"))
+        df = ak.index_zh_a_hist(
+            symbol=symbol,
+            period="daily",
+            start_date=start or "20200101",
+            end_date=end or datetime.now().strftime("%Y%m%d"),
+        )
     except Exception as e:
         _LOGGER.warning("fetch_index_hist(%s) 失败: %s", symbol, e)
         return []
@@ -210,18 +226,22 @@ def tracking_error_report(
     time.sleep(2)
     idx_rets = fetch_index_hist(index_code)
     if not etf_rets or not idx_rets:
-        return {"etf_code": etf_code, "index_code": index_code,
-                "windows": {}, "error": "取数失败（ETF 或指数历史为空）"}
+        return {
+            "etf_code": etf_code,
+            "index_code": index_code,
+            "windows": {},
+            "error": "取数失败（ETF 或指数历史为空）",
+        }
 
     # 对齐日期：用 date → ret 的 dict，取交集（inner join）
     etf_map = {r["date"]: r["ret"] for r in etf_rets}
     idx_map = {r["date"]: r["ret"] for r in idx_rets}
     common_dates = sorted(set(etf_map) & set(idx_map))
     if len(common_dates) < 2:
-        return {"etf_code": etf_code, "index_code": index_code,
-                "windows": {}, "error": "共同日期不足 2 天"}
+        return {"etf_code": etf_code, "index_code": index_code, "windows": {}, "error": "共同日期不足 2 天"}
 
     import math
+
     diffs = [etf_map[d] - idx_map[d] for d in common_dates]
 
     out_windows: dict[str, dict] = {}

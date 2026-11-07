@@ -6,6 +6,7 @@
 
 零额外 API 调用——全部从已有 gene_scores.db 计算。
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -19,6 +20,7 @@ _DB = resolve_data_dir() / "gene_scores.db"
 @dataclass(frozen=True)
 class SectorPhase:
     """板块周期阶段分析结果。"""
+
     industry: str
     count_today: int
     count_avg_3d: float
@@ -44,10 +46,13 @@ def _get_zt_count_by_date_industry(date: str, industry: str) -> int:
     """某日某板块涨停股数（S066 Q16 回填 industry 列后直查；原 stub 因无此列恒返 0）。"""
     conn = sqlite3.connect(str(_DB))
     try:
-        return conn.execute(
-            "SELECT COUNT(DISTINCT code) FROM gene_scores WHERE date = ? AND industry = ?",
-            (date, industry),
-        ).fetchone()[0] or 0
+        return (
+            conn.execute(
+                "SELECT COUNT(DISTINCT code) FROM gene_scores WHERE date = ? AND industry = ?",
+                (date, industry),
+            ).fetchone()[0]
+            or 0
+        )
     except Exception:
         return 0
     finally:
@@ -93,8 +98,13 @@ def analyze_sector_phase(date: str, industry: str) -> SectorPhase | None:
     prev_dates = _get_prev_trading_dates(date, 3)
     if not prev_dates:
         return SectorPhase(
-            industry=industry, count_today=0, count_avg_3d=0.0,
-            momentum=0.0, phase="无历史", modifier=1.0, phase_note="无历史数据",
+            industry=industry,
+            count_today=0,
+            count_avg_3d=0.0,
+            momentum=0.0,
+            phase="无历史",
+            modifier=1.0,
+            phase_note="无历史数据",
         )
 
     count_today = _get_zt_count_by_date_industry(date, industry)
@@ -107,8 +117,13 @@ def analyze_sector_phase(date: str, industry: str) -> SectorPhase | None:
     stay_days = _sector_stay_days(date, industry)
 
     return SectorPhase(
-        industry=industry, count_today=count_today, count_avg_3d=round(count_avg_3d, 2),
-        momentum=round(momentum, 2), phase=phase, modifier=modifier, phase_note=note,
+        industry=industry,
+        count_today=count_today,
+        count_avg_3d=round(count_avg_3d, 2),
+        momentum=round(momentum, 2),
+        phase=phase,
+        modifier=modifier,
+        phase_note=note,
         stay_days=stay_days,
     )
 
@@ -144,7 +159,8 @@ def _sector_stay_days(date: str, industry: str, max_lookback: int = 30) -> int:
     try:
         placeholders = ",".join("?" * len(prev))
         on_board = {
-            r[0] for r in conn.execute(
+            r[0]
+            for r in conn.execute(
                 f"SELECT DISTINCT date FROM gene_scores WHERE industry=? AND date IN ({placeholders})",
                 [industry, *prev],
             ).fetchall()
@@ -168,6 +184,7 @@ def sector_strength_rank(date: str, sectors: list[dict]) -> list[dict]:
     sectors: [{industry, zt_count_today, zt_momentum, fund_flow}]
     返回按强度降序排序的 TOP-10 + 候选修饰系数。
     """
+
     def strength(s: dict) -> float:
         zt = s.get("zt_count_today", 0)
         mom = s.get("zt_momentum", 0)
@@ -198,6 +215,7 @@ def detect_rotation(date_prev: str, date_curr: str, sectors_prev: list[dict], se
 
     对比 T 日 vs T-1 日板块涨停数排名变化。上升 >= 5 位 = 启动候选，下降 >= 5 位 = 退潮。
     """
+
     def rank_map(sectors: list[dict]) -> dict[str, int]:
         ranked = sorted(sectors, key=lambda s: s.get("zt_count_today", 0), reverse=True)
         return {s["industry"]: i + 1 for i, s in enumerate(ranked)}
@@ -212,13 +230,15 @@ def detect_rotation(date_prev: str, date_curr: str, sectors_prev: list[dict], se
         curr_r = curr_ranks.get(ind, 999)
         change = prev_r - curr_r  # 正=上升
         if abs(change) >= 5:
-            rotations.append({
-                "industry": ind,
-                "prev_rank": prev_r if prev_r != 999 else None,
-                "curr_rank": curr_r if curr_r != 999 else None,
-                "change": change,
-                "signal": "启动候选" if change >= 5 else "退潮",
-            })
+            rotations.append(
+                {
+                    "industry": ind,
+                    "prev_rank": prev_r if prev_r != 999 else None,
+                    "curr_rank": curr_r if curr_r != 999 else None,
+                    "change": change,
+                    "signal": "启动候选" if change >= 5 else "退潮",
+                }
+            )
     return rotations
 
 
@@ -242,16 +262,21 @@ def aggregate_sectors(date: str) -> list[dict]:
     conn = sqlite3.connect(str(_DB))
     try:
         # 1. 前 3 个交易日（与 industry 无关，算一次，移出循环）
-        prev_dates = [r[0] for r in conn.execute(
-            "SELECT DISTINCT date FROM gene_scores WHERE date < ? ORDER BY date DESC LIMIT 3",
-            (date,),
-        ).fetchall()]
+        prev_dates = [
+            r[0]
+            for r in conn.execute(
+                "SELECT DISTINCT date FROM gene_scores WHERE date < ? ORDER BY date DESC LIMIT 3",
+                (date,),
+            ).fetchall()
+        ]
         # 2. 当日各板块涨停数（单条 GROUP BY，替代 per-industry COUNT）
-        today_counts = dict(conn.execute(
-            "SELECT industry, COUNT(DISTINCT code) FROM gene_scores "
-            "WHERE date = ? AND industry IS NOT NULL GROUP BY industry",
-            (date,),
-        ).fetchall())
+        today_counts = dict(
+            conn.execute(
+                "SELECT industry, COUNT(DISTINCT code) FROM gene_scores "
+                "WHERE date = ? AND industry IS NOT NULL GROUP BY industry",
+                (date,),
+            ).fetchall()
+        )
         # 3. 前 3 日各板块涨停数（按 industry,date GROUP，Python 聚合 sum per industry；
         # DISTINCT code per (industry,date) 再 sum，等价原 sum(_get_zt_count_by_date_industry(d, ind)))
         prev_counts: dict[str, int] = {}
@@ -274,12 +299,14 @@ def aggregate_sectors(date: str) -> list[dict]:
     sectors: list[dict] = []
     for ind, count_today in today_counts.items():
         count_avg_3d = prev_counts.get(ind, 0) / n_prev
-        sectors.append({
-            "industry": ind,
-            "zt_count_today": count_today,
-            "zt_momentum": count_today - count_avg_3d,
-            "fund_flow": 0,  # §44 数据阻断降级 0
-        })
+        sectors.append(
+            {
+                "industry": ind,
+                "zt_count_today": count_today,
+                "zt_momentum": count_today - count_avg_3d,
+                "fund_flow": 0,  # §44 数据阻断降级 0
+            }
+        )
     return sectors
 
 
@@ -366,6 +393,7 @@ def aggregate_multi(date: str) -> list[dict]:
         industry_map = {r[0]: r[1] for r in rows if r[1]}
     except Exception as e:  # noqa: BLE001
         import logging
+
         logging.getLogger(__name__).warning("code_industry 表查询失败（降级，不阻塞）: %s", e)
     finally:
         conn.close()
@@ -377,17 +405,41 @@ def aggregate_multi(date: str) -> list[dict]:
         _cc_path = _DB.parent / "concept_map_cache.json"
         if _cc_path.exists():
             import json as _json
+
             concept_cache = _json.loads(_cc_path.read_bytes())
     except Exception:
         concept_cache = {}
 
     # 市场分类噪声过滤（concept_blocks 返回含这些非题材标签：融资融券/沪深股通/振幅/盘大小/重仓/地域/指数/热股）
     _NOISE_CONCEPTS = {
-        "融资融券", "深股通", "沪股通", "昨日高振幅", "小盘股", "中盘股", "大盘股",
-        "QFII重仓", "机构重仓", "最近多板", "昨日涨停", "昨日触板", "昨日炸板",
-        "央视50", "MSCI中国", "富时罗素", "中证500", "沪深300", "上证50",
-        "创业板指", "科创50", "注册制次新股", "次新股", "老风口",
-        "标准普尔", "东方财富热股", "侃股网利好", "同花顺F10",
+        "融资融券",
+        "深股通",
+        "沪股通",
+        "昨日高振幅",
+        "小盘股",
+        "中盘股",
+        "大盘股",
+        "QFII重仓",
+        "机构重仓",
+        "最近多板",
+        "昨日涨停",
+        "昨日触板",
+        "昨日炸板",
+        "央视50",
+        "MSCI中国",
+        "富时罗素",
+        "中证500",
+        "沪深300",
+        "上证50",
+        "创业板指",
+        "科创50",
+        "注册制次新股",
+        "次新股",
+        "老风口",
+        "标准普尔",
+        "东方财富热股",
+        "侃股网利好",
+        "同花顺F10",
     }
 
     def _is_noise(label: str) -> bool:
@@ -431,8 +483,7 @@ def aggregate_multi(date: str) -> list[dict]:
             label_count[label]["codes"].append({"code": code, "name": name})
 
     return [
-        {"label": k, "zt_count_today": v["count"], "dims": sorted(v["dims"]),
-         "codes": v["codes"][:20]}
+        {"label": k, "zt_count_today": v["count"], "dims": sorted(v["dims"]), "codes": v["codes"][:20]}
         for k, v in sorted(label_count.items(), key=lambda x: -x[1]["count"])
     ]
 

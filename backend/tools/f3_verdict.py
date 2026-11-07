@@ -14,6 +14,7 @@ multifactor null 对账（spec §1.1）：backend/tools/multifactor_combo_valida
 推翻高置信 null → 须非凡证据（spec §1.1「非凡证据」+ memory rigorous-methodology）。其余 status 与 null 一致
 （无 validated 融合 edge），诚实降级（spec §6「不过=重发现 multifactor null，诚实标融合无 validated edge」）。
 """
+
 from __future__ import annotations
 
 
@@ -48,21 +49,14 @@ def interpret_f3_verdict(
     elif status == "underpowered":
         fusion_conclusion = "fusion_underpowered"
         null_engagement = (
-            "consistent with multifactor null —— days_robust<60 不判，"
-            "无 validated 融合 edge（诚实降级，spec §6）"
+            "consistent with multifactor null —— days_robust<60 不判，无 validated 融合 edge（诚实降级，spec §6）"
         )
     elif status == "falsified":
         fusion_conclusion = "fusion_falsified"
-        null_engagement = (
-            "consistent with multifactor null —— 融合 event 群体均收益≤0，"
-            "重发现 null（spec §6 预期路径）"
-        )
+        null_engagement = "consistent with multifactor null —— 融合 event 群体均收益≤0，重发现 null（spec §6 预期路径）"
     else:  # exploratory / not_validated
         fusion_conclusion = "fusion_exploratory"
-        null_engagement = (
-            "consistent with multifactor null —— 无 validated 融合 edge，"
-            "诚实标探索性不判（spec §6）"
-        )
+        null_engagement = "consistent with multifactor null —— 无 validated 融合 edge，诚实标探索性不判（spec §6）"
 
     return {
         "status": status,

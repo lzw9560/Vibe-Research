@@ -43,18 +43,11 @@ class FeatureSpec:
 
     def __post_init__(self) -> None:
         if self.availability_offset < 0:
-            raise ValueError(
-                f"availability_offset must be >= 0, got {self.availability_offset}"
-            )
+            raise ValueError(f"availability_offset must be >= 0, got {self.availability_offset}")
         if self.stage not in _STAGE_ORDER:
-            raise ValueError(
-                f"stage must be one of {_STAGE_ORDER.keys()}, got '{self.stage}'"
-            )
+            raise ValueError(f"stage must be one of {_STAGE_ORDER.keys()}, got '{self.stage}'")
         if self.compliance_flag not in _VALID_COMPLIANCE_FLAGS:
-            raise ValueError(
-                f"compliance_flag must be one of {_VALID_COMPLIANCE_FLAGS}, "
-                f"got '{self.compliance_flag}'"
-            )
+            raise ValueError(f"compliance_flag must be one of {_VALID_COMPLIANCE_FLAGS}, got '{self.compliance_flag}'")
 
 
 class Registry:
@@ -88,15 +81,9 @@ class Registry:
         leak future information.
         """
         if stage not in _STAGE_ORDER:
-            raise ValueError(
-                f"stage must be one of {_STAGE_ORDER.keys()}, got '{stage}'"
-            )
+            raise ValueError(f"stage must be one of {_STAGE_ORDER.keys()}, got '{stage}'")
         current = _STAGE_ORDER[stage]
-        return [
-            spec
-            for spec in self._store.values()
-            if _STAGE_ORDER[spec.stage] <= current
-        ]
+        return [spec for spec in self._store.values() if _STAGE_ORDER[spec.stage] <= current]
 
     def list_for_head(self, head: str) -> List[FeatureSpec]:
         """STUB — return all registered features regardless of stage.

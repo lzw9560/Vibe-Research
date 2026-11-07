@@ -11,6 +11,7 @@ grill 修复：
 - #5 input_files：wire_verdict 传 input 文件 hash（forecast_reports/kline_cache 复现锚点）
 - n_comparisons：多 horizon/arm 多重比较校正（BH K=15，verifier event 分支已加 p_bonf/p_bh）
 """
+
 from __future__ import annotations
 
 import bisect
@@ -51,8 +52,19 @@ def build_return_series(
     - exit bar volume>0
     """
     if not calendar:
-        return [], [], {"n_events": len(events), "n_valid": 0, "n_out_of_range": 0,
-                         "n_no_entry": 0, "n_no_exit": 0, "n_halted": 0}, []
+        return (
+            [],
+            [],
+            {
+                "n_events": len(events),
+                "n_valid": 0,
+                "n_out_of_range": 0,
+                "n_no_entry": 0,
+                "n_no_exit": 0,
+                "n_halted": 0,
+            },
+            [],
+        )
     cache_min, cache_max = calendar[0], calendar[-1]
     returns: list[float] = []
     dates: list[str] = []
@@ -112,6 +124,7 @@ def build_return_series(
             continue
         if cost_pct is None:
             from engine.accounting import _cost_pct  # noqa: PLC0415
+
             cp_pp = _cost_pct(entry_open, 100.0, entry_date)
             cp_dec = cp_pp / 100.0
         else:
@@ -152,7 +165,11 @@ def run_event_verdict(
     verify event 分支 day_clustered_t_test + p_bonf/p_bh（grill #3 多重比较校正）。
     """
     returns, dates, guards, costs = build_return_series(
-        events, kline_cache, calendar, horizon, cost,
+        events,
+        kline_cache,
+        calendar,
+        horizon,
+        cost,
     )
     if cost is None and costs:
         avg_cost_ratio = sum(costs) / len(costs) / 100.0

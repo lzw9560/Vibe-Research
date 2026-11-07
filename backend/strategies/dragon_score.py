@@ -5,6 +5,7 @@
 树阈值吃掉）。读 DIMENSION_REGISTRY Dimension.data_source 取原始值→归一化→加权求和。
 纯函数无副作用（同输入→同输出）。
 """
+
 from __future__ import annotations
 
 

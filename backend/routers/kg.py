@@ -8,6 +8,7 @@
 - 私有数据隔离：只返图谱客观数据（实体 frontmatter/关系链接），持仓/研报/API key 不进 endpoint
 - 不碰选股分（scoring.py）/§44v2（lift_for_arm）——只读图谱客观数据
 """
+
 from __future__ import annotations
 
 import importlib
@@ -112,6 +113,7 @@ def kg_inject(code: str = Query(..., description="6 位股票代码")) -> Dict[s
     合规：公告公开数据（em_get），LLM 输出待审非臆造进正式区。
     """
     from tools.kg_inject import inject_announcements_to_inbox  # noqa: PLC0415
+
     try:
         result = inject_announcements_to_inbox(code)
         return {"data": result}
@@ -123,6 +125,7 @@ def kg_inject(code: str = Query(..., description="6 位股票代码")) -> Dict[s
 def kg_approve(filename: str = Query(..., description="inbox 文件名")) -> Dict[str, Any]:
     """M7 审过：inbox/{filename} → reference/{filename}（移到正式区）。"""
     from tools.kg_inject import approve_inbox_to_reference  # noqa: PLC0415
+
     try:
         result = approve_inbox_to_reference(filename)
         return {"data": result}

@@ -21,6 +21,7 @@ spec §3.1 + plan §2 R1-R5 设计：
 - 输出含【拒绝介入】/独食独大/散户霸榜等量化方向参数，挂轻量风险提醒
 - 历史统计特征，市场有风险
 """
+
 from __future__ import annotations
 
 import logging
@@ -91,6 +92,7 @@ def _default_config() -> dict[str, Any]:
 # R2.2 子串模糊匹配工具
 # ===========================================================================
 
+
 def match_seat_substring(blacklist_name: str, seat_name: str) -> bool:
     """子串模糊匹配（R2.2，应对席位写法差异）。
 
@@ -113,6 +115,7 @@ def match_seat_substring(blacklist_name: str, seat_name: str) -> bool:
 # ===========================================================================
 # DragonTigerSeatFilter 主类
 # ===========================================================================
+
 
 class DragonTigerSeatFilter:
     """龙虎榜席位三分级风控（R1-R5）。
@@ -140,6 +143,7 @@ class DragonTigerSeatFilter:
         """惰性获取 seat_engine（避免 import 时初始化）。"""
         if self._seat_engine is None:
             from seat_engine.service import get_engine
+
             self._seat_engine = get_engine()
         return self._seat_engine
 
@@ -147,9 +151,7 @@ class DragonTigerSeatFilter:
     # R1 龙虎榜取数
     # -------------------------------------------------------------------
 
-    def fetch_consensus(
-        self, stock_code: str, trade_date: str
-    ) -> dict[str, Any] | None:
+    def fetch_consensus(self, stock_code: str, trade_date: str) -> dict[str, Any] | None:
         """R1 龙虎榜取数：复用 seat_engine.compute_consensus_signal。
 
         Args:
@@ -165,7 +167,9 @@ class DragonTigerSeatFilter:
         except Exception as e:
             _logger.warning(
                 "fetch_consensus 取数失败 code=%s date=%s err=%s",
-                stock_code, trade_date, e,
+                stock_code,
+                trade_date,
+                e,
             )
             return None
 
@@ -173,9 +177,7 @@ class DragonTigerSeatFilter:
     # R2 黑名单硬剔除
     # -------------------------------------------------------------------
 
-    def _calc_blacklist_ratio(
-        self, buy_seats: list[dict], total_buy_amount: float
-    ) -> tuple[float, list[str]]:
+    def _calc_blacklist_ratio(self, buy_seats: list[dict], total_buy_amount: float) -> tuple[float, list[str]]:
         """计算黑名单席位占比（R2）。
 
         Args:
@@ -276,9 +278,7 @@ class DragonTigerSeatFilter:
     # R4 散户霸榜软标记
     # -------------------------------------------------------------------
 
-    def _check_retail_dominance(
-        self, buy_seats: list[dict]
-    ) -> list[str]:
+    def _check_retail_dominance(self, buy_seats: list[dict]) -> list[str]:
         """R4 散户霸榜软标记。
 
         判定（spec R4）：
@@ -316,9 +316,7 @@ class DragonTigerSeatFilter:
     # R5 数据缺失处置
     # -------------------------------------------------------------------
 
-    def _handle_data_missing(
-        self, suggestion: PositionSuggestion
-    ) -> tuple[bool, list[str], str | None]:
+    def _handle_data_missing(self, suggestion: PositionSuggestion) -> tuple[bool, list[str], str | None]:
         """R5 数据缺失处置（龙虎榜"未取得"时）。
 
         spec R5/AC4：

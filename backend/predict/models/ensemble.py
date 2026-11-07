@@ -54,9 +54,7 @@ class SoftVoteEnsemble:
             if sys.platform == "win32":
                 # LightGBM fit() hangs on Windows (OSError/access violation);
                 # force immediate fallback to avoid un-catchable hang.
-                raise OSError(
-                    "lightgbm disabled on Windows (known hang)"
-                )
+                raise OSError("lightgbm disabled on Windows (known hang)")
             from lightgbm import LGBMClassifier
 
             self._tree = LGBMClassifier(

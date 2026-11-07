@@ -1,6 +1,7 @@
 """
 Market router.
 """
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Any, Dict
@@ -16,11 +17,13 @@ router = APIRouter(tags=["market"])
 
 class _GlobalStockResponse(BaseModel):
     """``/api/global/stock`` 信封（T9）。"""
+
     data: GlobalStock
 
 
 class _EmotionResponseEnvelope(BaseModel):
     """``/api/market/emotion`` 信封（T10）。"""
+
     data: EmotionResponse
 
 
@@ -60,10 +63,12 @@ def market_turnover_top() -> Dict[str, Any]:
 
 # ── S104：hithink 特色榜单端点（异动/飙升/热股榜，东财无独立源） ────────
 
+
 @router.get("/api/market/skyrocket")
 def market_skyrocket(period: str = Query("day", description="day(日榜) / hour(小时榜)")) -> Dict[str, Any]:
     """A 股飙升榜（同花顺口径，hithink 独家数据源）。客观榜单数据，非推荐。"""
     from data.sources.hithink_src import skyrocket
+
     if period not in ("day", "hour"):
         raise HTTPException(400, "period must be day | hour")
     try:
@@ -76,6 +81,7 @@ def market_skyrocket(period: str = Query("day", description="day(日榜) / hour(
 def market_hot_stock(period: str = Query("day", description="day / hour")) -> Dict[str, Any]:
     """A 股热股榜（同花顺口径，hithink 独家数据源）。客观榜单数据，非推荐。"""
     from data.sources.hithink_src import hot_stock
+
     if period not in ("day", "hour"):
         raise HTTPException(400, "period must be day | hour")
     try:
@@ -88,6 +94,7 @@ def market_hot_stock(period: str = Query("day", description="day / hour")) -> Di
 def market_anomaly(tag_codes: str | None = Query(None, description="可选异动类型标签过滤")) -> Dict[str, Any]:
     """A 股异动分析（同花顺口径，hithink 独家数据源）。盘后可能空。客观异动数据，非推荐。"""
     from data.sources.hithink_src import anomaly_list
+
     try:
         return {"data": anomaly_list(tag_codes), "source": "hithink"}
     except Exception as e:  # noqa: BLE001

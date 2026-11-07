@@ -4,6 +4,7 @@
 daily_report ——生成并可选推送每日信号报告（C1）。
 keypoint_notify ——关键点位提醒：D 收盘入场 / D+1 开盘出场 / gap-down 诚实标（C3）。
 """
+
 from __future__ import annotations
 
 import json
@@ -27,6 +28,7 @@ def _actual_pnl_for_weekly_review() -> dict[str, Any]:
     无记录时返 None 字段。
     """
     from routers.signals import _load_manual_trades
+
     trades = _load_manual_trades()
     closed = [t for t in trades if (t.get("actual_pnl") or {}).get("status") == "closed"]
     if not closed:
@@ -41,6 +43,7 @@ def _actual_pnl_for_weekly_review() -> dict[str, Any]:
         "n_closed": len(closed),
         "latest_leak": latest_leak,
     }
+
 
 #: 信号记录存储路径（.vibe-research/，不进 git）
 _SIGNAL_DIR = Path(__file__).resolve().parents[3] / ".vibe-research" / "signal_reports"
@@ -83,7 +86,8 @@ def daily_report(payload: dict[str, Any]) -> dict[str, Any]:
     env_val = os.environ.get("VR_ALLOW_X1DOT0", "未设")
     logger.info(
         "[S218] daily_report cap 状态: cap.effective=%s（VR_ALLOW_X1DOT0=%s，设=1 解锁 bull ×1.0）",
-        cap_effective, env_val,
+        cap_effective,
+        env_val,
     )
 
     # 2. 渲染报告
@@ -104,6 +108,7 @@ def daily_report(payload: dict[str, Any]) -> dict[str, Any]:
         else:
             try:
                 from notification.notification_service import get_notification_service
+
                 service = get_notification_service()
                 if hasattr(service, "send"):
                     service.send(report_text)
@@ -121,10 +126,12 @@ def daily_report(payload: dict[str, Any]) -> dict[str, Any]:
 
 # ── C3: keypoint_notify ───────────────────────────────────────────────────
 
+
 def _send_text_notification(text: str) -> None:
     """通过 NotificationService 发送纯文本通知（复用 _send_notification 路径）。"""
     try:
         from notification.notification_service import get_notification_service
+
         service = get_notification_service()
         if hasattr(service, "send"):
             service.send(text)
@@ -338,12 +345,14 @@ def keypoint_notify(payload: dict[str, Any]) -> dict[str, Any]:
 
 # ── Stub / TODO for future S218 components ──────────────────────────────
 
+
 def intraday_alert(payload: dict[str, Any]) -> dict[str, Any]:
     """TODO: 盘中异动预警（量比突增/封板异动）。"""
     return {"status": "skipped", "reason": "TODO: S218 P2 intraday_alert stub"}
 
 
 # ── C5: weekly_review ───────────────────────────────────────────────────
+
 
 def _evaluate_cap_up_gate(bear_days: int, decay_stable: bool, lbc3_days: int) -> bool:
     """统一 cap 升 ×1.0 gate：须 ALL 满足，非 OR。"""
@@ -386,7 +395,9 @@ def _render_weekly_review(
         lines.append("  只能看 paper 表现，没真交易收益；接券商才有真 closure")
     if paper_trends:
         last = paper_trends[-1]
-        lines.append(f"  最近周胜率 {last.get('win_rate', 0)*100:.1f}%（n={last.get('n_decided', 0)}，{last.get('label', '')}）")
+        lines.append(
+            f"  最近周胜率 {last.get('win_rate', 0) * 100:.1f}%（n={last.get('n_decided', 0)}，{last.get('label', '')}）"
+        )
     else:
         lines.append("  暂无 paper 交易记录")
     lines.append("")
@@ -418,9 +429,9 @@ def _render_weekly_review(
     lines.append("【process-theater 自检】")
     mean_wr = last.get("win_rate", 0.5) if paper_trends else 0.5
     if mean_wr < 0.5:
-        lines.append(f"  纸面 P&L mean={mean_wr*100:.1f}% < 0 → 触发 cap-down 提案")
+        lines.append(f"  纸面 P&L mean={mean_wr * 100:.1f}% < 0 → 触发 cap-down 提案")
     else:
-        lines.append(f"  纸面 P&L mean={mean_wr*100:.1f}% ≥ 0 → 未触发 cap-down")
+        lines.append(f"  纸面 P&L mean={mean_wr * 100:.1f}% ≥ 0 → 未触发 cap-down")
     lines.append("  自检标准：paper P&L mean<0 OR 衰减轨迹跨 negative → 生成 cap-down 提案")
     lines.append("")
 
@@ -459,6 +470,7 @@ def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
 
     # 1. 复用 C1 shared core
     from tools.signal_report import get_consecutive_relay_signals
+
     signals = get_consecutive_relay_signals(run_date)
 
     # 2. 取 paper P&L（TradeJournal）
@@ -466,6 +478,7 @@ def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
     arm_status: dict | None = None
     try:
         from engine.trade_journal import TradeJournal
+
         tj = TradeJournal()
         paper_trends = tj.query_winrate_trends(arm="consecutive_relay")
         arm_status = tj.query_arm_status(arm="consecutive_relay")
@@ -476,6 +489,7 @@ def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
     cap = signals.get("cap", {})
     effective = cap.get("effective", 0.0)  # v6.5 P1: default 0 fail-safe（原 1.0 fail-open）
     from tools.signal_report import _compute_consecutive_relay_decay
+
     decay_stats = _compute_consecutive_relay_decay()
     cap_up_ready = _evaluate_cap_up_gate(
         bear_days=decay_stats["bear_days"],
@@ -485,7 +499,9 @@ def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
     cap_down_triggered = _evaluate_cap_down_trigger(decay_pct=decay_stats["decay_pct"])
 
     # 4. 生成报告（传 decay_stats + cap_up_ready 动态渲染，非硬编码）
-    review_text = _render_weekly_review(signals, paper_trends, arm_status, decay_stats, cap_up_ready, cap_down_triggered)
+    review_text = _render_weekly_review(
+        signals, paper_trends, arm_status, decay_stats, cap_up_ready, cap_down_triggered
+    )
 
     # 5. process-theater 自检：paper P&L mean<0 OR 衰减跨 negative → cap-down 提案
     #    S218 P0: 优先用实际 P&L（手动交易记录），没有才降级 paper P&L
@@ -512,7 +528,7 @@ def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
                 "action": "cap-down",
                 "from": effective,
                 "to": 0.5,
-                "reason": f"paper P&L mean={mean_wr*100:.1f}% < 0，衰减轨迹跨 negative",
+                "reason": f"paper P&L mean={mean_wr * 100:.1f}% < 0，衰减轨迹跨 negative",
             }
     else:
         # 无 paper 记录时，若衰减>34% 也提案
@@ -553,6 +569,7 @@ def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
         else:
             try:
                 from notification.notification_service import get_notification_service
+
                 service = get_notification_service()
                 if hasattr(service, "send"):
                     service.send(review_text)
@@ -602,11 +619,12 @@ def regime_gate_combo_log(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         result = subprocess.run(
             [sys.executable, str(script), "--log"],
-            capture_output=True, text=True, timeout=900,  # 300→900：monitor build 全市场慢（10-27/10-28 超 300s 被 kill，表只 10-26 一行，gate 多日趋势看不到）
+            capture_output=True,
+            text=True,
+            timeout=900,  # 300→900：monitor build 全市场慢（10-27/10-28 超 300s 被 kill，表只 10-26 一行，gate 多日趋势看不到）
         )
         if result.returncode != 0:
-            logger.warning("[regime_gate_combo_log] 脚本失败 rc=%s: %s",
-                           result.returncode, result.stderr[:300])
+            logger.warning("[regime_gate_combo_log] 脚本失败 rc=%s: %s", result.returncode, result.stderr[:300])
             return {"status": f"error: rc={result.returncode}", "stderr": result.stderr[:200]}
         last_line = result.stdout.strip().split("\n")[-1] if result.stdout.strip() else ""
         logger.info("[regime_gate_combo_log] 跑 ok: %s", last_line)
@@ -642,11 +660,12 @@ def combo_daily_notify(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         result = subprocess.run(
             [sys.executable, str(script)],
-            capture_output=True, text=True, timeout=600,  # 300→600：combo_notify 调 load_combo_5d_today（90s+ 解析 1.3GB JSON）+ compute_gate（60s 读全市场），300s 可能不够
+            capture_output=True,
+            text=True,
+            timeout=600,  # 300→600：combo_notify 调 load_combo_5d_today（90s+ 解析 1.3GB JSON）+ compute_gate（60s 读全市场），300s 可能不够
         )
         if result.returncode != 0:
-            logger.warning("[combo_daily_notify] 脚本失败 rc=%s: %s",
-                           result.returncode, result.stderr[:300])
+            logger.warning("[combo_daily_notify] 脚本失败 rc=%s: %s", result.returncode, result.stderr[:300])
             return {"status": f"error: rc={result.returncode}", "stderr": result.stderr[:200]}
         last_line = result.stdout.strip().split("\n")[-1] if result.stdout.strip() else ""
         logger.info("[combo_daily_notify] 跑 ok: %s", last_line)

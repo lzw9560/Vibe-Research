@@ -31,17 +31,17 @@ logger = logging.getLogger("vibe-research")
 
 
 class CircuitState(Enum):
-    CLOSED = "closed"       # 正常：允许请求
-    OPEN = "open"           # 熔断：快速失败
-    HALF_OPEN = "half_open" # 半开：试探性请求
+    CLOSED = "closed"  # 正常：允许请求
+    OPEN = "open"  # 熔断：快速失败
+    HALF_OPEN = "half_open"  # 半开：试探性请求
 
 
 @dataclass
 class CircuitBreakerConfig:
-    failure_threshold: int = 5          # 连续失败次数阈值
-    recovery_timeout: float = 60.0      # 熔断后多久进入半开（秒）
-    half_open_max_calls: int = 3        # 半开状态最大试探次数
-    success_threshold: int = 2          # 半开状态连续成功次数阈值
+    failure_threshold: int = 5  # 连续失败次数阈值
+    recovery_timeout: float = 60.0  # 熔断后多久进入半开（秒）
+    half_open_max_calls: int = 3  # 半开状态最大试探次数
+    success_threshold: int = 2  # 半开状态连续成功次数阈值
 
 
 # ── SQLite 持久化层（S164 R1）────────────────────────────────────────────
@@ -55,6 +55,7 @@ def _get_db_path() -> str:
     global _db_path_cache
     if _db_path_cache is None:
         from vr_paths import resolve_data_dir
+
         _db_path_cache = str(resolve_data_dir() / "circuit_breaker_state.db")
     return _db_path_cache
 

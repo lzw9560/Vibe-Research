@@ -7,7 +7,9 @@ snapshot_zt_pool 已加 fallback，此脚本遍历缺日调它回补。
 用法：python tools/backfill_zt_history.py [start_date] [end_date]
 默认 zt_history.db 已有日范围（MIN~MAX date）。
 """
+
 import sys
+
 sys.path.insert(0, ".")
 from data.zt_history_store import snapshot_zt_pool
 from vr_paths import is_trading_day, resolve_data_dir
@@ -36,7 +38,9 @@ while d <= end:
     if is_trading_day(d) and ds not in existing:
         print(f"回补 {ds}...", flush=True)
         try:
-            n = snapshot_zt_pool(date=ds, is_final=True)  # 历史日终盘稳定（T6 查 is_final=1，fallback 链 em→ths→hithink）
+            n = snapshot_zt_pool(
+                date=ds, is_final=True
+            )  # 历史日终盘稳定（T6 查 is_final=1，fallback 链 em→ths→hithink）
             if n > 0:
                 filled += 1
                 print(f"  {ds}: {n} 条", flush=True)

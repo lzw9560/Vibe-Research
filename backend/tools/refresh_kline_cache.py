@@ -9,6 +9,7 @@ cache 缺生产方（原 backfill_kline_samples.py 已不在仓库），本脚�
 baostock 非东财，不被 IP 限流（§44 grill 资金流被 push2his 限流，kline 不受影响）。
 用法：cd backend && .venv/bin/python tools/refresh_kline_cache.py [--max N]
 """
+
 from __future__ import annotations
 
 import json
@@ -48,6 +49,7 @@ def _last_trading_date() -> str:
     """最近交易日（周末/节假日回退）。优先 vr_paths，失败返今日。"""
     try:
         from vr_paths import last_trading_date_str
+
         return last_trading_date_str()
     except Exception:
         return datetime.now().strftime("%Y-%m-%d")
@@ -71,6 +73,7 @@ def _resolve_refresh_end_date(default_end: str, fetch_fn) -> tuple[str, bool]:
     test_bars = fetch_fn("sh.600000", default_end, default_end)
     if not test_bars:
         from vr_paths import prev_trading_date_str
+
         prev = prev_trading_date_str()
         print(f"[refresh] baostock 当日 bar 未就绪 end_date={default_end}，回退到 {prev}（刷前一天数据，不跳过整轮）")
         return prev, True
@@ -80,12 +83,14 @@ def _resolve_refresh_end_date(default_end: str, fetch_fn) -> tuple[str, bool]:
 def main(max_stocks: int | None = None, codes: list[str] | None = None) -> int:
     # SQLite store（替代全量 json.loads 482MB→2.19GB 峰值）：per-code get_bars + 批量 upsert
     from engine.kline_cache_store import get_bars, get_all_codes, upsert_many
+
     to_upsert: list[tuple[str, list[dict]]] = []
     end_date = _last_trading_date()
     # 传 codes 优先（刷特定 picks），否则 load_industry_map 全 A（~5540）
     if not codes:
         try:
             from strategies.pattern_scan import load_industry_map
+
             codes = list(load_industry_map().keys())
         except Exception as e:
             print(f"[refresh] load_industry_map 失败，降级增量 get_all_codes(): {e}")
@@ -106,7 +111,7 @@ def main(max_stocks: int | None = None, codes: list[str] | None = None) -> int:
             if attempt == 2:
                 print(f"[refresh] baostock login 3 次失败: {e}")
                 return 1
-            time.sleep(2 ** attempt)  # 1s, 2s backoff
+            time.sleep(2**attempt)  # 1s, 2s backoff
 
     # S184 grill（方案 0）：数据就绪预检——baostock 当日 bar 17:00+ 更新。
     # 未就绪时回退到前一交易日继续刷新（不跳过整轮——前几天 bars 仍需补，
@@ -128,7 +133,7 @@ def main(max_stocks: int | None = None, codes: list[str] | None = None) -> int:
                 except (ImportError, DependencyMissing):
                     print(f"[refresh] re-login 失败 @ {i}, 中止")
                     break
-                print(f"[refresh] re-login @ {i}/{len(codes)} elapsed={time.time()-t0:.0f}s")
+                print(f"[refresh] re-login @ {i}/{len(codes)} elapsed={time.time() - t0:.0f}s")
 
             existing = get_bars(code)
             if existing:
@@ -169,8 +174,11 @@ def main(max_stocks: int | None = None, codes: list[str] | None = None) -> int:
                 new_codes_added += 1
 
             if (i + 1) % 100 == 0:
-                print(f"[refresh] {i+1}/{len(codes)} updated={updated} new={new_codes_added} "
-                      f"new_bars={new_bars_total} elapsed={time.time()-t0:.0f}s", flush=True)
+                print(
+                    f"[refresh] {i + 1}/{len(codes)} updated={updated} new={new_codes_added} "
+                    f"new_bars={new_bars_total} elapsed={time.time() - t0:.0f}s",
+                    flush=True,
+                )
     finally:
         logout()
 
@@ -178,12 +186,13 @@ def main(max_stocks: int | None = None, codes: list[str] | None = None) -> int:
     if to_upsert:
         upsert_many(to_upsert)
 
-    print(f"[refresh] done: {updated}/{len(codes)} updated, {new_codes_added} new codes, "
-          f"{new_bars_total} new bars, {skipped} already-fresh, elapsed={time.time()-t0:.0f}s")
+    print(
+        f"[refresh] done: {updated}/{len(codes)} updated, {new_codes_added} new codes, "
+        f"{new_bars_total} new bars, {skipped} already-fresh, elapsed={time.time() - t0:.0f}s"
+    )
     # newest 取 to_upsert 最后一 bar（cache 不再全量 load，从 SQLite 算 newest）
-    newest_now = max((b['date'] for _, bars in to_upsert for b in bars[-1:]), default='?')
-    print(f"[refresh] end_date={end_date} upserted={len(to_upsert)} "
-          f"newest now={newest_now}")
+    newest_now = max((b["date"] for _, bars in to_upsert for b in bars[-1:]), default="?")
+    print(f"[refresh] end_date={end_date} upserted={len(to_upsert)} newest now={newest_now}")
     return 0
 
 

@@ -3,6 +3,7 @@
 §44 60日复验窗口：breakout naive lift=1.36x <2x（2026-09-02 实算 208043 obs），未 validated 但不阻断——honest_label 标弱信号，
 edge 主来自风控非对称（(b) ethos）。前向测试期间不投真金。
 """
+
 from typing import Any, Dict
 
 from fastapi import APIRouter, Query
@@ -26,8 +27,7 @@ async def premarket_selection(
     sel = select_premarket_with_risk(date, top_n=top_n, min_score=min_score)
     return {
         "disclaimer": (
-            "弱信号（§44 naive lift=1.36x<2x 非 validated edge）。"
-            "前向测试期间不投真金。历史统计特征，市场有风险。"
+            "弱信号（§44 naive lift=1.36x<2x 非 validated edge）。前向测试期间不投真金。历史统计特征，市场有风险。"
         ),
         "data": {
             "target_date": sel.target_date,

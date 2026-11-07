@@ -7,6 +7,7 @@ backfill 324 股（cache 最早 >= 2025-06-01）更早 bars 让 verdict 用满 3
 new_bars enrich_pctchg（0.0 复算覆盖，防一字板误判——harness 用 cache 直读不 enrich）。
 baostock 不封 IP，sleep 0.3s/股限流。不碰 em_get。
 """
+
 from __future__ import annotations
 
 import json
@@ -36,9 +37,10 @@ START = "2025-06-01"
 def main() -> None:
     cache = json.loads(CACHE.read_bytes())
     conn = sqlite3.connect(str(DB))
-    codes = [r[0] for r in conn.execute(
-        "SELECT DISTINCT code FROM zt_history WHERE lbc>=2 AND lbc<=3 AND is_final=1"
-    ).fetchall()]
+    codes = [
+        r[0]
+        for r in conn.execute("SELECT DISTINCT code FROM zt_history WHERE lbc>=2 AND lbc<=3 AND is_final=1").fetchall()
+    ]
     conn.close()
 
     need: list[tuple[str, str | None]] = []
@@ -72,7 +74,7 @@ def main() -> None:
                     n_bars_added += len(new_bars)
                 time.sleep(0.3)
             if (i + 1) % 50 == 0:
-                print(f"  {i+1}/{len(need)}: filled={n_filled} +{n_bars_added} bars", flush=True)
+                print(f"  {i + 1}/{len(need)}: filled={n_filled} +{n_bars_added} bars", flush=True)
         except Exception as e:  # noqa: BLE001
             print(f"  {code} 失败: {e}", flush=True)
             time.sleep(0.5)

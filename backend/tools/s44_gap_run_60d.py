@@ -16,6 +16,7 @@ scaled to each trade's notional (close_d × 100 shares). P0 fix: replaced
 flat 0.0070 ratio that only covered spread+slippage, missing the 5 元
 minimum commission floor that dominates for low-priced 首板.
 """
+
 from __future__ import annotations
 
 import bisect
@@ -63,10 +64,11 @@ FROZEN_COMMIT = "b4e7446"
 def load_universe() -> list[dict]:
     with open(UNIVERSE, encoding="utf-8") as f:
         data = json.load(f)
-    print(f"[universe] meta window_days={data['meta']['window_days']} "
-          f"window={data['meta']['window']}")
-    print(f"[universe] totals first_board={data['totals']['first_board']} "
-          f"zt={data['totals']['zt']} lianban={data['totals']['lianban']}")
+    print(f"[universe] meta window_days={data['meta']['window_days']} window={data['meta']['window']}")
+    print(
+        f"[universe] totals first_board={data['totals']['first_board']} "
+        f"zt={data['totals']['zt']} lianban={data['totals']['lianban']}"
+    )
     fbs = data["first_boards"]
     print(f"[universe] flat records={len(fbs)}")
     return fbs
@@ -203,7 +205,10 @@ def compute_gap_series(fbs, cache, idx_maps, calendar):
             n_unbuyable += 1
             continue
         gap, cost_pct, _gross = gap_net_return(
-            close_d, open_next, entry_date=d, size=TRADE_SIZE,
+            close_d,
+            open_next,
+            entry_date=d,
+            size=TRADE_SIZE,
         )
         returns.append(gap)
         costs.append(cost_pct)
@@ -308,7 +313,10 @@ def selection_verdict(fbs, cache, idx_maps, returns, dates, calendar, snap_id):
         if open_next is None or open_next <= 0:
             continue
         gap, _cost_pct, _gross = gap_net_return(
-            close_d, open_next, entry_date=d, size=TRADE_SIZE,
+            close_d,
+            open_next,
+            entry_date=d,
+            size=TRADE_SIZE,
         )
         gap_map[(code, d)] = gap
         next_td_map[(code, d)] = next_td
@@ -349,8 +357,10 @@ def selection_verdict(fbs, cache, idx_maps, returns, dates, calendar, snap_id):
         n_joined += 1
 
     coverage = n_joined / len(gap_map) if gap_map else 0.0
-    print(f"[selection] gap_map={len(gap_map)} score_rows_matched={n_score_rows} "
-          f"joined={n_joined} no_score={n_no_score} coverage={coverage:.2%}")
+    print(
+        f"[selection] gap_map={len(gap_map)} score_rows_matched={n_score_rows} "
+        f"joined={n_joined} no_score={n_no_score} coverage={coverage:.2%}"
+    )
 
     if coverage < 0.40:
         print("[selection] coverage < 40% -> STUB (not run)")
@@ -374,9 +384,7 @@ def selection_verdict(fbs, cache, idx_maps, returns, dates, calendar, snap_id):
         print("[selection] no day with >=5 picks -> STUB")
         return None, universe_by_day, {}
 
-    arr_all = np.asarray(
-        [g for gs in universe_by_day.values() for g in gs], dtype=float
-    )
+    arr_all = np.asarray([g for gs in universe_by_day.values() for g in gs], dtype=float)
     v = verify(
         returns=arr_all,
         n_trials=1,
@@ -425,9 +433,13 @@ def main():
     print(f"n no_code in kline     = {n_no_code}")
     print(f"n bad close            = {n_bad_close}")
     print(f"unique dates (days_robust raw) = {days_robust}")
-    print(f"date range            = {unique_dates[0] if unique_dates else '-'}"
-          f" -> {unique_dates[-1] if unique_dates else '-'}")
-    print(f"avg cost % (real)     = {avg_cost_pct:.4f}  (min={float(costs_arr.min()):.4f} max={float(costs_arr.max()):.4f})")
+    print(
+        f"date range            = {unique_dates[0] if unique_dates else '-'}"
+        f" -> {unique_dates[-1] if unique_dates else '-'}"
+    )
+    print(
+        f"avg cost % (real)     = {avg_cost_pct:.4f}  (min={float(costs_arr.min()):.4f} max={float(costs_arr.max()):.4f})"
+    )
     print(f"gross mean %          = {gross_mean_pct:.4f}")
     print(f"net mean % (after real cost) = {net_mean_pct:.4f}")
     print(f"median net %         = {median_pct:.4f}")
@@ -436,7 +448,7 @@ def main():
     print(f"gross win_rate       = {gross_win:.4f}")
     # naive t-stat (pooled, for reference vs 14-day baseline t=10.65)
     if n > 1 and std_pct > 0:
-        t_naive = mean_pct / (std_pct / (n ** 0.5))
+        t_naive = mean_pct / (std_pct / (n**0.5))
         print(f"naive pooled t-stat  = {t_naive:.4f}  (ref 14d baseline t=10.6549)")
 
     print("\n=== EVENT VERDICT (primary: is gap a real edge?) ===")
@@ -450,7 +462,7 @@ def main():
     if ev.event_metrics:
         em = ev.event_metrics
         print(f"event_metrics:")
-        print(f"  mean_return        = {em.mean_return:.6f} ({em.mean_return*100:.4f}%)")
+        print(f"  mean_return        = {em.mean_return:.6f} ({em.mean_return * 100:.4f}%)")
         print(f"  net_mean           = {em.net_mean}")
         print(f"  win_rate           = {em.win_rate:.4f}")
         print(f"  t_stat_day_clust   = {em.t_stat_day_clustered}")
@@ -508,19 +520,26 @@ def main():
     print(f"[pit_store] universe snapshot_id = {uni_sid}")
 
     # Persist gap baseline (derived series — reproducible verdict input)
-    gap_baseline = json.dumps({
-        "returns": returns,
-        "dates": dates,
-        "costs_pct": costs,
-        "avg_cost_pct": avg_cost_pct,
-        "trade_size": TRADE_SIZE,
-        "n_picks": len(returns),
-        "frozen_commit": FROZEN_COMMIT,
-    }).encode("utf-8")
+    gap_baseline = json.dumps(
+        {
+            "returns": returns,
+            "dates": dates,
+            "costs_pct": costs,
+            "avg_cost_pct": avg_cost_pct,
+            "trade_size": TRADE_SIZE,
+            "n_picks": len(returns),
+            "frozen_commit": FROZEN_COMMIT,
+        }
+    ).encode("utf-8")
     gap_sid = store.put(
         source="gap_baseline_60d",
         data_date=None,
-        query_spec={"universe_snapshot_id": uni_sid, "cost_model": "accounting.gap_net_return", "trade_size": TRADE_SIZE, "window_days": 60},
+        query_spec={
+            "universe_snapshot_id": uni_sid,
+            "cost_model": "accounting.gap_net_return",
+            "trade_size": TRADE_SIZE,
+            "window_days": 60,
+        },
         raw_bytes=gap_baseline,
         generator_commit=FROZEN_COMMIT,
     )
@@ -531,15 +550,10 @@ def main():
 
     # Verify recompute_input (复现判据 §2.6b: raw retrievable without re-fetch)
     raw_back = store.recompute_input(uni_sid)
-    assert raw_back == uni_raw, (
-        f"universe recompute mismatch! {len(raw_back)} vs {len(uni_raw)}"
-    )
+    assert raw_back == uni_raw, f"universe recompute mismatch! {len(raw_back)} vs {len(uni_raw)}"
     gap_back = store.recompute_input(gap_sid)
     assert gap_back == gap_baseline, "gap_baseline recompute mismatch!"
-    print(
-        f"[pit_store] recompute_input verified: "
-        f"universe({len(raw_back)}B) + gap({len(gap_back)}B)"
-    )
+    print(f"[pit_store] recompute_input verified: universe({len(raw_back)}B) + gap({len(gap_back)}B)")
 
     # Save event verdict to recorder (S161 R4)
     recorder = Recorder()

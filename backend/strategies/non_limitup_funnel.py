@@ -20,6 +20,7 @@ spec §4.4 因子定义：
 - volume_signal：量比 > 2 = 1.0 / 资金净流入 = 1.0 / 成交额 > 15亿 = 1.0（按战法上下文选）
 - sector_strength：板块涨幅排名分（top-5 = 1.0, top-20 = 0.5, 其他 = 0.2）
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -37,6 +38,7 @@ from strategies.strategy_funnel_registry import (
 # ===========================================================================
 # 板块等权平均日K聚合（S094 R2）
 # ===========================================================================
+
 
 def _aggregate_sector_bars(stock_bars_list: list[list[dict]]) -> list[dict]:
     """板块成分股等权平均日K（S094 R2）。
@@ -64,6 +66,7 @@ def _aggregate_sector_bars(stock_bars_list: list[list[dict]]) -> list[dict]:
                         by_date[d].setdefault(field, []).append(float(v))
                     except (ValueError, TypeError) as e:
                         import logging
+
                         logging.getLogger(__name__).debug("non_limitup_funnel parse 失败（降级，不阻塞）: %s", e)
     result: list[dict] = []
     for d in sorted(by_date.keys()):
@@ -103,6 +106,7 @@ def _build_sector_bars_map(
 # ===========================================================================
 # 非涨停类因子计算
 # ===========================================================================
+
 
 def compute_relative_strength_score(pattern: PatternScan) -> float:
     """相对强度因子（0-100 标准化）。
@@ -188,9 +192,11 @@ def compute_sector_strength_score(sector_rank: int | None) -> float:
 # 非涨停类策略分计算
 # ===========================================================================
 
+
 @dataclass(frozen=True)
 class NonLimitupScore:
     """非涨停类策略分结果。"""
+
     code: str
     strategy_code: str
     strategy_name: str
@@ -216,8 +222,12 @@ def compute_non_limitup_score(
     cfg = get_strategy_config(strategy_code)
     if not cfg or cfg.funnel_type != "market_scan":
         return NonLimitupScore(
-            code=code, strategy_code=strategy_code, strategy_name="",
-            strategy_score=0.0, score_breakdown={}, pattern=pattern,
+            code=code,
+            strategy_code=strategy_code,
+            strategy_name="",
+            strategy_score=0.0,
+            score_breakdown={},
+            pattern=pattern,
         )
 
     # S094 R4：单一 PatternScan factors dict（中文键，0-100 值，复用 4 个映射函数）
@@ -250,6 +260,7 @@ def compute_non_limitup_score(
 # 非涨停类漏斗编排（spec §3.1）
 # ===========================================================================
 
+
 def run_non_limitup_funnel(
     candidates: list[dict],
     weather_state: str | None,
@@ -273,14 +284,19 @@ def run_non_limitup_funnel(
         sector = cand.get("sector", "")
         # 扫描形态（S094 R2：传 sector_bars，compute_relative_strength 真相对值）
         from strategies.pattern_scan import scan_patterns
+
         pattern = scan_patterns(code, bars, sb_map.get(sector))
-        produced.append({
-            **cand,
-            "pattern": pattern,
-            "name": cand.get("name", ""),
-            "sector_rank": cand.get("sector_rank"),
-            "close": cand.get("close") if cand.get("close") is not None else (bars[-1].get("close") if bars else None),
-        })
+        produced.append(
+            {
+                **cand,
+                "pattern": pattern,
+                "name": cand.get("name", ""),
+                "sector_rank": cand.get("sector_rank"),
+                "close": cand.get("close")
+                if cand.get("close") is not None
+                else (bars[-1].get("close") if bars else None),
+            }
+        )
     return produced
 
 

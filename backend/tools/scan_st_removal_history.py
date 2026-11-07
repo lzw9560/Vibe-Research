@@ -5,6 +5,7 @@ em_get announcements(code, limit=200) per 股 × 5226 = ~25min（0.3s/次限流�
 过滤 _ZHAIMAO_KEYWORDS（撤销风险警示/摘帽），排除"申请撤销"（待批非生效）。
 缓存 .scratch/s170-st-removal/st_removal_events.json（{code, notice_date, title}）。
 """
+
 from __future__ import annotations
 
 import json
@@ -46,19 +47,24 @@ def scan():
                 # 排除"申请撤销"（待批非生效，只取已生效的撤销）
                 if "申请" in title:
                     continue
-                events.append({
-                    "code": code,
-                    "pub_date": a.get("date", ""),
-                    "notice_date": a.get("date", ""),
-                    "title": title,
-                })
+                events.append(
+                    {
+                        "code": code,
+                        "pub_date": a.get("date", ""),
+                        "notice_date": a.get("date", ""),
+                        "title": title,
+                    }
+                )
         if (i + 1) % 200 == 0:
             el = time.time() - t0
-            print(f"  {i+1}/{len(codes)} events={len(events)} "
-                  f"elapsed={el:.0f}s eta={el/(i+1)*(len(codes)-i-1):.0f}s", flush=True)
+            print(
+                f"  {i + 1}/{len(codes)} events={len(events)} "
+                f"elapsed={el:.0f}s eta={el / (i + 1) * (len(codes) - i - 1):.0f}s",
+                flush=True,
+            )
     CACHE.parent.mkdir(parents=True, exist_ok=True)
     CACHE.write_text(json.dumps(events, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[S170] collected {len(events)} 摘帽 events in {time.time()-t0:.0f}s → {CACHE}")
+    print(f"[S170] collected {len(events)} 摘帽 events in {time.time() - t0:.0f}s → {CACHE}")
     return events
 
 

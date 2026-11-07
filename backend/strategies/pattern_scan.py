@@ -14,6 +14,7 @@ spec §5.5/P2-2 形态计算：
 
 零 em_get（BaoStock 独立源 + kline_multi 多源回退）。
 """
+
 from __future__ import annotations
 
 import time
@@ -37,23 +38,25 @@ class PatternScan:
     S094 R5：升为 market_scan 唯一因子源，新增 shadow_length_pct/ma5_slope
     （PatternReversal 长上影洗盘修复形态用）。
     """
+
     code: str
-    relative_strength: float | None     # 个股 5 日涨幅 - 板块 5 日涨幅
-    ma_bullish: bool                     # MA5 > MA10 > MA20
-    ma5_proximity: float | None         # |close - MA5| / MA5 * 100（低吸龙头用）
-    consolidation_days: int | None     # 横盘天数（振幅 < 阈值）
+    relative_strength: float | None  # 个股 5 日涨幅 - 板块 5 日涨幅
+    ma_bullish: bool  # MA5 > MA10 > MA20
+    ma5_proximity: float | None  # |close - MA5| / MA5 * 100（低吸龙头用）
+    consolidation_days: int | None  # 横盘天数（振幅 < 阈值）
     consolidation_amplitude: float | None  # N 日振幅 %
     volume_breakout_ratio: float | None  # 量比放大倍数（今量/前5日均量）
-    amount_yi: float | None             # 成交额（亿）
+    amount_yi: float | None  # 成交额（亿）
     # S094 R5 新增（PatternReversal 长上影洗盘修复形态）
-    shadow_length_pct: float | None = None   # 上影线长度 = (high/close - 1)*100
-    ma5_slope: float | None = None           # MA5 斜率 = (ma5_now - ma5_prev)/ma5_prev
+    shadow_length_pct: float | None = None  # 上影线长度 = (high/close - 1)*100
+    ma5_slope: float | None = None  # MA5 斜率 = (ma5_now - ma5_prev)/ma5_prev
     consolidation_max_high: float | None = None  # S153 R2：完整窗口 max_high（供 D+1 突破确认）
 
 
 # ===========================================================================
 # 板块成分股（P2-1，spec §8）
 # ===========================================================================
+
 
 def load_industry_map(force_refresh: bool = False) -> dict[str, str]:
     """加载 BaoStock 行业分类 → {code: industry_name}。
@@ -70,6 +73,7 @@ def load_industry_map(force_refresh: bool = False) -> dict[str, str]:
     if not force_refresh and _INDUSTRY_CACHE_PATH.exists():
         try:
             import json
+
             data = json.loads(_INDUSTRY_CACHE_PATH.read_text(encoding="utf-8"))
             if data and isinstance(data, dict) and "_meta" in data:
                 cache_ts = data["_meta"].get("cached_ts", 0)
@@ -80,6 +84,7 @@ def load_industry_map(force_refresh: bool = False) -> dict[str, str]:
                     return mapping
         except Exception as e:  # noqa: BLE001
             import logging
+
             logging.getLogger(__name__).warning("pattern_scan 行业缓存加载失败→重新拉 BaoStock: %s", e)
 
     # 从 BaoStock 拉取
@@ -95,6 +100,7 @@ def _save_industry_cache(mapping: dict[str, str], ts: float) -> None:
     """保存行业分类到磁盘缓存。"""
     try:
         import json
+
         data = {
             "_meta": {"cached_ts": ts, "count": len(mapping), "source": "baostock"},
             "mapping": mapping,
@@ -102,6 +108,7 @@ def _save_industry_cache(mapping: dict[str, str], ts: float) -> None:
         _INDUSTRY_CACHE_PATH.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     except Exception as e:  # noqa: BLE001
         import logging
+
         logging.getLogger(__name__).warning("行业缓存写入失败（降级，不阻塞）: %s", e)
 
 
@@ -125,6 +132,7 @@ def get_stock_industry(code: str, industry_map: dict[str, str] | None = None) ->
 # ===========================================================================
 # 形态计算（P2-2，spec §5.5）
 # ===========================================================================
+
 
 def compute_relative_strength(
     stock_bars: list[dict],
@@ -270,7 +278,9 @@ def compute_ma5_slope(bars: list[dict]) -> float | None:
         return None
 
 
-def compute_consolidation(bars: list[dict], threshold: float = 8.0, min_days: int = 5) -> tuple[int | None, float | None, float | None, float | None]:
+def compute_consolidation(
+    bars: list[dict], threshold: float = 8.0, min_days: int = 5
+) -> tuple[int | None, float | None, float | None, float | None]:
     """横盘形态：N 日振幅 < 阈值（spec §5.5）。S153 R1：返 4-tuple (days, amplitude, max_high, min_low)。
 
     max_high/min_low 从**完整 consolidation_days 窗口**算（下方 line 336 段，非循环内 line 318
@@ -286,7 +296,7 @@ def compute_consolidation(bars: list[dict], threshold: float = 8.0, min_days: in
     window_start = len(bars) - 1
 
     while window_start >= 0:
-        window = bars[max(0, window_start - min_days + 1): window_start + 1]
+        window = bars[max(0, window_start - min_days + 1) : window_start + 1]
         if len(window) < min_days:
             break
         highs = [float(b.get("high", 0)) for b in window if b.get("high")]
@@ -308,7 +318,7 @@ def compute_consolidation(bars: list[dict], threshold: float = 8.0, min_days: in
         return 0, None, None, None
 
     # 计算横盘区间振幅 + max_high/min_low（完整 consolidation_days 窗口，S153 R1 CRITICAL2）
-    window = bars[len(bars) - consolidation_days:]
+    window = bars[len(bars) - consolidation_days :]
     if len(window) < 2:
         return consolidation_days, None, None, None
     highs = [float(b.get("high", 0)) for b in window if b.get("high")]

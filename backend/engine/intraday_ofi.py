@@ -10,6 +10,7 @@
 纯函数：输入 buy/sell levels list[{level, price, vol}]（tencent _parse_gtimg levels() shape），
 输出 float。vol 缺失/None/非数字当 0（数据质量门，防 tencent 偶发坏档）。
 """
+
 from __future__ import annotations
 
 #: 涨停 sell=0 时 pressure cap（避免 ∞，跨股可比）
@@ -85,10 +86,17 @@ def compute_multi_level_ofi(
     返 (per_level_ofi_list, total_ofi)。total_ofi = Σ OFI_Li（等权；实战可按 1/d 距离加权）。
     入参长度不足 levels 的取 min(可用档数, levels)；空/对齐失败该档 0.0。
     """
-    n = min(levels, len(prev_buy_prices) or 0, len(curr_buy_prices) or 0,
-            len(prev_buy_vols) or 0, len(curr_buy_vols) or 0,
-            len(prev_sell_prices) or 0, len(curr_sell_prices) or 0,
-            len(prev_sell_vols) or 0, len(curr_sell_vols) or 0)
+    n = min(
+        levels,
+        len(prev_buy_prices) or 0,
+        len(curr_buy_prices) or 0,
+        len(prev_buy_vols) or 0,
+        len(curr_buy_vols) or 0,
+        len(prev_sell_prices) or 0,
+        len(curr_sell_prices) or 0,
+        len(prev_sell_vols) or 0,
+        len(curr_sell_vols) or 0,
+    )
     per_level: list[float] = []
     for i in range(n):
         try:
@@ -156,6 +164,11 @@ def is_auction_period(ts: str) -> bool:
 
 
 __all__ = [
-    "compute_ofi", "compute_ofi_abs", "compute_bid_ask_pressure", "PRESSURE_CAP",
-    "compute_multi_level_ofi", "is_auction_period", "ofi_turn_points",
+    "compute_ofi",
+    "compute_ofi_abs",
+    "compute_bid_ask_pressure",
+    "PRESSURE_CAP",
+    "compute_multi_level_ofi",
+    "is_auction_period",
+    "ofi_turn_points",
 ]

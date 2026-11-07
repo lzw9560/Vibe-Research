@@ -12,6 +12,7 @@ import astock
 from vr_paths import is_trading_day
 
 import logging
+
 _logger = logging.getLogger(__name__)
 
 
@@ -20,24 +21,27 @@ class ExtremeMarketSignal:
     """极端行情信号。"""
 
     date: str
-    signal_type: str          # 涨停潮 / 跌停潮 / 正常
-    zt_count: int = 0         # 涨停家数
-    dt_count: int = 0         # 跌停家数
-    zb_count: int = 0         # 炸板家数
-    total_attempts: int = 0   # 尝试涨停总数（涨停+炸板）
-    zt_ratio: float = 0.0     # 涨停占比（相对尝试数）
-    dt_ratio: float = 0.0     # 跌停占比（相对全市场）
-    threshold_zt: float = 0.0 # 动态涨停阈值
-    threshold_dt: float = 0.0 # 动态跌停阈值
+    signal_type: str  # 涨停潮 / 跌停潮 / 正常
+    zt_count: int = 0  # 涨停家数
+    dt_count: int = 0  # 跌停家数
+    zb_count: int = 0  # 炸板家数
+    total_attempts: int = 0  # 尝试涨停总数（涨停+炸板）
+    zt_ratio: float = 0.0  # 涨停占比（相对尝试数）
+    dt_ratio: float = 0.0  # 跌停占比（相对全市场）
+    threshold_zt: float = 0.0  # 动态涨停阈值
+    threshold_dt: float = 0.0  # 动态跌停阈值
     is_extreme: bool = False  # 是否极端行情
     interpretation: str = ""
     last_updated: str = ""
-    data_status: str = "ok"   # ok | missing | degraded（数据诚实标记，对齐 sentiment_context:45；Tier-1 仅加字段，逻辑待 Tier-2）
+    data_status: str = (
+        "ok"  # ok | missing | degraded（数据诚实标记，对齐 sentiment_context:45；Tier-1 仅加字段，逻辑待 Tier-2）
+    )
 
 
 # ===========================================================================
 # 动态阈值计算
 # ===========================================================================
+
 
 def _compute_dynamic_thresholds(zt_history: list[int], dt_history: list[int]) -> tuple[float, float]:
     """基于历史数据计算动态阈值。
@@ -95,6 +99,7 @@ def _resolve_pool_provenance(meta: dict[str, Any], pools_all_empty: bool) -> tup
 # 主检测函数
 # ===========================================================================
 
+
 async def detect_extreme_market(date: str | None = None) -> ExtremeMarketSignal | None:
     """检测极端行情（涨停潮/跌停潮）。
 
@@ -124,6 +129,7 @@ async def detect_extreme_market(date: str | None = None) -> ExtremeMarketSignal 
 
         # 获取涨停池、跌停池、炸板池（带降级 + 诚实元数据，S112 R5）
         from fallback import get_with_fallback_meta
+
         cache_key = f"zt_pool:{target_date}"
         pool_data, meta = get_with_fallback_meta(
             cache_key,

@@ -8,6 +8,7 @@ combo edge 分解出是"小盘效应"。R12 问：挑出的低成交额票，跑
 
 流通股本 = volume / turn；流通市值 = 股本 × close。
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -65,11 +66,17 @@ def build_by_date() -> dict:
                 continue
             float_shares = vol / (turn / 100.0)  # turn 是百分数
             cap = float_shares * c / 1e8  # 亿
-            by_date[bars[i].get("date", "")].append({
-                "code": code, "gap": (o - prev_c) / prev_c,
-                "tr": (c - prev_c) / prev_c, "amt": amt, "cap": cap,
-                "fwd5": (nc - c) / c, "is_zt": (c - prev_c) / prev_c >= _board_limit(code),
-            })
+            by_date[bars[i].get("date", "")].append(
+                {
+                    "code": code,
+                    "gap": (o - prev_c) / prev_c,
+                    "tr": (c - prev_c) / prev_c,
+                    "amt": amt,
+                    "cap": cap,
+                    "fwd5": (nc - c) / c,
+                    "is_zt": (c - prev_c) / prev_c >= _board_limit(code),
+                }
+            )
     return by_date
 
 
@@ -84,10 +91,14 @@ def rank_scores(lst: list, use_gap=True, use_tr=True, use_amt=True) -> list:
 
     def s(k):
         x = 0.0
-        if use_gap: x += rg[k]
-        if use_tr: x += rt[k]
-        if use_amt: x += ra[k]
+        if use_gap:
+            x += rg[k]
+        if use_tr:
+            x += rt[k]
+        if use_amt:
+            x += ra[k]
         return x
+
     return sorted(range(n), key=s, reverse=True)
 
 
@@ -101,8 +112,15 @@ def cap_deciles(lst: list) -> list:
     return dec
 
 
-def r12_for(dates: list, by_date: dict, use_gap=True, use_tr=True, use_amt=True,
-            top_n: int | None = None, exclude_zt: bool = False) -> dict | None:
+def r12_for(
+    dates: list,
+    by_date: dict,
+    use_gap=True,
+    use_tr=True,
+    use_amt=True,
+    top_n: int | None = None,
+    exclude_zt: bool = False,
+) -> dict | None:
     """挑 top → 每只 vs 同档同龄 → alpha。exclude_zt=True 时挑出后滤涨停（去涨停版 R12）。"""
     daily_raw, daily_peer, daily_alpha = [], [], []
     for d in dates:
@@ -149,11 +167,13 @@ def r12_for(dates: list, by_date: dict, use_gap=True, use_tr=True, use_amt=True,
 
     return {
         "n_days": len(daily_alpha),
-        "raw": statistics.mean(daily_raw), "raw_t": tstat(daily_raw),
-        "peer": statistics.mean(daily_peer), "peer_t": tstat(daily_peer),
-        "alpha": statistics.mean(daily_alpha), "alpha_t": tstat(daily_alpha),
-        "alpha_share": statistics.mean(daily_alpha) / statistics.mean(daily_raw)
-            if statistics.mean(daily_raw) else 0,
+        "raw": statistics.mean(daily_raw),
+        "raw_t": tstat(daily_raw),
+        "peer": statistics.mean(daily_peer),
+        "peer_t": tstat(daily_peer),
+        "alpha": statistics.mean(daily_alpha),
+        "alpha_t": tstat(daily_alpha),
+        "alpha_share": statistics.mean(daily_alpha) / statistics.mean(daily_raw) if statistics.mean(daily_raw) else 0,
     }
 
 
@@ -174,11 +194,13 @@ def main() -> None:
             print(f"{label:<18} (n不足)")
             continue
         print(f"--- {label} ---")
-        print(f"  挑出 raw:  mean {r['raw']*100:+.4f}%  t={r['raw_t']:.2f}")
-        print(f"  同龄 peer: mean {r['peer']*100:+.4f}%  t={r['peer_t']:.2f}")
-        print(f"  alpha:     mean {r['alpha']*100:+.4f}%  t={r['alpha_t']:.2f}  "
-              f"({'✅alpha在' if r['alpha'] > 0 and r['alpha_t'] > 2.4 else '❌alpha没了=纯size' if abs(r['alpha']) < 0.0005 else '⚠️alpha弱'})")
-        print(f"  alpha占raw: {r['alpha_share']*100:.1f}%")
+        print(f"  挑出 raw:  mean {r['raw'] * 100:+.4f}%  t={r['raw_t']:.2f}")
+        print(f"  同龄 peer: mean {r['peer'] * 100:+.4f}%  t={r['peer_t']:.2f}")
+        print(
+            f"  alpha:     mean {r['alpha'] * 100:+.4f}%  t={r['alpha_t']:.2f}  "
+            f"({'✅alpha在' if r['alpha'] > 0 and r['alpha_t'] > 2.4 else '❌alpha没了=纯size' if abs(r['alpha']) < 0.0005 else '⚠️alpha弱'})"
+        )
+        print(f"  alpha占raw: {r['alpha_share'] * 100:.1f}%")
         print()
 
     # 去涨停版 R12（tradeable 真 edge：去涨停后 alpha 还在否？非 size premium？）
@@ -186,11 +208,13 @@ def main() -> None:
     r = r12_for(test, by_date, use_gap=True, use_tr=True, use_amt=True, top_n=20, exclude_zt=True)
     if r:
         print(f"--- 全 combo top20 去涨停 ---")
-        print(f"  挑出 raw:  mean {r['raw']*100:+.4f}%  t={r['raw_t']:.2f}")
-        print(f"  同龄 peer: mean {r['peer']*100:+.4f}%  t={r['peer_t']:.2f}")
-        print(f"  alpha:     mean {r['alpha']*100:+.4f}%  t={r['alpha_t']:.2f}  "
-              f"({'✅alpha在(真edge非size)' if r['alpha'] > 0 and r['alpha_t'] > 2.4 else '❌alpha没了=去涨停后纯size' if abs(r['alpha']) < 0.0005 else '⚠️alpha弱'})")
-        print(f"  alpha占raw: {r['alpha_share']*100:.1f}%")
+        print(f"  挑出 raw:  mean {r['raw'] * 100:+.4f}%  t={r['raw_t']:.2f}")
+        print(f"  同龄 peer: mean {r['peer'] * 100:+.4f}%  t={r['peer_t']:.2f}")
+        print(
+            f"  alpha:     mean {r['alpha'] * 100:+.4f}%  t={r['alpha_t']:.2f}  "
+            f"({'✅alpha在(真edge非size)' if r['alpha'] > 0 and r['alpha_t'] > 2.4 else '❌alpha没了=去涨停后纯size' if abs(r['alpha']) < 0.0005 else '⚠️alpha弱'})"
+        )
+        print(f"  alpha占raw: {r['alpha_share'] * 100:.1f}%")
         print()
     else:
         print("(n不足)\n")
@@ -208,12 +232,14 @@ def main() -> None:
         if not r:
             print(f"{label:<12} (n不足)")
             continue
-        alpha_ok = r['alpha'] > 0 and r['alpha_t'] > 2.4
-        print(f"{label:<12} raw {r['raw']*100:+.4f}%(t={r['raw_t']:.2f}) "
-              f"peer {r['peer']*100:+.4f}%(t={r['peer_t']:.2f}) "
-              f"alpha {r['alpha']*100:+.4f}%(t={r['alpha_t']:.2f}) "
-              f"{'✅' if alpha_ok else '⚠️alpha弱/没' if r['alpha_t'] < 2.4 else ''} "
-              f"[{r['n_days']}日]")
+        alpha_ok = r["alpha"] > 0 and r["alpha_t"] > 2.4
+        print(
+            f"{label:<12} raw {r['raw'] * 100:+.4f}%(t={r['raw_t']:.2f}) "
+            f"peer {r['peer'] * 100:+.4f}%(t={r['peer_t']:.2f}) "
+            f"alpha {r['alpha'] * 100:+.4f}%(t={r['alpha_t']:.2f}) "
+            f"{'✅' if alpha_ok else '⚠️alpha弱/没' if r['alpha_t'] < 2.4 else ''} "
+            f"[{r['n_days']}日]"
+        )
     print("\n读法：alpha t>2.4 = 选股 alpha 还在；alpha t<2.4 或转负 = 2026 衰减吃掉了 alpha")
 
 

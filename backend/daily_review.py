@@ -44,49 +44,52 @@ REVIEW_DISCLAIMER = (
 # 1. 数据结构
 # ===========================================================================
 
+
 class ZTStockSummary(BaseModel):
     """涨停股统计摘要。"""
+
     code: str
     name: str
-    lbc: int               # 连板数
-    fbt: float             # 封板时间
-    seal_rate: float       # 封板率
-    zbc: int               # 炸板次数
+    lbc: int  # 连板数
+    fbt: float  # 封板时间
+    seal_rate: float  # 封板率
+    zbc: int  # 炸板次数
 
 
 class SectorHeatItem(BaseModel):
     """板块热度排行。"""
-    sector: str            # 板块名称
-    zt_count: int          # 涨停股数
-    total_count: int       # 总股数
-    zt_rate: float         # 涨停占比
-    avg_change: float      # 平均涨跌幅
+
+    sector: str  # 板块名称
+    zt_count: int  # 涨停股数
+    total_count: int  # 总股数
+    zt_rate: float  # 涨停占比
+    avg_change: float  # 平均涨跌幅
 
 
 class ReviewReport(BaseModel):
     """每日复盘报告（客观数据展示）。"""
-    
+
     date: str
-    sti_score: float | None          # STI 情绪分数
-    sti_phase: str | None            # STI 阶段
-    sti_change: float | None         # STI 动量（较昨日变化）
-    
+    sti_score: float | None  # STI 情绪分数
+    sti_phase: str | None  # STI 阶段
+    sti_change: float | None  # STI 动量（较昨日变化）
+
     # 涨停统计
-    zt_total: int                    # 今日涨停总数
-    dt_total: int                    # 今日跌停总数
-    zb_total: int                    # 今日炸板总数
-    advance_count: int               # 上涨家数
-    decline_count: int               # 下跌家数
-    
+    zt_total: int  # 今日涨停总数
+    dt_total: int  # 今日跌停总数
+    zb_total: int  # 今日炸板总数
+    advance_count: int  # 上涨家数
+    decline_count: int  # 下跌家数
+
     # 板块热度 TOP N
     sector_heat: list[SectorHeatItem] = field(default_factory=list)
-    
+
     # 涨停股明细（按连板数降序）
     zt_stocks: list[ZTStockSummary] = field(default_factory=list)
-    
+
     # 昨日涨停股今日表现
     prev_zt_stats: dict[str, float] = field(default_factory=dict)
-    
+
     # 竞价回顾 TOP N
     auction_top: list[dict[str, Any]] = field(default_factory=list)
 
@@ -94,7 +97,7 @@ class ReviewReport(BaseModel):
     # money_effect 中位数——precompute_daily 算并落盘（emotion_metrics_ext 缺失时 None，不臆造）。
     money_effect_median: float | None = None
 
-    updated: str                     # 更新时间
+    updated: str  # 更新时间
     disclaimer: str = REVIEW_DISCLAIMER
 
 
@@ -102,10 +105,11 @@ class ReviewReport(BaseModel):
 # 2. 复盘报告生成引擎
 # ===========================================================================
 
+
 class DailyReviewer:
     """
     每日收盘后自动生成复盘报告。
-    
+
     MVP 阶段：规则引擎生成结构化摘要（无 AI Agent）。
     Phase 3+：接入 AI 复盘 Agent（结构化反思）。
     """
@@ -117,7 +121,7 @@ class DailyReviewer:
         """
         输入：交易日 YYYY-MM-DD
         输出：每日复盘报告
-        
+
         步骤：
         1. 获取 STI 情绪分数
         2. 获取涨停池 + 跌停池 + 炸板池
@@ -134,19 +138,15 @@ class DailyReviewer:
         try:
             parsed_date = datetime.strptime(trade_date, "%Y-%m-%d").date()
         except ValueError:
-            raise ValueError(
-                f"非交易日 {trade_date} 无市场数据，数据源会静默回退造成日期错位——拒绝生成"
-            )
+            raise ValueError(f"非交易日 {trade_date} 无市场数据，数据源会静默回退造成日期错位——拒绝生成")
         if not is_trading_day(parsed_date):
-            raise ValueError(
-                f"非交易日 {trade_date} 无市场数据，数据源会静默回退造成日期错位——拒绝生成"
-            )
+            raise ValueError(f"非交易日 {trade_date} 无市场数据，数据源会静默回退造成日期错位——拒绝生成")
 
         date_fmt = trade_date.replace("-", "") if "-" in trade_date else trade_date
-        
+
         # 1. 获取 STI 情绪分数
         sti_data = self._get_sti_data(trade_date)
-        
+
         # 2. 获取涨停池 + 跌停池 + 炸板池
         # S131 R5：raise_on_failure=True 让源断 raise（非吞 [] 伪装平静市），
         # 逐池 try/except 兜底——单池断不丢其他池数据。
@@ -155,44 +155,57 @@ class DailyReviewer:
         zb_pool: list = []
         yzt_pool: list = []
         try:
-            zt_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicZTPool", date_fmt, "fbt:asc", raise_on_failure=True)]
+            zt_pool = [
+                zt_pool_item_from_dict(it)
+                for it in astock.em_zt_topic_pool("getTopicZTPool", date_fmt, "fbt:asc", raise_on_failure=True)
+            ]
         except Exception as e:
             logging.getLogger("vibe-research").warning("daily_review 涨停池取数失败 date=%s err=%s", date_fmt, e)
         try:
-            dt_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicDTPool", date_fmt, raise_on_failure=True)]
+            dt_pool = [
+                zt_pool_item_from_dict(it)
+                for it in astock.em_zt_topic_pool("getTopicDTPool", date_fmt, raise_on_failure=True)
+            ]
         except Exception as e:
             logging.getLogger("vibe-research").warning("daily_review 跌停池取数失败 date=%s err=%s", date_fmt, e)
         try:
-            zb_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicZBPool", date_fmt, "fbt:asc", raise_on_failure=True)]
+            zb_pool = [
+                zt_pool_item_from_dict(it)
+                for it in astock.em_zt_topic_pool("getTopicZBPool", date_fmt, "fbt:asc", raise_on_failure=True)
+            ]
         except Exception as e:
             logging.getLogger("vibe-research").warning("daily_review 炸板池取数失败 date=%s err=%s", date_fmt, e)
         try:
-            yzt_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getYesterdayZTPool", date_fmt, "zs:desc", raise_on_failure=True)]
+            yzt_pool = [
+                zt_pool_item_from_dict(it)
+                for it in astock.em_zt_topic_pool("getYesterdayZTPool", date_fmt, "zs:desc", raise_on_failure=True)
+            ]
         except Exception as e:
             logging.getLogger("vibe-research").warning("daily_review 昨涨停池取数失败 date=%s err=%s", date_fmt, e)
-        
+
         # 3. 获取市场广度（涨跌家数）
         try:
             import market as _market_module
+
             sentiment = _market_module._sentiment(date_fmt)
             advance_count = sentiment.get("up", 0)
             decline_count = sentiment.get("down", 0)
         except Exception:
             advance_count = 0
             decline_count = 0
-        
+
         # 4. 计算板块热度
         sector_heat = self._calculate_sector_heat(zt_pool)
-        
+
         # 5. 涨停股统计
         zt_stocks = self._summarize_zt_stocks(zt_pool)
-        
+
         # 6. 昨日涨停股今日表现
         prev_zt_stats = self._calculate_prev_zt_performance(yzt_pool, zt_pool)
-        
+
         # 7. 竞价回顾（复用 auction_screener）
         auction_top = self._get_auction_review(trade_date)
-        
+
         # 8. 组装报告
         return ReviewReport(
             date=trade_date,
@@ -210,7 +223,7 @@ class DailyReviewer:
             auction_top=auction_top,
             updated=datetime.now(BEIJING_TZ).strftime("%Y-%m-%d %H:%M"),
         )
-    
+
     def _get_sti_data(self, trade_date: str) -> dict[str, Any]:
         """获取 STI 情绪数据。"""
         try:
@@ -219,6 +232,7 @@ class DailyReviewer:
             # None → journal.market.emotion_phase 盖章坏。改 `from limitup_sti import`（同进程
             # 根包路径，已验证可用——auction_screener.py:454 同款写法）。
             from limitup_sti import STIEngine
+
             engine = STIEngine()
             result = engine.get_latest(trade_date)
             if result and result.source_ok:
@@ -226,7 +240,11 @@ class DailyReviewer:
                 yesterday = prev_trading_date_str(datetime.strptime(trade_date, "%Y-%m-%d").date())
                 try:
                     prev_result = engine.get_latest(yesterday)
-                    change = (result.score - prev_result.score) if prev_result and prev_result.source_ok and result.score is not None else None
+                    change = (
+                        (result.score - prev_result.score)
+                        if prev_result and prev_result.source_ok and result.score is not None
+                        else None
+                    )
                 except Exception:
                     change = None
                 return {
@@ -236,9 +254,10 @@ class DailyReviewer:
                 }
         except Exception as e:  # noqa: BLE001
             import logging
+
             logging.getLogger(__name__).warning("daily_review STI score+change 查询失败→返 None（日报降级）: %s", e)
         return {"score": None, "phase": None, "change": None}
-    
+
     def _calculate_sector_heat(self, zt_pool: list) -> list[SectorHeatItem]:
         """
         计算板块热度排行。
@@ -252,23 +271,25 @@ class DailyReviewer:
             if sector not in sector_stats:
                 sector_stats[sector] = {"zt_count": 0, "total_count": 0, "sum_change": 0.0}
             sector_stats[sector]["zt_count"] += 1
-        
+
         # 获取全市场数据计算总股数和平均涨跌幅
         # MVP 简化：仅基于涨停池数据计算板块热度
         items = []
         for sector, stats in sector_stats.items():
-            items.append(SectorHeatItem(
-                sector=sector,
-                zt_count=stats["zt_count"],
-                total_count=stats["zt_count"],  # MVP 简化
-                zt_rate=100.0,  # MVP 简化
-                avg_change=0.0,  # MVP 简化
-            ))
-        
+            items.append(
+                SectorHeatItem(
+                    sector=sector,
+                    zt_count=stats["zt_count"],
+                    total_count=stats["zt_count"],  # MVP 简化
+                    zt_rate=100.0,  # MVP 简化
+                    avg_change=0.0,  # MVP 简化
+                )
+            )
+
         # 按涨停数降序
         items.sort(key=lambda x: x.zt_count, reverse=True)
         return items[:10]
-    
+
     def _summarize_zt_stocks(self, zt_pool: list) -> list[ZTStockSummary]:
         """涨停股明细摘要（按连板数降序）。"""
         stocks = []
@@ -282,19 +303,21 @@ class DailyReviewer:
             zbc = item.broken_count or 0
             seal_rate = self._fbt_to_seal_rate(fbt)
 
-            stocks.append(ZTStockSummary(
-                code=code,
-                name=item.name or "",
-                lbc=int(lbc),
-                fbt=fbt,
-                seal_rate=round(seal_rate, 2),
-                zbc=int(zbc),
-            ))
-        
+            stocks.append(
+                ZTStockSummary(
+                    code=code,
+                    name=item.name or "",
+                    lbc=int(lbc),
+                    fbt=fbt,
+                    seal_rate=round(seal_rate, 2),
+                    zbc=int(zbc),
+                )
+            )
+
         # 按连板数降序
         stocks.sort(key=lambda s: s.lbc, reverse=True)
         return stocks
-    
+
     def _fbt_to_seal_rate(self, fbt: float) -> float:
         """封板时间 → 封板率（0-100）。"""
         if fbt <= 92500:
@@ -303,7 +326,7 @@ class DailyReviewer:
             return 0.0
         else:
             return max(0.0, min(100.0, (1 - (fbt - 92500) / (145000 - 92500)) * 100))
-    
+
     def _calculate_prev_zt_performance(self, yzt_pool: list, zt_pool: list) -> dict[str, float]:
         """
         昨日涨停股今日表现。
@@ -321,23 +344,24 @@ class DailyReviewer:
         yzt_codes = {item.code for item in yzt_pool}
         retained = sum(1 for item in zt_pool if item.code in yzt_codes)
         retention_rate = (retained / yzt_count) * 100 if yzt_count > 0 else 0.0
-        
+
         return {
             "prev_zt_count": yzt_count,
             "retention_rate": round(retention_rate, 2),
             "proxy_indicator": round((zt_count / yzt_count) * 100, 2),
         }
-    
+
     def _get_auction_review(self, trade_date: str) -> list[dict[str, Any]]:
         """获取竞价回顾 TOP N。"""
         try:
             import auction_screener as asc
+
             screener = asc.get_screener()
             result = screener.analyze(trade_date)
             return [c.model_dump() for c in result.candidates[:REVIEW_AUCTION_TOP_N]]
         except Exception:
             return []
-    
+
     def precompute_daily(self, date: str) -> ReviewReport:
         """每日预计算入口 — 由 app.py 15:35 调度器触发。
 
@@ -352,11 +376,13 @@ class DailyReviewer:
         # journal 如实记 None。不臆造。待 P2 恢复后自动激活。
         try:
             import emotion_metrics_ext as _emotion_ext
+
             me = _emotion_ext.money_effect(date)
             result.money_effect_median = me.get("median") if me.get("available") else None
         except Exception as e:  # noqa: BLE001
             logging.getLogger("vibe-research").warning(
-                "[daily_review %s] money_effect 中位数取失败，盖章 median=None: %s", date, e)
+                "[daily_review %s] money_effect 中位数取失败，盖章 median=None: %s", date, e
+            )
 
         # 写入内存缓存 + 磁盘持久化层（journal 盖章零网络读这里）
         cache_key = f"daily_review_{date}"
@@ -364,8 +390,7 @@ class DailyReviewer:
         try:
             atomic_write_json(_daily_review_path(date), result.model_dump(mode="json"))
         except Exception as e:  # noqa: BLE001
-            logging.getLogger("vibe-research").warning(
-                "[daily_review %s] 磁盘落盘失败: %s", date, e)
+            logging.getLogger("vibe-research").warning("[daily_review %s] 磁盘落盘失败: %s", date, e)
 
         return result
 

@@ -8,6 +8,7 @@
 
 私有数据隔离：db 落 .vibe-research/（resolve_data_dir 复用 vr_paths，gitignored）。
 """
+
 from __future__ import annotations
 import json
 import random
@@ -99,9 +100,15 @@ class SignalStore:
                 "entry_price) VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (
                     datetime.now().isoformat(timespec="seconds"),
-                    tactic, code, int(score), int(bool(is_triggered)),
-                    _dumps(factors_json), _dumps(raw_data_json),
-                    record_type, seed, entry_price,
+                    tactic,
+                    code,
+                    int(score),
+                    int(bool(is_triggered)),
+                    _dumps(factors_json),
+                    _dumps(raw_data_json),
+                    record_type,
+                    seed,
+                    entry_price,
                 ),
             )
             return cur.lastrowid
@@ -122,17 +129,15 @@ class SignalStore:
         seed 固定→选取可复现。同市值段空时退到全量（除信号自身）。
         """
         rng = random.Random(seed)
-        signal = next(
-            (s for s in all_stocks if s.get("thscode") == signal_code), None
-        )
+        signal = next((s for s in all_stocks if s.get("thscode") == signal_code), None)
         if signal is None:
             pool = [s for s in all_stocks if s.get("thscode") != signal_code]
         else:
             mc = float(signal.get("float_mv", 0) or 0)
             pool = [
-                s for s in all_stocks
-                if s.get("thscode") != signal_code
-                and _same_mc_bucket(float(s.get("float_mv", 0) or 0), mc)
+                s
+                for s in all_stocks
+                if s.get("thscode") != signal_code and _same_mc_bucket(float(s.get("float_mv", 0) or 0), mc)
             ]
             if not pool:  # 同市值段空，退到全量
                 pool = [s for s in all_stocks if s.get("thscode") != signal_code]
@@ -140,10 +145,15 @@ class SignalStore:
         ids = []
         for pick in picks:
             rid = self.save_signal(
-                tactic=tactic, code=pick.get("thscode", ""), score=0,
-                is_triggered=False, factors_json=factors_json or {},
-                raw_data_json=raw_data_json or {}, record_type="control",
-                seed=seed, entry_price=None,
+                tactic=tactic,
+                code=pick.get("thscode", ""),
+                score=0,
+                is_triggered=False,
+                factors_json=factors_json or {},
+                raw_data_json=raw_data_json or {},
+                record_type="control",
+                seed=seed,
+                entry_price=None,
             )
             ids.append(rid)
         return ids
@@ -164,10 +174,7 @@ class SignalStore:
 
     def get_control_group(self, date: str, tactic: str) -> list[dict]:
         """查询某日某战法的对照组（date=YYYY-MM-DD，匹配 timestamp 前 10 字符）。"""
-        sql = (
-            "SELECT * FROM signals WHERE record_type='control' "
-            "AND tactic_name=? AND substr(timestamp,1,10)=?"
-        )
+        sql = "SELECT * FROM signals WHERE record_type='control' AND tactic_name=? AND substr(timestamp,1,10)=?"
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(sql, (tactic, date)).fetchall()

@@ -9,6 +9,7 @@ main 分支的内联端点，develop 合并后拆为模块化路由（保 chat.p
 LLM 配置校验口径与 routers/chat.py 一致（API 接入需 baseURL+apiKey+model，
 CLI 接入需检测本机命令；预设接入走 presetId 补全）。
 """
+
 from __future__ import annotations
 
 import json
@@ -74,12 +75,14 @@ def _resolve_llm(cfg: dict) -> None:
 
 def _ndjson(events_fn) -> StreamingResponse:
     """流式 NDJSON 包装：事件序列化为一行一 JSON，异常转 error 事件。"""
+
     def gen():
         try:
             for ev in events_fn():
                 yield json.dumps(ev, ensure_ascii=False) + "\n"
         except Exception as e:  # noqa: BLE001 — 运行时错误以流内事件上报
             yield json.dumps({"type": "error", "message": str(e)}, ensure_ascii=False) + "\n"
+
     return StreamingResponse(gen(), media_type="application/x-ndjson")
 
 

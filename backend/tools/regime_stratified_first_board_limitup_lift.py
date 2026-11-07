@@ -19,6 +19,7 @@ underpowered, not extrapolated.
 
 picks by D-day regime -> day-paired event lift -> wire_verdict.
 """
+
 from __future__ import annotations
 
 import sys
@@ -76,7 +77,9 @@ def run(
         return {}
 
     by_regime, by_regime_day, n_untagged = stratify_gap(
-        returns, dates, regime_map,
+        returns,
+        dates,
+        regime_map,
     )
     if n_untagged:
         print(f"[regime] WARNING: {n_untagged} trades have no regime tag")

@@ -7,6 +7,7 @@
 合规（CLAUDE.md §1 弱合规）：工具只返回图谱客观数据（实体元数据/关系链接），
 方向性研判由 LLM 在 SYSTEM_PROMPT 约束下给出，工具不越权。
 """
+
 from __future__ import annotations
 
 import os
@@ -67,9 +68,7 @@ def _parse_frontmatter(content: str) -> dict:
     return fm
 
 
-def _list_entities(
-    folder: str, filter_field: str = "", filter_value: str = ""
-) -> list[dict]:
+def _list_entities(folder: str, filter_field: str = "", filter_value: str = "") -> list[dict]:
     """列某文件夹下所有实体的 frontmatter（跳过 index.md）。
 
     filter_field + filter_value 命中时按字段精确匹配过滤（字符串化比对，
@@ -98,8 +97,7 @@ def _list_entities(
 
 @register_tool(
     "query_kg_entities",
-    "查知识图谱实体。可按类型/行业/代码过滤。"
-    "如「查白酒行业所有股票」「查所有数据源」「查所有战法」。",
+    "查知识图谱实体。可按类型/行业/代码过滤。如「查白酒行业所有股票」「查所有数据源」「查所有战法」。",
     params={
         "entity_type": {
             "description": "实体类型",
@@ -131,17 +129,14 @@ def _list_entities(
         },
     },
 )
-def query_kg_entities(
-    entity_type: str, filter_field: str = "", filter_value: str = ""
-) -> list[dict]:
+def query_kg_entities(entity_type: str, filter_field: str = "", filter_value: str = "") -> list[dict]:
     folder = _FOLDER_MAP.get(entity_type, entity_type + "s")
     return _list_entities(folder, filter_field, filter_value)
 
 
 @register_tool(
     "query_kg_relations",
-    "查实体关系。扫描实体的 [[]] 链接，返回关联实体列表。"
-    "如「600519 关联哪些战法」「国产芯片概念有哪些股票」。",
+    "查实体关系。扫描实体的 [[]] 链接，返回关联实体列表。如「600519 关联哪些战法」「国产芯片概念有哪些股票」。",
     params={
         "entity_code": {
             "description": "实体代码或文件名，如 '600519' 或 'dragon_head'",
@@ -197,9 +192,7 @@ def kg_audit() -> dict:
     for folder in _FOLDER_MAP.values():
         dir_path = _VAULT_INVESTING / folder
         if dir_path.exists():
-            count = len(
-                [x for x in dir_path.glob("*.md") if x.name != "index.md"]
-            )
+            count = len([x for x in dir_path.glob("*.md") if x.name != "index.md"])
             summary[folder] = count
             total += count
         else:

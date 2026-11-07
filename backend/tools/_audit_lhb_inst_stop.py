@@ -7,6 +7,7 @@
 stop 逻辑（简化，R6 realistic fill 待完整 intraday）：
   T+1 open 买入，T+1 close 跌破 -3% 按 T+1 close stop，否则 T+2 close 卖。
 """
+
 import json
 import sqlite3
 import random
@@ -29,8 +30,14 @@ DT_DB = DATA / "dragon_tiger_history.db"
 KLINE_DB = DATA / "baostock_kline_cache.db"
 
 INST_KEYWORDS = (
-    "机构专用", "总部", "高盛", "瑞银", "股通", "摩根",
-    "中信证券股份有限公司上海分公司", "国际金融",
+    "机构专用",
+    "总部",
+    "高盛",
+    "瑞银",
+    "股通",
+    "摩根",
+    "中信证券股份有限公司上海分公司",
+    "国际金融",
 )
 STOP_PCT = -3.0  # -3% stop
 ALPHA = 0.05
@@ -39,8 +46,7 @@ ALPHA = 0.05
 def load_picks_by_layer() -> dict:
     conn = sqlite3.connect(str(DT_DB))
     rows = conn.execute(
-        "SELECT trade_date, security_code, dept_name, buy, net "
-        "FROM dragon_tiger_rows WHERE side='buy' AND buy > 0"
+        "SELECT trade_date, security_code, dept_name, buy, net FROM dragon_tiger_rows WHERE side='buy' AND buy > 0"
     ).fetchall()
     conn.close()
     picks: dict = defaultdict(list)
@@ -118,7 +124,7 @@ def compute_stop_return(code: str, trade_date: str, kline_cache: dict) -> tuple:
 
 
 def normal_p(t: float) -> float:
-    return 2 * (1 - 0.5 * (1 + erf(abs(t) / (2 ** 0.5))))
+    return 2 * (1 - 0.5 * (1 + erf(abs(t) / (2**0.5))))
 
 
 def audit_stop(sample_n: int = 5000) -> None:
@@ -147,7 +153,7 @@ def audit_stop(sample_n: int = 5000) -> None:
             continue
         mean = statistics.mean(day_means)
         n_days = len(day_means)
-        se = statistics.stdev(day_means) / (n_days ** 0.5) if n_days > 1 else 0
+        se = statistics.stdev(day_means) / (n_days**0.5) if n_days > 1 else 0
         t = mean / se if se > 0 else 0
         n_picks = len(all_returns)
         wr = sum(1 for r in all_returns if r > 0) / n_picks * 100 if n_picks else 0
@@ -157,9 +163,11 @@ def audit_stop(sample_n: int = 5000) -> None:
         p = normal_p(t)
         p_bonf = min(1.0, p * 3)
         verdict = "PASS" if p_bonf < ALPHA else "FAIL"
-        print(f"  {layer_name}: n={n_picks} days={n_days} mean={mean:.3f}% median={median:.3f}% "
-              f"WR={wr:.1f}% stop_rate={stop_rate:.1f}% day_t={t:.2f} "
-              f"p={p:.4f} Bonf×3={p_bonf:.4f} {verdict}")
+        print(
+            f"  {layer_name}: n={n_picks} days={n_days} mean={mean:.3f}% median={median:.3f}% "
+            f"WR={wr:.1f}% stop_rate={stop_rate:.1f}% day_t={t:.2f} "
+            f"p={p:.4f} Bonf×3={p_bonf:.4f} {verdict}"
+        )
 
     # 对比无 stop
     print(f"\n  对比（无 stop vs -3% stop）:")

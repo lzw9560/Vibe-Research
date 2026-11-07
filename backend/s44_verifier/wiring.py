@@ -7,6 +7,7 @@ modules directly (deflated_sharpe / pbo_cscv / purged_kfold / haircut are
 valid module names). This also isolates any future vendor version drift from
 verifier.py.
 """
+
 from __future__ import annotations
 
 import math
@@ -15,10 +16,7 @@ import sys
 
 import numpy as np
 
-_SCRIPTS_DIR = (
-    pathlib.Path(__file__).resolve().parents[2]
-    / "vendor" / "skill-backtest-overfit" / "scripts"
-)
+_SCRIPTS_DIR = pathlib.Path(__file__).resolve().parents[2] / "vendor" / "skill-backtest-overfit" / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
@@ -142,7 +140,9 @@ def compute_purged_kfold_splits(
         return []
     try:
         cv = PurgedKFold(
-            n_splits=min(n_splits, n), label_times=label_times, embargo_pct=embargo_pct,
+            n_splits=min(n_splits, n),
+            label_times=label_times,
+            embargo_pct=embargo_pct,
         )
         return [(np.asarray(tr), np.asarray(te)) for tr, te in cv.split()]
     except (ValueError, IndexError):
@@ -183,7 +183,10 @@ def compute_haircut(
         return None
     try:
         res = haircut_sharpe(
-            sr_pp, n_obs=int(n_obs), n_tests=int(n_tests), method=method,
+            sr_pp,
+            n_obs=int(n_obs),
+            n_tests=int(n_tests),
+            method=method,
         )
         h = float(res.haircut)
         if math.isnan(h):

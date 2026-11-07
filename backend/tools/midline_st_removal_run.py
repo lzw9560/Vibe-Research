@@ -6,6 +6,7 @@ run_event_verdict（edge_type="event"）→ 5 horizon verdict 落 Recorder + lin
 
 摘帽 event edge：撤销风险警示公告后 drift（A 股摘帽效应，文献较少）。
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -40,9 +41,7 @@ def run():
         print("[S170] 无交易日历")
         return
 
-    frozen = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=str(ROOT)
-    ).decode().strip()[:8]
+    frozen = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(ROOT)).decode().strip()[:8]
 
     input_files = {
         str(REMOVAL_CACHE): "st_removal_events",

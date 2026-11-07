@@ -14,6 +14,7 @@ from config import default_config
 
 class RecommendationLevel(str, Enum):
     """推荐等级 — 基于基因得分的教育研究式分级。"""
+
     HIGH_QUALITY = "高质量关注"
     MEDIUM_QUALITY = "中等质量关注"
     LOW_QUALITY = "低质量关注"
@@ -22,10 +23,10 @@ class RecommendationLevel(str, Enum):
 
 # AVOID 触发条件（量化判定，避免主观判断）
 AVOID_CONDITIONS = {
-    "seal_break_streak": 3,         # 近3日连续炸板（≥3次炸板）
-    "gene_score_decay_pct": 30,     # 基因得分连续5日衰减 ≥ 30%
-    "open_premium_negative_avg": -3, # 近5日平均开盘溢价 < -3%
-    "extreme_sti_phase": ["冰点"],   # STI处于冰点阶段时整体回避
+    "seal_break_streak": 3,  # 近3日连续炸板（≥3次炸板）
+    "gene_score_decay_pct": 30,  # 基因得分连续5日衰减 ≥ 30%
+    "open_premium_negative_avg": -3,  # 近5日平均开盘溢价 < -3%
+    "extreme_sti_phase": ["冰点"],  # STI处于冰点阶段时整体回避
 }
 
 # 仓位建议百分比（研究参考，非交易指令）
@@ -40,6 +41,7 @@ POSITION_SUGGESTIONS = {
 @dataclass
 class StockRecommendation:
     """个股推荐结果（教育研究式，非交易建议）。"""
+
     code: str
     name: str
     gene_score: float
@@ -133,14 +135,15 @@ async def get_recommendation(code: str, date: str | None = None) -> StockRecomme
     try:
         engine = get_sti_engine()
         db = engine._get_db()
-        row = db.execute(
-            "SELECT phase FROM sti_timeline WHERE phase IS NOT NULL ORDER BY date DESC LIMIT 1"
-        ).fetchone()
+        row = db.execute("SELECT phase FROM sti_timeline WHERE phase IS NOT NULL ORDER BY date DESC LIMIT 1").fetchone()
         if row:
             sti_phase = row["phase"]
     except Exception as e:  # noqa: BLE001
         import logging
-        logging.getLogger(__name__).warning("recommendation STI phase DB 查询失败（降级 sti_phase=None，影响 AVOID 判定）: %s", e)
+
+        logging.getLogger(__name__).warning(
+            "recommendation STI phase DB 查询失败（降级 sti_phase=None，影响 AVOID 判定）: %s", e
+        )
 
     # 检查 AVOID 条件
     avoid, reason = _check_avoid_conditions(gene, sti_phase)
@@ -157,6 +160,7 @@ async def get_recommendation(code: str, date: str | None = None) -> StockRecomme
     try:
         from s44_verifier.ic_ir import industry_demean
         import numpy as np
+
         # 同行业股票的中位数 demean（去行业暴露）
         all_genes = getattr(gene, "_all_genes", None)
         if all_genes and len(all_genes) >= 2:
@@ -222,6 +226,7 @@ from enum import Enum
 
 class ArmHonestLabel(str, Enum):
     """多臂诚实标签（grill C7：falsified ≠ weak ≠ 待复验 ≠ exploratory）。"""
+
     EXTERNALLY_VALIDATED = "externally_validated"  # 外部文献验证（floor 红利低波 9-12% 三重定论，非本系统 §44）
     EXPLORATORY = "exploratory"  # signal 建但 §44 未验（trend 骨架，paper tracking 不推真金）
     SECTION44_FALSIFIED = "§44_falsified"  # §44 证否（breakout selection 无 edge）
@@ -236,6 +241,7 @@ FLOOR_ALLOCATION: float = 0.5
 @dataclass
 class MultiArmRecommendation:
     """多臂推荐结果——各臂 honest_label + sizing（floor actionable 读 equity）。"""
+
     arm: str
     honest_label: ArmHonestLabel
     action_type: str  # "batch_buy" | "paper_track" | "none"
@@ -269,78 +275,112 @@ def get_multi_arm_recommendations(
     # floor：ETF 512890 批次计划（actionable，externally_validated）+ equity sizing
     try:
         from strategies.index_replication_floor import (  # noqa: PLC0415
-            build_position_batches, ETF_CODE,
+            build_position_batches,
+            ETF_CODE,
         )
+
         batches = build_position_batches(one_shot=True)
         n_batches = max(len(batches), 1)
         # S180 R4: floor_size 读 PaperPortfolio.final_size 含 lift cap（floor N/A→1.0，接口接线）
         floor_gross = equity * FLOOR_ALLOCATION
         floor_size = pp.final_size("floor", floor_gross / n_batches)
-        recs.append(MultiArmRecommendation(
-            arm="floor", honest_label=ArmHonestLabel.EXTERNALLY_VALIDATED,
-            action_type="batch_buy", code=ETF_CODE, name="红利低波 ETF",
-            sizing_suggestion=f"每批 ≈{floor_size:.0f} CNY（equity {equity:.0f} × {FLOOR_ALLOCATION} / {n_batches} 批）",
-            coverage_rate=1.0, validated=True,
-            note="外部三重定论 9-12%（学术+卖方+指数），非本系统 §44 验证；长线 buy+hold",
-        ))
+        recs.append(
+            MultiArmRecommendation(
+                arm="floor",
+                honest_label=ArmHonestLabel.EXTERNALLY_VALIDATED,
+                action_type="batch_buy",
+                code=ETF_CODE,
+                name="红利低波 ETF",
+                sizing_suggestion=f"每批 ≈{floor_size:.0f} CNY（equity {equity:.0f} × {FLOOR_ALLOCATION} / {n_batches} 批）",
+                coverage_rate=1.0,
+                validated=True,
+                note="外部三重定论 9-12%（学术+卖方+指数），非本系统 §44 验证；长线 buy+hold",
+            )
+        )
     except Exception as e:  # noqa: BLE001
-        recs.append(MultiArmRecommendation(
-            arm="floor", honest_label=ArmHonestLabel.MOCK_NOT_READY,
-            action_type="none", note=f"floor 未就绪: {e}",
-        ))
+        recs.append(
+            MultiArmRecommendation(
+                arm="floor",
+                honest_label=ArmHonestLabel.MOCK_NOT_READY,
+                action_type="none",
+                note=f"floor 未就绪: {e}",
+            )
+        )
 
     # breakout：§44_falsified paper-only（不推荐真金）
     try:
         agg = tj.aggregate_by_arm()
         bo_stats = agg.get("breakout", {})
-        recs.append(MultiArmRecommendation(
-            arm="breakout", honest_label=ArmHonestLabel.SECTION44_FALSIFIED,
-            action_type="paper_track",
-            coverage_rate=bo_stats.get("coverage_rate") if isinstance(bo_stats, dict) else None,
-            days_tracked=bo_stats.get("n_days", 0) if isinstance(bo_stats, dict) else 0,
-            validated=False,
-            note="§44 selection 已证否（S168 12 harness 全 falsified）无 selection edge；"
-                 "盘中 conditioning 未测——paper tracking 非 weak 非 underpowered_tracking",
-        ))
+        recs.append(
+            MultiArmRecommendation(
+                arm="breakout",
+                honest_label=ArmHonestLabel.SECTION44_FALSIFIED,
+                action_type="paper_track",
+                coverage_rate=bo_stats.get("coverage_rate") if isinstance(bo_stats, dict) else None,
+                days_tracked=bo_stats.get("n_days", 0) if isinstance(bo_stats, dict) else 0,
+                validated=False,
+                note="§44 selection 已证否（S168 12 harness 全 falsified）无 selection edge；"
+                "盘中 conditioning 未测——paper tracking 非 weak 非 underpowered_tracking",
+            )
+        )
     except Exception as e:  # noqa: BLE001
-        recs.append(MultiArmRecommendation(
-            arm="breakout", honest_label=ArmHonestLabel.SECTION44_FALSIFIED,
-            action_type="paper_track", note=f"stats 不可得: {e}",
-        ))
+        recs.append(
+            MultiArmRecommendation(
+                arm="breakout",
+                honest_label=ArmHonestLabel.SECTION44_FALSIFIED,
+                action_type="paper_track",
+                note=f"stats 不可得: {e}",
+            )
+        )
 
     # limitup：mock_not_ready（signal 生成器未建）
-    recs.append(MultiArmRecommendation(
-        arm="limitup", honest_label=ArmHonestLabel.MOCK_NOT_READY,
-        action_type="none", validated=False,
-        note="limitup signal 生成器未建（mock_entry=10.0 硬编），等 conditioning harness",
-    ))
+    recs.append(
+        MultiArmRecommendation(
+            arm="limitup",
+            honest_label=ArmHonestLabel.MOCK_NOT_READY,
+            action_type="none",
+            validated=False,
+            note="limitup signal 生成器未建（mock_entry=10.0 硬编），等 conditioning harness",
+        )
+    )
 
     # trend：EXPLORATORY（题材/政策趋势骨架建，§44 未验）paper tracking 不推真金
     try:
         agg = tj.aggregate_by_arm()
         trend_stats = agg.get("trend", {})
-        recs.append(MultiArmRecommendation(
-            arm="trend", honest_label=ArmHonestLabel.EXPLORATORY,
-            action_type="paper_track",
-            coverage_rate=trend_stats.get("signal_coverage_rate") if isinstance(trend_stats, dict) else None,
-            days_tracked=trend_stats.get("n_days", 0) if isinstance(trend_stats, dict) else 0,
-            validated=False,
-            note="题材/政策趋势骨架（板块周期+资金流 composite，非动量避§44 falsified）；"
-                 "§44 未验；paper tracking 不推真金；"
-                 "zt 动量/新闻催化剂 S182/S183 deferred",
-        ))
+        recs.append(
+            MultiArmRecommendation(
+                arm="trend",
+                honest_label=ArmHonestLabel.EXPLORATORY,
+                action_type="paper_track",
+                coverage_rate=trend_stats.get("signal_coverage_rate") if isinstance(trend_stats, dict) else None,
+                days_tracked=trend_stats.get("n_days", 0) if isinstance(trend_stats, dict) else 0,
+                validated=False,
+                note="题材/政策趋势骨架（板块周期+资金流 composite，非动量避§44 falsified）；"
+                "§44 未验；paper tracking 不推真金；"
+                "zt 动量/新闻催化剂 S182/S183 deferred",
+            )
+        )
     except Exception as e:  # noqa: BLE001
-        recs.append(MultiArmRecommendation(
-            arm="trend", honest_label=ArmHonestLabel.EXPLORATORY,
-            action_type="paper_track", note=f"stats 不可得: {e}",
-        ))
+        recs.append(
+            MultiArmRecommendation(
+                arm="trend",
+                honest_label=ArmHonestLabel.EXPLORATORY,
+                action_type="paper_track",
+                note=f"stats 不可得: {e}",
+            )
+        )
 
     # gap：dead_arm（不推荐）
-    recs.append(MultiArmRecommendation(
-        arm="gap", honest_label=ArmHonestLabel.DEAD_ARM,
-        action_type="none", validated=False,
-        note="gap §44 falsified（成本假象 net -0.48% t=-3.79），is_dead_arm=1 不推荐；"
-             "审计走 tools/s44_gap_run_60d.py",
-    ))
+    recs.append(
+        MultiArmRecommendation(
+            arm="gap",
+            honest_label=ArmHonestLabel.DEAD_ARM,
+            action_type="none",
+            validated=False,
+            note="gap §44 falsified（成本假象 net -0.48% t=-3.79），is_dead_arm=1 不推荐；"
+            "审计走 tools/s44_gap_run_60d.py",
+        )
+    )
 
     return recs

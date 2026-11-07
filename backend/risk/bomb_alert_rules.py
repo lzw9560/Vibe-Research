@@ -55,6 +55,7 @@ RISK_DISCLAIMER = "历史统计特征，市场有风险，研究参考"
 @dataclass
 class BombAlertRuleV2:
     """炸板预警规则（V2 时序驱动）。"""
+
     rule_id: str  # C1-C9（C1-C6 既有 + C7-C9 S093 新增）
     name: str
     alert_level: str  # yellow/red
@@ -65,6 +66,7 @@ class BombAlertRuleV2:
 @dataclass
 class RuleCheckResult:
     """单规则检查结果。"""
+
     rule_id: str
     triggered: bool
     alert: BombAlert | None = None
@@ -73,8 +75,14 @@ class RuleCheckResult:
 
 
 def _build_alert(
-    code: str, name: str, rule_id: str, level: str,
-    condition: str, seal_amount: float | None, change: float, recommendation: str,
+    code: str,
+    name: str,
+    rule_id: str,
+    level: str,
+    condition: str,
+    seal_amount: float | None,
+    change: float,
+    recommendation: str,
     now: datetime | None = None,
 ) -> BombAlert:
     now = now or datetime.now()
@@ -91,7 +99,9 @@ def _build_alert(
 
 
 def check_c1_seal_drop_5min(
-    snapshots: list[dict[str, Any]], code: str, name: str,
+    snapshots: list[dict[str, Any]],
+    code: str,
+    name: str,
     now: datetime | None = None,
 ) -> RuleCheckResult:
     """C1：封单 5 分钟减>30% → 黄。"""
@@ -117,17 +127,24 @@ def check_c1_seal_drop_5min(
     drop = (prev_seal - curr_seal) / prev_seal
     if drop >= C1_SEAL_DROP_RATIO_5MIN:
         alert = _build_alert(
-            code, name, "C1", "yellow",
+            code,
+            name,
+            "C1",
+            "yellow",
             f"{name}({code}) 封单 5 分钟减 {drop:.1%}（C1：>30% 黄色预警）",
-            curr_seal, prev_seal - curr_seal,
-            recommendation=RULE_RECOMMENDATIONS["C1"], now=now,
+            curr_seal,
+            prev_seal - curr_seal,
+            recommendation=RULE_RECOMMENDATIONS["C1"],
+            now=now,
         )
         return RuleCheckResult("C1", True, alert=alert, reason=f"5 分钟降幅 {drop:.1%}")
     return RuleCheckResult("C1", False, reason=f"5 分钟降幅 {drop:.1%}（未触发）")
 
 
 def check_c2_degraded_seal_drop(
-    snapshots: list[dict[str, Any]], code: str, name: str,
+    snapshots: list[dict[str, Any]],
+    code: str,
+    name: str,
     now: datetime | None = None,
 ) -> RuleCheckResult:
     """C2 降级：封单骤降（5 分钟降幅≥50%）→ 黄。
@@ -156,18 +173,26 @@ def check_c2_degraded_seal_drop(
     drop = (prev_seal - curr_seal) / prev_seal
     if drop >= C2_DEGRADED_SEAL_DROP_RATIO:
         alert = _build_alert(
-            code, name, "C2", "yellow",
+            code,
+            name,
+            "C2",
+            "yellow",
             f"{name}({code}) 封单骤降 {drop:.1%}（C2 降级口径：原 tick 级不可得，用 5 分钟≥50% 代理）",
-            curr_seal, prev_seal - curr_seal,
-            recommendation=RULE_RECOMMENDATIONS["C2"], now=now,
+            curr_seal,
+            prev_seal - curr_seal,
+            recommendation=RULE_RECOMMENDATIONS["C2"],
+            now=now,
         )
         return RuleCheckResult("C2", True, alert=alert, reason=f"骤降 {drop:.1%}（降级口径）")
     return RuleCheckResult("C2", False, reason=f"降幅 {drop:.1%}（未触发）")
 
 
 def check_c3_sector_leader_broken(
-    snapshots: list[dict[str, Any]], code: str, name: str,
-    zb_pool_codes: set[str], now: datetime | None = None,
+    snapshots: list[dict[str, Any]],
+    code: str,
+    name: str,
+    zb_pool_codes: set[str],
+    now: datetime | None = None,
 ) -> RuleCheckResult:
     """C3：同板块龙头进炸板池 → 红。
 
@@ -182,16 +207,23 @@ def check_c3_sector_leader_broken(
     # 保守触发：进炸板池即红色预警（龙头聚合判定留 backlog）
     latest = snapshots[-1] if snapshots else {}
     alert = _build_alert(
-        code, name, "C3", "red",
+        code,
+        name,
+        "C3",
+        "red",
         f"{name}({code}) 进入炸板池（C3：同板块龙头炸板红色预警）",
-        latest.get("seal_amount"), 0.0,
-        recommendation=RULE_RECOMMENDATIONS["C3"], now=now,
+        latest.get("seal_amount"),
+        0.0,
+        recommendation=RULE_RECOMMENDATIONS["C3"],
+        now=now,
     )
     return RuleCheckResult("C3", True, alert=alert, reason="进入炸板池")
 
 
 def check_c4_index_drop_5min(
-    snapshots: list[dict[str, Any]], code: str, name: str,
+    snapshots: list[dict[str, Any]],
+    code: str,
+    name: str,
     now: datetime | None = None,
 ) -> RuleCheckResult:
     """C4：大盘 5 分钟急跌>0.5% → 红。"""
@@ -204,17 +236,24 @@ def check_c4_index_drop_5min(
         return RuleCheckResult("C4", False, data_status="missing", reason="指数 5 分钟变化未取得")
     if idx_change <= -C4_INDEX_DROP_5MIN:
         alert = _build_alert(
-            code, name, "C4", "red",
+            code,
+            name,
+            "C4",
+            "red",
             f"{name}({code}) 大盘 5 分钟急跌 {idx_change:.2f}%（C4：>0.5% 红色预警）",
-            latest.get("seal_amount"), 0.0,
-            recommendation=RULE_RECOMMENDATIONS["C4"], now=now,
+            latest.get("seal_amount"),
+            0.0,
+            recommendation=RULE_RECOMMENDATIONS["C4"],
+            now=now,
         )
         return RuleCheckResult("C4", True, alert=alert, reason=f"大盘跌幅 {idx_change:.2f}%")
     return RuleCheckResult("C4", False, reason=f"大盘跌幅 {idx_change:.2f}%（未触发）")
 
 
 def check_c5_reopen_unsealed(
-    snapshots: list[dict[str, Any]], code: str, name: str,
+    snapshots: list[dict[str, Any]],
+    code: str,
+    name: str,
     now: datetime | None = None,
 ) -> RuleCheckResult:
     """C5：开板 3 分钟未回封 → 红。
@@ -242,17 +281,24 @@ def check_c5_reopen_unsealed(
     recent = [s for s in snapshots if s.get("ts", "") >= cutoff]
     if recent and all((s.get("seal_amount") is None or s.get("seal_amount") == 0) for s in recent):
         alert = _build_alert(
-            code, name, "C5", "red",
+            code,
+            name,
+            "C5",
+            "red",
             f"{name}({code}) 开板 {int(open_count)} 次且 3 分钟未回封（C5：红色预警）",
-            latest.get("seal_amount"), 0.0,
-            recommendation=RULE_RECOMMENDATIONS["C5"], now=now,
+            latest.get("seal_amount"),
+            0.0,
+            recommendation=RULE_RECOMMENDATIONS["C5"],
+            now=now,
         )
         return RuleCheckResult("C5", True, alert=alert, reason=f"开板 {int(open_count)} 次未回封")
     return RuleCheckResult("C5", False, reason="已回封或无封单持续不足 3 分钟")
 
 
 def check_c6_seal_below_float_ratio(
-    snapshots: list[dict[str, Any]], code: str, name: str,
+    snapshots: list[dict[str, Any]],
+    code: str,
+    name: str,
     now: datetime | None = None,
 ) -> RuleCheckResult:
     """C6：封单<流通市值 0.3% → 红。"""
@@ -269,17 +315,24 @@ def check_c6_seal_below_float_ratio(
     ratio = seal / float_cap
     if ratio < C6_SEAL_TO_FLOAT_RATIO_MIN:
         alert = _build_alert(
-            code, name, "C6", "red",
+            code,
+            name,
+            "C6",
+            "red",
             f"{name}({code}) 封单/流通市值 {ratio:.3%} < 0.3%（C6：红色预警）",
-            seal, 0.0,
-            recommendation=RULE_RECOMMENDATIONS["C6"], now=now,
+            seal,
+            0.0,
+            recommendation=RULE_RECOMMENDATIONS["C6"],
+            now=now,
         )
         return RuleCheckResult("C6", True, alert=alert, reason=f"封单市值比 {ratio:.3%}")
     return RuleCheckResult("C6", False, reason=f"封单市值比 {ratio:.3%}（未触发）")
 
 
 def check_c7_forward_limit_up(
-    snapshots: list[dict[str, Any]], code: str, name: str,
+    snapshots: list[dict[str, Any]],
+    code: str,
+    name: str,
     forward_candidates: set[str] | None = None,
     zt_pool_codes: set[str] | None = None,
     now: datetime | None = None,
@@ -311,17 +364,21 @@ def check_c7_forward_limit_up(
 
     if is_limit_up:
         alert = _build_alert(
-            code, name, "C7", "info",
+            code,
+            name,
+            "C7",
+            "info",
             f"{name}({code}) 前瞻标的涨停（C7：INFO 提示）",
-            None, 0.0,
-            recommendation=RULE_RECOMMENDATIONS["C7"], now=now,
+            None,
+            0.0,
+            recommendation=RULE_RECOMMENDATIONS["C7"],
+            now=now,
         )
         return RuleCheckResult("C7", True, alert=alert, reason="前瞻标的涨停")
 
     # 无法判定涨停状态：zt_pool 未传入且快照无法判断
     if not zt_pool_provided:
-        return RuleCheckResult("C7", False, data_status="missing",
-                               reason="zt_pool 未取得且无法从快照判断涨停")
+        return RuleCheckResult("C7", False, data_status="missing", reason="zt_pool 未取得且无法从快照判断涨停")
 
     return RuleCheckResult("C7", False, reason="未涨停")
 
@@ -352,11 +409,15 @@ def check_c8_sentiment_deterioration(
 
     if zt < C8_ZT_COUNT_MIN and zb > zt:
         alert = _build_alert(
-            "MARKET", "市场情绪", "C8", "medium",
-            f"情绪恶化：涨停 {int(zt)} 只 < {C8_ZT_COUNT_MIN}，炸板 {int(zb)} 只 > 涨停"
-            f"（C8：天气降档 MEDIUM 预警）",
-            None, 0.0,
-            recommendation=RULE_RECOMMENDATIONS["C8"], now=now,
+            "MARKET",
+            "市场情绪",
+            "C8",
+            "medium",
+            f"情绪恶化：涨停 {int(zt)} 只 < {C8_ZT_COUNT_MIN}，炸板 {int(zb)} 只 > 涨停（C8：天气降档 MEDIUM 预警）",
+            None,
+            0.0,
+            recommendation=RULE_RECOMMENDATIONS["C8"],
+            now=now,
         )
         return RuleCheckResult("C8", True, alert=alert, reason=f"zt={int(zt)} zb={int(zb)}")
 
@@ -397,10 +458,15 @@ def check_c9_ladder_break(
 
     if board2_count == 0:
         alert = _build_alert(
-            "MARKET", "连板梯队", "C9", "medium",
+            "MARKET",
+            "连板梯队",
+            "C9",
+            "medium",
             f"连板断裂：最高 {int(max_b)} 板但无 2 板接力（C9：MEDIUM 预警）",
-            None, 0.0,
-            recommendation=RULE_RECOMMENDATIONS["C9"], now=now,
+            None,
+            0.0,
+            recommendation=RULE_RECOMMENDATIONS["C9"],
+            now=now,
         )
         return RuleCheckResult("C9", True, alert=alert, reason=f"max_boards={int(max_b)} board2=0")
 

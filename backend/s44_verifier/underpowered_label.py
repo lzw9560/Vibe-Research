@@ -10,6 +10,7 @@
 
 spec: specs/S204-多日跟踪架构与§44v2修正/tasks.md T4
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -18,7 +19,7 @@ from dataclasses import dataclass
 _MIN_DAYS_ROBUST = 60
 
 # institutional 季度披露 cadence——n_events<10 独立事件 → structural underpowered
-#（verifier 无此机制，harness post-process override）
+# （verifier 无此机制，harness post-process override）
 _INSTITUTIONAL_MIN_EVENTS = 10
 _STRUCTURAL_UNDERPOWERED_SOURCES = frozenset({"institutional"})
 
@@ -51,9 +52,7 @@ class UnderpoweredLabel:
     reason: str
 
 
-def label_underpowered(
-    source: str, days: int, n_events: int | None = None
-) -> UnderpoweredLabel:
+def label_underpowered(source: str, days: int, n_events: int | None = None) -> UnderpoweredLabel:
     """标数据源是否 underpowered（纯函数，immutable 返新对象）。
 
     Args:
@@ -73,11 +72,7 @@ def label_underpowered(
     事件 cadence，harness post-process 须 override 防假 robust）。
     """
     # structural_underpowered 优先（institutional 季度 cadence，n_events<10）
-    if (
-        source in _STRUCTURAL_UNDERPOWERED_SOURCES
-        and n_events is not None
-        and n_events < _INSTITUTIONAL_MIN_EVENTS
-    ):
+    if source in _STRUCTURAL_UNDERPOWERED_SOURCES and n_events is not None and n_events < _INSTITUTIONAL_MIN_EVENTS:
         return UnderpoweredLabel(
             source=source,
             days=days,

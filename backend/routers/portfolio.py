@@ -1,6 +1,7 @@
 """
 Portfolio router.
 """
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Any, Dict
@@ -63,6 +64,7 @@ async def portfolio_close(c: CloseIn) -> Dict[str, Any]:
     if not date:
         raise HTTPException(400, "请填清仓日期")
     from datetime import datetime
+
     try:
         datetime.strptime(date, "%Y-%m-%d")
     except ValueError:

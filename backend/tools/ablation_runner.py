@@ -18,6 +18,7 @@ v2 重设计（per verify recommended_fix）：
 
 不喂 walk_forward_cv 模型——融合分自身即预测分数，IC = spearman(融合分, y)，无模型 wash out。
 """
+
 from __future__ import annotations
 
 from typing import Callable
@@ -70,6 +71,7 @@ def _spearman_ic(scores: np.ndarray, y: np.ndarray) -> float:
         return 0.0
     try:
         from scipy.stats import spearmanr  # noqa: PLC0415
+
         r, _ = spearmanr(scores, y)
         return 0.0 if np.isnan(r) else float(r)
     except Exception:  # noqa: BLE001
@@ -103,8 +105,14 @@ def run_composite_ablation(
         kept_y.append(float(y))
         kept_dates.append(d)
     if not kept_vals:
-        return {"delta_ic": 0.0, "delta_pval": 1.0, "per_fold_deltas": [], "n_folds": 0,
-                "full_ic_mean": 0.0, "ablated_ic_mean": 0.0}
+        return {
+            "delta_ic": 0.0,
+            "delta_pval": 1.0,
+            "per_fold_deltas": [],
+            "n_folds": 0,
+            "full_ic_mean": 0.0,
+            "ablated_ic_mean": 0.0,
+        }
 
     y_arr = np.array(kept_y)
     unique_dates = sorted(set(kept_dates))

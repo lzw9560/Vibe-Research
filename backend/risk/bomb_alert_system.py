@@ -10,6 +10,7 @@ from realtime_workflow import BombAlert
 @dataclass
 class BombAlertRule:
     """炸板预警规则"""
+
     name: str
     seal_drop_ratio: float = 0.5
     min_seal_amount: float = 1000000.0
@@ -20,6 +21,7 @@ class BombAlertRule:
 @dataclass
 class BombAlertResult:
     """单股炸板检测结果"""
+
     code: str
     name: str
     triggered: bool

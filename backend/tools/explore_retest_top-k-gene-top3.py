@@ -28,6 +28,7 @@
   cd /Users/lizhiwei/project/code/stock/Vibe-Research/backend
   .venv/bin/python tools/explore_retest_top-k-gene-top3.py
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -72,14 +73,13 @@ GENE_DB = resolve_data_dir() / "gene_scores.db"
 # filename prevents module import, so copy the 3 small functions)
 # =====================================================================
 
+
 def load_gene_scores() -> tuple[dict[str, dict[str, float]], int]:
     """读 gene_scores.db → {date: {code: total_score}}. 无 look-ahead."""
     conn = sqlite3.connect(str(GENE_DB))
     by_date: dict[str, dict[str, float]] = defaultdict(dict)
     n = 0
-    for d, code, score in conn.execute(
-        "SELECT date, code, total_score FROM gene_scores"
-    ):
+    for d, code, score in conn.execute("SELECT date, code, total_score FROM gene_scores"):
         if score is None:
             continue
         by_date[d][code] = float(score)
@@ -88,9 +88,7 @@ def load_gene_scores() -> tuple[dict[str, dict[str, float]], int]:
     return dict(by_date), n
 
 
-def attach_gene_scores(
-    picks: list[dict], gene: dict[str, dict[str, float]]
-) -> tuple[list[dict], int]:
+def attach_gene_scores(picks: list[dict], gene: dict[str, dict[str, float]]) -> tuple[list[dict], int]:
     n_with = 0
     for p in picks:
         dmap = gene.get(p["zt_date"])
@@ -119,6 +117,7 @@ def select_topk_per_date(picks: list[dict], k: int) -> list[dict]:
 # NEW methodology 1: BH FDR (Benjamini-Hochberg)
 # =====================================================================
 
+
 def bh_fdr(p_list: list[float], alpha: float = 0.05) -> dict:
     """Benjamini-Hochberg FDR procedure.
 
@@ -134,8 +133,7 @@ def bh_fdr(p_list: list[float], alpha: float = 0.05) -> dict:
     """
     m = len(p_list)
     if m == 0:
-        return {"rejected": [], "bh_adjusted_p": [], "n_significant": 0,
-                "m": 0, "alpha": alpha}
+        return {"rejected": [], "bh_adjusted_p": [], "n_significant": 0, "m": 0, "alpha": alpha}
 
     indexed = sorted(enumerate(p_list), key=lambda x: x[1])
     sorted_ps = [p for _, p in indexed]
@@ -171,6 +169,7 @@ def bh_fdr(p_list: list[float], alpha: float = 0.05) -> dict:
 # NEW methodology 2: per-trade t + HAC (Newey-West)
 # =====================================================================
 
+
 def per_trade_t_hac(rets: list[float], dates: list[str]) -> dict:
     """Per-trade t-statistic with Newey-West HAC standard errors.
 
@@ -181,8 +180,7 @@ def per_trade_t_hac(rets: list[float], dates: list[str]) -> dict:
     Less conservative than per-day-mean t (shrinks N to n_days).
     """
     if len(rets) == 0:
-        return {"n": 0, "n_days": 0, "mean": 0.0, "hac_se": 0.0,
-                "t": 0.0, "p_one_sided": 1.0, "lag": 0}
+        return {"n": 0, "n_days": 0, "mean": 0.0, "hac_se": 0.0, "t": 0.0, "p_one_sided": 1.0, "lag": 0}
 
     paired = sorted(zip(dates, rets), key=lambda x: x[0])
     r_arr = np.array([r for _, r in paired], dtype=float)
@@ -201,30 +199,36 @@ def per_trade_t_hac(rets: list[float], dates: list[str]) -> dict:
 
     # HAC variance (Bartlett kernel):
     # S = sum(e_t^2) + 2 * sum_{l=1}^{L} w_l * sum_{t=l+1}^{n} e_t * e_{t-l}
-    omega_0 = float(np.sum(resid ** 2))
+    omega_0 = float(np.sum(resid**2))
     s_hac = omega_0
     for l in range(1, L + 1):
         w_l = 1.0 - l / (L + 1)
         if l < n:
-            cross = float(np.sum(resid[l:] * resid[:n - l]))
+            cross = float(np.sum(resid[l:] * resid[: n - l]))
             s_hac += 2.0 * w_l * cross
 
-    hac_var = s_hac / (n ** 2) if n > 0 else 0.0
+    hac_var = s_hac / (n**2) if n > 0 else 0.0
     hac_se = sqrt(max(hac_var, 0.0))
     t_stat = mean / hac_se if hac_se > 0 else 0.0
     p_one = float(stats.norm.sf(t_stat))  # one-sided positive edge
 
     return {
-        "n": n, "n_days": n_days, "mean": round(mean, 4),
-        "hac_se": round(hac_se, 5), "t": round(t_stat, 3),
-        "p_one_sided": round(p_one, 6), "lag": L,
-        "nw_lag": nw_lag, "max_same_day": max_same_day,
+        "n": n,
+        "n_days": n_days,
+        "mean": round(mean, 4),
+        "hac_se": round(hac_se, 5),
+        "t": round(t_stat, 3),
+        "p_one_sided": round(p_one, 6),
+        "lag": L,
+        "nw_lag": nw_lag,
+        "max_same_day": max_same_day,
     }
 
 
 # =====================================================================
 # NEW methodology 3: rolling 4-window expanding walk-forward
 # =====================================================================
+
 
 def _ret_float(p: dict, ret_fn) -> float | None:
     """Extract float from ret_fn (handles both float and tuple returns)."""
@@ -236,9 +240,7 @@ def _ret_float(p: dict, ret_fn) -> float | None:
     return r
 
 
-def rolling_walk_forward(
-    picks: list[dict], ret_fn, n_windows: int = 4
-) -> dict:
+def rolling_walk_forward(picks: list[dict], ret_fn, n_windows: int = 4) -> dict:
     """Expanding-window walk-forward with n_windows date-quarters.
 
     Fold i: train = Q1..Q(i), test = Q(i+1).  (n_windows-1 folds)
@@ -250,8 +252,7 @@ def rolling_walk_forward(
     ps = sorted(picks, key=lambda p: p["zt_date"])
     all_dates = sorted(set(p["zt_date"] for p in ps))
     if len(all_dates) < n_windows:
-        return {"status": "too_few_dates", "n_dates": len(all_dates),
-                "n_windows": n_windows}
+        return {"status": "too_few_dates", "n_dates": len(all_dates), "n_windows": n_windows}
 
     q_size = len(all_dates) // n_windows
     quarters: list[set[str]] = []
@@ -294,18 +295,24 @@ def rolling_walk_forward(
                 test_by_date[p["zt_date"]].append(r)
         test_dt = day_paired_t(test_by_date)
 
-        folds.append({
-            "fold": i + 1,
-            "n_train": len(train_rets), "n_test": len(test_rets),
-            "n_train_dates": len(train_dates), "n_test_dates": len(test_dates),
-            "train_ev": train_ev["ev"], "test_ev": test_ev["ev"],
-            "test_wr": test_ev["wr"],
-            "test_hac_t": test_hac["t"], "test_hac_p": test_hac["p_one_sided"],
-            "test_day_t": test_dt["t"], "test_day_p": test_dt["p_one_sided"],
-            "test_n_days": test_dt["n_days"],
-            "test_range": (f"{min(test_dates)}~{max(test_dates)}"
-                           if test_dates else "-"),
-        })
+        folds.append(
+            {
+                "fold": i + 1,
+                "n_train": len(train_rets),
+                "n_test": len(test_rets),
+                "n_train_dates": len(train_dates),
+                "n_test_dates": len(test_dates),
+                "train_ev": train_ev["ev"],
+                "test_ev": test_ev["ev"],
+                "test_wr": test_ev["wr"],
+                "test_hac_t": test_hac["t"],
+                "test_hac_p": test_hac["p_one_sided"],
+                "test_day_t": test_dt["t"],
+                "test_day_p": test_dt["p_one_sided"],
+                "test_n_days": test_dt["n_days"],
+                "test_range": (f"{min(test_dates)}~{max(test_dates)}" if test_dates else "-"),
+            }
+        )
 
     # Pooled OOS (union of all test picks — all genuinely OOS)
     pooled_rets = [ret_cache[id(p)] for p in all_test_picks if id(p) in ret_cache]
@@ -325,12 +332,15 @@ def rolling_walk_forward(
         "n_folds": len(folds),
         "folds": folds,
         "pooled_oos": {
-            "n": pooled_ev["n"], "n_days": pooled_dt["n_days"],
+            "n": pooled_ev["n"],
+            "n_days": pooled_dt["n_days"],
             "gross_ev": pooled_ev["ev"],
             "net_ev": round(pooled_ev["ev"] - COST * 100, 3),
             "wr": pooled_ev["wr"],
-            "hac_t": pooled_hac["t"], "hac_p": pooled_hac["p_one_sided"],
-            "day_t": pooled_dt["t"], "day_p": pooled_dt["p_one_sided"],
+            "hac_t": pooled_hac["t"],
+            "hac_p": pooled_hac["p_one_sided"],
+            "day_t": pooled_dt["t"],
+            "day_p": pooled_dt["p_one_sided"],
         },
     }
 
@@ -338,6 +348,7 @@ def rolling_walk_forward(
 # =====================================================================
 # NEW verdict (BH + rolling WF + HAC)
 # =====================================================================
+
 
 def new_verdict_for(
     ev_gross: float,
@@ -367,14 +378,18 @@ def new_verdict_for(
       8. All pass → edge-confirmed
     """
     print(f"\n  {subset_name} [NEW methodology — BH + rolling WF + HAC]:")
-    print(f"    gross_EV={ev_gross}% net_EV={net_ev}% "
-          f"HAC_t={hac_t} HAC_p_raw={hac_p_raw} "
-          f"BH_full_rej={bh_full_rejected} n_days={n_days}")
+    print(
+        f"    gross_EV={ev_gross}% net_EV={net_ev}% "
+        f"HAC_t={hac_t} HAC_p_raw={hac_p_raw} "
+        f"BH_full_rej={bh_full_rejected} n_days={n_days}"
+    )
     if rwf_status == "ok":
-        print(f"    rolling-WF: pooled_OOS_gross={pooled_oos_ev}% "
-              f"OOS_HAC_p={pooled_oos_hac_p} "
-              f"BH_oos_rej={bh_oos_rejected} "
-              f"folds_pos={fold_positive}/{fold_total}")
+        print(
+            f"    rolling-WF: pooled_OOS_gross={pooled_oos_ev}% "
+            f"OOS_HAC_p={pooled_oos_hac_p} "
+            f"BH_oos_rej={bh_oos_rejected} "
+            f"folds_pos={fold_positive}/{fold_total}"
+        )
 
     if ev_gross < 0:
         print(f"    → FALSIFIED: gross EV < 0")
@@ -383,8 +398,10 @@ def new_verdict_for(
         print(f"    → UNDERPOWERED: n_days={n_days} < 60")
         return "underpowered"
     if not bh_full_rejected:
-        print(f"    → FALSIFIED: BH FDR 5% rejects full-sample HAC p "
-              f"(not significant even with less-conservative correction)")
+        print(
+            f"    → FALSIFIED: BH FDR 5% rejects full-sample HAC p "
+            f"(not significant even with less-conservative correction)"
+        )
         return "falsified"
     if net_ev <= 0:
         print(f"    → FALSIFIED: net EV={net_ev}% <= 0 (cost eats gross edge)")
@@ -394,16 +411,19 @@ def new_verdict_for(
             print(f"    → FALSIFIED: pooled OOS EV={pooled_oos_ev}% <= 0")
             return "falsified"
         if not bh_oos_rejected:
-            print(f"    → EXPLORATORY: OOS HAC p={pooled_oos_hac_p} "
-                  f"fails BH FDR 5% (OOS not significant)")
+            print(f"    → EXPLORATORY: OOS HAC p={pooled_oos_hac_p} fails BH FDR 5% (OOS not significant)")
             return "exploratory"
         if fold_positive < fold_total * 2 / 3:
-            print(f"    → EXPLORATORY: only {fold_positive}/{fold_total} "
-                  f"folds positive (< 2/3, not robust across regimes)")
+            print(
+                f"    → EXPLORATORY: only {fold_positive}/{fold_total} "
+                f"folds positive (< 2/3, not robust across regimes)"
+            )
             return "exploratory"
-        print(f"    → EDGE-CONFIRMED: gross+net>0, BH PASS, "
-              f"OOS EV={pooled_oos_ev}% significant (HAC p={pooled_oos_hac_p}), "
-              f"{fold_positive}/{fold_total} folds positive")
+        print(
+            f"    → EDGE-CONFIRMED: gross+net>0, BH PASS, "
+            f"OOS EV={pooled_oos_ev}% significant (HAC p={pooled_oos_hac_p}), "
+            f"{fold_positive}/{fold_total} folds positive"
+        )
         return "edge-confirmed"
     print(f"    → EXPLORATORY: rolling WF not available")
     return "exploratory"
@@ -412,6 +432,7 @@ def new_verdict_for(
 # =====================================================================
 # Main
 # =====================================================================
+
 
 def main() -> None:
     print("=" * 72)
@@ -425,21 +446,17 @@ def main() -> None:
     calendar = sorted(all_dates)
     zt_rows = load_zt()
     gene, n_gene = load_gene_scores()
-    print(f"  kline codes: {len(code_map)}, calendar: {len(calendar)} "
-          f"({calendar[0]} ~ {calendar[-1]})")
+    print(f"  kline codes: {len(code_map)}, calendar: {len(calendar)} ({calendar[0]} ~ {calendar[-1]})")
     print(f"  zt rows: {len(zt_rows)}")
-    print(f"  gene_scores: {n_gene} rows, {len(gene)} dates "
-          f"({min(gene)} ~ {max(gene)})")
+    print(f"  gene_scores: {n_gene} rows, {len(gene)} dates ({min(gene)} ~ {max(gene)})")
 
     # ---- build picks, attach gene, select top-k ----
     print("\n[2] Building picks (entry=T+1 open, exit=T+2 close, 一字涨停 skip)…")
     blanket = build_picks_generic(code_map, calendar, zt_rows, filter_fn=None)
     blanket, n_with = attach_gene_scores(blanket, gene)
-    gene_dates = sorted({p["zt_date"] for p in blanket
-                         if p.get("gene_score") is not None})
+    gene_dates = sorted({p["zt_date"] for p in blanket if p.get("gene_score") is not None})
     print(f"  blanket picks: {len(blanket)}, with gene_score: {n_with}")
-    print(f"  gene-scored pick dates: {len(gene_dates)} "
-          f"({gene_dates[0]} ~ {gene_dates[-1]})")
+    print(f"  gene-scored pick dates: {len(gene_dates)} ({gene_dates[0]} ~ {gene_dates[-1]})")
 
     top1 = select_topk_per_date(blanket, 1)
     top3 = select_topk_per_date(blanket, 3)
@@ -477,15 +494,23 @@ def main() -> None:
         # New rolling 4-window WF
         rwf = rolling_walk_forward(picks, close_ev_basic, n_windows=4)
         subset_data[name] = {
-            "picks": picks, "rets": rets, "dates": dates_list,
-            "gross_ev": gross["ev"], "net_ev": net,
-            "gross_stats": gross, "hac": hac, "day_t": dt,
-            "wf_orig": wf_orig, "rwf": rwf,
+            "picks": picks,
+            "rets": rets,
+            "dates": dates_list,
+            "gross_ev": gross["ev"],
+            "net_ev": net,
+            "gross_stats": gross,
+            "hac": hac,
+            "day_t": dt,
+            "wf_orig": wf_orig,
+            "rwf": rwf,
         }
-        print(f"  {name}: n={len(rets)} n_days={dt['n_days']} "
-              f"gross={gross['ev']}% net={net}% "
-              f"HAC_t={hac['t']} HAC_p={hac['p_one_sided']} "
-              f"day_t={dt['t']} day_p={dt['p_one_sided']}")
+        print(
+            f"  {name}: n={len(rets)} n_days={dt['n_days']} "
+            f"gross={gross['ev']}% net={net}% "
+            f"HAC_t={hac['t']} HAC_p={hac['p_one_sided']} "
+            f"day_t={dt['t']} day_p={dt['p_one_sided']}"
+        )
 
     # ---- ORIGINAL verdict (for comparison) ----
     print(f"\n{'=' * 72}")
@@ -502,13 +527,12 @@ def main() -> None:
         wf_status = wf.get("status", "no_picks")
         wf_tr = wf.get("train_ev", {}).get("ev", 0.0) if wf_status == "ok" else 0.0
         wf_te = wf.get("test_ev", {}).get("ev", 0.0) if wf_status == "ok" else 0.0
-        wf_te_p = (wf.get("test_day_t", {}).get("p_one_sided", 1.0)
-                   if wf_status == "ok" else 1.0)
-        v = verdict_for(ev, dt["t"], p_raw, wf_status, wf_tr,
-                        wf_te, wf_te_p, dt["n_days"], net, name,
-                        n_cross_factor=6)
-        print(f"  → {name}: {v}  (Bonf×12={p_bonf:.4f}, "
-              f"OOS_test_p={wf_te_p}, OOS_test_p_Bonf×12={bonferroni_p(wf_te_p,12):.4f})")
+        wf_te_p = wf.get("test_day_t", {}).get("p_one_sided", 1.0) if wf_status == "ok" else 1.0
+        v = verdict_for(ev, dt["t"], p_raw, wf_status, wf_tr, wf_te, wf_te_p, dt["n_days"], net, name, n_cross_factor=6)
+        print(
+            f"  → {name}: {v}  (Bonf×12={p_bonf:.4f}, "
+            f"OOS_test_p={wf_te_p}, OOS_test_p_Bonf×12={bonferroni_p(wf_te_p, 12):.4f})"
+        )
 
     # ---- BH FDR across family ----
     print(f"\n{'=' * 72}")
@@ -519,7 +543,7 @@ def main() -> None:
     full_p_list = [subset_data[n]["hac"]["p_one_sided"] for n in ("top-1", "top-3", "top-5")]
     bh_full_3 = bh_fdr(full_p_list, alpha=0.05)
     print(f"\n  Family A: full-sample HAC p (m=3: top-1/3/5)")
-    print(f"    p-values: {[round(p,6) for p in full_p_list]}")
+    print(f"    p-values: {[round(p, 6) for p in full_p_list]}")
     print(f"    BH rejected: {bh_full_3['rejected']}")
     print(f"    BH adjusted p: {bh_full_3['bh_adjusted_p']}")
     print(f"    n_significant: {bh_full_3['n_significant']}")
@@ -534,7 +558,7 @@ def main() -> None:
             oos_p_list.append(1.0)
     bh_oos_3 = bh_fdr(oos_p_list, alpha=0.05)
     print(f"\n  Family B: OOS pooled HAC p (m=3: top-1/3/5)")
-    print(f"    p-values: {[round(p,6) for p in oos_p_list]}")
+    print(f"    p-values: {[round(p, 6) for p in oos_p_list]}")
     print(f"    BH rejected: {bh_oos_3['rejected']}")
     print(f"    BH adjusted p: {bh_oos_3['bh_adjusted_p']}")
     print(f"    n_significant: {bh_oos_3['n_significant']}")
@@ -543,14 +567,14 @@ def main() -> None:
     combined_p = full_p_list + oos_p_list
     bh_combined_6 = bh_fdr(combined_p, alpha=0.05)
     print(f"\n  Family C: combined full+OOS (m=6)")
-    print(f"    p-values: {[round(p,6) for p in combined_p]}")
+    print(f"    p-values: {[round(p, 6) for p in combined_p]}")
     print(f"    BH rejected: {bh_combined_6['rejected']}")
     print(f"    BH adjusted p: {bh_combined_6['bh_adjusted_p']}")
     print(f"    n_significant: {bh_combined_6['n_significant']}")
 
     # Note: with original family m=12 (6 factors × 2 subsets)
     print(f"\n  Note: original Bonferroni family was m=12 (6 factors × 2 subsets).")
-    print(f"    BH with m=12 threshold for rank-1 = (1/12)*0.05 = {1/12*0.05:.6f}")
+    print(f"    BH with m=12 threshold for rank-1 = (1/12)*0.05 = {1 / 12 * 0.05:.6f}")
     print(f"    (if top-3 OOS p > 0.0042, it would NOT pass at rank 1 with m=12)")
 
     # ---- NEW verdict for top-3 ----
@@ -601,20 +625,26 @@ def main() -> None:
     print("[7] Rolling 4-window expanding WF detail (top-3)")
     print(f"{'=' * 72}")
     if rwf3_status == "ok":
-        print(f"  {'fold':<6} {'n_tr':>5} {'n_te':>5} {'days_tr':>7} {'days_te':>7} "
-              f"{'tr_EV%':>8} {'te_EV%':>8} {'te_WR%':>7} "
-              f"{'te_HAC_t':>9} {'te_HAC_p':>9} {'te_day_p':>9} {'range':<28}")
+        print(
+            f"  {'fold':<6} {'n_tr':>5} {'n_te':>5} {'days_tr':>7} {'days_te':>7} "
+            f"{'tr_EV%':>8} {'te_EV%':>8} {'te_WR%':>7} "
+            f"{'te_HAC_t':>9} {'te_HAC_p':>9} {'te_day_p':>9} {'range':<28}"
+        )
         for f in rwf3["folds"]:
-            print(f"  {f['fold']:<6} {f['n_train']:>5} {f['n_test']:>5} "
-                  f"{f['n_train_dates']:>7} {f['n_test_dates']:>7} "
-                  f"{f['train_ev']:>8.3f} {f['test_ev']:>8.3f} {f['test_wr']:>7.1f} "
-                  f"{f['test_hac_t']:>9.3f} {f['test_hac_p']:>9.6f} "
-                  f"{f['test_day_p']:>9.6f} {f['test_range']:<28}")
+            print(
+                f"  {f['fold']:<6} {f['n_train']:>5} {f['n_test']:>5} "
+                f"{f['n_train_dates']:>7} {f['n_test_dates']:>7} "
+                f"{f['train_ev']:>8.3f} {f['test_ev']:>8.3f} {f['test_wr']:>7.1f} "
+                f"{f['test_hac_t']:>9.3f} {f['test_hac_p']:>9.6f} "
+                f"{f['test_day_p']:>9.6f} {f['test_range']:<28}"
+            )
         p = rwf3["pooled_oos"]
-        print(f"\n  Pooled OOS: n={p['n']} n_days={p['n_days']} "
-              f"gross={p['gross_ev']}% net={p['net_ev']}% "
-              f"WR={p['wr']}% HAC_t={p['hac_t']} HAC_p={p['hac_p']} "
-              f"day_t={p['day_t']} day_p={p['day_p']}")
+        print(
+            f"\n  Pooled OOS: n={p['n']} n_days={p['n_days']} "
+            f"gross={p['gross_ev']}% net={p['net_ev']}% "
+            f"WR={p['wr']}% HAC_t={p['hac_t']} HAC_p={p['hac_p']} "
+            f"day_t={p['day_t']} day_p={p['day_p']}"
+        )
         print(f"  Folds positive: {fold_pos}/{fold_total}")
     else:
         print(f"  {rwf3_status}")
@@ -625,14 +655,11 @@ def main() -> None:
     print(f"{'=' * 72}")
     h = sd3["hac"]
     print(f"  n_trades={h['n']} n_days={h['n_days']} mean={h['mean']}%")
-    print(f"  HAC SE={h['hac_se']} lag={h['lag']} "
-          f"(NW_lag={h['nw_lag']}, max_same_day={h['max_same_day']})")
+    print(f"  HAC SE={h['hac_se']} lag={h['lag']} (NW_lag={h['nw_lag']}, max_same_day={h['max_same_day']})")
     print(f"  HAC t={h['t']} p_one_sided={h['p_one_sided']}")
     dt = sd3["day_t"]
-    print(f"  [compare] per-day-mean t={dt['t']} p_one_sided={dt['p_one_sided']} "
-          f"n_days={dt['n_days']}")
-    print(f"  [compare] gross_stats t={sd3['gross_stats']['t']} "
-          f"(naive per-trade t, no HAC)")
+    print(f"  [compare] per-day-mean t={dt['t']} p_one_sided={dt['p_one_sided']} n_days={dt['n_days']}")
+    print(f"  [compare] gross_stats t={sd3['gross_stats']['t']} (naive per-trade t, no HAC)")
 
     # ---- Comparison: original vs new ----
     print(f"\n{'=' * 72}")
@@ -641,29 +668,27 @@ def main() -> None:
     dt3 = sd3["day_t"]
     wf3 = sd3["wf_orig"]
     wf3_status = wf3.get("status", "no_picks")
-    wf3_te_p = (wf3.get("test_day_t", {}).get("p_one_sided", 1.0)
-                if wf3_status == "ok" else 1.0)
+    wf3_te_p = wf3.get("test_day_t", {}).get("p_one_sided", 1.0) if wf3_status == "ok" else 1.0
     print(f"  ORIGINAL: verdict=exploratory")
-    print(f"    per-day t={dt3['t']} p_raw={dt3['p_one_sided']} "
-          f"Bonf×12={bonferroni_p(dt3['p_one_sided'], 12):.6f}")
-    print(f"    OOS test_p={wf3_te_p} Bonf×12={bonferroni_p(wf3_te_p, 12):.6f} "
-          f"(>= 0.05 → exploratory)")
+    print(f"    per-day t={dt3['t']} p_raw={dt3['p_one_sided']} Bonf×12={bonferroni_p(dt3['p_one_sided'], 12):.6f}")
+    print(f"    OOS test_p={wf3_te_p} Bonf×12={bonferroni_p(wf3_te_p, 12):.6f} (>= 0.05 → exploratory)")
     print(f"  NEW: verdict={new_v}")
-    print(f"    per-trade HAC t={h['t']} p_raw={h['p_one_sided']} "
-          f"BH_adj={bh_full_3['bh_adjusted_p'][1]} "
-          f"(rejected={bh_full_rej_top3})")
+    print(
+        f"    per-trade HAC t={h['t']} p_raw={h['p_one_sided']} "
+        f"BH_adj={bh_full_3['bh_adjusted_p'][1]} "
+        f"(rejected={bh_full_rej_top3})"
+    )
     if rwf3_status == "ok":
-        print(f"    OOS pooled HAC p={pooled_hac_p} "
-              f"BH_adj={bh_oos_3['bh_adjusted_p'][1]} "
-              f"(rejected={bh_oos_rej_top3})")
-        print(f"    rolling WF: {fold_pos}/{fold_total} folds positive, "
-              f"pooled OOS EV={pooled_ev}%")
-    flipped = (new_v == "edge-confirmed")
+        print(f"    OOS pooled HAC p={pooled_hac_p} BH_adj={bh_oos_3['bh_adjusted_p'][1]} (rejected={bh_oos_rej_top3})")
+        print(f"    rolling WF: {fold_pos}/{fold_total} folds positive, pooled OOS EV={pooled_ev}%")
+    flipped = new_v == "edge-confirmed"
     print(f"\n  FLIPPED (exploratory → edge-confirmed): {flipped}")
 
     # ---- Fake-edge audit (if flipped) ----
     print(f"\n{'=' * 72}")
-    print("[10] 假 edge 5 模式审" + (" (FLIPPED — must audit)" if flipped else " (not flipped — audit for transparency)"))
+    print(
+        "[10] 假 edge 5 模式审" + (" (FLIPPED — must audit)" if flipped else " (not flipped — audit for transparency)")
+    )
     print(f"{'=' * 72}")
 
     # 1. entry 涨停价溢价
@@ -673,18 +698,15 @@ def main() -> None:
     # Check: how many picks have t1_open > t_close (gap up at entry)?
     gap_ups = sum(1 for p in top3 if p["entry"] > p["t_close"] * 1.001)
     gap_downs = sum(1 for p in top3 if p["entry"] < p["t_close"] * 0.999)
-    print(f"     entry vs T close: {gap_ups}/{len(top3)} gap up, "
-          f"{gap_downs}/{len(top3)} gap down at T+1 open")
+    print(f"     entry vs T close: {gap_ups}/{len(top3)} gap up, {gap_downs}/{len(top3)} gap down at T+1 open")
 
     # 2. survivorship
     print(f"\n  2. survivorship: edge 是否来自只看涨停股?")
     print(f"     ALL picks are 涨停股 (by construction — zt_history)")
     print(f"     edge should come from gene_score RANKING, not from being 涨停")
-    base_ev = ev_stats([close_ev_basic(p) for p in all_gene_scored
-                        if close_ev_basic(p) is not None])["ev"]
+    base_ev = ev_stats([close_ev_basic(p) for p in all_gene_scored if close_ev_basic(p) is not None])["ev"]
     delta = sd3["gross_ev"] - base_ev
-    print(f"     all_gene_scored EV={base_ev}% vs top-3 EV={sd3['gross_ev']}% "
-          f"→ concentration delta={delta:+.3f}%")
+    print(f"     all_gene_scored EV={base_ev}% vs top-3 EV={sd3['gross_ev']}% → concentration delta={delta:+.3f}%")
     if delta > 0:
         print(f"     → ranking adds value (concentration positive) — not pure survivorship")
     else:
@@ -699,13 +721,10 @@ def main() -> None:
     print(f"\n  4. 拥挤倒 U: edge 是否 in-sample 强 OOS 衰减 (过拟合)?")
     if rwf3_status == "ok":
         for f in rwf3["folds"]:
-            decay = ((f["train_ev"] - f["test_ev"]) / abs(f["train_ev"]) * 100
-                     if f["train_ev"] != 0 else 0)
-            print(f"     fold {f['fold']}: train={f['train_ev']}% "
-                  f"test={f['test_ev']}% decay={decay:.0f}%")
+            decay = (f["train_ev"] - f["test_ev"]) / abs(f["train_ev"]) * 100 if f["train_ev"] != 0 else 0
+            print(f"     fold {f['fold']}: train={f['train_ev']}% test={f['test_ev']}% decay={decay:.0f}%")
         print(f"     pooled OOS EV={pooled_ev}% vs full-sample gross={sd3['gross_ev']}%")
-        overall_decay = ((sd3["gross_ev"] - pooled_ev) / abs(sd3["gross_ev"]) * 100
-                         if sd3["gross_ev"] != 0 else 0)
+        overall_decay = (sd3["gross_ev"] - pooled_ev) / abs(sd3["gross_ev"]) * 100 if sd3["gross_ev"] != 0 else 0
         print(f"     overall OOS decay={overall_decay:.0f}%")
 
     # 5. fill 虚构

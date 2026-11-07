@@ -6,6 +6,7 @@ Retail return = raw_ev = (exit_close - entry)/entry (price change).
 When discount converges via NAV dropping, BHAR > 0 but retail = 0.
 Quantify how much of BHAR is capturable vs NAV-driven (not capturable).
 """
+
 import json
 import sys
 import statistics
@@ -31,14 +32,21 @@ ETF_CACHE = DATA / "etf_premium_cache.json"
 ETF_COST = 0.15
 
 ETF_UNIVERSE = {
-    "510300": ("沪深300ETF", "broad"), "510050": ("上证50ETF", "broad"),
-    "510500": ("中证500ETF", "broad"), "510880": ("红利ETF", "broad"),
-    "512890": ("红利低波ETF", "broad"), "512100": ("中证1000ETF", "broad"),
-    "588000": ("科创50ETF", "broad"), "159901": ("深100ETF", "broad"),
-    "510310": ("价值ETF", "broad"), "159955": ("中小盘ETF", "broad"),
+    "510300": ("沪深300ETF", "broad"),
+    "510050": ("上证50ETF", "broad"),
+    "510500": ("中证500ETF", "broad"),
+    "510880": ("红利ETF", "broad"),
+    "512890": ("红利低波ETF", "broad"),
+    "512100": ("中证1000ETF", "broad"),
+    "588000": ("科创50ETF", "broad"),
+    "159901": ("深100ETF", "broad"),
+    "510310": ("价值ETF", "broad"),
+    "159955": ("中小盘ETF", "broad"),
     "159915": ("创业板ETF", "broad"),
-    "512760": ("半导体ETF", "sector"), "159995": ("芯片ETF", "sector"),
-    "515790": ("光伏ETF", "sector"), "512660": ("军工ETF", "sector"),
+    "512760": ("半导体ETF", "sector"),
+    "159995": ("芯片ETF", "sector"),
+    "515790": ("光伏ETF", "sector"),
+    "512660": ("军工ETF", "sector"),
 }
 
 
@@ -92,16 +100,22 @@ def build_picks(etf_data, calendar, threshold=-0.3, hold_days=1):
                 continue
             if is_yizi_etf_proxy(entry, close_signal):
                 continue
-            picks.append({
-                "code": code, "signal_date": d,
-                "t1_date": t1_date, "exit_date": exit_date,
-                "hold_days": hold_days,
-                "discount_t": disc,
-                "entry": entry, "exit_close": exit_close,
-                "nav_signal": nav_signal,
-                "nav_t1": nav_t1, "nav_exit": nav_exit,
-                "zt_date": d,
-            })
+            picks.append(
+                {
+                    "code": code,
+                    "signal_date": d,
+                    "t1_date": t1_date,
+                    "exit_date": exit_date,
+                    "hold_days": hold_days,
+                    "discount_t": disc,
+                    "entry": entry,
+                    "exit_close": exit_close,
+                    "nav_signal": nav_signal,
+                    "nav_t1": nav_t1,
+                    "nav_exit": nav_exit,
+                    "zt_date": d,
+                }
+            )
     return picks
 
 
@@ -147,7 +161,7 @@ def main():
         p["raw"] = raw_ev(p)
         p["price_ret"] = price_ret(p)
         p["nav_ret_s2x"] = nav_ret_signal_to_exit(p)  # NAV signal->exit
-        p["nav_ret_t1x"] = nav_ret_t1_to_exit(p)      # NAV T+1->exit
+        p["nav_ret_t1x"] = nav_ret_t1_to_exit(p)  # NAV T+1->exit
 
     # ---- Aggregate stats ----
     bhars = [p["bhar"] for p in picks]
@@ -160,17 +174,17 @@ def main():
     nv_s = ev_stats(navs_s2x)
     nv_t1_s = ev_stats(navs_t1x)
 
-    print(f"\n{'='*78}")
+    print(f"\n{'=' * 78}")
     print("AGGREGATE STATS (disc<-0.3%, 1d hold, full sample)")
-    print(f"{'='*78}")
+    print(f"{'=' * 78}")
     print(f"BHAR (corrected):      mean={bh_s['ev']:+.3f}%  std={bh_s['std']}%  WR={bh_s['wr']}%")
     print(f"Raw EV (retail P&L):   mean={rw_s['ev']:+.3f}%  std={rw_s['std']}%  WR={rw_s['wr']}%")
     print(f"NAV ret (sig->exit):   mean={nv_s['ev']:+.3f}%  std={nv_s['std']}%")
     print(f"NAV ret (T+1->exit):   mean={nv_t1_s['ev']:+.3f}%  std={nv_t1_s['std']}%")
     print(f"\nDecomposition: raw_ev ≈ BHAR + nav_ret")
-    print(f"  BHAR + nav_ret(s2x) = {bh_s['ev']:+.3f} + {nv_s['ev']:+.3f} = {bh_s['ev']+nv_s['ev']:+.3f}%")
+    print(f"  BHAR + nav_ret(s2x) = {bh_s['ev']:+.3f} + {nv_s['ev']:+.3f} = {bh_s['ev'] + nv_s['ev']:+.3f}%")
     print(f"  Actual raw_ev         = {rw_s['ev']:+.3f}%")
-    print(f"  Residual (2nd-order)  = {rw_s['ev']-(bh_s['ev']+nv_s['ev']):+.3f}% (cross-term)")
+    print(f"  Residual (2nd-order)  = {rw_s['ev'] - (bh_s['ev'] + nv_s['ev']):+.3f}% (cross-term)")
 
     # ---- Day-paired t-test for raw_ev ----
     raw_by_date = defaultdict(list)
@@ -186,9 +200,9 @@ def main():
     print(f"  Raw EV:   day_t={raw_dt['t']}  p={raw_dt['p_one_sided']}  n_days={raw_dt['n_days']}")
 
     # ---- KEY: Decompose BHAR into capturable vs non-capturable ----
-    print(f"\n{'='*78}")
+    print(f"\n{'=' * 78}")
     print("KEY DECOMPOSITION: How much BHAR is capturable by retail?")
-    print(f"{'='*78}")
+    print(f"{'=' * 78}")
     print("Discount converges via:")
     print("  A) Price rising (nav flat) → retail captures → CAPTURABLE")
     print("  B) NAV dropping (price flat) → retail does NOT capture → NOT CAPTURABLE")
@@ -205,10 +219,10 @@ def main():
     # Categorize picks
     nav_flat_thresh = 0.05  # within 0.05% = "flat"
 
-    cat_price_rise = []   # nav flat, price rose → capturable
-    cat_nav_drop = []      # price flat, nav dropped → not capturable
-    cat_both_up = []       # both rose
-    cat_both_down = []     # both fell
+    cat_price_rise = []  # nav flat, price rose → capturable
+    cat_nav_drop = []  # price flat, nav dropped → not capturable
+    cat_both_up = []  # both rose
+    cat_both_down = []  # both fell
     cat_other = []
 
     for p in picks:
@@ -236,14 +250,14 @@ def main():
     print(f"  E. Other (mixed):                         n={len(cat_other):>5}")
 
     # ---- Split by nav_ret sign (more robust than flat threshold) ----
-    print(f"\n{'='*78}")
+    print(f"\n{'=' * 78}")
     print("SPLIT BY NAV RETURN SIGN (more robust)")
-    print(f"{'='*78}")
+    print(f"{'=' * 78}")
 
     nav_pos = [p for p in picks if p["nav_ret_s2x"] > 0]  # NAV rose
     nav_neg = [p for p in picks if p["nav_ret_s2x"] <= 0]  # NAV dropped/flat
 
-    print(f"\nNAV rose (nav_ret > 0): n={len(nav_pos)} ({len(nav_pos)/len(picks)*100:.1f}%)")
+    print(f"\nNAV rose (nav_ret > 0): n={len(nav_pos)} ({len(nav_pos) / len(picks) * 100:.1f}%)")
     if nav_pos:
         bhar_pos = ev_stats([p["bhar"] for p in nav_pos])
         raw_pos = ev_stats([p["raw"] for p in nav_pos])
@@ -254,7 +268,7 @@ def main():
         print(f"  → Retail captures raw_ev ({raw_pos['ev']:+.3f}%) which is HIGHER than BHAR ({bhar_pos['ev']:+.3f}%)")
         print(f"    because market beta (nav_ret={nav_pos_s['ev']:+.3f}%) adds to price")
 
-    print(f"\nNAV dropped/flat (nav_ret <= 0): n={len(nav_neg)} ({len(nav_neg)/len(picks)*100:.1f}%)")
+    print(f"\nNAV dropped/flat (nav_ret <= 0): n={len(nav_neg)} ({len(nav_neg) / len(picks) * 100:.1f}%)")
     if nav_neg:
         bhar_neg = ev_stats([p["bhar"] for p in nav_neg])
         raw_neg = ev_stats([p["raw"] for p in nav_neg])
@@ -273,21 +287,21 @@ def main():
         print(f"    Their BHAR sum: {phantom_bhar:+.2f}%")
         print(f"    Total BHAR sum (nav-neg group): {total_bhar_neg:+.2f}%")
         if total_bhar_neg != 0:
-            print(f"    Phantom fraction: {phantom_bhar/total_bhar_neg*100:.1f}% of nav-neg BHAR")
+            print(f"    Phantom fraction: {phantom_bhar / total_bhar_neg * 100:.1f}% of nav-neg BHAR")
 
     # ---- Sum-level decomposition ----
-    print(f"\n{'='*78}")
+    print(f"\n{'=' * 78}")
     print("SUM-LEVEL DECOMPOSITION (total BHAR vs capturable)")
-    print(f"{'='*78}")
+    print(f"{'=' * 78}")
 
     total_bhar = sum(p["bhar"] for p in picks)
     total_raw = sum(p["raw"] for p in picks)
     total_nav = sum(p["nav_ret_s2x"] for p in picks)
 
-    print(f"Sum BHAR:        {total_bhar:+.2f}%  (mean={total_bhar/len(picks):+.3f}%)")
-    print(f"Sum Raw EV:      {total_raw:+.2f}%  (mean={total_raw/len(picks):+.3f}%)")
-    print(f"Sum NAV ret:     {total_nav:+.2f}%  (mean={total_nav/len(picks):+.3f}%)")
-    print(f"Sum BHAR+NAV:    {total_bhar+total_nav:+.2f}%  (should ≈ Sum Raw EV)")
+    print(f"Sum BHAR:        {total_bhar:+.2f}%  (mean={total_bhar / len(picks):+.3f}%)")
+    print(f"Sum Raw EV:      {total_raw:+.2f}%  (mean={total_raw / len(picks):+.3f}%)")
+    print(f"Sum NAV ret:     {total_nav:+.2f}%  (mean={total_nav / len(picks):+.3f}%)")
+    print(f"Sum BHAR+NAV:    {total_bhar + total_nav:+.2f}%  (should ≈ Sum Raw EV)")
 
     # The non-capturable portion = BHAR from picks where NAV dropped
     bhar_from_nav_neg = sum(p["bhar"] for p in picks if p["nav_ret_s2x"] <= 0)
@@ -295,35 +309,51 @@ def main():
     raw_from_nav_neg = sum(p["raw"] for p in picks if p["nav_ret_s2x"] <= 0)
     raw_from_nav_pos = sum(p["raw"] for p in picks if p["nav_ret_s2x"] > 0)
 
-    print(f"\nBHAR from NAV-negative picks: {bhar_from_nav_neg:+.2f}% (mean={bhar_from_nav_neg/max(1,len([p for p in picks if p['nav_ret_s2x']<=0])):+.3f}%)")
-    print(f"  Retail (raw) from same:     {raw_from_nav_neg:+.2f}% (mean={raw_from_nav_neg/max(1,len([p for p in picks if p['nav_ret_s2x']<=0])):+.3f}%)")
-    print(f"  Gap (BHAR - Retail):        {bhar_from_nav_neg-raw_from_nav_neg:+.2f}% ← PHANTOM (not capturable)")
-    print(f"\nBHAR from NAV-positive picks: {bhar_from_nav_pos:+.2f}% (mean={bhar_from_nav_pos/max(1,len([p for p in picks if p['nav_ret_s2x']>0])):+.3f}%)")
-    print(f"  Retail (raw) from same:      {raw_from_nav_pos:+.2f}% (mean={raw_from_nav_pos/max(1,len([p for p in picks if p['nav_ret_s2x']>0])):+.3f}%)")
-    print(f"  Gap (Retail - BHAR):         {raw_from_nav_pos-bhar_from_nav_pos:+.2f}% ← market beta bonus")
+    print(
+        f"\nBHAR from NAV-negative picks: {bhar_from_nav_neg:+.2f}% (mean={bhar_from_nav_neg / max(1, len([p for p in picks if p['nav_ret_s2x'] <= 0])):+.3f}%)"
+    )
+    print(
+        f"  Retail (raw) from same:     {raw_from_nav_neg:+.2f}% (mean={raw_from_nav_neg / max(1, len([p for p in picks if p['nav_ret_s2x'] <= 0])):+.3f}%)"
+    )
+    print(f"  Gap (BHAR - Retail):        {bhar_from_nav_neg - raw_from_nav_neg:+.2f}% ← PHANTOM (not capturable)")
+    print(
+        f"\nBHAR from NAV-positive picks: {bhar_from_nav_pos:+.2f}% (mean={bhar_from_nav_pos / max(1, len([p for p in picks if p['nav_ret_s2x'] > 0])):+.3f}%)"
+    )
+    print(
+        f"  Retail (raw) from same:      {raw_from_nav_pos:+.2f}% (mean={raw_from_nav_pos / max(1, len([p for p in picks if p['nav_ret_s2x'] > 0])):+.3f}%)"
+    )
+    print(f"  Gap (Retail - BHAR):         {raw_from_nav_pos - bhar_from_nav_pos:+.2f}% ← market beta bonus")
 
     # ---- THE CRITICAL TEST: Is raw_ev (retail return) positive & significant? ----
-    print(f"\n{'='*78}")
+    print(f"\n{'=' * 78}")
     print("CRITICAL TEST: Is raw_ev (retail return) positive & significant?")
-    print(f"{'='*78}")
-    print(f"  Raw EV gross:   {rw_s['ev']:+.3f}%  net (after {ETF_COST}% cost): {rw_s['ev']-ETF_COST:+.3f}%")
+    print(f"{'=' * 78}")
+    print(f"  Raw EV gross:   {rw_s['ev']:+.3f}%  net (after {ETF_COST}% cost): {rw_s['ev'] - ETF_COST:+.3f}%")
     print(f"  Raw EV day_t:   {raw_dt['t']}  p={raw_dt['p_one_sided']}  n_days={raw_dt['n_days']}")
     print(f"  Raw EV WR:      {rw_s['wr']}%")
     print(f"  Raw EV CI:      [{rw_s['ci_lo']}, {rw_s['ci_hi']}]")
 
-    if rw_s['ev'] - ETF_COST > 0 and raw_dt['p_one_sided'] < 0.05:
+    if rw_s["ev"] - ETF_COST > 0 and raw_dt["p_one_sided"] < 0.05:
         print(f"  → Raw EV net POSITIVE and significant → retail CAN capture edge")
-    elif rw_s['ev'] - ETF_COST > 0:
+    elif rw_s["ev"] - ETF_COST > 0:
         print(f"  → Raw EV net POSITIVE but day_t not significant → edge weak for retail")
     else:
         print(f"  → Raw EV net NEGATIVE → retail CANNOT capture edge (BHAR is phantom)")
 
     # ---- NAV-negative subset: is retail return positive? ----
-    print(f"\n{'='*78}")
+    print(f"\n{'=' * 78}")
     print("NAV-NEGATIVE SUBSET: When market falls, does retail still profit?")
-    print(f"{'='*78}")
+    print(f"{'=' * 78}")
     if nav_neg:
-        raw_neg_dt = day_paired_t(defaultdict(list, {d: [p["raw"] for p in nav_neg if p["signal_date"]==d] for d in set(p["signal_date"] for p in nav_neg)}))
+        raw_neg_dt = day_paired_t(
+            defaultdict(
+                list,
+                {
+                    d: [p["raw"] for p in nav_neg if p["signal_date"] == d]
+                    for d in set(p["signal_date"] for p in nav_neg)
+                },
+            )
+        )
         # rebuild properly
         raw_neg_by_date = defaultdict(list)
         bhar_neg_by_date = defaultdict(list)
@@ -336,35 +366,40 @@ def main():
         print(f"  n={len(nav_neg)}  n_days={raw_neg_dt['n_days']}")
         print(f"  BHAR:     mean={bhar_neg['ev']:+.3f}%  day_t={bhar_neg_dt['t']}  p={bhar_neg_dt['p_one_sided']}")
         print(f"  Raw EV:   mean={raw_neg['ev']:+.3f}%  day_t={raw_neg_dt['t']}  p={raw_neg_dt['p_one_sided']}")
-        print(f"  Raw net:  {raw_neg['ev']-ETF_COST:+.3f}%")
-        if raw_neg['ev'] - ETF_COST <= 0:
+        print(f"  Raw net:  {raw_neg['ev'] - ETF_COST:+.3f}%")
+        if raw_neg["ev"] - ETF_COST <= 0:
             print(f"  → WARNING: When NAV drops, retail return is net NEGATIVE")
-            print(f"    BHAR shows +{bhar_neg['ev']:.3f}% but retail gets {raw_neg['ev']-ETF_COST:+.3f}% net")
-            print(f"    This is the PHANTOM ALPHA: BHAR inflates by {bhar_neg['ev']-(raw_neg['ev']-ETF_COST):.3f}%")
+            print(f"    BHAR shows +{bhar_neg['ev']:.3f}% but retail gets {raw_neg['ev'] - ETF_COST:+.3f}% net")
+            print(f"    This is the PHANTOM ALPHA: BHAR inflates by {bhar_neg['ev'] - (raw_neg['ev'] - ETF_COST):.3f}%")
 
     # ---- Quantify the inflation: BHAR vs raw_ev difference ----
-    print(f"\n{'='*78}")
+    print(f"\n{'=' * 78}")
     print("BHAR INFLATION QUANTIFICATION")
-    print(f"{'='*78}")
-    inflation = bh_s['ev'] - rw_s['ev']
+    print(f"{'=' * 78}")
+    inflation = bh_s["ev"] - rw_s["ev"]
     print(f"  BHAR mean:     {bh_s['ev']:+.3f}%")
     print(f"  Raw EV mean:   {rw_s['ev']:+.3f}%")
     print(f"  Inflation:     {inflation:+.3f}% (BHAR - Raw)")
     if inflation > 0:
-        print(f"  → BHAR INFLATES edge by {inflation:.3f}% ({abs(inflation)/max(abs(bh_s['ev']),0.001)*100:.1f}% of BHAR)")
+        print(
+            f"  → BHAR INFLATES edge by {inflation:.3f}% ({abs(inflation) / max(abs(bh_s['ev']), 0.001) * 100:.1f}% of BHAR)"
+        )
         print(f"    This means BHAR OVERSTATES the capturable alpha")
-        print(f"    Corrected edge (retail-capturable) = raw_ev = {rw_s['ev']:+.3f}% gross, {rw_s['ev']-ETF_COST:+.3f}% net")
+        print(
+            f"    Corrected edge (retail-capturable) = raw_ev = {rw_s['ev']:+.3f}% gross, {rw_s['ev'] - ETF_COST:+.3f}% net"
+        )
     elif inflation < 0:
         print(f"  → BHAR DEFLATES edge by {abs(inflation):.3f}% (BHAR is more conservative)")
         print(f"    Retail captures MORE than BHAR due to positive market beta")
         print(f"    But market beta is not a reliable alpha (can be negative)")
 
     # ---- Walk-forward on raw_ev (retail return) ----
-    print(f"\n{'='*78}")
+    print(f"\n{'=' * 78}")
     print("WALK-FORWARD ON RAW_EV (retail return, the capturable metric)")
-    print(f"{'='*78}")
+    print(f"{'=' * 78}")
 
     from tools._factor_helpers import walk_forward
+
     wf_raw = walk_forward(picks, lambda p: raw_ev(p))
     if wf_raw["status"] == "ok":
         tr = wf_raw["train_ev"]
@@ -372,7 +407,7 @@ def main():
         te_dt = wf_raw["test_day_t"]
         print(f"  train: n={tr['n']}  EV={tr['ev']:+.3f}%  t={tr['t']}")
         print(f"  test:  n={te['n']}  EV={te['ev']:+.3f}%  t={te['t']}  day_t={te_dt['t']}  p={te_dt['p_one_sided']}")
-        print(f"  test net: {te['ev']-ETF_COST:+.3f}%")
+        print(f"  test net: {te['ev'] - ETF_COST:+.3f}%")
     else:
         print(f"  {wf_raw['status']}")
 
@@ -387,27 +422,27 @@ def main():
         print(f"  test:  n={te['n']}  EV={te['ev']:+.3f}%  t={te['t']}  day_t={te_dt['t']}  p={te_dt['p_one_sided']}")
 
     # ---- Distribution of nav_ret ----
-    print(f"\n{'='*78}")
+    print(f"\n{'=' * 78}")
     print("NAV RETURN DISTRIBUTION (market beta during holding period)")
-    print(f"{'='*78}")
+    print(f"{'=' * 78}")
     nav_rets_sorted = sorted(navs_s2x)
     n = len(nav_rets_sorted)
     print(f"  n={n}")
     print(f"  mean={nv_s['ev']:+.3f}%  std={nv_s['std']}%")
-    print(f"  p10={nav_rets_sorted[int(n*0.10)]:+.3f}%")
-    print(f"  p25={nav_rets_sorted[int(n*0.25)]:+.3f}%")
-    print(f"  p50={nav_rets_sorted[n//2]:+.3f}%")
-    print(f"  p75={nav_rets_sorted[int(n*0.75)]:+.3f}%")
-    print(f"  p90={nav_rets_sorted[int(n*0.90)]:+.3f}%")
+    print(f"  p10={nav_rets_sorted[int(n * 0.10)]:+.3f}%")
+    print(f"  p25={nav_rets_sorted[int(n * 0.25)]:+.3f}%")
+    print(f"  p50={nav_rets_sorted[n // 2]:+.3f}%")
+    print(f"  p75={nav_rets_sorted[int(n * 0.75)]:+.3f}%")
+    print(f"  p90={nav_rets_sorted[int(n * 0.90)]:+.3f}%")
     pct_neg = sum(1 for x in nav_rets_sorted if x <= 0) / n * 100
     print(f"  % with NAV drop (<=0): {pct_neg:.1f}%")
     pct_neg_1 = sum(1 for x in nav_rets_sorted if x <= -0.1) / n * 100
     print(f"  % with NAV drop (<-0.1%): {pct_neg_1:.1f}%")
 
     # ---- THE EXACT RELATIONSHIP: discount change decomposition ----
-    print(f"\n{'='*78}")
+    print(f"\n{'=' * 78}")
     print("EXACT DISCOUNT CHANGE DECOMPOSITION")
-    print(f"{'='*78}")
+    print(f"{'=' * 78}")
     print("For each pick: BHAR = d_exit - d_entry (discount change)")
     print("d_exit - d_entry can be decomposed as:")
     print("  = [P_x/N_x - 1] - [P_e/N_s - 1]")
@@ -442,13 +477,13 @@ def main():
     print(f"  Actual BHAR:              mean={bhar_actual_s['ev']:+.3f}%")
     print(f"  Price-only BHAR (cap):    mean={bhar_price_s['ev']:+.3f}%  ← what retail captures")
     print(f"  NAV-only BHAR (phantom):  mean={bhar_nav_s['ev']:+.3f}%  ← phantom, not capturable")
-    print(f"  Sum (price+nav):          mean={bhar_price_s['ev']+bhar_nav_s['ev']:+.3f}%  (should ≈ actual)")
-    print(f"  Cross-term:               mean={bhar_actual_s['ev']-(bhar_price_s['ev']+bhar_nav_s['ev']):+.3f}%")
+    print(f"  Sum (price+nav):          mean={bhar_price_s['ev'] + bhar_nav_s['ev']:+.3f}%  (should ≈ actual)")
+    print(f"  Cross-term:               mean={bhar_actual_s['ev'] - (bhar_price_s['ev'] + bhar_nav_s['ev']):+.3f}%")
 
     # ---- Yearly breakdown of phantom alpha ----
-    print(f"\n{'='*78}")
+    print(f"\n{'=' * 78}")
     print("YEARLY: BHAR vs Raw EV vs Phantom (NAV-only)")
-    print(f"{'='*78}")
+    print(f"{'=' * 78}")
     print(f"{'year':<6} {'n':>5} {'BHAR%':>8} {'Raw%':>8} {'Phantom%':>10} {'Capturable%':>12}")
     for yr in range(2015, 2027):
         yr_picks = [p for p in picks if p["signal_date"][:4] == str(yr)]
@@ -461,20 +496,20 @@ def main():
         print(f"{yr:<6} {len(yr_picks):>5} {bh['ev']:>+8} {rw['ev']:>+8} {ph['ev']:>+10} {cp['ev']:>+12}")
 
     # ---- FINAL VERDICT ----
-    print(f"\n{'='*78}")
+    print(f"\n{'=' * 78}")
     print("FINAL VERDICT (BHAR-vs-Retail lens)")
-    print(f"{'='*78}")
-    print(f"  BHAR (corrected):     {bh_s['ev']:+.3f}% gross  {bh_s['ev']-ETF_COST:+.3f}% net")
-    print(f"  Raw EV (retail):      {rw_s['ev']:+.3f}% gross  {rw_s['ev']-ETF_COST:+.3f}% net")
+    print(f"{'=' * 78}")
+    print(f"  BHAR (corrected):     {bh_s['ev']:+.3f}% gross  {bh_s['ev'] - ETF_COST:+.3f}% net")
+    print(f"  Raw EV (retail):      {rw_s['ev']:+.3f}% gross  {rw_s['ev'] - ETF_COST:+.3f}% net")
     print(f"  Phantom (NAV-only):   {bhar_nav_s['ev']:+.3f}%")
     print(f"  Capturable (price-only): {bhar_price_s['ev']:+.3f}%")
     print()
     print(f"  If edge-confirmed is based on BHAR ({bh_s['ev']:+.3f}%) but retail only")
-    print(f"  captures raw_ev ({rw_s['ev']:+.3f}%), the gap is {bh_s['ev']-rw_s['ev']:+.3f}%.")
-    if rw_s['ev'] - ETF_COST > 0 and raw_dt['p_one_sided'] < 0.05:
+    print(f"  captures raw_ev ({rw_s['ev']:+.3f}%), the gap is {bh_s['ev'] - rw_s['ev']:+.3f}%.")
+    if rw_s["ev"] - ETF_COST > 0 and raw_dt["p_one_sided"] < 0.05:
         print(f"  → Raw EV is net positive AND significant → edge IS capturable")
         print(f"    BHAR may overstate but retail return still positive")
-    elif rw_s['ev'] - ETF_COST > 0:
+    elif rw_s["ev"] - ETF_COST > 0:
         print(f"  → Raw EV net positive but day_t={raw_dt['t']} not significant enough")
         print(f"    Edge may not be reliably capturable by retail")
     else:

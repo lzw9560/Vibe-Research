@@ -8,6 +8,7 @@
     python backfill_rebound_factor.py --days 30           # 重算近 30 日
     python backfill_rebound_factor.py --days 30 --dry-run # 只列日期不执行
 """
+
 from __future__ import annotations
 
 import argparse
@@ -24,9 +25,7 @@ from config import GENE_SCORES_DB_PATH  # noqa: E402
 def _gene_dates(days: int) -> list[str]:
     """gene_scores 最近 days 个有数据的日期，升序。"""
     conn = sqlite3.connect(GENE_SCORES_DB_PATH)
-    rows = conn.execute(
-        "SELECT DISTINCT date FROM gene_scores ORDER BY date DESC LIMIT ?", (days,)
-    ).fetchall()
+    rows = conn.execute("SELECT DISTINCT date FROM gene_scores ORDER BY date DESC LIMIT ?", (days,)).fetchall()
     conn.close()
     return sorted(r[0] for r in rows)
 

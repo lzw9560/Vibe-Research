@@ -7,6 +7,7 @@
 记录信号价 vs 实际成交价，供 30 笔后归因（避免 survivorship：未成交信号在
 signal_store 落库，本表只记成交的）。
 """
+
 from __future__ import annotations
 import sqlite3
 from datetime import datetime
@@ -15,7 +16,7 @@ from pathlib import Path
 from vr_paths import resolve_data_dir  # 复用现有私有数据目录解析
 
 # 滑点（spec §5.4：0.2-0.5%，取 0.3%）
-BUY_SLIPPAGE = 0.003   # 买入 fill = signal_price × 1.003（付更多）
+BUY_SLIPPAGE = 0.003  # 买入 fill = signal_price × 1.003（付更多）
 SELL_SLIPPAGE = 0.003  # 卖出 fill = raw_exit × 0.997（得更少）
 # 默认止损 -10%（spec §2.3：2×ATR，中位 4.9%×2≈10%，有数据支撑）
 DEFAULT_STOP_PCT = -10
@@ -104,9 +105,14 @@ class TradeJournal:
                 "entry_price, fill_price, stop_price, slippage_pct) "
                 "VALUES (?,?,?,?,?,?,?,?)",
                 (
-                    signal_id, code, tactic,
+                    signal_id,
+                    code,
+                    tactic,
                     entry_time or datetime.now().isoformat(timespec="seconds"),
-                    entry_price, fill_price, stop_price, BUY_SLIPPAGE,
+                    entry_price,
+                    fill_price,
+                    stop_price,
+                    BUY_SLIPPAGE,
                 ),
             )
             return cur.lastrowid
@@ -122,28 +128,28 @@ class TradeJournal:
         """记录卖出：sell_fill = exit × (1 - SELL_SLIPPAGE)。返实际收益率。"""
         sell_fill = exit_price * (1 - SELL_SLIPPAGE)
         with sqlite3.connect(self.db_path) as conn:
-            row = conn.execute(
-                "SELECT fill_price FROM trades WHERE id=?", (trade_id,)
-            ).fetchone()
+            row = conn.execute("SELECT fill_price FROM trades WHERE id=?", (trade_id,)).fetchone()
             if not row:
                 raise ValueError(f"trade {trade_id} 不存在")
             fill_price = float(row[0])
             ret = (sell_fill - fill_price) / fill_price if fill_price > 0 else 0.0
             conn.execute(
-                "UPDATE trades SET exit_price=?, exit_reason=?, exit_time=?, "
-                "hold_days=?, return_pct=? WHERE id=?",
-                (exit_price, exit_reason,
-                 exit_time or datetime.now().isoformat(timespec="seconds"),
-                 hold_days, ret, trade_id),
+                "UPDATE trades SET exit_price=?, exit_reason=?, exit_time=?, hold_days=?, return_pct=? WHERE id=?",
+                (
+                    exit_price,
+                    exit_reason,
+                    exit_time or datetime.now().isoformat(timespec="seconds"),
+                    hold_days,
+                    ret,
+                    trade_id,
+                ),
             )
         return ret
 
     def get_trade(self, trade_id: int) -> dict | None:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT * FROM trades WHERE id=?", (trade_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM trades WHERE id=?", (trade_id,)).fetchone()
         return dict(row) if row else None
 
     def get_trade_pnl(self, trade_id: int) -> float | None:

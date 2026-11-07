@@ -3,6 +3,7 @@
 
 观察池工具非交易信号。turn>20%+vr5>2 信号 lift 5.28x 真但 EV -0.87% 负。
 """
+
 import json
 import logging
 from pathlib import Path
@@ -56,8 +57,11 @@ def t1_watchlist_generate(payload: dict[str, Any]) -> dict[str, Any]:
     if payload.get("notify", False):
         try:
             _send_text_notification(report_text)
-            _logger.info("[S232] watchlist 飞书通知已发送: count=%d edge_status=%s",
-                         watchlist.get("count"), watchlist.get("edge_status"))
+            _logger.info(
+                "[S232] watchlist 飞书通知已发送: count=%d edge_status=%s",
+                watchlist.get("count"),
+                watchlist.get("edge_status"),
+            )
         except Exception as e:  # noqa: BLE001
             _logger.warning("[S232] watchlist 飞书通知失败: %s", e)
 
@@ -83,6 +87,7 @@ def t1_hit_backfill(payload: dict[str, Any]) -> dict[str, Any]:
          "hit_count": int, "hit_rate": float, "expected_rate": float}
     """
     from vr_paths import last_trading_date_str
+
     t1_date = payload.get("t1_date") or last_trading_date_str()  # T+1 = 最近交易日（今天）
     t_date = payload.get("t_date") or prev_trading_date_str()  # T = 昨天
     _logger.info("[S232] t1_hit_backfill start: t_date=%s t1_date=%s", t_date, t1_date)
@@ -94,8 +99,7 @@ def t1_hit_backfill(payload: dict[str, Any]) -> dict[str, Any]:
     if payload.get("notify", False):
         try:
             _send_text_notification(report_text)
-            _logger.info("[S232] hit_backfill 飞书通知已发送: hit_rate=%s",
-                         result.get("hit_rate"))
+            _logger.info("[S232] hit_backfill 飞书通知已发送: hit_rate=%s", result.get("hit_rate"))
         except Exception as e:  # noqa: BLE001
             _logger.warning("[S232] hit_backfill 飞书通知失败: %s", e)
 

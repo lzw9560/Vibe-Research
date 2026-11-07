@@ -5,6 +5,7 @@
 
 关联：specs/S236 / specs/S237 / 基本面专家审查
 """
+
 from data.sources.sina_financial import fetch_merged_periods
 
 RECEIVABLE_THRESHOLD = 0.40  # 应收/营收>=40% 过滤（用户最初 prompt 红线）

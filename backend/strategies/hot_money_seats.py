@@ -20,6 +20,7 @@ spec §9 设计：
   S094：原 hot_money_seats.json 已废弃，与 seat_engine 合并到同一 SQLite 宽表。
 - hot_money_seat_risk 因子 → 策略分修饰（一日游占比高 → ×0.7 扣分）
 """
+
 from __future__ import annotations
 
 import json
@@ -43,39 +44,42 @@ _DATACENTER_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
 _UA = {"User-Agent": "Mozilla/5.0", "Referer": "https://data.eastmoney.com/"}
 
 # 分类阈值（spec §9.3）
-DAY_TRIP_SELL_RATE_MIN = 0.7    # 一日游：next_day_sell_rate >= 0.7
-RELAY_SELL_RATE_MAX = 0.3       # 接力型：next_day_sell_rate <= 0.3
-APPEARANCE_MIN = 3              # 最少上榜次数才分类
-MUTATION_THRESHOLD = 0.30       # 行为突变：偏差 > 30%
+DAY_TRIP_SELL_RATE_MIN = 0.7  # 一日游：next_day_sell_rate >= 0.7
+RELAY_SELL_RATE_MAX = 0.3  # 接力型：next_day_sell_rate <= 0.3
+APPEARANCE_MIN = 3  # 最少上榜次数才分类
+MUTATION_THRESHOLD = 0.30  # 行为突变：偏差 > 30%
 
 
 @dataclass(frozen=True)
 class SeatProfile:
     """单个席位画像。"""
+
     seat_name: str
-    seat_type: str               # 一日游 / 接力型 / 机构 / 混合型 / 样本不足
-    next_day_sell_rate: float    # T 买入后 T+1 在卖方榜出现的比例
-    appearance_count: int       # 60 日上榜总次数
-    confidence: str             # high / medium / low
-    source: str                  # data / preset
+    seat_type: str  # 一日游 / 接力型 / 机构 / 混合型 / 样本不足
+    next_day_sell_rate: float  # T 买入后 T+1 在卖方榜出现的比例
+    appearance_count: int  # 60 日上榜总次数
+    confidence: str  # high / medium / low
+    source: str  # data / preset
     note: str = ""
 
 
 @dataclass(frozen=True)
 class SeatRiskFactor:
     """个股游资席位风险因子（spec §9.4）。"""
-    day_trip_ratio: float       # 一日游席位净买入额 / 总净买入额
-    relay_ratio: float          # 接力型席位净买入额 / 总净买入额
-    institution_ratio: float    # 机构席位净买入额 / 总净买入额
-    score_modifier: float        # 策略分修饰系数（一日游高 → ×0.7）
-    risk_label: str             # 高风险 / 中风险 / 低风险 / 无数据
-    mutation_alert: bool        # 行为突变标注
+
+    day_trip_ratio: float  # 一日游席位净买入额 / 总净买入额
+    relay_ratio: float  # 接力型席位净买入额 / 总净买入额
+    institution_ratio: float  # 机构席位净买入额 / 总净买入额
+    score_modifier: float  # 策略分修饰系数（一日游高 → ×0.7）
+    risk_label: str  # 高风险 / 中风险 / 低风险 / 无数据
+    mutation_alert: bool  # 行为突变标注
     mutation_note: str = ""
 
 
 # ===========================================================================
 # 60 日龙虎榜聚合（周更，spec §9.3）
 # ===========================================================================
+
 
 def fetch_billboard_dates(days: int = 60) -> list[str]:
     """获取最近 N 个有龙虎榜数据的交易日日期列表。
@@ -110,8 +114,7 @@ def fetch_billboard_for_date_meta(trade_date: str) -> dict:
     rows: list[dict] = []
     buy_ok = False
     sell_ok = False
-    for side, report in (("buy", "RPT_BILLBOARD_DAILYDETAILSBUY"),
-                         ("sell", "RPT_BILLBOARD_DAILYDETAILSSELL")):
+    for side, report in (("buy", "RPT_BILLBOARD_DAILYDETAILSBUY"), ("sell", "RPT_BILLBOARD_DAILYDETAILSSELL")):
         url = (
             f"{_DATACENTER_URL}?reportName={report}&columns=ALL"
             f"&filter=(TRADE_DATE='{trade_date}')"
@@ -129,9 +132,7 @@ def fetch_billboard_for_date_meta(trade_date: str) -> dict:
             else:
                 sell_ok = True
         except Exception as e:
-            logger.warning(
-                "fetch_billboard %s 榜 %s 取数失败: %s", side, trade_date, e
-            )
+            logger.warning("fetch_billboard %s 榜 %s 取数失败: %s", side, trade_date, e)
     return {"rows": rows, "buy_ok": buy_ok, "sell_ok": sell_ok}
 
 
@@ -190,11 +191,17 @@ def build_seat_profiles(billboard_data: list[dict]) -> list[SeatProfile]:
         if not buy_dates:
             # 只有卖方记录的席位，无法算 next_day_sell_rate
             seat_type, conf = "样本不足", "low"
-            profiles.append(SeatProfile(
-                seat_name=name, seat_type=seat_type,
-                next_day_sell_rate=0.0, appearance_count=stats["appearance_count"],
-                confidence=conf, source="data", note="无买入记录",
-            ))
+            profiles.append(
+                SeatProfile(
+                    seat_name=name,
+                    seat_type=seat_type,
+                    next_day_sell_rate=0.0,
+                    appearance_count=stats["appearance_count"],
+                    confidence=conf,
+                    source="data",
+                    note="无买入记录",
+                )
+            )
             continue
 
         # S085 C3：真实下一交易日替代 1-3 自然日 offset——修长假漏判
@@ -202,9 +209,7 @@ def build_seat_profiles(billboard_data: list[dict]) -> list[SeatProfile]:
         # → next_day_sell_rate 偏低 → 偏向接力型 → 少扣一日游风险 → 选股分偏高）。
         # 从 billboard_data 提取 sorted 真实交易日，用 index+1..3 真实下一交易日替代自然日
         # （保留 1-3 宽泛语义，只修长假 catch）。
-        trade_dates_sorted = sorted({
-            str(r.get("TRADE_DATE", ""))[:10] for r in billboard_data if r.get("TRADE_DATE")
-        })
+        trade_dates_sorted = sorted({str(r.get("TRADE_DATE", ""))[:10] for r in billboard_data if r.get("TRADE_DATE")})
         next_day_sell_count = 0
         for bd in buy_dates:
             if bd not in trade_dates_sorted:
@@ -222,12 +227,16 @@ def build_seat_profiles(billboard_data: list[dict]) -> list[SeatProfile]:
         next_day_sell_rate = next_day_sell_count / len(buy_dates) if buy_dates else 0.0
         seat_type, conf = _classify_seat(next_day_sell_rate, stats["appearance_count"])
 
-        profiles.append(SeatProfile(
-            seat_name=name, seat_type=seat_type,
-            next_day_sell_rate=round(next_day_sell_rate, 4),
-            appearance_count=stats["appearance_count"],
-            confidence=conf, source="data",
-        ))
+        profiles.append(
+            SeatProfile(
+                seat_name=name,
+                seat_type=seat_type,
+                next_day_sell_rate=round(next_day_sell_rate, 4),
+                appearance_count=stats["appearance_count"],
+                confidence=conf,
+                source="data",
+            )
+        )
 
     return profiles
 
@@ -252,15 +261,17 @@ def merge_with_presets(data_profiles: list[SeatProfile]) -> list[SeatProfile]:
     for group_name, group_info in seat_groups.items():
         for seat_name in group_info.get("seats", []):
             if seat_name not in data_names:
-                merged.append(SeatProfile(
-                    seat_name=seat_name,
-                    seat_type=group_info.get("default_type", "混合型"),
-                    next_day_sell_rate=0.0,
-                    appearance_count=0,
-                    confidence=group_info.get("confidence", "low"),
-                    source="preset",
-                    note=group_info.get("note", ""),
-                ))
+                merged.append(
+                    SeatProfile(
+                        seat_name=seat_name,
+                        seat_type=group_info.get("default_type", "混合型"),
+                        next_day_sell_rate=0.0,
+                        appearance_count=0,
+                        confidence=group_info.get("confidence", "low"),
+                        source="preset",
+                        note=group_info.get("note", ""),
+                    )
+                )
 
     return merged
 
@@ -282,8 +293,7 @@ def save_aggregate_profiles(profiles: list[SeatProfile]) -> None:
                        next_day_sell_rate=?, appearance_count=?, confidence=?,
                        source=?, note=?, updated_at=?
                    WHERE seat_name=?""",
-                (p.next_day_sell_rate, p.appearance_count, p.confidence,
-                 p.source, p.note, now, p.seat_name),
+                (p.next_day_sell_rate, p.appearance_count, p.confidence, p.source, p.note, now, p.seat_name),
             )
             if cur.rowcount == 0:
                 conn.execute(
@@ -291,8 +301,7 @@ def save_aggregate_profiles(profiles: list[SeatProfile]) -> None:
                            seat_name, next_day_sell_rate, appearance_count,
                            confidence, source, note, updated_at
                        ) VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                    (p.seat_name, p.next_day_sell_rate, p.appearance_count,
-                     p.confidence, p.source, p.note, now),
+                    (p.seat_name, p.next_day_sell_rate, p.appearance_count, p.confidence, p.source, p.note, now),
                 )
         conn.commit()
     except sqlite3.Error:
@@ -338,6 +347,7 @@ def load_aggregate_profiles() -> list[SeatProfile]:
 # 行为突变检测（spec §9.3）
 # ===========================================================================
 
+
 def detect_behavior_mutation(
     recent_5d_profiles: list[SeatProfile],
     baseline_60d_profiles: list[SeatProfile],
@@ -376,6 +386,7 @@ def detect_behavior_mutation(
 # 策略分接入（spec §9.4）
 # ===========================================================================
 
+
 def compute_seat_risk_factor(
     code: str,
     trade_date: str,
@@ -406,15 +417,22 @@ def compute_seat_risk_factor(
         if not (meta["buy_ok"] and meta["sell_ok"]):
             logger.warning(
                 "compute_seat_risk_factor %s %s 残缺（buy_ok=%s, sell_ok=%s），用可用 rows best-effort",
-                code, trade_date, meta["buy_ok"], meta["sell_ok"],
+                code,
+                trade_date,
+                meta["buy_ok"],
+                meta["sell_ok"],
             )
         billboard = meta["rows"]
     code_billboard = [r for r in billboard if r.get("SECURITY_CODE") == code]
 
     if not code_billboard:
         return SeatRiskFactor(
-            day_trip_ratio=0.0, relay_ratio=0.0, institution_ratio=0.0,
-            score_modifier=1.0, risk_label="无数据", mutation_alert=False,
+            day_trip_ratio=0.0,
+            relay_ratio=0.0,
+            institution_ratio=0.0,
+            score_modifier=1.0,
+            risk_label="无数据",
+            mutation_alert=False,
         )
 
     # 按席位类型聚合净买入额
@@ -480,6 +498,7 @@ def compute_seat_risk_factor(
 # 周更入口
 # ===========================================================================
 
+
 def update_hot_money_seats(days: int = 60) -> int:
     """周更入口：拉 60 日龙虎榜 → 聚合画像 → 保存。
 
@@ -498,7 +517,9 @@ def update_hot_money_seats(days: int = 60) -> int:
         if not (meta["buy_ok"] and meta["sell_ok"]):
             logger.warning(
                 "update_hot_money_seats 跳过残缺日 %s（buy_ok=%s, sell_ok=%s）",
-                d, meta["buy_ok"], meta["sell_ok"],
+                d,
+                meta["buy_ok"],
+                meta["sell_ok"],
             )
             continue  # 残缺日不纳入聚合（不喂 build_seat_profiles 算 next_day_sell_rate）
         all_data.extend(meta["rows"])

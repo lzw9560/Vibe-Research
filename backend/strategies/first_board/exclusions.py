@@ -7,6 +7,7 @@
 - 009-010 层3：exclude_layer3_market_env（市场环境 T-1 粗筛）
 - 辅助：_sector_zt_count / _market_drop_pct
 """
+
 from __future__ import annotations
 
 import logging
@@ -59,15 +60,17 @@ def exclude_layer1_seal_quality(first_boards: list[dict]) -> tuple[list[dict], l
         if seal is not None and fcap is not None and fcap > 0:
             ratio = seal / fcap
             if ratio < min_sr:
-                reasons.append(f"封单/流通市值{ratio*100:.2f}%")
+                reasons.append(f"封单/流通市值{ratio * 100:.2f}%")
 
         if reasons:
-            filtered.append({
-                "code": code,
-                "name": fb.get("name", ""),
-                "layer": 1,
-                "reason": "/".join(reasons),
-            })
+            filtered.append(
+                {
+                    "code": code,
+                    "name": fb.get("name", ""),
+                    "layer": 1,
+                    "reason": "/".join(reasons),
+                }
+            )
         else:
             kept.append(fb)
 
@@ -75,7 +78,8 @@ def exclude_layer1_seal_quality(first_boards: list[dict]) -> tuple[list[dict], l
 
 
 def exclude_layer2_chip_structure(
-    candidates: list[dict], date: str | None = None,
+    candidates: list[dict],
+    date: str | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """剔除层2：grill 收紧后简化为透传（不剔除，只缓存 _chip_structure 供评分用）。
 
@@ -141,7 +145,9 @@ def _market_drop_pct(date: str) -> float | None:
 
 
 def exclude_layer3_market_env(
-    candidates: list[dict], date: str, first_boards: list[dict] | None = None,
+    candidates: list[dict],
+    date: str,
+    first_boards: list[dict] | None = None,
 ) -> tuple[list[dict], list[dict], dict]:
     """剔除层3：市场环境（T-1 粗筛）。
 
@@ -189,7 +195,7 @@ def exclude_layer3_market_env(
     # 取大盘涨跌幅
     market_drop = _market_drop_pct(date)
     threshold = EXCLUDE_THRESHOLDS["market_drop_threshold"]
-    high_risk = (market_drop is not None and market_drop <= threshold)
+    high_risk = market_drop is not None and market_drop <= threshold
 
     env_flags: dict = {
         "market_drop_pct": market_drop,

@@ -20,6 +20,7 @@ spec: `specs/S076-首板流盘中多源行情实测/spec.md`
   python -m tools.first_board_quote_source_probe --sweep 600127 001358
   python -m tools.first_board_quote_source_probe --sweep-until 09:36 600127 001358
 """
+
 from __future__ import annotations
 
 import argparse
@@ -50,8 +51,8 @@ DEFAULT_CODES = ["600519", "000001", "300750", "688981"]
 TENCENT_FIELDS = ["open", "last_close", "vol_ratio", "amount_wan", "price", "name", "change_pct"]
 
 # sanity 阈值（超出标记 insane，但仍记录原值）
-SANE_OPEN_PCT = (-11.0, 11.0)   # 高开 -11%~+11% 合理（涨停 +10%）
-SANE_VOL_RATIO = (0.0, 30.0)     # 量比 0-30 合理（首板可高）
+SANE_OPEN_PCT = (-11.0, 11.0)  # 高开 -11%~+11% 合理（涨停 +10%）
+SANE_VOL_RATIO = (0.0, 30.0)  # 量比 0-30 合理（首板可高）
 
 # 东财 push2 个股实时字段：f43=最新价 f46=开盘 f60=昨收 f50=量比 f47=成交量 f48=成交额 f57=code f58=name
 EM_PUSH2_FIELDS = "f43,f46,f60,f50,f47,f48,f57,f58"
@@ -64,6 +65,7 @@ EM_PUSH2_MIN_INTERVAL_S = 600
 # ─────────────────────────────────────────────────────────────────────────────
 # 辅助
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _to_float(v) -> float | None:
     """raw 字段归一 float 或 None。"""
@@ -120,12 +122,14 @@ def _truncate(s, n: int = 300) -> str:
 # 源探查
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _probe_tencent(codes: list[str]) -> dict:
     """探查 tencent_quote。"""
     out: dict = {"source": "tencent", "ok": False, "latency_ms": None, "per_code": {}, "error": None}
     t0 = time.monotonic()
     try:
         from astock import tencent_quote
+
         q = tencent_quote(codes)
     except Exception as e:  # noqa: BLE001
         out["error"] = f"tencent_quote 调用失败: {e!r}"
@@ -161,11 +165,16 @@ def _probe_mootdx(codes: list[str]) -> dict:
     API 形状不确定，故防御性：记录 raw + non_empty + error，失败即记"需接线"。
     """
     out: dict = {
-        "source": "mootdx", "ok": False, "latency_ms": None, "per_code": {}, "error": None,
+        "source": "mootdx",
+        "ok": False,
+        "latency_ms": None,
+        "per_code": {},
+        "error": None,
         "note": "源模块仅暴露 kline/finance；本探查直调 Quotes.quotes/bids 测实时",
     }
     try:
         from mootdx.quotes import Quotes
+
         client = Quotes.factory(market="std")
     except Exception as e:  # noqa: BLE001  mootdx 未装/连不上
         out["error"] = f"mootdx 不可用（未安装/连不上）: {e!r}"
@@ -197,8 +206,9 @@ def _probe_mootdx(codes: list[str]) -> dict:
             per["bids"] = {"error": f"bids 失败: {e!r}", "latency_ms": round((time.monotonic() - t1) * 1000, 1)}
         out["per_code"][code] = per
 
-    out["ok"] = any(p.get("quotes", {}).get("non_empty") or p.get("bids", {}).get("non_empty")
-                   for p in out["per_code"].values())
+    out["ok"] = any(
+        p.get("quotes", {}).get("non_empty") or p.get("bids", {}).get("non_empty") for p in out["per_code"].values()
+    )
     return out
 
 
@@ -235,7 +245,11 @@ def _probe_em_push2(codes: list[str]) -> dict:
             out["per_code"][code] = {"error": "ut 不可用（_PUSH2_UT 缺），push2 个股实时返空/拒绝"}
             continue
         params = {
-            "secid": secid, "fields": EM_PUSH2_FIELDS, "fltt": "2", "invt": "2", "ut": _PUSH2_UT,
+            "secid": secid,
+            "fields": EM_PUSH2_FIELDS,
+            "fltt": "2",
+            "invt": "2",
+            "ut": _PUSH2_UT,
         }
         t0 = time.monotonic()
         try:
@@ -246,9 +260,13 @@ def _probe_em_push2(codes: list[str]) -> dict:
                 "non_empty": bool(data),
                 "raw": _truncate(data),
                 # 东财 stock/get 返回 {rc, rt, data:{f43,f46,...}}；data 非空且有 f43 算可用
-                "has_price": bool(data and isinstance(data, dict)
-                                  and data.get("data") and isinstance(data["data"], dict)
-                                  and data["data"].get("f43") is not None),
+                "has_price": bool(
+                    data
+                    and isinstance(data, dict)
+                    and data.get("data")
+                    and isinstance(data["data"], dict)
+                    and data["data"].get("f43") is not None
+                ),
             }
         except Exception as e:  # noqa: BLE001
             per = {"error": f"push2 stock/get 失败: {e!r}", "latency_ms": round((time.monotonic() - t0) * 1000, 1)}
@@ -278,6 +296,7 @@ def _probe_em_push2(codes: list[str]) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 # 聚合 + 落盘
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def probe_once(codes: list[str], sources: list[str] | None = None) -> dict:
     """一次探查所有源，返回一行 {timestamp, time, sources...}。"""
@@ -356,6 +375,7 @@ def sweep(codes: list[str], until_hhmm: str | None = None) -> None:
 # CLI
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="S076 首板流盘中多源行情实测探查")
     g = p.add_mutually_exclusive_group(required=True)
@@ -373,11 +393,17 @@ def main(argv: list[str] | None = None) -> int:
         row = probe_once(codes)
         path = _append_row(row)
         _logger.info("[once][%s] 完成 → %s", row["time"], path)
-        _logger.info("摘要: %s", json.dumps({
-            "tencent_ok": row["tencent"].get("ok"),
-            "mootdx_ok": row["mootdx"].get("ok"),
-            "em_push2_ok": row["em_push2"].get("ok"),
-        }, ensure_ascii=False))
+        _logger.info(
+            "摘要: %s",
+            json.dumps(
+                {
+                    "tencent_ok": row["tencent"].get("ok"),
+                    "mootdx_ok": row["mootdx"].get("ok"),
+                    "em_push2_ok": row["em_push2"].get("ok"),
+                },
+                ensure_ascii=False,
+            ),
+        )
     elif args.sweep or args.sweep_until:
         sweep(codes, args.sweep_until)
     return 0

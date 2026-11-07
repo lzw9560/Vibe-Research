@@ -9,6 +9,7 @@ combo 5日 edge 找到了(test t=5.65 net+0.405%)，但 3 个关键没测：
 
 全在 test 期(2023-2026)做，5日持有，复用 combo_hold 的 rank 逻辑。
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -59,10 +60,15 @@ def build_by_date() -> dict:
             if not nc:
                 continue
             fwd5 = (nc - c) / c
-            by_date[bars[i].get("date", "")].append({
-                "gap": gap, "tr": today_ret, "amt": amt, "fwd5": fwd5,
-                "up": c > ma60,
-            })
+            by_date[bars[i].get("date", "")].append(
+                {
+                    "gap": gap,
+                    "tr": today_ret,
+                    "amt": amt,
+                    "fwd5": fwd5,
+                    "up": c > ma60,
+                }
+            )
     return by_date
 
 
@@ -75,6 +81,7 @@ def rank_scores(lst: list, use_gap: bool, use_tr: bool, use_amt: bool) -> list:
     rg = {orig: r / n for r, orig in enumerate(sg)}
     rt = {orig: r / n for r, orig in enumerate(st)}
     ra = {orig: (1 - r / n) for r, orig in enumerate(sa)}  # 小盘=高分
+
     def score(k):
         s = 0.0
         if use_gap:
@@ -84,11 +91,13 @@ def rank_scores(lst: list, use_gap: bool, use_tr: bool, use_amt: bool) -> list:
         if use_amt:
             s += ra[k]
         return s
+
     return sorted(range(n), key=score, reverse=True)
 
 
-def stats_for(dates: list, by_date: dict, use_gap=True, use_tr=True, use_amt=True,
-              top_n: int | None = None) -> dict | None:
+def stats_for(
+    dates: list, by_date: dict, use_gap=True, use_tr=True, use_amt=True, top_n: int | None = None
+) -> dict | None:
     """对给定日期集，取 top（decile 或固定 N），算 5日 fwd 的日均值统计。"""
     daily_mean, daily_median, daily_wr, all_picks = [], [], [], []
     for d in dates:
@@ -119,8 +128,14 @@ def stats_for(dates: list, by_date: dict, use_gap=True, use_tr=True, use_amt=Tru
     se = std / (len(daily_mean) ** 0.5) if len(daily_mean) else 0
     t = m / se if se > 0 else 0
     return {
-        "n_days": len(daily_mean), "mean": m, "median": med, "wr": wr,
-        "net": net, "t": t, "n_picks": len(all_picks), "picks": all_picks,
+        "n_days": len(daily_mean),
+        "mean": m,
+        "median": med,
+        "wr": wr,
+        "net": net,
+        "t": t,
+        "n_picks": len(all_picks),
+        "picks": all_picks,
     }
 
 
@@ -135,8 +150,8 @@ def pct(vals: list, p: float) -> float:
 def main() -> None:
     by_date = build_by_date()
     all_test = sorted(d for d in by_date if d >= SPLIT)
-    h1 = sorted(d for d in all_test if d < "2025-01-01")       # 2023-2024
-    h2 = sorted(d for d in all_test if d >= "2025-01-01")       # 2025-2026
+    h1 = sorted(d for d in all_test if d < "2025-01-01")  # 2023-2024
+    h2 = sorted(d for d in all_test if d >= "2025-01-01")  # 2025-2026
 
     print(f"=== 轮6 combo 深度验证（test {len(all_test)} 日：2023-2024={len(h1)}日 / 2025-2026={len(h2)}日）===\n")
 
@@ -148,13 +163,17 @@ def main() -> None:
         r = stats_for(ds, by_date)
         if not r:
             continue
-        print(f"{label:<14}{r['mean']*100:>+9.4f}%{r['median']*100:>+9.4f}%{r['wr']*100:>6.1f}%{r['net']*100:>+9.4f}%{r['t']:>6.2f}{r['n_days']:>8}")
+        print(
+            f"{label:<14}{r['mean'] * 100:>+9.4f}%{r['median'] * 100:>+9.4f}%{r['wr'] * 100:>6.1f}%{r['net'] * 100:>+9.4f}%{r['t']:>6.2f}{r['n_days']:>8}"
+        )
     # 2025-2026 by year
     for yr in ("2025", "2026"):
         ds = sorted(d for d in h2 if d.startswith(yr))
         r = stats_for(ds, by_date)
         if r:
-            print(f"{yr:<14}{r['mean']*100:>+9.4f}%{r['median']*100:>+9.4f}%{r['wr']*100:>6.1f}%{r['net']*100:>+9.4f}%{r['t']:>6.2f}{r['n_days']:>8}")
+            print(
+                f"{yr:<14}{r['mean'] * 100:>+9.4f}%{r['median'] * 100:>+9.4f}%{r['wr'] * 100:>6.1f}%{r['net'] * 100:>+9.4f}%{r['t']:>6.2f}{r['n_days']:>8}"
+            )
     print()
 
     # 2. 集中度
@@ -166,7 +185,9 @@ def main() -> None:
         if not r:
             print(f"{label:<14} (n不足跳过)")
             continue
-        print(f"{label:<14}{r['mean']*100:>+9.4f}%{r['median']*100:>+9.4f}%{r['wr']*100:>6.1f}%{r['net']*100:>+9.4f}%{r['t']:>6.2f}{r['n_days']:>8}")
+        print(
+            f"{label:<14}{r['mean'] * 100:>+9.4f}%{r['median'] * 100:>+9.4f}%{r['wr'] * 100:>6.1f}%{r['net'] * 100:>+9.4f}%{r['t']:>6.2f}{r['n_days']:>8}"
+        )
     print()
 
     # 3. 因子分解
@@ -185,7 +206,9 @@ def main() -> None:
         r = stats_for(all_test, by_date, use_gap=g, use_tr=tr, use_amt=a)
         if not r:
             continue
-        print(f"{label:<22}{r['mean']*100:>+9.4f}%{r['median']*100:>+9.4f}%{r['wr']*100:>6.1f}%{r['net']*100:>+9.4f}%{r['t']:>6.2f}")
+        print(
+            f"{label:<22}{r['mean'] * 100:>+9.4f}%{r['median'] * 100:>+9.4f}%{r['wr'] * 100:>6.1f}%{r['net'] * 100:>+9.4f}%{r['t']:>6.2f}"
+        )
     print()
 
     # 4. 尾部分布（全 combo top-decile 全test）
@@ -194,18 +217,24 @@ def main() -> None:
     if r:
         pk = r["picks"]
         n = len(pk)
-        print(f"  picks={n} mean={statistics.mean(pk)*100:+.3f}% median={statistics.median(pk)*100:+.3f}%")
-        print(f"  p10={pct(pk,10)*100:+.3f}%  p25={pct(pk,25)*100:+.3f}%  p75={pct(pk,75)*100:+.3f}%  p90={pct(pk,90)*100:+.3f}%  p95={pct(pk,95)*100:+.3f}%")
+        print(f"  picks={n} mean={statistics.mean(pk) * 100:+.3f}% median={statistics.median(pk) * 100:+.3f}%")
+        print(
+            f"  p10={pct(pk, 10) * 100:+.3f}%  p25={pct(pk, 25) * 100:+.3f}%  p75={pct(pk, 75) * 100:+.3f}%  p90={pct(pk, 90) * 100:+.3f}%  p95={pct(pk, 95) * 100:+.3f}%"
+        )
         big_win = sum(1 for x in pk if x > 0.05) / n
         huge_win = sum(1 for x in pk if x > 0.10) / n
         big_loss = sum(1 for x in pk if x < -0.05) / n
         huge_loss = sum(1 for x in pk if x < -0.10) / n
-        print(f"  >+5%:{big_win*100:.1f}%  >+10%:{huge_win*100:.1f}%  <-5%:{big_loss*100:.1f}%  <-10%:{huge_loss*100:.1f}%")
+        print(
+            f"  >+5%:{big_win * 100:.1f}%  >+10%:{huge_win * 100:.1f}%  <-5%:{big_loss * 100:.1f}%  <-10%:{huge_loss * 100:.1f}%"
+        )
         # 去掉 top 5% 暴利票后 mean（看核心是否还正）
         cut = int(n * 0.05)
         trimmed = sorted(pk)[:-cut] if cut else pk
         if trimmed:
-            print(f"  去 top5%暴利后 mean={statistics.mean(trimmed)*100:+.3f}% median={statistics.median(trimmed)*100:+.3f}%（核心是否还正）")
+            print(
+                f"  去 top5%暴利后 mean={statistics.mean(trimmed) * 100:+.3f}% median={statistics.median(trimmed) * 100:+.3f}%（核心是否还正）"
+            )
 
 
 if __name__ == "__main__":

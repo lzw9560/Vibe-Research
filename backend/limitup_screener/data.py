@@ -22,26 +22,31 @@ _DB_LOCK = _threading.Lock()
 def run_migrations() -> None:
     """执行数据库迁移（仅一次）。"""
     from migrations import MigrationManager
+
     manager = MigrationManager(db_path=_DB_PATH)
     migration_v1 = (
         Path(__file__).resolve().parent.parent
-        / "migrations" / "limitup_screener" / "20250613-001_create_gene_scores.sql"
+        / "migrations"
+        / "limitup_screener"
+        / "20250613-001_create_gene_scores.sql"
     ).read_text(encoding="utf-8")
     migration_v2 = (
         Path(__file__).resolve().parent.parent
-        / "migrations" / "limitup_screener" / "20250613-002_add_gene_scores_indexes.sql"
+        / "migrations"
+        / "limitup_screener"
+        / "20250613-002_add_gene_scores_indexes.sql"
     ).read_text(encoding="utf-8")
     migration_v3 = (
         Path(__file__).resolve().parent.parent
-        / "migrations" / "limitup_screener" / "20250724-001_create_fuse_pardon_records.sql"
+        / "migrations"
+        / "limitup_screener"
+        / "20250724-001_create_fuse_pardon_records.sql"
     ).read_text(encoding="utf-8")
     migration_v4 = (
-        Path(__file__).resolve().parent.parent
-        / "migrations" / "limitup_screener" / "20260809-001_add_data_source.sql"
+        Path(__file__).resolve().parent.parent / "migrations" / "limitup_screener" / "20260809-001_add_data_source.sql"
     ).read_text(encoding="utf-8")
     migration_v5 = (
-        Path(__file__).resolve().parent.parent
-        / "migrations" / "limitup_screener" / "20260816-001_add_industry.sql"
+        Path(__file__).resolve().parent.parent / "migrations" / "limitup_screener" / "20260816-001_add_industry.sql"
     ).read_text(encoding="utf-8")
     migrations = [
         {
@@ -91,12 +96,17 @@ def save_gene_scores(date: str, scores: list) -> None:
     with _DB_LOCK:
         try:
             # S066 Q16 step2：industry 主源 = GeneScore.industry（pool hybk），池缺时兜底 code_industry
-            code2ind: dict[str, str] = dict(conn.execute(
-                "SELECT code, industry FROM code_industry WHERE industry IS NOT NULL AND industry != ''"
-            ).fetchall())
+            code2ind: dict[str, str] = dict(
+                conn.execute(
+                    "SELECT code, industry FROM code_industry WHERE industry IS NOT NULL AND industry != ''"
+                ).fetchall()
+            )
             rows = [
                 (
-                    date, s.code, s.name, s.total_score,
+                    date,
+                    s.code,
+                    s.name,
+                    s.total_score,
                     s.factors.get("次日溢价率", 0),
                     s.factors.get("红盘率", 0),
                     s.factors.get("封板率", 0),
@@ -112,14 +122,17 @@ def save_gene_scores(date: str, scores: list) -> None:
                 )
                 for s in scores
             ]
-            conn.executemany("""
+            conn.executemany(
+                """
                 INSERT OR REPLACE INTO gene_scores
                 (date, code, name, total_score, factor_premium_rate, factor_red_rate,
                  factor_seal_rate, factor_rebound_rate, factor_freq_score,
                  wilson_adjusted, qualify, high_gene, zt_count_250d,
                  data_source, missing_factors, industry)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, rows)
+            """,
+                rows,
+            )
             conn.commit()
         except Exception:
             conn.rollback()
@@ -153,6 +166,7 @@ def load_gene_scores(date: str) -> list | None:
             "涨停频次": row["factor_freq_score"] or 0,
         }
         import json as _json2
+
         missing_raw = row["missing_factors"] if "missing_factors" in row.keys() else ""
         try:
             missing = _json2.loads(missing_raw) if missing_raw else []
@@ -160,21 +174,23 @@ def load_gene_scores(date: str) -> list | None:
             missing = []
         ds = row["data_source"] if "data_source" in row.keys() else "eastmoney_live"
         ind = row["industry"] if "industry" in row.keys() else ""
-        scores.append(GeneScore(
-            code=row["code"],
-            name=row["name"] or "",
-            total_score=row["total_score"] or 0,
-            factors=factors,
-            wilson_adjusted=row["wilson_adjusted"] or 0,
-            qualify=bool(row["qualify"]),
-            high_gene=bool(row["high_gene"]),
-            last_zt_dates=[],
-            zt_count_250d=row["zt_count_250d"] or 0,
-            data_source=ds,
-            missing_factors=missing,
-            industry=ind or "",
-            date=row["date"] if "date" in row.keys() else "",
-        ))
+        scores.append(
+            GeneScore(
+                code=row["code"],
+                name=row["name"] or "",
+                total_score=row["total_score"] or 0,
+                factors=factors,
+                wilson_adjusted=row["wilson_adjusted"] or 0,
+                qualify=bool(row["qualify"]),
+                high_gene=bool(row["high_gene"]),
+                last_zt_dates=[],
+                zt_count_250d=row["zt_count_250d"] or 0,
+                data_source=ds,
+                missing_factors=missing,
+                industry=ind or "",
+                date=row["date"] if "date" in row.keys() else "",
+            )
+        )
     return scores
 
 
@@ -188,24 +204,27 @@ def create_pardon_record(record: dict) -> None:
     conn = get_db()
     with _DB_LOCK:
         try:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO fuse_pardon_records
                 (id, strategy_code, strategy_name, enabled_by, enabled_ip,
                  approved_by, max_position_pct, created_at, expires_at, reason, is_active)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                record["id"],
-                record["strategy_code"],
-                record["strategy_name"],
-                record["enabled_by"],
-                record.get("enabled_ip"),
-                record["approved_by"],
-                record.get("max_position_pct", 0.35),
-                record["created_at"],
-                record["expires_at"],
-                record.get("reason", ""),
-                1 if record.get("is_active", True) else 0,
-            ))
+            """,
+                (
+                    record["id"],
+                    record["strategy_code"],
+                    record["strategy_name"],
+                    record["enabled_by"],
+                    record.get("enabled_ip"),
+                    record["approved_by"],
+                    record.get("max_position_pct", 0.35),
+                    record["created_at"],
+                    record["expires_at"],
+                    record.get("reason", ""),
+                    1 if record.get("is_active", True) else 0,
+                ),
+            )
             conn.commit()
         except Exception:
             conn.rollback()
@@ -218,11 +237,14 @@ def get_active_pardon_records() -> list[dict]:
     """获取所有生效中的赦免记录。"""
     conn = get_db()
     with _DB_LOCK:
-        rows = conn.execute("""
+        rows = conn.execute(
+            """
             SELECT * FROM fuse_pardon_records
             WHERE is_active = 1 AND expires_at > ?
             ORDER BY created_at DESC
-        """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"),)).fetchall()
+        """,
+            (datetime.now().strftime("%Y-%m-%d %H:%M:%S"),),
+        ).fetchall()
         conn.close()
 
     return [dict(row) for row in rows]
@@ -232,11 +254,14 @@ def get_all_pardon_records(limit: int = 100) -> list[dict]:
     """获取所有赦免记录（包括已撤销的）。"""
     conn = get_db()
     with _DB_LOCK:
-        rows = conn.execute("""
+        rows = conn.execute(
+            """
             SELECT * FROM fuse_pardon_records
             ORDER BY created_at DESC
             LIMIT ?
-        """, (limit,)).fetchall()
+        """,
+            (limit,),
+        ).fetchall()
         conn.close()
 
     return [dict(row) for row in rows]
@@ -248,11 +273,14 @@ def revoke_pardon_record(pardon_id: str, revoked_by: str) -> bool:
     with _DB_LOCK:
         try:
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 UPDATE fuse_pardon_records
                 SET is_active = 0, revoked_at = ?, revoked_by = ?
                 WHERE id = ? AND is_active = 1
-            """, (now, revoked_by, pardon_id))
+            """,
+                (now, revoked_by, pardon_id),
+            )
             conn.commit()
             return cursor.rowcount > 0
         except Exception:
@@ -265,14 +293,18 @@ def revoke_pardon_record(pardon_id: str, revoked_by: str) -> bool:
 def update_pardon_outcome(pardon_id: str, outcome: dict) -> bool:
     """更新赦免交易结果。"""
     import json
+
     conn = get_db()
     with _DB_LOCK:
         try:
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 UPDATE fuse_pardon_records
                 SET outcome_json = ?
                 WHERE id = ?
-            """, (json.dumps(outcome, ensure_ascii=False), pardon_id))
+            """,
+                (json.dumps(outcome, ensure_ascii=False), pardon_id),
+            )
             conn.commit()
             return cursor.rowcount > 0
         except Exception:
@@ -288,11 +320,14 @@ def cleanup_expired_pardons() -> int:
     with _DB_LOCK:
         try:
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 UPDATE fuse_pardon_records
                 SET is_active = 0
                 WHERE is_active = 1 AND expires_at <= ?
-            """, (now,))
+            """,
+                (now,),
+            )
             conn.commit()
             return cursor.rowcount
         except Exception:

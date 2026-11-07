@@ -19,6 +19,7 @@ B. Market-level：bars 前向收益 3/5/10 日，gap-present vs no-gap lift（�
 用法：python tools/s199_s44_verify.py [signals.json]
 默认读 /tmp/s194_signals_fresh.json
 """
+
 import json
 import sys
 from collections import defaultdict
@@ -154,27 +155,16 @@ def regime_stratified_lift(
     """
     results: dict[str, dict[int, dict]] = {}
     for tag in ("bull", "bear", "range"):
-        regime_cases = [
-            d for d in data if regime_map.get(d["entry_date"]) == tag
-        ]
+        regime_cases = [d for d in data if regime_map.get(d["entry_date"]) == tag]
         if not regime_cases:
             results[tag] = {}
             continue
         win_results: dict[int, dict] = {}
         for n in windows:
-            surv, raw, all_ = split_fwd_returns(
-                regime_cases, gap_field, n, get_bars)
+            surv, raw, all_ = split_fwd_returns(regime_cases, gap_field, n, get_bars)
             pl = day_paired_lift(surv, raw)
-            lift = (
-                pl.winrate_lift_avg
-                if pl and pl.winrate_lift_avg is not None
-                else None
-            )
-            perm_p = (
-                permutation_p_value(surv, all_, lift)
-                if lift is not None
-                else 1.0
-            )
+            lift = pl.winrate_lift_avg if pl and pl.winrate_lift_avg is not None else None
+            perm_p = permutation_p_value(surv, all_, lift) if lift is not None else 1.0
             win_results[n] = {
                 "lift": lift,
                 "perm_p": perm_p,
@@ -197,21 +187,11 @@ def regime_stratified_trade_lift(
     """
     results: dict[str, dict] = {}
     for tag in ("bull", "bear", "range"):
-        regime_cases = [
-            d for d in data if regime_map.get(d["entry_date"]) == tag
-        ]
+        regime_cases = [d for d in data if regime_map.get(d["entry_date"]) == tag]
         surv, raw, all_ = split_trade_returns(regime_cases, gap_field)
         pl = day_paired_lift(surv, raw)
-        lift = (
-            pl.winrate_lift_avg
-            if pl and pl.winrate_lift_avg is not None
-            else None
-        )
-        perm_p = (
-            permutation_p_value(surv, all_, lift)
-            if lift is not None
-            else 1.0
-        )
+        lift = pl.winrate_lift_avg if pl and pl.winrate_lift_avg is not None else None
+        perm_p = permutation_p_value(surv, all_, lift) if lift is not None else 1.0
         results[tag] = {
             "lift": lift,
             "perm_p": perm_p,
@@ -225,7 +205,7 @@ def regime_stratified_trade_lift(
 def main() -> None:
     signals_path = sys.argv[1] if len(sys.argv) > 1 else "/tmp/s194_signals_fresh.json"
     raw = Path(signals_path).read_text()
-    data = json.loads(raw[raw.index("["):])  # 容错 baostock 污染
+    data = json.loads(raw[raw.index("[") :])  # 容错 baostock 污染
 
     # 用方向感知编码区分 gap-present vs no-gap
     for d in data:
@@ -237,25 +217,23 @@ def main() -> None:
     n_gap_b = sum(1 for d in data if d["gap_b"] > 0)
     n_ret = sum(1 for d in data if d.get("gross_return") is not None)
     n_days = len(set(d["entry_date"] for d in data if d.get("gross_return") is not None))
-    print(f"# S199 §44 验证: n_total={n_total} n_gap_a(方向感知)={n_gap_a} "
-          f"n_gap_b(方向无关)={n_gap_b} n_ret={n_ret} n_days={n_days}")
+    print(
+        f"# S199 §44 验证: n_total={n_total} n_gap_a(方向感知)={n_gap_a} "
+        f"n_gap_b(方向无关)={n_gap_b} n_ret={n_ret} n_days={n_days}"
+    )
 
     # ════════════════════════════════════════════════════════════════════════
     # A. Trade-level: gross_return 作 outcome
     # ════════════════════════════════════════════════════════════════════════
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("A. Trade-level（gross_return 作 outcome）")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     # A1. day_clustered_t_test: gap-present 收益 mean > 0?
-    gap_returns = [float(d["gross_return"]) for d in data
-                   if d.get("gross_return") is not None and d["gap_a"] > 0]
-    gap_dates = [d["entry_date"] for d in data
-                 if d.get("gross_return") is not None and d["gap_a"] > 0]
-    no_gap_returns = [float(d["gross_return"]) for d in data
-                      if d.get("gross_return") is not None and d["gap_a"] == 0]
-    no_gap_dates = [d["entry_date"] for d in data
-                    if d.get("gross_return") is not None and d["gap_a"] == 0]
+    gap_returns = [float(d["gross_return"]) for d in data if d.get("gross_return") is not None and d["gap_a"] > 0]
+    gap_dates = [d["entry_date"] for d in data if d.get("gross_return") is not None and d["gap_a"] > 0]
+    no_gap_returns = [float(d["gross_return"]) for d in data if d.get("gross_return") is not None and d["gap_a"] == 0]
+    no_gap_dates = [d["entry_date"] for d in data if d.get("gross_return") is not None and d["gap_a"] == 0]
 
     print(f"\n  gap-present (A): n={len(gap_returns)} n_days={len(set(gap_dates))}")
     print(f"  no-gap:          n={len(no_gap_returns)} n_days={len(set(no_gap_dates))}")
@@ -264,15 +242,19 @@ def main() -> None:
     t_gap = day_clustered_t_test(gap_returns, gap_dates)
     t_no_gap = day_clustered_t_test(no_gap_returns, no_gap_dates)
     if t_gap:
-        print(f"\n  gap-present day_clustered_t_test: t={t_gap.t_stat:+.3f} "
-              f"p={t_gap.p_one_sided:.4f} day_mean={t_gap.day_mean:+.6f} "
-              f"n_days={t_gap.n_days}")
+        print(
+            f"\n  gap-present day_clustered_t_test: t={t_gap.t_stat:+.3f} "
+            f"p={t_gap.p_one_sided:.4f} day_mean={t_gap.day_mean:+.6f} "
+            f"n_days={t_gap.n_days}"
+        )
     else:
         print(f"\n  gap-present day_clustered_t_test: insufficient (n_days<2)")
     if t_no_gap:
-        print(f"  no-gap      day_clustered_t_test: t={t_no_gap.t_stat:+.3f} "
-              f"p={t_no_gap.p_one_sided:.4f} day_mean={t_no_gap.day_mean:+.6f} "
-              f"n_days={t_no_gap.n_days}")
+        print(
+            f"  no-gap      day_clustered_t_test: t={t_no_gap.t_stat:+.3f} "
+            f"p={t_no_gap.p_one_sided:.4f} day_mean={t_no_gap.day_mean:+.6f} "
+            f"n_days={t_no_gap.n_days}"
+        )
 
     # A2. day_paired_lift + permutation: gap-present vs no-gap
     surv_by_day: dict[str, list[float]] = defaultdict(list)
@@ -296,11 +278,13 @@ def main() -> None:
 
     paired = day_paired_lift(surv_by_day, raw_by_day)
     if paired and paired.winrate_lift_avg is not None:
-        print(f"\n  day_paired_lift (gap vs no-gap): "
-              f"winrate_lift={paired.winrate_lift_avg:.4f} "
-              f"mean_lift={paired.mean_lift_avg} "
-              f"n_days={paired.n_days} "
-              f"surv_n={paired.surv_n_pooled} raw_n={paired.raw_n_pooled}")
+        print(
+            f"\n  day_paired_lift (gap vs no-gap): "
+            f"winrate_lift={paired.winrate_lift_avg:.4f} "
+            f"mean_lift={paired.mean_lift_avg} "
+            f"n_days={paired.n_days} "
+            f"surv_n={paired.surv_n_pooled} raw_n={paired.raw_n_pooled}"
+        )
         perm_p = permutation_p_value(surv_by_day, all_by_day, paired.winrate_lift_avg)
         print(f"  permutation_p_value: p={perm_p:.4f} (within-day resampling null)")
     else:
@@ -310,9 +294,9 @@ def main() -> None:
     # ════════════════════════════════════════════════════════════════════════
     # B. Market-level: bars 前向收益 3/5/10 日（多窗口 sanity, §44v2 规约①）
     # ════════════════════════════════════════════════════════════════════════
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("B. Market-level（bars 前向收益 3/5/10 日，多窗口 sanity）")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     bp = KlineCacheBarsProvider()
     bars_cache: dict[str, list[dict]] = {}
@@ -350,7 +334,7 @@ def main() -> None:
     for n in WINDOWS:
         g = gap_fwd[n]
         ng = nogap_fwd[n]
-        print(f"  | {n}日 | {len(g)} | {len(set(d for _,d in g))} | {len(ng)} | {len(set(d for _,d in ng))} |")
+        print(f"  | {n}日 | {len(g)} | {len(set(d for _, d in g))} | {len(ng)} | {len(set(d for _, d in ng))} |")
 
     # B1. day_clustered_t_test per window
     print(f"\n  day_clustered_t_test per window (gap-present mean > 0?):")
@@ -395,8 +379,10 @@ def main() -> None:
         pl = day_paired_lift(surv_day, raw_day)
         if pl and pl.winrate_lift_avg is not None:
             pp = permutation_p_value(surv_day, all_day, pl.winrate_lift_avg)
-            print(f"  | {n}日 | {pl.winrate_lift_avg:.4f} | {pl.mean_lift_avg} | "
-                  f"{pp:.4f} | {pl.n_days} | {pl.surv_n_pooled} | {pl.raw_n_pooled} |")
+            print(
+                f"  | {n}日 | {pl.winrate_lift_avg:.4f} | {pl.mean_lift_avg} | "
+                f"{pp:.4f} | {pl.n_days} | {pl.surv_n_pooled} | {pl.raw_n_pooled} |"
+            )
             p_list.append(pp)
             p_keys.append(f"perm_{n}d")
         else:
@@ -417,9 +403,9 @@ def main() -> None:
     # ════════════════════════════════════════════════════════════════════════
     # C. Version A vs B comparison (direction-aware vs direction-agnostic)
     # ════════════════════════════════════════════════════════════════════════
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("C. A vs B 对照（方向感知 vs 方向无关，多窗口）")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"\n  | 窗口 | A lift | A perm_p | B lift | B perm_p | A-B lift |")
     print(f"  |---|---|---|---|---|---|")
     for n in WINDOWS:
@@ -445,72 +431,67 @@ def main() -> None:
     # ════════════════════════════════════════════════════════════════════════
     # D. Regime-stratified gap edge (bull/bear/range, §44v2 regime-conditional)
     # ════════════════════════════════════════════════════════════════════════
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("D. Regime-stratified（bull/bear/range gap edge lift）")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     regime_map: dict[str, str] = {}
     try:
         from tools.gap_regime_stratified import compute_regime_labels
+
         regime_map = compute_regime_labels()
     except Exception as e:
         print(f"  regime labels unavailable: {e}")
 
     if regime_map:
-        n_tagged = sum(
-            1 for d in data if regime_map.get(d.get("entry_date")))
-        print(f"  regime_map: {len(regime_map)} dates, "
-              f"{n_tagged}/{len(data)} cases tagged")
+        n_tagged = sum(1 for d in data if regime_map.get(d.get("entry_date")))
+        print(f"  regime_map: {len(regime_map)} dates, {n_tagged}/{len(data)} cases tagged")
 
         # D1. Trade-level (gross_return)
         print(f"\n  --- D1. Trade-level (gap_a direction-aware) ---")
         print(f"  | regime | lift | perm_p | n_days | surv_n | raw_n |")
         print(f"  |---|---|---|---|---|---|")
-        trade_reg = regime_stratified_trade_lift(
-            data, "gap_a", regime_map)
+        trade_reg = regime_stratified_trade_lift(data, "gap_a", regime_map)
         regime_p_list: list[float] = []
         regime_p_keys: list[str] = []
         for tag in ("bull", "bear", "range"):
             r = trade_reg[tag]
             lift_s = f"{r['lift']:.4f}" if r["lift"] is not None else "n/a"
-            print(f"  | {tag} | {lift_s} | {r['perm_p']:.4f} | "
-                  f"{r['n_days']} | {r['surv_n']} | {r['raw_n']} |")
+            print(f"  | {tag} | {lift_s} | {r['perm_p']:.4f} | {r['n_days']} | {r['surv_n']} | {r['raw_n']} |")
             if r["lift"] is not None:
                 regime_p_list.append(r["perm_p"])
                 regime_p_keys.append(f"trade_{tag}")
 
         # D2. Market-level (3/5/10d, pre-window sanity §44v2 ①)
         print(f"\n  --- D2. Market-level (gap_a, multi-window) ---")
-        print(f"  | regime | window | lift | perm_p | n_days | "
-              f"surv_n | raw_n |")
+        print(f"  | regime | window | lift | perm_p | n_days | surv_n | raw_n |")
         print(f"  |---|---|---|---|---|---|---|")
-        mkt_reg = regime_stratified_lift(
-            data, "gap_a", regime_map, WINDOWS, get_bars)
+        mkt_reg = regime_stratified_lift(data, "gap_a", regime_map, WINDOWS, get_bars)
         for tag in ("bull", "bear", "range"):
             for n in WINDOWS:
                 r = mkt_reg[tag].get(n, {})
                 lift_v = r.get("lift")
                 lift_s = f"{lift_v:.4f}" if lift_v is not None else "n/a"
-                print(f"  | {tag} | {n}d | {lift_s} | "
-                      f"{r.get('perm_p', 1.0):.4f} | "
-                      f"{r.get('n_days', 0)} | {r.get('surv_n', 0)} | "
-                      f"{r.get('raw_n', 0)} |")
+                print(
+                    f"  | {tag} | {n}d | {lift_s} | "
+                    f"{r.get('perm_p', 1.0):.4f} | "
+                    f"{r.get('n_days', 0)} | {r.get('surv_n', 0)} | "
+                    f"{r.get('raw_n', 0)} |"
+                )
                 if lift_v is not None:
                     regime_p_list.append(r["perm_p"])
                     regime_p_keys.append(f"mkt_{tag}_{n}d")
 
         # D3. Bonferroni (§44v2, K capped at 8)
         k_eff = min(len(regime_p_list), _MAX_BONFERRONI_K)
-        print(f"\n  Bonferroni (K={len(regime_p_list)}, "
-              f"effective cap={k_eff}):")
+        print(f"\n  Bonferroni (K={len(regime_p_list)}, effective cap={k_eff}):")
         if regime_p_list:
             adj_reg = bonferroni_bh(regime_p_list, method="bonferroni")
             print(f"  | test | raw_p | Bonf_adj | sig |")
             print(f"  |---|---|---|---|")
             for i, key in enumerate(regime_p_keys):
                 sig = "✓" if adj_reg[i] < 0.05 else "✗"
-                print(f"  | {key} | {regime_p_list[i]:.4f} | "
-                      f"{adj_reg[i]:.4f} {sig} |")
+                print(f"  | {key} | {regime_p_list[i]:.4f} | {adj_reg[i]:.4f} {sig} |")
 
         # D4. Regime-conditional verdict (bull vs bear focus)
         bull_r = trade_reg.get("bull", {})
@@ -521,12 +502,10 @@ def main() -> None:
         print(f"    bull lift={bull_lift}  bear lift={bear_lift}")
         if bull_lift is not None and bear_lift is not None:
             if bull_lift > 1.0 and bear_lift > 1.0:
-                print("    → gap edge in BOTH bull AND bear "
-                      "(regime-independent)")
+                print("    → gap edge in BOTH bull AND bear (regime-independent)")
             elif bull_lift > 1.0 or bear_lift > 1.0:
                 stronger = "bull" if (bull_lift or 0) > (bear_lift or 0) else "bear"
-                print(f"    → gap edge regime-dependent "
-                      f"(stronger in {stronger})")
+                print(f"    → gap edge regime-dependent (stronger in {stronger})")
             else:
                 print("    → gap edge absent in both bull and bear")
         else:
@@ -535,20 +514,18 @@ def main() -> None:
         for tag in ("bull", "bear", "range"):
             r = trade_reg[tag]
             if r["n_days"] > 0 and r["n_days"] < 30:
-                print(f"  WARNING: {tag} n_days={r['n_days']} (<30) "
-                      f"→ exploratory, not validated (§44v2 ②)")
+                print(f"  WARNING: {tag} n_days={r['n_days']} (<30) → exploratory, not validated (§44v2 ②)")
             elif 30 <= r["n_days"] < 60:
-                print(f"  NOTE: {tag} n_days={r['n_days']} (<60) "
-                      f"→ provisional, not yet robust tier (§44v2 ②)")
+                print(f"  NOTE: {tag} n_days={r['n_days']} (<60) → provisional, not yet robust tier (§44v2 ②)")
     else:
         print("  (skipped — regime_map empty)")
 
     # ════════════════════════════════════════════════════════════════════════
     # E. 结论（诚实，不外推）
     # ════════════════════════════════════════════════════════════════════════
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("E. 结论（§44v2 诚实判定，不外推）")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"""
   测了什么：
   1. 融合分消融 delta_ic A vs B（方向感知 vs 方向无关）—— gap 信号对融合分预测力的贡献增量

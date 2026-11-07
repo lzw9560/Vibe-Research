@@ -12,6 +12,7 @@ t1_gap_analysis 扩展：在 gap（T+1 开盘 gap）第一维度基础上，加 
 
 跑法：cd backend && .venv/bin/python tools/explore_t1_gap_seal_combo.py
 """
+
 import json
 import sqlite3
 import sys
@@ -60,7 +61,7 @@ def vol_ratio_5(bars: list[dict], idx: int) -> float | None:
     vol = bars[idx].get("volume")
     if not vol:
         return None
-    prev = bars[idx - 5:idx]
+    prev = bars[idx - 5 : idx]
     pv = [b.get("volume") for b in prev]
     if any(v is None or v == 0 for v in pv):
         return None
@@ -140,12 +141,20 @@ def combo_analysis(end_date: str = "2026-09-17", days: int = 180) -> dict:
             # open_ret: T+1 open → T+2（含 T+1 日内涨幅，对 T+1-close 信号有 look-ahead 泄漏）
             open_ret = ((zt_price_t2 - t1_open) / t1_open * 100) if was_zt_t2 else ((t2_open - t1_open) / t1_open * 100)
             # close_ret: T+1 close → T+2（post-confirmation，隔离 pctChg 信号真 edge）
-            close_ret = ((zt_price_t2 - t1_close) / t1_close * 100) if was_zt_t2 else ((t2_open - t1_close) / t1_close * 100)
-            records.append({
-                "code": code, "gap": round(gap, 2), "t1_pct": round(float(t1_pct), 2),
-                "was_zt_t1": was_zt_t1, "was_zt_t2": was_zt_t2,
-                "open_ret": round(open_ret, 2), "close_ret": round(close_ret, 2),
-            })
+            close_ret = (
+                ((zt_price_t2 - t1_close) / t1_close * 100) if was_zt_t2 else ((t2_open - t1_close) / t1_close * 100)
+            )
+            records.append(
+                {
+                    "code": code,
+                    "gap": round(gap, 2),
+                    "t1_pct": round(float(t1_pct), 2),
+                    "was_zt_t1": was_zt_t1,
+                    "was_zt_t2": was_zt_t2,
+                    "open_ret": round(open_ret, 2),
+                    "close_ret": round(close_ret, 2),
+                }
+            )
 
     # gap buckets
     gap_defs = [
@@ -170,7 +179,9 @@ def combo_analysis(end_date: str = "2026-09-17", days: int = 180) -> dict:
         n = len(sub)
         hit = sum(1 for r in sub if r["was_zt_t2"])
         ev = sum(r["open_ret"] for r in sub) / n if n else 0.0
-        gap_buckets.append({"bucket": name, "n": n, "hit": hit, "rate": round(hit/n, 4) if n else 0, "ev": round(ev, 2)})
+        gap_buckets.append(
+            {"bucket": name, "n": n, "hit": hit, "rate": round(hit / n, 4) if n else 0, "ev": round(ev, 2)}
+        )
 
     # pctChg-only buckets (both open-anchored and close-anchored/post-confirmation)
     pct_buckets = []
@@ -180,8 +191,16 @@ def combo_analysis(end_date: str = "2026-09-17", days: int = 180) -> dict:
         hit = sum(1 for r in sub if r["was_zt_t2"])
         oev = sum(r["open_ret"] for r in sub) / n if n else 0.0
         cev = sum(r["close_ret"] for r in sub) / n if n else 0.0
-        pct_buckets.append({"bucket": name, "n": n, "hit": hit, "rate": round(hit/n, 4) if n else 0,
-                            "open_ev": round(oev, 2), "close_ev": round(cev, 2)})
+        pct_buckets.append(
+            {
+                "bucket": name,
+                "n": n,
+                "hit": hit,
+                "rate": round(hit / n, 4) if n else 0,
+                "open_ev": round(oev, 2),
+                "close_ev": round(cev, 2),
+            }
+        )
 
     # combo buckets (gap × pctChg) — close_ret is the methodologically correct EV for a T+1-close signal
     combo_buckets = []
@@ -192,23 +211,39 @@ def combo_analysis(end_date: str = "2026-09-17", days: int = 180) -> dict:
             hit = sum(1 for r in sub if r["was_zt_t2"])
             oev = sum(r["open_ret"] for r in sub) / n if n else 0.0
             cev = sum(r["close_ret"] for r in sub) / n if n else 0.0
-            combo_buckets.append({
-                "combo": f"{gname} × {pname}", "gap": gname, "pct": pname,
-                "n": n, "hit": hit, "rate": round(hit/n, 4) if n else 0,
-                "open_ev": round(oev, 2), "close_ev": round(cev, 2),
-                "positive_ev": cev > 0,
-            })
+            combo_buckets.append(
+                {
+                    "combo": f"{gname} × {pname}",
+                    "gap": gname,
+                    "pct": pname,
+                    "n": n,
+                    "hit": hit,
+                    "rate": round(hit / n, 4) if n else 0,
+                    "open_ev": round(oev, 2),
+                    "close_ev": round(cev, 2),
+                    "positive_ev": cev > 0,
+                }
+            )
 
     total_n = len(records)
     total_hit = sum(1 for r in records if r["was_zt_t2"])
     total_oev = sum(r["open_ret"] for r in records) / total_n if total_n else 0.0
     total_cev = sum(r["close_ret"] for r in records) / total_n if total_n else 0.0
-    baseline = {"n": total_n, "hit": total_hit, "rate": round(total_hit/total_n, 4) if total_n else 0,
-                "open_ev": round(total_oev, 2), "close_ev": round(total_cev, 2)}
+    baseline = {
+        "n": total_n,
+        "hit": total_hit,
+        "rate": round(total_hit / total_n, 4) if total_n else 0,
+        "open_ev": round(total_oev, 2),
+        "close_ev": round(total_cev, 2),
+    }
 
     return {
-        "status": "ok", "days": len(pairs), "total_records": total_n,
-        "baseline": baseline, "gap_buckets": gap_buckets, "pct_buckets": pct_buckets,
+        "status": "ok",
+        "days": len(pairs),
+        "total_records": total_n,
+        "baseline": baseline,
+        "gap_buckets": gap_buckets,
+        "pct_buckets": pct_buckets,
         "combo_buckets": combo_buckets,
     }
 
@@ -217,19 +252,25 @@ if __name__ == "__main__":
     r = combo_analysis()
     print(f"days={r['days']} records={r['total_records']}")
     b = r["baseline"]
-    print(f"baseline open_ev={b['open_ev']}% close_ev={b['close_ev']}% rate={b['rate']*100:.2f}%")
+    print(f"baseline open_ev={b['open_ev']}% close_ev={b['close_ev']}% rate={b['rate'] * 100:.2f}%")
     print("\n=== gap buckets (open-anchored, T+1 open 信号 so open_ret 正确) ===")
     for x in r["gap_buckets"]:
-        print(f"  {x['bucket']}: n={x['n']} hit={x['hit']} rate={x['rate']*100:.2f}% ev={x['ev']}%")
+        print(f"  {x['bucket']}: n={x['n']} hit={x['hit']} rate={x['rate'] * 100:.2f}% ev={x['ev']}%")
     print("\n=== pctChg buckets (封板强度代理) — open_ev 含 T+1 日内泄漏, close_ev 隔离真 edge ===")
     for x in r["pct_buckets"]:
-        print(f"  {x['bucket']}: n={x['n']} hit={x['hit']} rate={x['rate']*100:.2f}% "
-              f"open_ev={x['open_ev']}% close_ev={x['close_ev']}%")
+        print(
+            f"  {x['bucket']}: n={x['n']} hit={x['hit']} rate={x['rate'] * 100:.2f}% "
+            f"open_ev={x['open_ev']}% close_ev={x['close_ev']}%"
+        )
     print("\n=== gap × pctChg combos (n>=30) by close_ev (post-confirmation 真实 edge) ===")
     for x in sorted([c for c in r["combo_buckets"] if c["n"] >= 30], key=lambda c: -c["close_ev"]):
         flag = " ★" if x["close_ev"] > 0.7 else ""
-        print(f"  {x['combo']}: n={x['n']} hit={x['hit']} rate={x['rate']*100:.2f}% "
-              f"open_ev={x['open_ev']}% close_ev={x['close_ev']}%{flag}")
+        print(
+            f"  {x['combo']}: n={x['n']} hit={x['hit']} rate={x['rate'] * 100:.2f}% "
+            f"open_ev={x['open_ev']}% close_ev={x['close_ev']}%{flag}"
+        )
     print("\n=== 同 combo open_ev vs close_ev 对比（看 T+1 日内泄漏大小）===")
-    for x in sorted([c for c in r["combo_buckets"] if c["n"] >= 30], key=lambda c: -(c["open_ev"]-c["close_ev"])):
-        print(f"  {x['combo']}: open_ev={x['open_ev']}% close_ev={x['close_ev']}% 泄漏={round(x['open_ev']-x['close_ev'],2)}%")
+    for x in sorted([c for c in r["combo_buckets"] if c["n"] >= 30], key=lambda c: -(c["open_ev"] - c["close_ev"])):
+        print(
+            f"  {x['combo']}: open_ev={x['open_ev']}% close_ev={x['close_ev']}% 泄漏={round(x['open_ev'] - x['close_ev'], 2)}%"
+        )

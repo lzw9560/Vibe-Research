@@ -14,6 +14,7 @@
 为何不复用 backfill_history --source kline：后者 codes=None 扫全 DB 数百只/日（慢），
 且无 DELETE 旧零行（INSERT OR REPLACE 不净表）。本脚本 per-date codes（快）+ DELETE（净）。
 """
+
 from __future__ import annotations
 
 import argparse
@@ -32,6 +33,7 @@ from vr_paths import resolve_data_dir  # noqa: E402
 def _trading_days(start: str, end: str) -> list[str]:
     """枚举 [start, end] 区间交易日（跳周末；节假日由 DB 有无数据兜底）。"""
     from datetime import datetime, timedelta
+
     out: list[str] = []
     d = datetime.strptime(start, "%Y-%m-%d")
     end_d = datetime.strptime(end, "%Y-%m-%d")
@@ -71,20 +73,24 @@ async def recompute_one(date: str, dry_run: bool = False) -> dict:
     """重算单日。返 {date, codes_in, deleted, rebuilt, nonzero}。"""
     codes = _date_codes(date)
     if not codes:
-        return {"date": date, "codes_in": 0, "deleted": 0, "rebuilt": 0, "nonzero": 0,
-                "note": "DB 无该日 code（跳过）"}
+        return {"date": date, "codes_in": 0, "deleted": 0, "rebuilt": 0, "nonzero": 0, "note": "DB 无该日 code（跳过）"}
 
     deleted = _delete_date(date) if not dry_run else 0
     if dry_run:
-        return {"date": date, "codes_in": len(codes), "deleted": 0, "rebuilt": 0, "nonzero": 0,
-                "note": "dry-run 跳过写"}
+        return {
+            "date": date,
+            "codes_in": len(codes),
+            "deleted": 0,
+            "rebuilt": 0,
+            "nonzero": 0,
+            "note": "dry-run 跳过写",
+        }
 
     scores = await rebuild_date(date, codes=codes)
     if scores:
         save_gene_scores(date, scores)
     nonzero = sum(1 for s in scores if s.total_score > 0)
-    return {"date": date, "codes_in": len(codes), "deleted": deleted,
-            "rebuilt": len(scores), "nonzero": nonzero}
+    return {"date": date, "codes_in": len(codes), "deleted": deleted, "rebuilt": len(scores), "nonzero": nonzero}
 
 
 async def recompute_range(start: str, end: str, dry_run: bool = False) -> None:
@@ -94,8 +100,10 @@ async def recompute_range(start: str, end: str, dry_run: bool = False) -> None:
     total_nonzero = 0
     for i, d in enumerate(dates):
         r = await recompute_one(d, dry_run=dry_run)
-        print(f"[{i+1}/{len(dates)}] {d}: codes_in={r['codes_in']} deleted={r['deleted']} "
-              f"rebuilt={r['rebuilt']} nonzero={r['nonzero']} {r.get('note','')}")
+        print(
+            f"[{i + 1}/{len(dates)}] {d}: codes_in={r['codes_in']} deleted={r['deleted']} "
+            f"rebuilt={r['rebuilt']} nonzero={r['nonzero']} {r.get('note', '')}"
+        )
         total_rebuilt += r["rebuilt"]
         total_nonzero += r["nonzero"]
     print("=" * 50)

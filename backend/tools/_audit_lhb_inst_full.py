@@ -7,6 +7,7 @@ _inst_stop.py 采样 5000 + 简化 stop（T+1 close 跌破）。
 
 确认 inst_dominant 是否真 edge-confirmed（项目首个 buy-side edge 候选）。
 """
+
 import json
 import sqlite3
 import statistics
@@ -28,8 +29,14 @@ DT_DB = DATA / "dragon_tiger_history.db"
 KLINE_DB = DATA / "baostock_kline_cache.db"
 
 INST_KEYWORDS = (
-    "机构专用", "总部", "高盛", "瑞银", "股通", "摩根",
-    "中信证券股份有限公司上海分公司", "国际金融",
+    "机构专用",
+    "总部",
+    "高盛",
+    "瑞银",
+    "股通",
+    "摩根",
+    "中信证券股份有限公司上海分公司",
+    "国际金融",
 )
 STOP_PCT = -3.0
 ALPHA = 0.05
@@ -38,8 +45,7 @@ ALPHA = 0.05
 def load_picks_by_layer() -> dict:
     conn = sqlite3.connect(str(DT_DB))
     rows = conn.execute(
-        "SELECT trade_date, security_code, dept_name, buy, net "
-        "FROM dragon_tiger_rows WHERE side='buy' AND buy > 0"
+        "SELECT trade_date, security_code, dept_name, buy, net FROM dragon_tiger_rows WHERE side='buy' AND buy > 0"
     ).fetchall()
     conn.close()
     picks: dict = defaultdict(list)
@@ -80,7 +86,11 @@ def compute_stop_intraday(code: str, trade_date: str, kline_cache: dict) -> tupl
     if code not in kline_cache:
         kline_cache[code] = load_kline(code)
     bars = kline_cache[code]
-    after = [b for b in bars if b.get("date", "") > trade_date and float(b.get("volume", 0) or 0) > 0 and float(b.get("amount", 0) or 0) > 0]  # P0 修高危(orderbook-sanity 2026-11-07)：剔停牌冻结 bar vol=0/amt=0（原 after 不过滤→停牌冻结价当真实买卖点虚增 inst 回测）
+    after = [
+        b
+        for b in bars
+        if b.get("date", "") > trade_date and float(b.get("volume", 0) or 0) > 0 and float(b.get("amount", 0) or 0) > 0
+    ]  # P0 修高危(orderbook-sanity 2026-11-07)：剔停牌冻结 bar vol=0/amt=0（原 after 不过滤→停牌冻结价当真实买卖点虚增 inst 回测）
     if len(after) < 2:
         return None, None
     t1 = after[0]
@@ -101,7 +111,7 @@ def compute_stop_intraday(code: str, trade_date: str, kline_cache: dict) -> tupl
 
 
 def normal_p(t: float) -> float:
-    return 2 * (1 - 0.5 * (1 + erf(abs(t) / (2 ** 0.5))))
+    return 2 * (1 - 0.5 * (1 + erf(abs(t) / (2**0.5))))
 
 
 def stats_for(returns_by_date: dict, all_returns: list, stop_count: int) -> dict:
@@ -110,7 +120,7 @@ def stats_for(returns_by_date: dict, all_returns: list, stop_count: int) -> dict
         return {}
     mean = statistics.mean(day_means)
     n_days = len(day_means)
-    se = statistics.stdev(day_means) / (n_days ** 0.5) if n_days > 1 else 0
+    se = statistics.stdev(day_means) / (n_days**0.5) if n_days > 1 else 0
     t = mean / se if se > 0 else 0
     n_picks = len(all_returns)
     wr = sum(1 for r in all_returns if r > 0) / n_picks * 100 if n_picks else 0
@@ -119,8 +129,14 @@ def stats_for(returns_by_date: dict, all_returns: list, stop_count: int) -> dict
     stop_rate = stop_count / n_picks * 100 if n_picks else 0
     p = normal_p(t)
     return {
-        "n_picks": n_picks, "n_days": n_days, "mean": mean, "median": median,
-        "wr": wr, "stop_rate": stop_rate, "t": t, "p": p,
+        "n_picks": n_picks,
+        "n_days": n_days,
+        "mean": mean,
+        "median": median,
+        "wr": wr,
+        "stop_rate": stop_rate,
+        "t": t,
+        "p": p,
     }
 
 
@@ -159,10 +175,12 @@ def audit_full() -> None:
             continue
         p_bonf = min(1.0, s["p"] * 3)
         verdict = "PASS" if p_bonf < ALPHA else "FAIL"
-        print(f"  [{layer_name}] 全量: n={s['n_picks']} days={s['n_days']} "
-              f"mean={s['mean']:.3f}% median={s['median']:.3f}% WR={s['wr']:.1f}% "
-              f"stop_rate={s['stop_rate']:.1f}% day_t={s['t']:.2f} "
-              f"p={s['p']:.4f} Bonf×3={p_bonf:.4f} {verdict}")
+        print(
+            f"  [{layer_name}] 全量: n={s['n_picks']} days={s['n_days']} "
+            f"mean={s['mean']:.3f}% median={s['median']:.3f}% WR={s['wr']:.1f}% "
+            f"stop_rate={s['stop_rate']:.1f}% day_t={s['t']:.2f} "
+            f"p={s['p']:.4f} Bonf×3={p_bonf:.4f} {verdict}"
+        )
 
         # 跨 regime 分层
         for regime, rbd in by_regime.items():
@@ -174,10 +192,12 @@ def audit_full() -> None:
             if sr:
                 pr = min(1.0, sr["p"] * 3)
                 v = "PASS" if pr < ALPHA else "FAIL"
-                print(f"    {regime}: n={sr['n_picks']} days={sr['n_days']} "
-                      f"mean={sr['mean']:.3f}% median={sr['median']:.3f}% "
-                      f"WR={sr['wr']:.1f}% stop={sr['stop_rate']:.1f}% "
-                      f"t={sr['t']:.2f} p={sr['p']:.4f} Bonf×3={pr:.4f} {v}")
+                print(
+                    f"    {regime}: n={sr['n_picks']} days={sr['n_days']} "
+                    f"mean={sr['mean']:.3f}% median={sr['median']:.3f}% "
+                    f"WR={sr['wr']:.1f}% stop={sr['stop_rate']:.1f}% "
+                    f"t={sr['t']:.2f} p={sr['p']:.4f} Bonf×3={pr:.4f} {v}"
+                )
         print()
 
 
@@ -186,7 +206,11 @@ def compute_nostop_return(code: str, trade_date: str, kline_cache: dict) -> floa
     if code not in kline_cache:
         kline_cache[code] = load_kline(code)
     bars = kline_cache[code]
-    after = [b for b in bars if b.get("date", "") > trade_date and float(b.get("volume", 0) or 0) > 0 and float(b.get("amount", 0) or 0) > 0]  # P0 修高危(orderbook-sanity 2026-11-07)：剔停牌冻结 bar vol=0/amt=0（原 after 不过滤→停牌冻结价当真实买卖点虚增 inst 回测）
+    after = [
+        b
+        for b in bars
+        if b.get("date", "") > trade_date and float(b.get("volume", 0) or 0) > 0 and float(b.get("amount", 0) or 0) > 0
+    ]  # P0 修高危(orderbook-sanity 2026-11-07)：剔停牌冻结 bar vol=0/amt=0（原 after 不过滤→停牌冻结价当真实买卖点虚增 inst 回测）
     if len(after) < 2:
         return None
     t1, t2 = after[0], after[1]
@@ -206,6 +230,7 @@ def audit_top6_combo(mode: str = "basic") -> dict:
     """
     import sqlite3  # noqa: PLC0415
     from collections import defaultdict  # noqa: PLC0415
+
     foreign_kw = ("高盛", "瑞银", "股通", "摩根", "国际金融", "总部")
     conn = sqlite3.connect(str(DT_DB))
     rows = conn.execute(

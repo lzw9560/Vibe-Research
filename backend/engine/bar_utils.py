@@ -4,6 +4,7 @@
 自包含（engine 不 import strategies.kline_returns，避免循环依赖）。
 kline_returns._is_unbuyable_next_bar / _bar_get 薄委托至此（backward compat）。
 """
+
 from __future__ import annotations
 
 from typing import Any

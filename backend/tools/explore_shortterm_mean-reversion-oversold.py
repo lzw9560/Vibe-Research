@@ -23,6 +23,7 @@
 跑法:
   cd backend && .venv/bin/python tools/explore_shortterm_mean-reversion-oversold.py
 """
+
 from __future__ import annotations
 
 import json
@@ -73,6 +74,7 @@ N_CROSS_FACTOR = N_SIGNALS * N_HOLDS  # 27
 # 一字跌停检测 (can't sell on exit day)
 # ------------------------------------------------------------------
 
+
 def is_yizi_down(bar: dict, prev_close: float, limit: float) -> bool:
     """一字跌停: open 和 high 都在跌停价附近 (locked at limit-down, 卖不出).
 
@@ -91,6 +93,7 @@ def is_yizi_down(bar: dict, prev_close: float, limit: float) -> bool:
 # ------------------------------------------------------------------
 # indicator computation (no look-ahead)
 # ------------------------------------------------------------------
+
 
 def compute_rsi_series(closes: list[float], period: int = 14) -> list[float | None]:
     """Wilder's RSI. None for first `period` elements (not enough data)."""
@@ -257,9 +260,7 @@ def build_picks_from_kline(
                 if r != regime_filter:
                     continue
 
-            if not _check_signal(
-                signal_type, closes, rsi_series, ma20_series, consec_down, i
-            ):
+            if not _check_signal(signal_type, closes, rsi_series, ma20_series, consec_down, i):
                 continue
 
             # Need T+1 through T+5 in calendar
@@ -300,23 +301,25 @@ def build_picks_from_kline(
             if is_yizi_down(t2_bar, close, limit):
                 continue
 
-            picks.append({
-                "code": code,
-                "zt_date": d,  # signal date (key name for walk_forward compat)
-                "t1_date": t1_date,
-                "t2_date": t2_date,
-                "t3_date": t3_date,
-                "t4_date": t4_date,
-                "t5_date": t5_date,
-                "entry": t1_open,
-                "t1_bar": t1_bar,
-                "t2_bar": t2_bar,
-                "t3_bar": dmap.get(t3_date),
-                "t4_bar": dmap.get(t4_date),
-                "t5_bar": dmap.get(t5_date),
-                "t_close": close,
-                "lbc": 0,
-            })
+            picks.append(
+                {
+                    "code": code,
+                    "zt_date": d,  # signal date (key name for walk_forward compat)
+                    "t1_date": t1_date,
+                    "t2_date": t2_date,
+                    "t3_date": t3_date,
+                    "t4_date": t4_date,
+                    "t5_date": t5_date,
+                    "entry": t1_open,
+                    "t1_bar": t1_bar,
+                    "t2_bar": t2_bar,
+                    "t3_bar": dmap.get(t3_date),
+                    "t4_bar": dmap.get(t4_date),
+                    "t5_bar": dmap.get(t5_date),
+                    "t_close": close,
+                    "lbc": 0,
+                }
+            )
 
     return picks
 
@@ -324,6 +327,7 @@ def build_picks_from_kline(
 # ------------------------------------------------------------------
 # return functions for different hold periods (close_ev, no open_ev)
 # ------------------------------------------------------------------
+
 
 def close_ev_t3(p: dict) -> float | None:
     """Exit at T+3 close. Skip if T+3 一字跌停 (can't sell)."""
@@ -355,9 +359,7 @@ def close_ev_t5(p: dict) -> float | None:
     return (c - p["entry"]) / p["entry"] * 100
 
 
-def close_ev_stop_t3(
-    p: dict, stop_pct: float = STOP_PCT, realistic: bool = True
-) -> tuple[float, str] | None:
+def close_ev_stop_t3(p: dict, stop_pct: float = STOP_PCT, realistic: bool = True) -> tuple[float, str] | None:
     """-3% stop + R6, exit T+3 close if no stop hit.
 
     Checks stop on T+1 (can't sell → T+2 open), T+2, T+3.
@@ -409,9 +411,7 @@ def close_ev_stop_t3(
     return (t3_close - entry) / entry * 100, "t3_close"
 
 
-def close_ev_stop_t5(
-    p: dict, stop_pct: float = STOP_PCT, realistic: bool = True
-) -> tuple[float, str] | None:
+def close_ev_stop_t5(p: dict, stop_pct: float = STOP_PCT, realistic: bool = True) -> tuple[float, str] | None:
     """-3% stop + R6, exit T+5 close if no stop hit.
 
     Checks stop on T+1, T+2, T+3, T+4, T+5.
@@ -484,6 +484,7 @@ def close_ev_stop_t5(
 # custom return functions for T+3/T+5 holds)
 # ------------------------------------------------------------------
 
+
 def analyze_hold_variant(
     name: str,
     picks: list[dict],
@@ -506,9 +507,11 @@ def analyze_hold_variant(
     basic_s = ev_stats(basic_rets)
     net_basic = basic_s["ev"] - COST * 100
     print(f"\n--- basic close_ev (no stop) ---")
-    print(f"  n={basic_s['n']} gross_EV={basic_s['ev']}% std={basic_s['std']}% "
-          f"WR={basic_s['wr']}% t={basic_s['t']} CI[{basic_s['ci_lo']},{basic_s['ci_hi']}]")
-    print(f"  net EV (after {COST*100:.1f}% cost): {net_basic:.3f}%")
+    print(
+        f"  n={basic_s['n']} gross_EV={basic_s['ev']}% std={basic_s['std']}% "
+        f"WR={basic_s['wr']}% t={basic_s['t']} CI[{basic_s['ci_lo']},{basic_s['ci_hi']}]"
+    )
+    print(f"  net EV (after {COST * 100:.1f}% cost): {net_basic:.3f}%")
 
     # day-paired t
     basic_by_date: dict[str, list[float]] = defaultdict(list)
@@ -517,17 +520,21 @@ def analyze_hold_variant(
         if r is not None:
             basic_by_date[p["zt_date"]].append(r)
     basic_dt = day_paired_t(basic_by_date)
-    print(f"  day-paired: n_days={basic_dt['n_days']} mean={basic_dt['mean']}% "
-          f"t={basic_dt['t']} p_one_sided={basic_dt['p_one_sided']}")
+    print(
+        f"  day-paired: n_days={basic_dt['n_days']} mean={basic_dt['mean']}% "
+        f"t={basic_dt['t']} p_one_sided={basic_dt['p_one_sided']}"
+    )
 
     # ---- stop variant ----
-    print(f"\n--- stop variant (-{STOP_PCT*100:.0f}% stop + R6 gap-through) ---")
+    print(f"\n--- stop variant (-{STOP_PCT * 100:.0f}% stop + R6 gap-through) ---")
     stop_rets = [ret_fn_stop(p) for p in picks]
     stop_rets_clean = [r[0] for r in stop_rets if r is not None]
     stop_s = ev_stats(stop_rets_clean)
     net_stop = stop_s["ev"] - COST * 100
-    print(f"  n={stop_s['n']} gross_EV={stop_s['ev']}% std={stop_s['std']}% "
-          f"WR={stop_s['wr']}% t={stop_s['t']} CI[{stop_s['ci_lo']},{stop_s['ci_hi']}]")
+    print(
+        f"  n={stop_s['n']} gross_EV={stop_s['ev']}% std={stop_s['std']}% "
+        f"WR={stop_s['wr']}% t={stop_s['t']} CI[{stop_s['ci_lo']},{stop_s['ci_hi']}]"
+    )
     print(f"  net EV (after cost): {net_stop:.3f}%")
 
     stop_reasons: dict[str, int] = defaultdict(int)
@@ -539,7 +546,7 @@ def analyze_hold_variant(
     if total_r > 0:
         print(f"  exit reasons:")
         for rsn, cnt in sorted(stop_reasons.items(), key=lambda x: -x[1]):
-            print(f"    {rsn}: {cnt} ({cnt/max(total_r,1)*100:.1f}%)")
+            print(f"    {rsn}: {cnt} ({cnt / max(total_r, 1) * 100:.1f}%)")
 
     stop_by_date: dict[str, list[float]] = defaultdict(list)
     for p in picks:
@@ -547,8 +554,10 @@ def analyze_hold_variant(
         if r is not None:
             stop_by_date[p["zt_date"]].append(r[0])
     stop_dt = day_paired_t(stop_by_date)
-    print(f"  day-paired: n_days={stop_dt['n_days']} mean={stop_dt['mean']}% "
-          f"t={stop_dt['t']} p_one_sided={stop_dt['p_one_sided']}")
+    print(
+        f"  day-paired: n_days={stop_dt['n_days']} mean={stop_dt['mean']}% "
+        f"t={stop_dt['t']} p_one_sided={stop_dt['p_one_sided']}"
+    )
 
     # ---- walk-forward OOS ----
     print(f"\n--- walk-forward OOS (basic, 前半 train → 后半 test) ---")
@@ -564,13 +573,13 @@ def analyze_hold_variant(
         wf_train_ev = tr["ev"]
         wf_test_ev = te["ev"]
         wf_test_p = te_dt["p_one_sided"]
-        print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} "
-              f"EV={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
-        print(f"  test:  n={te['n']} n_dates={wf['n_test_dates']} "
-              f"EV={te['ev']}% t={te['t']} day_t={te_dt['t']} "
-              f"p={te_dt['p_one_sided']}")
-        decay = ((tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100
-                 if tr["ev"] != 0 else 0)
+        print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} EV={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
+        print(
+            f"  test:  n={te['n']} n_dates={wf['n_test_dates']} "
+            f"EV={te['ev']}% t={te['t']} day_t={te_dt['t']} "
+            f"p={te_dt['p_one_sided']}"
+        )
+        decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
         print(f"  decay: {decay:.0f}% (train→test)")
     else:
         print(f"  {wf['status']} (n_dates={wf.get('n_dates', 0)})")
@@ -598,6 +607,7 @@ def analyze_hold_variant(
 # ------------------------------------------------------------------
 # DSR (Deflated Sharpe Ratio) — simple implementation
 # ------------------------------------------------------------------
+
 
 def compute_dsr(
     rets: list[float],
@@ -628,8 +638,8 @@ def compute_dsr(
 
     # Skewness and kurtosis (excess)
     if n > 3:
-        skew = sum((x - mean_r) ** 3 for x in r) / (n * std_r ** 3)
-        kurt = sum((x - mean_r) ** 4 for x in r) / (n * std_r ** 4) - 3
+        skew = sum((x - mean_r) ** 3 for x in r) / (n * std_r**3)
+        kurt = sum((x - mean_r) ** 4 for x in r) / (n * std_r**4) - 3
     else:
         skew = 0.0
         kurt = 0.0
@@ -638,6 +648,7 @@ def compute_dsr(
     # SR_0 = sqrt(Variance) * ((1-γ)*Φ^{-1}(1-1/N) + γ*Φ^{-1}(1-1/(N*e)))
     # where γ ≈ 0.5772 (Euler-Mascheroni constant)
     from math import log, sqrt as msqrt, pi
+
     euler_gamma = 0.5772156649
 
     def norm_ppf(p: float) -> float:
@@ -647,32 +658,50 @@ def compute_dsr(
         if p >= 1:
             return 10
         # Beasley-Springer-Moro approximation
-        a = [-3.969683028665376e+01, 2.209460984245205e+02,
-             -2.759285104469687e+02, 1.383577518672690e+02,
-             -3.066479806614716e+01, 2.506628277459239e+00]
-        b = [-5.447609879822406e+01, 1.615858368580409e+02,
-             -1.556989798598866e+02, 6.680131188771972e+01,
-             -1.328068155288572e+01]
-        c = [-7.784894002430293e-03, -3.223964580411365e-01,
-             -2.400758277161838e+00, -2.549732539343734e+00,
-             4.374664141444968e+00, 2.938163982698783e+00]
-        d = [7.784695709041462e-03, 3.224671290700398e-01,
-             2.445134137142996e+00, 3.754408661907416e+00]
+        a = [
+            -3.969683028665376e01,
+            2.209460984245205e02,
+            -2.759285104469687e02,
+            1.383577518672690e02,
+            -3.066479806614716e01,
+            2.506628277459239e00,
+        ]
+        b = [
+            -5.447609879822406e01,
+            1.615858368580409e02,
+            -1.556989798598866e02,
+            6.680131188771972e01,
+            -1.328068155288572e01,
+        ]
+        c = [
+            -7.784894002430293e-03,
+            -3.223964580411365e-01,
+            -2.400758277161838e00,
+            -2.549732539343734e00,
+            4.374664141444968e00,
+            2.938163982698783e00,
+        ]
+        d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e00, 3.754408661907416e00]
         p_low = 0.02425
         p_high = 1 - p_low
         if p < p_low:
             q = msqrt(-2 * log(p))
-            x = (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / \
-                ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+            x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
+                (((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1
+            )
         elif p <= p_high:
             q = p - 0.5
             r_val = q * q
-            x = (((((a[0]*r_val+a[1])*r_val+a[2])*r_val+a[3])*r_val+a[4])*r_val+a[5]) * q / \
-                (((((b[0]*r_val+b[1])*r_val+b[2])*r_val+b[3])*r_val+b[4])*r_val+1)
+            x = (
+                (((((a[0] * r_val + a[1]) * r_val + a[2]) * r_val + a[3]) * r_val + a[4]) * r_val + a[5])
+                * q
+                / (((((b[0] * r_val + b[1]) * r_val + b[2]) * r_val + b[3]) * r_val + b[4]) * r_val + 1)
+            )
         else:
             q = msqrt(-2 * log(1 - p))
-            x = -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / \
-                ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+            x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
+                (((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1
+            )
         return x
 
     # SR_0 = expected max Sharpe under H0
@@ -690,7 +719,7 @@ def compute_dsr(
     sr_per_trade = mean_r / std_r
     T = n
     numerator = (sr_per_trade - sr_0_annual) * sqrt(T)
-    denominator_sq = 1 + skew * sr_per_trade + (kurt / 4) * sr_per_trade ** 2
+    denominator_sq = 1 + skew * sr_per_trade + (kurt / 4) * sr_per_trade**2
     denominator = sqrt(max(denominator_sq, 0.01))
     z_dsr = numerator / denominator
     dsr = 0.5 * (1 + erf(z_dsr / sqrt(2)))
@@ -710,6 +739,7 @@ def compute_dsr(
 # main
 # ------------------------------------------------------------------
 
+
 def main() -> None:
     print("=" * 70)
     print("短线策略探索: 均值回归/超跌反弹 (mean-reversion/oversold bounce)")
@@ -724,17 +754,16 @@ def main() -> None:
     print(f"  calendar range: {calendar[0]} ~ {calendar[-1]}")
 
     regime_data = json.loads(REGIME_PATH.read_text())
-    regime_map: dict[str, str] = {
-        d: v.get("regime", "unknown") for d, v in regime_data.items()
-    }
+    regime_map: dict[str, str] = {d: v.get("regime", "unknown") for d, v in regime_data.items()}
     regime_2018 = {d: r for d, r in regime_map.items() if d >= "2018-01-01"}
     from collections import Counter
+
     rc = Counter(regime_2018.values())
     print(f"  regime (2018+): strong={rc.get('strong', 0)}, weak={rc.get('weak', 0)}")
 
     # ---- main sweep: 9 signals × T+2 hold × all regime ----
     print(f"\n[2] 主 sweep: {N_SIGNALS} 信号 × T+2 hold × all regime")
-    print(f"    Bonferroni n_cross_factor = {N_CROSS_FACTOR} (×{N_CROSS_FACTOR*2} tests)")
+    print(f"    Bonferroni n_cross_factor = {N_CROSS_FACTOR} (×{N_CROSS_FACTOR * 2} tests)")
     print()
 
     results: list[dict] = []
@@ -779,17 +808,21 @@ def main() -> None:
     print(f"\n\n{'=' * 70}")
     print(f"[3] 主 sweep 汇总表 (T+2 hold, all regime)")
     print(f"{'=' * 70}")
-    print(f"{'signal':<25} {'n_picks':>8} {'n_days':>7} {'gross%':>8} {'net%':>8} "
-          f"{'day_t':>7} {'p_raw':>9} {'Bonf':>9} {'wf_tr':>7} {'wf_te':>7} {'wf_p':>9}")
+    print(
+        f"{'signal':<25} {'n_picks':>8} {'n_days':>7} {'gross%':>8} {'net%':>8} "
+        f"{'day_t':>7} {'p_raw':>9} {'Bonf':>9} {'wf_tr':>7} {'wf_te':>7} {'wf_p':>9}"
+    )
     print("-" * 120)
     for r in results:
         if r["n_picks"] == 0:
             continue
         p_bonf = bonferroni_p(r["basic_p_raw"], N_CROSS_FACTOR * 2)
-        print(f"{r['name'][:25]:<25} {r['n_picks']:>8} {r['n_days']:>7} "
-              f"{r['basic_ev_gross']:>8.3f} {r['basic_ev_net']:>8.3f} "
-              f"{r['basic_day_t']:>7.2f} {r['basic_p_raw']:>9.6f} {p_bonf:>9.6f} "
-              f"{r['wf_train_ev']:>7.3f} {r['wf_test_ev']:>7.3f} {r['wf_test_p']:>9.6f}")
+        print(
+            f"{r['name'][:25]:<25} {r['n_picks']:>8} {r['n_days']:>7} "
+            f"{r['basic_ev_gross']:>8.3f} {r['basic_ev_net']:>8.3f} "
+            f"{r['basic_day_t']:>7.2f} {r['basic_p_raw']:>9.6f} {p_bonf:>9.6f} "
+            f"{r['wf_train_ev']:>7.3f} {r['wf_test_ev']:>7.3f} {r['wf_test_p']:>9.6f}"
+        )
     print()
 
     # ---- hold variants for best signal ----
@@ -844,9 +877,7 @@ def main() -> None:
         ret_basic_best, ret_stop_best = hold_fns.get(best_hold_label, (close_ev_basic, close_ev_stop))
 
         for regime_filter in ["strong", "weak"]:
-            picks_regime = build_picks_from_kline(
-                code_map, calendar, best_signal, regime_map, regime_filter
-            )
+            picks_regime = build_picks_from_kline(code_map, calendar, best_signal, regime_map, regime_filter)
             r = analyze_hold_variant(
                 f"{best_signal} ({regime_filter})",
                 picks_regime,
@@ -876,10 +907,12 @@ def main() -> None:
         best_t2_rets = [close_ev_basic(p) for p in best_picks]
         best_t2_rets = [r for r in best_t2_rets if r is not None]
         dsr_result = compute_dsr(best_t2_rets, n_trials=N_CROSS_FACTOR)
-        print(f"  {best_signal} T+2: DSR={dsr_result.get('dsr', 0)} "
-              f"SR_obs={dsr_result.get('sr_obs', 0)} SR_0={dsr_result.get('sr_0', 0)} "
-              f"skew={dsr_result.get('skew', 0)} kurt={dsr_result.get('kurt_excess', 0)} "
-              f"n_trials={dsr_result.get('n_trials', 0)} n={dsr_result.get('n', 0)}")
+        print(
+            f"  {best_signal} T+2: DSR={dsr_result.get('dsr', 0)} "
+            f"SR_obs={dsr_result.get('sr_obs', 0)} SR_0={dsr_result.get('sr_0', 0)} "
+            f"skew={dsr_result.get('skew', 0)} kurt={dsr_result.get('kurt_excess', 0)} "
+            f"n_trials={dsr_result.get('n_trials', 0)} n={dsr_result.get('n', 0)}"
+        )
         if dsr_result.get("dsr", 0) > 0.95:
             print(f"  → DSR > 0.95: Sharpe 可能在多重测试后仍显著 (低过拟合风险)")
         else:
@@ -892,16 +925,17 @@ def main() -> None:
     print(f"  策略: 均值回归/超跌反弹 (mean-reversion/oversold bounce)")
     print(f"  信号数: {N_SIGNALS} (5日跌幅×3 + RSI×2 + 破MA20×1 + 连阴×3)")
     print(f"  持有期: T+2/T+3/T+5 (1/2/4 日持有)")
-    print(f"  Bonferroni n_cross_factor: {N_CROSS_FACTOR} (×{N_CROSS_FACTOR*2} tests)")
-    print(f"  数据: {len(code_map)} codes, {len(calendar)} trading days "
-          f"({calendar[0]}~{calendar[-1]})")
+    print(f"  Bonferroni n_cross_factor: {N_CROSS_FACTOR} (×{N_CROSS_FACTOR * 2} tests)")
+    print(f"  数据: {len(code_map)} codes, {len(calendar)} trading days ({calendar[0]}~{calendar[-1]})")
 
     # Count results
     n_falsified = sum(1 for r in results if r["n_picks"] > 0 and r["basic_ev_gross"] < 0)
     n_positive_gross = sum(1 for r in results if r["n_picks"] > 0 and r["basic_ev_gross"] > 0)
     n_positive_net = sum(1 for r in results if r["n_picks"] > 0 and r["basic_ev_net"] > 0)
-    print(f"  结果: {n_falsified}/{len([r for r in results if r['n_picks']>0])} gross EV < 0, "
-          f"{n_positive_gross} gross EV > 0, {n_positive_net} net EV > 0")
+    print(
+        f"  结果: {n_falsified}/{len([r for r in results if r['n_picks'] > 0])} gross EV < 0, "
+        f"{n_positive_gross} gross EV > 0, {n_positive_net} net EV > 0"
+    )
 
     if best_signal:
         best_r = next(r for r in results if r["name"].startswith(best_signal))
@@ -910,15 +944,16 @@ def main() -> None:
         print(f"    gross EV={best_r['basic_ev_gross']}% net EV={best_r['basic_ev_net']}%")
         print(f"    day_t={best_r['basic_day_t']} p_raw={best_r['basic_p_raw']}")
         p_bonf = bonferroni_p(best_r["basic_p_raw"], N_CROSS_FACTOR * 2)
-        print(f"    Bonferroni p(×{N_CROSS_FACTOR*2})={p_bonf}")
-        print(f"    walk-forward: train={best_r['wf_train_ev']}% test={best_r['wf_test_ev']}% "
-              f"test_p={best_r['wf_test_p']}")
+        print(f"    Bonferroni p(×{N_CROSS_FACTOR * 2})={p_bonf}")
+        print(
+            f"    walk-forward: train={best_r['wf_train_ev']}% test={best_r['wf_test_ev']}% "
+            f"test_p={best_r['wf_test_p']}"
+        )
         if dsr_result:
             print(f"    DSR={dsr_result.get('dsr', 0)} (n_trials={N_CROSS_FACTOR})")
 
     print(f"\n  禁止外推: 本测试仅覆盖超跌反弹均值回归, 不代表短线策略整体有/无 edge")
-    print(f"  局限性: 收盘价未复权 (除权日可能假信号但阈值>=10%影响小), "
-          f"非组合级 (无再平衡), 仅日线粒度")
+    print(f"  局限性: 收盘价未复权 (除权日可能假信号但阈值>=10%影响小), 非组合级 (无再平衡), 仅日线粒度")
 
 
 if __name__ == "__main__":

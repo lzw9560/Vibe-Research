@@ -7,6 +7,7 @@
 启动调度线程。本脚本在 import app **之前** monkeypatch scheduler 模块这两个
 函数为 no-op，避免 dump 期间触发后台预计算/刷新（CI 友好、无副作用）。
 """
+
 from __future__ import annotations
 
 import json
@@ -32,8 +33,10 @@ def main() -> int:
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(schema, f, ensure_ascii=False, indent=2)
-    print(f"[dump_openapi] wrote {OUT} ({len(schema.get('paths', {}))} paths, "
-          f"{len(schema.get('components', {}).get('schemas', {}))} schemas)")
+    print(
+        f"[dump_openapi] wrote {OUT} ({len(schema.get('paths', {}))} paths, "
+        f"{len(schema.get('components', {}).get('schemas', {}))} schemas)"
+    )
     return 0
 
 

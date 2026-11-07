@@ -48,6 +48,7 @@ def _save_cache(cache: dict[str, dict[str, Any]]) -> None:
 @dataclass
 class BacktestResult:
     """简化版回测结果。"""
+
     period: str
     total_signals: int
     hit_count: int
@@ -122,6 +123,7 @@ async def generate_scatter_data(date_range: tuple[str, str]) -> list[dict]:
 
     # K 线按 code 缓存（同股跨日复用），offset = 日历天数 + 15 余量
     from datetime import datetime as _dt
+
     window_days = (_dt.strptime(end, "%Y-%m-%d") - _dt.strptime(start, "%Y-%m-%d")).days
     kline_cache: dict[str, Any] = {"_offset": max(5, window_days + 15)}
 
@@ -134,20 +136,22 @@ async def generate_scatter_data(date_range: tuple[str, str]) -> list[dict]:
                 next_day_return, fetch_ok = _calc_next_day_return_meta(g.code, current, kline_cache)
                 if not fetch_ok:
                     continue  # K 线取数失败，不喂散点/hit_rate（S123 R4）
-                points.append({
-                    "gene_score": g.total_score,
-                    "next_day_return": next_day_return,
-                    "code": g.code,
-                    "date": current,
-                    "industry": getattr(g, "industry", "未知"),
-                    "factor_premium_rate": (g.factors or {}).get("次日溢价率", 0) or 0,
-                    "factor_seal_rate": (g.factors or {}).get("封板率", 0) or 0,
-                    "factor_rebound_rate": (g.factors or {}).get("炸板后溢价", 0) or 0,
-                    "factor_red_rate": (g.factors or {}).get("红盘率", 0) or 0,
-                    "factor_freq_score": (g.factors or {}).get("涨停频次", 0) or 0,
-                    "data_source": getattr(g, "data_source", "eastmoney_live"),
-                    "missing_factors": getattr(g, "missing_factors", []),
-                })
+                points.append(
+                    {
+                        "gene_score": g.total_score,
+                        "next_day_return": next_day_return,
+                        "code": g.code,
+                        "date": current,
+                        "industry": getattr(g, "industry", "未知"),
+                        "factor_premium_rate": (g.factors or {}).get("次日溢价率", 0) or 0,
+                        "factor_seal_rate": (g.factors or {}).get("封板率", 0) or 0,
+                        "factor_rebound_rate": (g.factors or {}).get("炸板后溢价", 0) or 0,
+                        "factor_red_rate": (g.factors or {}).get("红盘率", 0) or 0,
+                        "factor_freq_score": (g.factors or {}).get("涨停频次", 0) or 0,
+                        "data_source": getattr(g, "data_source", "eastmoney_live"),
+                        "missing_factors": getattr(g, "missing_factors", []),
+                    }
+                )
         except Exception as e:  # noqa: BLE001
             logging.getLogger("backtest_lite").warning("backtest_lite 失败（降级，不阻塞）: %s", e)
         current = _next_trading_day(current)
@@ -164,6 +168,7 @@ def _next_trading_day(date_str: str) -> str:
     try:
         import json
         from pathlib import Path
+
         cal_file = Path(__file__).resolve().parent / "data" / "trading_calendar.json"
         if cal_file.exists():
             with open(cal_file, "r", encoding="utf-8") as f:
@@ -199,6 +204,7 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
 
     # K 线按 code 缓存（同股跨日复用），offset = 日历天数 + 15 余量
     from datetime import datetime as _dt
+
     window_days = (_dt.strptime(end_date, "%Y-%m-%d") - _dt.strptime(start_date, "%Y-%m-%d")).days
     kline_cache: dict[str, Any] = {"_offset": max(5, window_days + 15)}
 
@@ -221,19 +227,21 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
                 returns.append(next_day_return)
                 if next_day_return > 0:
                     hit_count += 1
-                scatter.append({
-                    "date": current,
-                    "code": g.code,
-                    "gene_score": g.total_score,
-                    "next_day_return": next_day_return,
-                    "factor_premium_rate": (g.factors or {}).get("次日溢价率", 0) or 0,
-                    "factor_seal_rate": (g.factors or {}).get("封板率", 0) or 0,
-                    "factor_rebound_rate": (g.factors or {}).get("炸板后溢价", 0) or 0,
-                    "factor_red_rate": (g.factors or {}).get("红盘率", 0) or 0,
-                    "factor_freq_score": (g.factors or {}).get("涨停频次", 0) or 0,
-                    "data_source": getattr(g, "data_source", "eastmoney_live"),
-                    "missing_factors": getattr(g, "missing_factors", []),
-                })
+                scatter.append(
+                    {
+                        "date": current,
+                        "code": g.code,
+                        "gene_score": g.total_score,
+                        "next_day_return": next_day_return,
+                        "factor_premium_rate": (g.factors or {}).get("次日溢价率", 0) or 0,
+                        "factor_seal_rate": (g.factors or {}).get("封板率", 0) or 0,
+                        "factor_rebound_rate": (g.factors or {}).get("炸板后溢价", 0) or 0,
+                        "factor_red_rate": (g.factors or {}).get("红盘率", 0) or 0,
+                        "factor_freq_score": (g.factors or {}).get("涨停频次", 0) or 0,
+                        "data_source": getattr(g, "data_source", "eastmoney_live"),
+                        "missing_factors": getattr(g, "missing_factors", []),
+                    }
+                )
         except Exception as e:  # noqa: BLE001
             logging.getLogger("backtest_lite").warning("backtest_lite 失败（降级，不阻塞）: %s", e)
         current = _next_trading_day(current)
@@ -257,16 +265,14 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
     if len(returns) > 1:
         mean = avg_return
         variance = sum((r - mean) ** 2 for r in returns) / len(returns)
-        std = variance ** 0.5
+        std = variance**0.5
         sharpe = (mean / std) if std > 0 else 0.0
     else:
         sharpe = 0.0
 
     # 分位分析
     percentile_analysis = _calc_percentile_analysis(scatter)
-    factor_percentile_analysis = _calc_factor_percentile_analysis(
-        scatter, "factor_premium_rate", _PREMIUM_BUCKETS
-    )
+    factor_percentile_analysis = _calc_factor_percentile_analysis(scatter, "factor_premium_rate", _PREMIUM_BUCKETS)
     factor_ic_analysis = _calc_factor_ic(scatter, "factor_premium_rate")
 
     backtest_result = BacktestResult(
@@ -289,7 +295,9 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
         logging.getLogger("backtest_lite").warning(
             "run_backtest_async %s~%s: %d 个信号 K 线取数失败（fetch_ok=False）"
             "已排除出 hit_rate/returns 分母（§44 胜率数字为真）",
-            start_date, end_date, degraded_kline,
+            start_date,
+            end_date,
+            degraded_kline,
         )
     return backtest_result
 

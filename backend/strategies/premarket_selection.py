@@ -14,6 +14,7 @@ edge 主来自风控非对称（(b) ethos），breakout 是 weak ranking signal�
 universe：cache 5226 股（全市场 broad set，T21 R20 扩展自历史涨停股至全 A）。
 信号：breakout_20d = T-1 close >= 0.95 × max(high, 前 20 日) → 1（接近新高）+ 连续分数（越接近越高）。
 """
+
 from __future__ import annotations
 
 import logging
@@ -28,6 +29,7 @@ KLINE_CACHE = ROOT.parent / ".vibe-research" / "baostock_kline_cache.json"
 
 _logger = logging.getLogger(__name__)
 
+
 def _load_kline_cache() -> dict[str, list[dict]]:
     """全量 load（deprecated，offline 工具兼容；生产热路径走 per-code）。
 
@@ -39,6 +41,7 @@ def _load_kline_cache() -> dict[str, list[dict]]:
     per-code（~0 常驻，~2ms/查）。降级范式：SQLite 异常返空 dict 不崩（不臆造）。
     """
     from engine.kline_cache_store import load_all
+
     return load_all()
 
 
@@ -51,12 +54,11 @@ def _load_code_name_map() -> dict[str, str]:
     try:
         from config import GENE_SCORES_DB_PATH  # noqa: PLC0415
         from db_health import get_healthy_conn  # noqa: PLC0415
+
         conn = get_healthy_conn(GENE_SCORES_DB_PATH, check_same_thread=False)
         try:
             rows = conn.execute(
-                "SELECT code, name FROM gene_scores "
-                "WHERE name IS NOT NULL AND name != '' "
-                "ORDER BY date DESC"
+                "SELECT code, name FROM gene_scores WHERE name IS NOT NULL AND name != '' ORDER BY date DESC"
             ).fetchall()
         finally:
             conn.close()
@@ -64,6 +66,7 @@ def _load_code_name_map() -> dict[str, str]:
         return {row["code"]: row["name"] for row in rows}
     except Exception:
         return {}
+
 
 # 诚实标签（不改不撒谎）——naive lift 随 §44 重验更新（2026-09-02 实算，208043 obs，kline_ta_validation.py）
 # 复现性更正见模块 docstring：此前 day-cluster 1.72x + PnL 0.486% 无脚本复现，已改可复现 naive 1.36x
@@ -80,8 +83,8 @@ HONEST_LABEL = (
 class PreMarketCandidate:
     code: str
     name: str
-    breakout_score: float       # 0-1（T-1 close / 20日 max_high，越高越接近新高）
-    breakout_binary: int        # 1 = close >= 0.95 × max_high（硬突破）
+    breakout_score: float  # 0-1（T-1 close / 20日 max_high，越高越接近新高）
+    breakout_binary: int  # 1 = close >= 0.95 × max_high（硬突破）
     t1_close: float
     t1_date: str
 
@@ -109,7 +112,9 @@ def _compute_breakout(bars: list[dict], target_date: str) -> tuple[float, int, f
 
 
 def select_premarket_candidates(
-    target_date: str, top_n: int = 20, min_score: float = 0.85,
+    target_date: str,
+    top_n: int = 20,
+    min_score: float = 0.85,
 ) -> list[PreMarketCandidate]:
     """盘前选股：按 breakout_20d 排序 → top-N（score >= min_score）。
 
@@ -117,6 +122,7 @@ def select_premarket_candidates(
     返回 top-N candidates（breakout 分数降序）。
     """
     from engine.kline_cache_store import get_all_codes, get_bars
+
     codes = get_all_codes()
     if not codes:
         # baostock 未装/首次运行/SQLite 空 → 降级返空候选（非 500 崩，对齐 S069 降级不崩契约）
@@ -136,10 +142,16 @@ def select_premarket_candidates(
             continue
         # name 从 gene_scores 表补全（bar 无 name 字段，spec §8 盲点 #6）
         name = code_names.get(code, "")
-        candidates.append(PreMarketCandidate(
-            code=code, name=name, breakout_score=score,
-            breakout_binary=binary, t1_close=t1_close, t1_date=t1_date,
-        ))
+        candidates.append(
+            PreMarketCandidate(
+                code=code,
+                name=name,
+                breakout_score=score,
+                breakout_binary=binary,
+                t1_close=t1_close,
+                t1_date=t1_date,
+            )
+        )
     candidates.sort(key=lambda c: c.breakout_score, reverse=True)
     return candidates[:top_n]
 
@@ -158,14 +170,16 @@ def _find_t1_idx(bars: list[dict], target_date: str) -> int | None:
 # S071 (b) 风控层：弱信号靠风控非对称补（edge 主来自风控，非 breakout 信号本身）
 # ===========================================================================
 
+
 @dataclass(frozen=True)
 class PreMarketRiskParams:
     """盘前选股风控参数（弱信号→小仓+紧止损+非对称 R:R+短持）。"""
-    position_pct: float        # 单票仓位 %（× 日历因子后）
-    max_positions: int         # 最大持仓数（集中度上限）
-    stop_loss_pct: float       # 止损 %（负值，相对入场参考价）
-    take_profit_pct: float     # 止盈 %（正值，R:R≈1:2 非对称）
-    max_hold_days: int         # 最大持有日（短线，breakout 衰减快）
+
+    position_pct: float  # 单票仓位 %（× 日历因子后）
+    max_positions: int  # 最大持仓数（集中度上限）
+    stop_loss_pct: float  # 止损 %（负值，相对入场参考价）
+    take_profit_pct: float  # 止盈 %（正值，R:R≈1:2 非对称）
+    max_hold_days: int  # 最大持有日（短线，breakout 衰减快）
 
 
 # 弱信号保守默认（breakout §44 naive lift=1.36x <2x 非 validated → 小仓紧止损）
@@ -181,21 +195,23 @@ _PREMARKET_RISK_BASE = PreMarketRiskParams(
 @dataclass(frozen=True)
 class PreMarketCandidateRisk:
     """候选 + 风控具体价（止损/止盈/仓位）。"""
+
     code: str
     name: str
     breakout_score: float
     breakout_binary: int
     t1_close: float
     t1_date: str
-    entry_ref: float           # 预案估算价（= T-1 close，非实际成交参考；实盘以 T 日开盘竞价重算，gap 时止损止盈失真）
-    stop_loss: float           # 止损价（entry_ref × (1+stop_loss_pct/100)）
-    take_profit: float         # 止盈价（entry_ref × (1+take_profit_pct/100)）
-    position_pct: float        # 仓位 %（已 × 日历因子）
+    entry_ref: float  # 预案估算价（= T-1 close，非实际成交参考；实盘以 T 日开盘竞价重算，gap 时止损止盈失真）
+    stop_loss: float  # 止损价（entry_ref × (1+stop_loss_pct/100)）
+    take_profit: float  # 止盈价（entry_ref × (1+take_profit_pct/100)）
+    position_pct: float  # 仓位 %（已 × 日历因子）
 
 
 @dataclass(frozen=True)
 class PreMarketSelection:
     """盘前选股完整结果（候选+风控+诚实标签+日历+元信息）。"""
+
     target_date: str
     honest_label: str
     risk_params: PreMarketRiskParams
@@ -206,7 +222,9 @@ class PreMarketSelection:
 
 
 def select_premarket_with_risk(
-    target_date: str, top_n: int = 20, min_score: float = 0.90,
+    target_date: str,
+    top_n: int = 20,
+    min_score: float = 0.90,
 ) -> PreMarketSelection:
     """盘前选股 + 风控层（endpoint 入口）。
 
@@ -226,8 +244,12 @@ def select_premarket_with_risk(
 
     candidates = [
         PreMarketCandidateRisk(
-            code=c.code, name=c.name, breakout_score=c.breakout_score,
-            breakout_binary=c.breakout_binary, t1_close=c.t1_close, t1_date=c.t1_date,
+            code=c.code,
+            name=c.name,
+            breakout_score=c.breakout_score,
+            breakout_binary=c.breakout_binary,
+            t1_close=c.t1_close,
+            t1_date=c.t1_date,
             entry_ref=c.t1_close,
             stop_loss=round(c.t1_close * (1 + _PREMARKET_RISK_BASE.stop_loss_pct / 100), 2),
             take_profit=round(c.t1_close * (1 + _PREMARKET_RISK_BASE.take_profit_pct / 100), 2),
@@ -254,13 +276,13 @@ def select_premarket_with_risk(
 
 if __name__ == "__main__":
     import sys
+
     d = sys.argv[1] if len(sys.argv) > 1 else "2026-08-14"
     cands = select_premarket_candidates(d, top_n=20, min_score=0.90)
     print(f"=== 盘前选股（breakout）{d} ===")
     print(f"诚实标签: {HONEST_LABEL}")
     print(f"候选（breakout>=0.90, top-20）: {len(cands)}")
     for c in cands[:10]:
-        print(f"  {c.code} score={c.breakout_score} binary={c.breakout_binary} "
-              f"close={c.t1_close} T-1={c.t1_date}")
+        print(f"  {c.code} score={c.breakout_score} binary={c.breakout_binary} close={c.t1_close} T-1={c.t1_date}")
     if len(cands) > 10:
-        print(f"  ... ({len(cands)-10} more)")
+        print(f"  ... ({len(cands) - 10} more)")

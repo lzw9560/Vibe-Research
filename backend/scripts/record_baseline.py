@@ -10,6 +10,7 @@
 
 港股/美股 code 无数据则跳过（诚实标注，不臆造）。
 """
+
 from __future__ import annotations
 
 import json
@@ -29,6 +30,7 @@ A_STOCKS = ["600519", "000858", "300750", "688981", "000001", "002594"]
 def test_record_quote_baseline():
     """录制 quote 端点基线（live，非交易时段可能返空→跳过）。"""
     import astock
+
     BASELINE_DIR.mkdir(parents=True, exist_ok=True)
     for code in A_STOCKS:
         try:
@@ -46,6 +48,7 @@ def test_record_quote_baseline():
 def test_record_capital_flow_baseline():
     """录制 capital_flow 端点基线（live）。"""
     import astock
+
     BASELINE_DIR.mkdir(parents=True, exist_ok=True)
     for code in A_STOCKS:
         try:
@@ -62,6 +65,7 @@ def test_record_capital_flow_baseline():
 def test_record_dragon_tiger_baseline():
     """录制 dragon_tiger 端点基线（live）。"""
     import astock
+
     BASELINE_DIR.mkdir(parents=True, exist_ok=True)
     for code in A_STOCKS:
         try:

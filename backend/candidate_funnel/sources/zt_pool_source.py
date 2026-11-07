@@ -8,6 +8,7 @@
 防封底线：fetch_zt_pool 内部走 astock.em_zt_topic_pool → em_get（0.3s 限流 + circuit_breaker），
 不裸调 requests。
 """
+
 from __future__ import annotations
 
 
@@ -21,6 +22,7 @@ def fetch_zt_pool_map(date: str) -> dict[str, dict]:
     """
     try:
         from strategies.first_board_filter import fetch_zt_pool
+
         pool = fetch_zt_pool(date) or []
     except Exception:
         return {}

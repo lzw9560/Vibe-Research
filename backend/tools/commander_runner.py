@@ -9,6 +9,7 @@
 
 输出：情绪得分 + 状态 + 仓位建议 + 风控 + 各战法 verdict（R30 诚实标注）。
 """
+
 from __future__ import annotations
 import sys
 from pathlib import Path
@@ -38,9 +39,17 @@ def _board_limit(code: str) -> float:
     if code.startswith(("8", "9")):
         return 0.298
     return 0.098
+
+
 INST_KEYWORDS = (
-    "机构专用", "总部", "高盛", "瑞银", "股通", "摩根",
-    "中信证券股份有限公司上海分公司", "国际金融",
+    "机构专用",
+    "总部",
+    "高盛",
+    "瑞银",
+    "股通",
+    "摩根",
+    "中信证券股份有限公司上海分公司",
+    "国际金融",
 )
 
 
@@ -55,6 +64,7 @@ def load_inst_dominant_today(mode: str = "basic") -> list[dict]:
     """
     import sqlite3  # noqa: PLC0415
     from collections import defaultdict  # noqa: PLC0415
+
     foreign_kw = ("高盛", "瑞银", "股通", "摩根", "国际金融", "总部")
     conn = sqlite3.connect(str(DT_DB))
     latest = conn.execute("SELECT MAX(trade_date) FROM dragon_tiger_rows").fetchone()[0]
@@ -92,19 +102,22 @@ def load_inst_dominant_today(mode: str = "basic") -> list[dict]:
                 continue
             if not (20 <= cp <= 100):  # 中价20-100，避开高价买不满1手
                 continue
-        candidates.append({
-            "code": code,
-            "inst_net_pct": round(inst_pct * 100, 1),
-            "ibuy": inst_buy,
-            "change_rate": round(chg, 2),
-            "close_price": cp,
-            "foreign_pct": round(foreign_pct * 100, 1),
-        })
+        candidates.append(
+            {
+                "code": code,
+                "inst_net_pct": round(inst_pct * 100, 1),
+                "ibuy": inst_buy,
+                "change_rate": round(chg, 2),
+                "close_price": cp,
+                "foreign_pct": round(foreign_pct * 100, 1),
+            }
+        )
     candidates.sort(key=lambda x: x["ibuy"], reverse=True)
     if mode == "filtered":
         # v10.5：用tail_dip_engine完整财务红线替换fundamental_filter单一应收过滤
         # 覆盖：商誉>=15% + 应收>=40% + 现金流为负 + 减持 + 数据缺失安全补丁
         from strategies.tail_dip_engine import fetch_financial_substitute_factors, HARD_THRESHOLDS  # noqa: PLC0415
+
         top12 = candidates[:12]
         passed = []
         for c in top12:
@@ -114,13 +127,7 @@ def load_inst_dominant_today(mode: str = "basic") -> list[dict]:
             ar = factors.get("ar_to_revenue_pct")
             cf_neg = factors.get("cf_negative", False)
             reduction = factors.get("has_reduction_recent", False)
-            blocked = (
-                (gw_blk and gw is not None)
-                or (ar and ar >= 40)
-                or cf_neg
-                or reduction
-                or (not factors)
-            )
+            blocked = (gw_blk and gw is not None) or (ar and ar >= 40) or cf_neg or reduction or (not factors)
             if not blocked:
                 passed.append(c)
         return passed[:6]
@@ -138,6 +145,7 @@ def load_a_group_today(mode: str = "basic") -> list[dict]:
     返回 [{code, chg, net_buy_wan}] 按净买降序 top5。
     """
     import sqlite3  # noqa: PLC0415
+
     conn = sqlite3.connect(str(DT_DB))
     latest = conn.execute("SELECT MAX(trade_date) FROM dragon_tiger_rows").fetchone()[0]
     if not latest:
@@ -167,6 +175,7 @@ def load_a_group_today(mode: str = "basic") -> list[dict]:
     if mode == "filtered":
         # v10.5：A组T+10也加完整财务红线过滤（同inst_dominant逻辑）
         from strategies.tail_dip_engine import fetch_financial_substitute_factors  # noqa: PLC0415
+
         top10 = signals[:10]
         passed = []
         for c in top10:
@@ -176,13 +185,7 @@ def load_a_group_today(mode: str = "basic") -> list[dict]:
             ar = factors.get("ar_to_revenue_pct")
             cf_neg = factors.get("cf_negative", False)
             reduction = factors.get("has_reduction_recent", False)
-            blocked = (
-                (gw_blk and gw is not None)
-                or (ar and ar >= 40)
-                or cf_neg
-                or reduction
-                or (not factors)
-            )
+            blocked = (gw_blk and gw is not None) or (ar and ar >= 40) or cf_neg or reduction or (not factors)
             if not blocked:
                 passed.append(c)
         return passed[:5]
@@ -203,10 +206,12 @@ def load_combo_5d_today(date: str | None = None, mode: str = "filtered", top_n: 
     """
     import json  # noqa: PLC0415
     import sqlite3  # noqa: PLC0415
+
     conn = sqlite3.connect(str(KLINE_DB))
     rows = conn.execute("SELECT code, bars_json FROM kline").fetchall()
     conn.close()
     from collections import Counter  # noqa: PLC0415
+
     parsed: list = []
     last_dates: Counter = Counter()
     for code, bj in rows:
@@ -251,14 +256,18 @@ def load_combo_5d_today(date: str | None = None, mode: str = "filtered", top_n: 
                 continue
             if code.startswith("920"):  # 北交所
                 continue
-            if (c - prev_c) / prev_c >= _board_limit(code):  # 涨停封板次日跌 live 不可交易（R4: 涨停贡献40%是假edge，去涨停后真edge +1.07% net t10.29）
+            if (c - prev_c) / prev_c >= _board_limit(
+                code
+            ):  # 涨停封板次日跌 live 不可交易（R4: 涨停贡献40%是假edge，去涨停后真edge +1.07% net t10.29）
                 continue
-        factors.append({
-            "code": code,
-            "gap": (o - prev_c) / prev_c,
-            "today_ret": (c - prev_c) / prev_c,
-            "amount": amt,
-        })
+        factors.append(
+            {
+                "code": code,
+                "gap": (o - prev_c) / prev_c,
+                "today_ret": (c - prev_c) / prev_c,
+                "amount": amt,
+            }
+        )
     if len(factors) < top_n * 10:
         return []
     n = len(factors)
@@ -294,18 +303,22 @@ def _record_combo_5d(picks: list[dict]) -> None:
     import sqlite3  # noqa: PLC0415
     import sys  # noqa: PLC0415
     from pathlib import Path  # noqa: PLC0415
+
     bp = str(Path(__file__).resolve().parents[1])  # backend/
     if bp not in sys.path:
         sys.path.insert(0, bp)
     from engine.trade_journal import TradeJournal, JournalRecord  # noqa: E402
+
     if not picks:
         return
     signal_date = picks[0]["date"]
     tj = TradeJournal()
     for p in picks:
         rec = JournalRecord.create(
-            arm="combo_5d", stock_code=p["code"],
-            entry_price=None, entry_date=signal_date,
+            arm="combo_5d",
+            stock_code=p["code"],
+            entry_price=None,
+            entry_date=signal_date,
             exit_model_version="nostop_t5",
         )
         tj.insert(rec)
@@ -335,6 +348,7 @@ def run() -> dict:
         try:
             from short_term_tactics_filter import filter_stock, to_json  # noqa: PLC0415
             from fetch_market_sentiment_metrics import load_latest_zt  # noqa: PLC0415
+
             zt = load_latest_zt()
             tactics_results = []
             for row in zt["rows"][:5]:
@@ -406,8 +420,10 @@ def push_feishu(text: str) -> None:
     """飞书推送（失败不阻塞主流程）。push_text 是 async，用 asyncio.run 驱动。"""
     try:
         import asyncio
+
         sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
         from feishu_notifier import FeishuNotifier
+
         notifier = FeishuNotifier()
         asyncio.run(notifier.push_text(text, ticker="sentiment_commander"))
         print("\n[feishu] ✅ pushed")

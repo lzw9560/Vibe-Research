@@ -36,6 +36,7 @@ prediction_ledger 格式未对齐）。故 _read_hits 诚实返空 → attributi
 
 S166 fresh-impl（design-agnostic）。四格算法参考自 cb54a96 历史，非整文件复活。
 """
+
 from __future__ import annotations
 
 from typing import Optional
@@ -43,8 +44,8 @@ from typing import Optional
 # 四格的名字。⚠️ 顺序别改，前端按 key 取。
 QUADRANTS = {
     "right_win": "判对 + 赚钱",
-    "right_lose": "判对 + 亏钱",       # ⭐ 执行问题
-    "wrong_win": "判错 + 赚钱",        # ⚠️ 运气
+    "right_lose": "判对 + 亏钱",  # ⭐ 执行问题
+    "wrong_win": "判错 + 赚钱",  # ⚠️ 运气
     "wrong_lose": "判错 + 亏钱",
 }
 
@@ -90,9 +91,10 @@ def attribution(limit: int = 500) -> dict:
     hits = _read_hits()
     if not hits:
         # 诚实降级：无市场判断数据源（不臆造命中）——待新 spec 接预测数据后激活
-        return {"available": False,
-                "reason": "还没有可用的市场判断记录（Vibe-Research 暂无 reflection/"
-                          "预测命中数据源），无法做判断/执行归因"}
+        return {
+            "available": False,
+            "reason": "还没有可用的市场判断记录（Vibe-Research 暂无 reflection/预测命中数据源），无法做判断/执行归因",
+        }
 
     # 按入场日汇总当天的已实现盈亏
     by_day: dict[str, dict] = {}
@@ -109,18 +111,19 @@ def attribution(limit: int = 500) -> dict:
         if d not in hits:
             skipped_no_read += 1
             continue
-        b = by_day.setdefault(d, {"date": d, "pnl": 0.0, "trades": 0,
-                                  "unplanned": 0, **hits[d]})
+        b = by_day.setdefault(d, {"date": d, "pnl": 0.0, "trades": 0, "unplanned": 0, **hits[d]})
         b["pnl"] += pnl
         b["trades"] += 1
         if t.get("as_planned") is False:
             b["unplanned"] += 1
 
     if not by_day:
-        return {"available": False, "skipped_no_amount": skipped_no_amount,
-                "skipped_no_read": skipped_no_read,
-                "reason": ("没有能归因的交易日——需要「填了成交明细的已平仓交易」"
-                           "且那天有市场判断记录")}
+        return {
+            "available": False,
+            "skipped_no_amount": skipped_no_amount,
+            "skipped_no_read": skipped_no_read,
+            "reason": ("没有能归因的交易日——需要「填了成交明细的已平仓交易」且那天有市场判断记录"),
+        }
 
     cells: dict[str, list[dict]] = {k: [] for k in QUADRANTS}
     for b in sorted(by_day.values(), key=lambda x: x["date"]):
@@ -132,8 +135,7 @@ def attribution(limit: int = 500) -> dict:
         cells[key].append(b)
 
     def _sum(rows: list[dict]) -> dict:
-        return {"days": len(rows), "pnl": round(sum(r["pnl"] for r in rows), 2),
-                "days_list": [r["date"] for r in rows]}
+        return {"days": len(rows), "pnl": round(sum(r["pnl"] for r in rows), 2), "days_list": [r["date"] for r in rows]}
 
     summary = {k: _sum(v) for k, v in cells.items()}
     counted = sum(s["days"] for s in summary.values())
@@ -146,8 +148,7 @@ def attribution(limit: int = 500) -> dict:
         "cells": cells,
         "skipped_no_amount": skipped_no_amount,
         "skipped_no_read": skipped_no_read,
-        "note": ("按**入场日**对齐：那天的操作依据是前一晚那份判断。"
-                 "盈亏为 0 的日子不进任何一格。"),
+        "note": ("按**入场日**对齐：那天的操作依据是前一晚那份判断。盈亏为 0 的日子不进任何一格。"),
     }
 
 

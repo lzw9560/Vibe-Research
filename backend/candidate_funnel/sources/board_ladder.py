@@ -32,6 +32,7 @@ def get_market_emotion_raw(date: str) -> dict:
         return hit[1]
     try:
         import market
+
         emo = market._emotion(date)
     except Exception:
         emo = {}

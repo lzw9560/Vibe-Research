@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """聚合 + score_candidates——天气软标注 + 策略分排序 → 候选列表。"""
+
 from __future__ import annotations
 
 import dataclasses
@@ -55,22 +56,27 @@ def _aggregate_strategy_funnels(
         for cand, results_by_code in cand_match_results:
             r = results_by_code.get(cfg.code)
             if r is None:
-                cand_marks.append({
-                    "code": cand.get("code", ""), "name": cand.get("name", ""),
-                    "fired": False, "conditions": [],
-                })
+                cand_marks.append(
+                    {
+                        "code": cand.get("code", ""),
+                        "name": cand.get("name", ""),
+                        "fired": False,
+                        "conditions": [],
+                    }
+                )
                 continue
             if not cond_specs:
-                cond_specs = [(c.condition_id, c.condition_name, c.factor, c.threshold)
-                              for c in r.conditions]
+                cond_specs = [(c.condition_id, c.condition_name, c.factor, c.threshold) for c in r.conditions]
             if r.fired:
                 fired_count += 1
-            cand_marks.append({
-                "code": cand.get("code", ""), "name": cand.get("name", ""),
-                "fired": r.fired,
-                "conditions": [{"condition_id": c.condition_id, "state": c.state}
-                               for c in r.conditions],
-            })
+            cand_marks.append(
+                {
+                    "code": cand.get("code", ""),
+                    "name": cand.get("name", ""),
+                    "fired": r.fired,
+                    "conditions": [{"condition_id": c.condition_id, "state": c.state} for c in r.conditions],
+                }
+            )
             for c in r.conditions:
                 if c.state == "hit":
                     per_cond_hit[c.condition_id] = per_cond_hit.get(c.condition_id, 0) + 1
@@ -81,17 +87,25 @@ def _aggregate_strategy_funnels(
         for cid, cname, factor, threshold in cond_specs:
             passed = per_cond_hit.get(cid, 0)
             du = per_cond_du.get(cid, 0)
-            conditions_agg.append({
-                "condition_id": cid, "condition_name": cname,
-                "factor": factor, "threshold": threshold,
-                "input_count": total, "passed_count": passed,
-                "data_unavailable_count": du,
-                "pass_rate": round(passed / total, 4) if total else 0.0,
-            })
+            conditions_agg.append(
+                {
+                    "condition_id": cid,
+                    "condition_name": cname,
+                    "factor": factor,
+                    "threshold": threshold,
+                    "input_count": total,
+                    "passed_count": passed,
+                    "data_unavailable_count": du,
+                    "pass_rate": round(passed / total, 4) if total else 0.0,
+                }
+            )
         summaries[cfg.code] = {
-            "strategy_code": cfg.code, "strategy_name": cfg.name,
-            "fired_count": fired_count, "total_count": total,
-            "conditions": conditions_agg, "candidates": cand_marks,
+            "strategy_code": cfg.code,
+            "strategy_name": cfg.name,
+            "fired_count": fired_count,
+            "total_count": total,
+            "conditions": conditions_agg,
+            "candidates": cand_marks,
         }
     return summaries
 
@@ -129,11 +143,15 @@ def score_candidates(
     # R9 行为变化面：limitup 路径不再跑 market_scan 战法（dragon_head/low_absorption/platform_breakout/
     # reverse_package/pattern_reversal 从"可能命中"变"永不命中"——涨停股本不该命中非涨停战法，方向对）。
     if funnel_type not in STRATEGIES_BY_FUNNEL_TYPE:
-        return [{
-            "strategy_code": "none",
-            "note": f"未知 funnel_type={funnel_type}（必填 limitup|market_scan）",
-            "strategy_score": 0, "strategy": "无符合条件标的", "factors": {},
-        }]
+        return [
+            {
+                "strategy_code": "none",
+                "note": f"未知 funnel_type={funnel_type}（必填 limitup|market_scan）",
+                "strategy_score": 0,
+                "strategy": "无符合条件标的",
+                "factors": {},
+            }
+        ]
     funnel_codes = set(STRATEGIES_BY_FUNNEL_TYPE[funnel_type])
     funnel_registry = [cfg for cfg in STRATEGY_REGISTRY if cfg.code in funnel_codes]
     primary_codes, _ = get_strategies_for_weather(weather_state)
@@ -152,13 +170,15 @@ def score_candidates(
                 load_aggregate_profiles,
                 fetch_billboard_for_date_meta,
             )
+
             seat_profiles = load_aggregate_profiles()
             _bb_meta = fetch_billboard_for_date_meta(trade_date)
             if not (_bb_meta["buy_ok"] and _bb_meta["sell_ok"]):
                 logging.getLogger(__name__).warning(
-                    "score_candidates billboard %s 残缺（buy_ok=%s, sell_ok=%s）"
-                    "→ seat risk 用可用 rows 降级",
-                    trade_date, _bb_meta["buy_ok"], _bb_meta["sell_ok"],
+                    "score_candidates billboard %s 残缺（buy_ok=%s, sell_ok=%s）→ seat risk 用可用 rows 降级",
+                    trade_date,
+                    _bb_meta["buy_ok"],
+                    _bb_meta["sell_ok"],
                 )
             billboard = _bb_meta["rows"]
         except Exception:
@@ -185,8 +205,12 @@ def score_candidates(
                 "rel_strength_vs_sector": getattr(_pat, "relative_strength", None) if _pat is not None else None,
             }
         ctx = StrategyContext(
-            code=code, gene=gene, pool_item=pool_item,
-            indicators=None, derived=derived, weather_state=weather_state,
+            code=code,
+            gene=gene,
+            pool_item=pool_item,
+            indicators=None,
+            derived=derived,
+            weather_state=weather_state,
             market_scan_ctx=market_scan_ctx,
         )
         # S097：直接调 impl.match 收集全量 StrategyMatchResult（含 fired=False/data_unavailable，
@@ -216,13 +240,19 @@ def score_candidates(
                     continue
             # S094 audit fix: market_scan 候选无 factors dict（run_non_limitup_funnel 产 pattern 不产 factors）
             # → 从 PatternScan+strat_code 建 per-strategy factors（量能信号 per-strategy R4），否则 score=0.0
-            _factors_for_score = _build_market_scan_factors(cand.get("pattern"), cand, strat_code) if funnel_type == "market_scan" else factors
+            _factors_for_score = (
+                _build_market_scan_factors(cand.get("pattern"), cand, strat_code)
+                if funnel_type == "market_scan"
+                else factors
+            )
             score, breakdown = compute_strategy_score(_factors_for_score, cfg.weight_set)
             # S073 §9.4 游资画像修饰（画像未建→modifier 1.0 不扣分，标 risk_label）
             seat_risk = None
             if trade_date and billboard is not None:
                 try:
-                    seat_risk = compute_seat_risk_factor(cand.get("code", ""), trade_date, seat_profiles, None, billboard)
+                    seat_risk = compute_seat_risk_factor(
+                        cand.get("code", ""), trade_date, seat_profiles, None, billboard
+                    )
                     score = round(score * seat_risk.score_modifier, 4)
                 except Exception:
                     seat_risk = None
@@ -231,28 +261,33 @@ def score_candidates(
             _confidence = _r.confidence if _r else None
             _signal_strength = int((_r.confidence or 0) * 100) if _r else None
             _volume_signal = cfg.strategy_impl.compute_volume_signal(ctx) if _r else None
-            scored.append({
-                **{k: v for k, v in cand.items() if k not in ("bars", "pattern")},  # S094 audit: strip heavy bars/pattern（不进 briefing JSON，前端 NonLimitupLane 只用 code/name/sector/strategy_score）
-                "strategy_code": cfg.code,
-                "strategy_name": cfg.name,
-                "strategy_score": score,
-                "score_breakdown": breakdown,
-                "confidence": _confidence,  # S094 R12: 复用 dispatch_match compute_confidence（不派生 strategy_score/100）
-                "signal_strength": _signal_strength,
-                "funnel_type": cfg.funnel_type,
-                "position_params": dataclasses.asdict(cfg.position_params),
-                "weather_recommended": strat_code in recommendation,  # grill Q7：天气推荐标注（软标注）
-                "volume_signal": _volume_signal,  # S094 R4：per-strategy 量能信号（None=未计算/涨停 pipeline 降级）
-                "hot_money_seat_risk": (
-                    {
-                        "day_trip_ratio": seat_risk.day_trip_ratio,
-                        "relay_ratio": seat_risk.relay_ratio,
-                        "risk_label": seat_risk.risk_label,
-                        "score_modifier": seat_risk.score_modifier,
-                    }
-                    if seat_risk else None
-                ),
-            })
+            scored.append(
+                {
+                    **{
+                        k: v for k, v in cand.items() if k not in ("bars", "pattern")
+                    },  # S094 audit: strip heavy bars/pattern（不进 briefing JSON，前端 NonLimitupLane 只用 code/name/sector/strategy_score）
+                    "strategy_code": cfg.code,
+                    "strategy_name": cfg.name,
+                    "strategy_score": score,
+                    "score_breakdown": breakdown,
+                    "confidence": _confidence,  # S094 R12: 复用 dispatch_match compute_confidence（不派生 strategy_score/100）
+                    "signal_strength": _signal_strength,
+                    "funnel_type": cfg.funnel_type,
+                    "position_params": dataclasses.asdict(cfg.position_params),
+                    "weather_recommended": strat_code in recommendation,  # grill Q7：天气推荐标注（软标注）
+                    "volume_signal": _volume_signal,  # S094 R4：per-strategy 量能信号（None=未计算/涨停 pipeline 降级）
+                    "hot_money_seat_risk": (
+                        {
+                            "day_trip_ratio": seat_risk.day_trip_ratio,
+                            "relay_ratio": seat_risk.relay_ratio,
+                            "risk_label": seat_risk.risk_label,
+                            "score_modifier": seat_risk.score_modifier,
+                        }
+                        if seat_risk
+                        else None
+                    ),
+                }
+            )
 
     # S097 R10/R17：批次聚合 StrategyFunnelSummary（每战法跨候选 input/passed/data_unavailable/
     # pass_rate + 候选命中标记），回填 scored 每项 strategy_funnel
@@ -269,11 +304,13 @@ def score_candidates(
             note = "炸板池数据缺失（S055 采集未完成）或昨日无 open_count>=2 的票"
         else:
             note = f"候选股因子值不满足 {', '.join(primary_codes)} 的入场条件"
-        return [{
-            "strategy_code": "none",
-            "note": note,
-            "strategy_score": 0,
-            "strategy": "无符合条件标的",
-            "factors": {},
-        }]
+        return [
+            {
+                "strategy_code": "none",
+                "note": note,
+                "strategy_score": 0,
+                "strategy": "无符合条件标的",
+                "factors": {},
+            }
+        ]
     return scored

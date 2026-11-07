@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Supplementary: walk-forward + 2023-2026 fresh BHAR + split by entry discount."""
+
 import json
 import statistics
 from collections import defaultdict
@@ -39,8 +40,7 @@ def is_yizi_etf_proxy(t1_open, t_close):
     return t1_open / t_close >= 1.099
 
 
-def build_picks(etf_data, calendar, threshold=-0.3, hold_days=1,
-                date_lo=None, date_hi=None):
+def build_picks(etf_data, calendar, threshold=-0.3, hold_days=1, date_lo=None, date_hi=None):
     date_idx = {d: i for i, d in enumerate(calendar)}
     exit_offset = 1 + hold_days
     picks = []
@@ -76,17 +76,19 @@ def build_picks(etf_data, calendar, threshold=-0.3, hold_days=1,
                 continue
             if is_yizi_etf_proxy(entry, close_T):
                 continue
-            picks.append({
-                "code": code,
-                "signal_date": d,
-                "zt_date": d,
-                "discount_t": disc,
-                "nav_T": nav_T,
-                "entry": entry,
-                "nav_T1": nav_T1,
-                "exit_close": exit_close,
-                "nav_exit": nav_exit,
-            })
+            picks.append(
+                {
+                    "code": code,
+                    "signal_date": d,
+                    "zt_date": d,
+                    "discount_t": disc,
+                    "nav_T": nav_T,
+                    "entry": entry,
+                    "nav_T1": nav_T1,
+                    "exit_close": exit_close,
+                    "nav_exit": nav_exit,
+                }
+            )
     return picks
 
 
@@ -100,17 +102,16 @@ def day_paired_t(picks, ret_fn):
         r = ret_fn(p)
         if r is not None:
             by_date[p["signal_date"]].append(r)
-    day_means = [sum(rs)/len(rs) for rs in by_date.values() if rs]
+    day_means = [sum(rs) / len(rs) for rs in by_date.values() if rs]
     n = len(day_means)
     if n == 0:
         return {"n_days": 0, "mean": 0, "t": 0, "p": 1.0}
-    mean = sum(day_means)/n
+    mean = sum(day_means) / n
     std = statistics.pstdev(day_means) if n > 1 else 0
-    se = std/sqrt(n) if n > 0 else 0
-    t = mean/se if se > 0 else 0
+    se = std / sqrt(n) if n > 0 else 0
+    t = mean / se if se > 0 else 0
     p = norm_sf_positive(t)
-    return {"n_days": n, "mean": round(mean,4), "t": round(t,2),
-            "p": round(p,8), "std": round(std,4)}
+    return {"n_days": n, "mean": round(mean, 4), "t": round(t, 2), "p": round(p, 8), "std": round(std, 4)}
 
 
 def walk_forward(picks, ret_fn):
@@ -171,10 +172,12 @@ def main():
     print("WALK-FORWARD OOS: stale vs fresh vs R1")
     print("=" * 78)
 
-    for label, fn in [("BHAR stale (R2)", bhar_stale),
-                       ("BHAR fresh (nav_T1)", bhar_fresh),
-                       ("BHAR R1", bhar_r1),
-                       ("raw EV", raw_ev)]:
+    for label, fn in [
+        ("BHAR stale (R2)", bhar_stale),
+        ("BHAR fresh (nav_T1)", bhar_fresh),
+        ("BHAR R1", bhar_r1),
+        ("raw EV", raw_ev),
+    ]:
         wf = walk_forward(picks_full, fn)
         if wf.get("status") != "ok":
             print(f"  {label}: {wf.get('status')}")
@@ -186,16 +189,12 @@ def main():
         mean_ret = statistics.mean(rets)
         net = mean_ret - ETF_COST
         print(f"\n  {label}:")
-        print(f"    full: per-pick={mean_ret:+.4f}% net={net:+.4f}% "
-              f"day_t={day_paired_t(picks_full, fn)['t']}")
-        print(f"    train: n_dates={wf['n_train_dates']} mean={tr['mean']:+.4f}% "
-              f"day_t={tr['t']} p={tr['p']}")
-        print(f"    test:  n_dates={wf['n_test_dates']} mean={te['mean']:+.4f}% "
-              f"day_t={te['t']} p={te['p']}")
+        print(f"    full: per-pick={mean_ret:+.4f}% net={net:+.4f}% day_t={day_paired_t(picks_full, fn)['t']}")
+        print(f"    train: n_dates={wf['n_train_dates']} mean={tr['mean']:+.4f}% day_t={tr['t']} p={tr['p']}")
+        print(f"    test:  n_dates={wf['n_test_dates']} mean={te['mean']:+.4f}% day_t={te['t']} p={te['p']}")
         # Bonferroni ×30 on test p
         p_bonf = min(1.0, te["p"] * 30)
-        print(f"    test p Bonf×30={p_bonf:.6f} "
-              f"({'PASS' if p_bonf < 0.05 else 'FAIL'})")
+        print(f"    test p Bonf×30={p_bonf:.6f} ({'PASS' if p_bonf < 0.05 else 'FAIL'})")
 
     # ================================================================
     # 2023-2026: stale vs fresh
@@ -204,21 +203,24 @@ def main():
     print("2023-2026: stale vs fresh vs R1")
     print("=" * 78)
 
-    picks_recent = build_picks(etf_data, calendar, -0.3, 1,
-                                date_lo="2023-01-01", date_hi="2026-12-31")
+    picks_recent = build_picks(etf_data, calendar, -0.3, 1, date_lo="2023-01-01", date_hi="2026-12-31")
     n_r = len(picks_recent)
     print(f"\n  n={n_r}")
 
-    for label, fn in [("BHAR stale (R2)", bhar_stale),
-                       ("BHAR fresh (nav_T1)", bhar_fresh),
-                       ("BHAR R1", bhar_r1),
-                       ("raw EV", raw_ev)]:
+    for label, fn in [
+        ("BHAR stale (R2)", bhar_stale),
+        ("BHAR fresh (nav_T1)", bhar_fresh),
+        ("BHAR R1", bhar_r1),
+        ("raw EV", raw_ev),
+    ]:
         dt = day_paired_t(picks_recent, fn)
         rets = [fn(p) for p in picks_recent]
         mean_ret = statistics.mean(rets)
         net = mean_ret - ETF_COST
-        print(f"  {label:<22}: per-pick={mean_ret:+.4f}% net={net:+.4f}% "
-              f"n_days={dt['n_days']} day_t={dt['t']} p={dt['p']}")
+        print(
+            f"  {label:<22}: per-pick={mean_ret:+.4f}% net={net:+.4f}% "
+            f"n_days={dt['n_days']} day_t={dt['t']} p={dt['p']}"
+        )
 
     # ================================================================
     # Split by entry discount: converged vs not-converged at T+1 open
@@ -227,24 +229,20 @@ def main():
     print("SPLIT: entry discount (stale nav_T) < -0.3% vs >= -0.3%")
     print("=" * 78)
 
-    conv_picks = [p for p in picks_full
-                  if (p["entry"] - p["nav_T"]) / p["nav_T"] * 100 >= -0.3]
-    notconv_picks = [p for p in picks_full
-                     if (p["entry"] - p["nav_T"]) / p["nav_T"] * 100 < -0.3]
+    conv_picks = [p for p in picks_full if (p["entry"] - p["nav_T"]) / p["nav_T"] * 100 >= -0.3]
+    notconv_picks = [p for p in picks_full if (p["entry"] - p["nav_T"]) / p["nav_T"] * 100 < -0.3]
 
     print(f"\n  Converged at T+1 open (stale disc >= -0.3%): n={len(conv_picks)}")
     for label, fn in [("BHAR stale", bhar_stale), ("BHAR fresh", bhar_fresh)]:
         dt = day_paired_t(conv_picks, fn)
         rets = [fn(p) for p in conv_picks]
-        print(f"    {label}: per-pick={statistics.mean(rets):+.4f}% "
-              f"n_days={dt['n_days']} day_t={dt['t']}")
+        print(f"    {label}: per-pick={statistics.mean(rets):+.4f}% n_days={dt['n_days']} day_t={dt['t']}")
 
     print(f"\n  NOT converged at T+1 open (stale disc < -0.3%): n={len(notconv_picks)}")
     for label, fn in [("BHAR stale", bhar_stale), ("BHAR fresh", bhar_fresh)]:
         dt = day_paired_t(notconv_picks, fn)
         rets = [fn(p) for p in notconv_picks]
-        print(f"    {label}: per-pick={statistics.mean(rets):+.4f}% "
-              f"n_days={dt['n_days']} day_t={dt['t']}")
+        print(f"    {label}: per-pick={statistics.mean(rets):+.4f}% n_days={dt['n_days']} day_t={dt['t']}")
 
     # ================================================================
     # Why day_t is inflated: within-day consistency (stale NAV creates
@@ -262,15 +260,21 @@ def main():
     for p in picks_full:
         stale_by_date[p["signal_date"]].append(bhar_stale(p))
         fresh_by_date[p["signal_date"]].append(bhar_fresh(p))
-    stale_day_means = [sum(rs)/len(rs) for rs in stale_by_date.values() if rs]
-    fresh_day_means = [sum(rs)/len(rs) for rs in fresh_by_date.values() if rs]
+    stale_day_means = [sum(rs) / len(rs) for rs in stale_by_date.values() if rs]
+    fresh_day_means = [sum(rs) / len(rs) for rs in fresh_by_date.values() if rs]
 
-    print(f"  stale day-means: std={statistics.pstdev(stale_day_means):.4f}% "
-          f"mean={statistics.mean(stale_day_means):.4f}%")
-    print(f"  fresh day-means: std={statistics.pstdev(fresh_day_means):.4f}% "
-          f"mean={statistics.mean(fresh_day_means):.4f}%")
-    print(f"  -> stale std {'<' if statistics.pstdev(stale_day_means) < statistics.pstdev(fresh_day_means) else '>'} fresh std")
-    print(f"  -> stale NAV {'reduces' if statistics.pstdev(stale_day_means) < statistics.pstdev(fresh_day_means) else 'increases'} day-mean dispersion -> {'inflates' if statistics.pstdev(stale_day_means) < statistics.pstdev(fresh_day_means) else 'deflates'} day_t")
+    print(
+        f"  stale day-means: std={statistics.pstdev(stale_day_means):.4f}% mean={statistics.mean(stale_day_means):.4f}%"
+    )
+    print(
+        f"  fresh day-means: std={statistics.pstdev(fresh_day_means):.4f}% mean={statistics.mean(fresh_day_means):.4f}%"
+    )
+    print(
+        f"  -> stale std {'<' if statistics.pstdev(stale_day_means) < statistics.pstdev(fresh_day_means) else '>'} fresh std"
+    )
+    print(
+        f"  -> stale NAV {'reduces' if statistics.pstdev(stale_day_means) < statistics.pstdev(fresh_day_means) else 'increases'} day-mean dispersion -> {'inflates' if statistics.pstdev(stale_day_means) < statistics.pstdev(fresh_day_means) else 'deflates'} day_t"
+    )
 
     # The bias adds a market-direction term to every pick on the same day.
     # Since all picks on day D share the same nav_overnight_gap, the bias
@@ -278,9 +282,10 @@ def main():
     # Check: per-pick std (cross-sectional dispersion)
     stale_rets = [bhar_stale(p) for p in picks_full]
     fresh_rets = [bhar_fresh(p) for p in picks_full]
-    print(f"\n  Per-pick std: stale={statistics.pstdev(stale_rets):.4f}% "
-          f"fresh={statistics.pstdev(fresh_rets):.4f}%")
-    print(f"  -> stale per-pick std {'<' if statistics.pstdev(stale_rets) < statistics.pstdev(fresh_rets) else '>'} fresh (stale compresses cross-sectional variance)")
+    print(f"\n  Per-pick std: stale={statistics.pstdev(stale_rets):.4f}% fresh={statistics.pstdev(fresh_rets):.4f}%")
+    print(
+        f"  -> stale per-pick std {'<' if statistics.pstdev(stale_rets) < statistics.pstdev(fresh_rets) else '>'} fresh (stale compresses cross-sectional variance)"
+    )
 
 
 if __name__ == "__main__":

@@ -44,9 +44,7 @@ def _migrate_legacy() -> None:
             os.replace(tmp, PF_FILE)  # 原子落位：复制中断不会留半截 portfolio.json 挡住下次重试
     except OSError as e:
         # 迁移失败不阻塞启动，但要出声——旧数据原样保留在 _OLD_PF_FILE，可手工复制
-        logging.getLogger("vibe-research").warning(
-            "持仓数据迁移失败（旧数据仍在 %s）: %s", _OLD_PF_FILE, e
-        )
+        logging.getLogger("vibe-research").warning("持仓数据迁移失败（旧数据仍在 %s）: %s", _OLD_PF_FILE, e)
 
 
 _migrate_legacy()
@@ -109,11 +107,18 @@ async def close_position(code: str, date: str, price: float, shares: float, cost
             name = quote_from_tencent(code, raw.get(code, {})).name or code
         except Exception:
             name = code
-        d["closed"].append({
-            "code": code, "name": name, "date": date, "price": price,
-            "shares": shares, "cost": cost, "pnl": round(pnl, 2),
-            "pnl_pct": round((price - cost) / cost * 100, 2) if cost else 0.0,
-        })
+        d["closed"].append(
+            {
+                "code": code,
+                "name": name,
+                "date": date,
+                "price": price,
+                "shares": shares,
+                "cost": cost,
+                "pnl": round(pnl, 2),
+                "pnl_pct": round((price - cost) / cost * 100, 2) if cost else 0.0,
+            }
+        )
         # 同步从持仓中移除该代码
         d["holdings"] = [h for h in d.get("holdings", []) if h["code"] != code]
         await asyncio.to_thread(_save, d)
@@ -157,24 +162,37 @@ async def get_portfolio() -> dict:
                 # 行情取数失败（tencent 断/停牌 price=0 被 S121 归一 None）→ 诚实化：
                 # 不 or 0.0 造伪 mv=0/pnl=-cv/pnl_pct=-100%，标 degraded + 字段 None
                 any_degraded = True
-                rows.append({
-                    "code": h["code"], "name": model.name or h["code"],
-                    "price": None, "shares": h["shares"], "cost": h["cost"],
-                    "market_value": None, "pnl": None, "pnl_pct": None,
-                    "data_status": "degraded",
-                })
+                rows.append(
+                    {
+                        "code": h["code"],
+                        "name": model.name or h["code"],
+                        "price": None,
+                        "shares": h["shares"],
+                        "cost": h["cost"],
+                        "market_value": None,
+                        "pnl": None,
+                        "pnl_pct": None,
+                        "data_status": "degraded",
+                    }
+                )
                 continue
             price = model.price
             mv = price * h["shares"]
             cv = h["cost"] * h["shares"]
             pnl = mv - cv
-            rows.append({
-                "code": h["code"], "name": model.name or h["code"],
-                "price": price, "shares": h["shares"], "cost": h["cost"],
-                "market_value": round(mv, 2), "pnl": round(pnl, 2),
-                "pnl_pct": round(pnl / cv * 100, 2) if cv else 0.0,
-                "data_status": "ok",
-            })
+            rows.append(
+                {
+                    "code": h["code"],
+                    "name": model.name or h["code"],
+                    "price": price,
+                    "shares": h["shares"],
+                    "cost": h["cost"],
+                    "market_value": round(mv, 2),
+                    "pnl": round(pnl, 2),
+                    "pnl_pct": round(pnl / cv * 100, 2) if cv else 0.0,
+                    "data_status": "ok",
+                }
+            )
             tmv += mv
             tcost += cv
     total_pnl = tmv - tcost
@@ -182,7 +200,8 @@ async def get_portfolio() -> dict:
     return {
         "holdings": rows,
         "totals": {
-            "market_value": round(tmv, 2), "cost": round(tcost, 2),
+            "market_value": round(tmv, 2),
+            "cost": round(tcost, 2),
             "pnl": round(total_pnl, 2),
             "pnl_pct": round(total_pnl / tcost * 100, 2) if tcost else 0.0,
             "data_status": "degraded" if any_degraded else "ok",

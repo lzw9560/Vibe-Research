@@ -61,6 +61,7 @@ PHASE_EXPLANATIONS = {
 
 class STIPhase(str, Enum):
     """五阶段枚举。"""
+
     HIGH潮 = "高潮"
     START = "启动"
     DIVERGENCE = "分歧"
@@ -70,6 +71,7 @@ class STIPhase(str, Enum):
 
 class STIDimension(BaseModel):
     """8 维指标原始值（归一化前）。"""
+
     limit_up_count: float = 0.0
     limit_down_count: float = 0.0
     seal_rate: float = 0.0
@@ -82,6 +84,7 @@ class STIDimension(BaseModel):
 
 class STIResult(BaseModel):
     """STI 情绪温度计算结果。"""
+
     date: str
     score: Optional[float]
     phase: Optional[STIPhase]

@@ -10,6 +10,7 @@ event edge 也算 universe_by_day，``drift_adjusted = event_mean - universe_mea
 ``is_drift_inflated=True`` 表示 event_mean>0 但 drift_adjusted≤0（漂移假阳性）
 → verifier 降级 non-robust（防牛市假阳性 robust_edge）。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -49,8 +50,10 @@ def adjust_event_drift(
 
     if not universe_by_day:
         return EventDriftResult(
-            event_mean=event_mean, universe_mean=None,
-            drift_adjusted_mean=None, is_drift_inflated=False,
+            event_mean=event_mean,
+            universe_mean=None,
+            drift_adjusted_mean=None,
+            is_drift_inflated=False,
         )
 
     univ_returns: list[float] = []
@@ -63,6 +66,8 @@ def adjust_event_drift(
     drift_adjusted = event_mean - universe_mean
     is_inflated = (event_mean > 0) and (drift_adjusted <= 0)
     return EventDriftResult(
-        event_mean=event_mean, universe_mean=universe_mean,
-        drift_adjusted_mean=drift_adjusted, is_drift_inflated=is_inflated,
+        event_mean=event_mean,
+        universe_mean=universe_mean,
+        drift_adjusted_mean=drift_adjusted,
+        is_drift_inflated=is_inflated,
     )

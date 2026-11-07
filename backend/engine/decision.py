@@ -11,6 +11,7 @@ v2 关键修（治 grill #6 两分支都破）：entry_price 是 Executor FillPo
 在 INPUT batch。Trades 自带 signal_date → PIT store 无消费者（deferred，engine 读
 pre-loaded bars 非 PIT query）。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

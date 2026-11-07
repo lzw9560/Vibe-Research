@@ -15,6 +15,7 @@ gate=OFF。本脚本算 8 年历史类似极值的恢复时间分布。
 - 历史 ≠ 未来 + 极端区域样本量少（8年里 breadth≤21.2% 的次数可能不多，分布宽）
 - 给分布（median/分位）不给单点预测
 """
+
 from __future__ import annotations
 
 import statistics
@@ -49,9 +50,11 @@ def _pct(data: list, q: float) -> float:
 def _dist_label(name: str, data: list) -> str:
     if not data:
         return f"{name}: (n=0)"
-    return (f"{name}: n={len(data)} median={statistics.median(data):.0f}d "
-            f"mean={statistics.mean(data):.0f}d p25={_pct(data,0.25):.0f}d "
-            f"p75={_pct(data,0.75):.0f}d min={min(data)} max={max(data)}")
+    return (
+        f"{name}: n={len(data)} median={statistics.median(data):.0f}d "
+        f"mean={statistics.mean(data):.0f}d p25={_pct(data, 0.25):.0f}d "
+        f"p75={_pct(data, 0.75):.0f}d min={min(data)} max={max(data)}"
+    )
 
 
 def main() -> None:
@@ -85,8 +88,8 @@ def main() -> None:
 
     print(f"=== 当前 regime 历史恢复时间分布（amount-decile 口径，{series[0][0]}~{latest_date}，{len(series)} 日）===")
     print(f"数据日（最新）：{latest_date}")
-    print(f"amount 口径当前值：breadth={cur_b*100:.1f}%  小盘5d={cur_sm5*100:+.2f}%  viable={cur_viable}")
-    print(f"cap 口径当前值（monitor 10-26 跑出，参考基准）：breadth={CAP_B*100:.1f}%  小盘5d={CAP_SM5*100:+.2f}%")
+    print(f"amount 口径当前值：breadth={cur_b * 100:.1f}%  小盘5d={cur_sm5 * 100:+.2f}%  viable={cur_viable}")
+    print(f"cap 口径当前值（monitor 10-26 跑出，参考基准）：breadth={CAP_B * 100:.1f}%  小盘5d={CAP_SM5 * 100:+.2f}%")
     print()
 
     # 1. 历史分位
@@ -95,10 +98,12 @@ def main() -> None:
     b_pct_cap = sum(1 for b in all_b if b <= CAP_B) / len(all_b)
     sm5_pct_cap = sum(1 for s in all_sm5 if s <= CAP_SM5) / len(all_sm5)
     print("【1】当前值的历史分位（越低=越极端=比现在更差的日子越少）")
-    print(f"  breadth {cur_b*100:.1f}%(amount口径): {b_pct_amt*100:.1f}% 的日子比现在更差（即 {(1-b_pct_amt)*100:.1f}% 日子比现在好）")
-    print(f"  breadth {CAP_B*100:.1f}%(cap口径基准): {b_pct_cap*100:.1f}% 的日子比现在更差")
-    print(f"  小盘5d {cur_sm5*100:+.2f}%(amount口径): {sm5_pct_amt*100:.1f}% 的日子比现在更差")
-    print(f"  小盘5d {CAP_SM5*100:+.2f}%(cap口径基准): {sm5_pct_cap*100:.1f}% 的日子比现在更差")
+    print(
+        f"  breadth {cur_b * 100:.1f}%(amount口径): {b_pct_amt * 100:.1f}% 的日子比现在更差（即 {(1 - b_pct_amt) * 100:.1f}% 日子比现在好）"
+    )
+    print(f"  breadth {CAP_B * 100:.1f}%(cap口径基准): {b_pct_cap * 100:.1f}% 的日子比现在更差")
+    print(f"  小盘5d {cur_sm5 * 100:+.2f}%(amount口径): {sm5_pct_amt * 100:.1f}% 的日子比现在更差")
+    print(f"  小盘5d {CAP_SM5 * 100:+.2f}%(cap口径基准): {sm5_pct_cap * 100:.1f}% 的日子比现在更差")
     print()
 
     # 2. breadth≤当前 → 恢复 >0.4 的交易日数分布
@@ -130,8 +135,8 @@ def main() -> None:
                     b_rec_amt.append(j - i)
                     break
     print("【2】breadth≤当前 → 恢复>40% 的交易日数分布")
-    print(f"  以 cap 基准 {CAP_B*100:.1f}%: {_dist_label('', b_rec_cap)}")
-    print(f"  以 amount 当前 {cur_b*100:.1f}%: {_dist_label('', b_rec_amt)}")
+    print(f"  以 cap 基准 {CAP_B * 100:.1f}%: {_dist_label('', b_rec_cap)}")
+    print(f"  以 amount 当前 {cur_b * 100:.1f}%: {_dist_label('', b_rec_amt)}")
     print()
 
     # 3. 小盘5d≤当前 → 转正 >0 的交易日数分布
@@ -150,8 +155,8 @@ def main() -> None:
                     sm5_rec_amt.append(j - i)
                     break
     print("【3】小盘5d≤当前 → 转正>0 的交易日数分布")
-    print(f"  以 cap 基准 {CAP_SM5*100:+.2f}%: {_dist_label('', sm5_rec_cap)}")
-    print(f"  以 amount 当前 {cur_sm5*100:+.2f}%: {_dist_label('', sm5_rec_amt)}")
+    print(f"  以 cap 基准 {CAP_SM5 * 100:+.2f}%: {_dist_label('', sm5_rec_cap)}")
+    print(f"  以 amount 当前 {cur_sm5 * 100:+.2f}%: {_dist_label('', sm5_rec_amt)}")
     print()
 
     # 4. gate=OFF 连续段长度分布
@@ -198,11 +203,17 @@ def main() -> None:
     print("【6】结论（历史类似极值的恢复区间，非预测）")
     parts = []
     if b_rec_cap:
-        parts.append(f"breadth≤21.2%→恢复>40% median {statistics.median(b_rec_cap):.0f} 交易日（p25-p75: {_pct(b_rec_cap,0.25):.0f}-{_pct(b_rec_cap,0.75):.0f}）")
+        parts.append(
+            f"breadth≤21.2%→恢复>40% median {statistics.median(b_rec_cap):.0f} 交易日（p25-p75: {_pct(b_rec_cap, 0.25):.0f}-{_pct(b_rec_cap, 0.75):.0f}）"
+        )
     if sm5_rec_cap:
-        parts.append(f"小盘5d≤-1.33%→转正 median {statistics.median(sm5_rec_cap):.0f} 交易日（p25-p75: {_pct(sm5_rec_cap,0.25):.0f}-{_pct(sm5_rec_cap,0.75):.0f}）")
+        parts.append(
+            f"小盘5d≤-1.33%→转正 median {statistics.median(sm5_rec_cap):.0f} 交易日（p25-p75: {_pct(sm5_rec_cap, 0.25):.0f}-{_pct(sm5_rec_cap, 0.75):.0f}）"
+        )
     if dual_rec:
-        parts.append(f"双极值→gate viable 恢复 median {statistics.median(dual_rec):.0f} 交易日（p25-p75: {_pct(dual_rec,0.25):.0f}-{_pct(dual_rec,0.75):.0f}）")
+        parts.append(
+            f"双极值→gate viable 恢复 median {statistics.median(dual_rec):.0f} 交易日（p25-p75: {_pct(dual_rec, 0.25):.0f}-{_pct(dual_rec, 0.75):.0f}）"
+        )
     for p in parts:
         print(f"  {p}")
     print()
@@ -211,7 +222,9 @@ def main() -> None:
     print("  - A股 regime 跳变（政策/流动性催化可突然反转）——历史恢复时间分布给的是'类似状态的典型持续'，")
     print("    不排除这次更长或更短（如 2024-09 政策催化 V 型反转 vs 2018 贸易战阴跌数月）")
     print("  - 极端区域样本量少（breadth≤21.2% 的次数有限），分布宽，median 仅供参照")
-    print("  - amount-decile 代理小盘（≠ cap-decile），cap 口径当前值（21.2%/-1.33%）在 amount 历史分布里找分位有口径差异")
+    print(
+        "  - amount-decile 代理小盘（≠ cap-decile），cap 口径当前值（21.2%/-1.33%）在 amount 历史分布里找分位有口径差异"
+    )
     print("  - 命题B已证伪 market timing——不给'X 天后转牛'的单点预测，给分布")
 
 

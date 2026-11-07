@@ -10,6 +10,7 @@ DRY：与 strategies/funnel/scoring.py 14 维评分系统不同抽象层（scori
 按市场档位分层；Dragon Score=战法级 ranking flat 先验权重标 overfit），共享数据源
 （seal_to_float_ratio/zt_count_today）不共享逻辑。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

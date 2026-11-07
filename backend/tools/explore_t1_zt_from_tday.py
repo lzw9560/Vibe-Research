@@ -9,6 +9,7 @@ T 日全样本（未涨停）→ T+1 涨停 预判信号宽口径回溯。
 - 候选信号：放量上涨未涨停 / 缩量回调企稳 / 尾盘抢筹(日线 close 近 high 代理) / 换手+量比组合
 诚实：报 sample n / hit count / hit rate / base rate / lift / 95% CI(Wilson)，不臆造。
 """
+
 import sqlite3
 import json
 import statistics
@@ -20,12 +21,14 @@ from collections import defaultdict
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vr_paths import resolve_data_dir
+
 _DATA = resolve_data_dir()
 KLINE_DB = str(_DATA / "baostock_kline_cache.db")
 ZT_DB = str(_DATA / "zt_history.db")
 
 # ---- load zt_history: date -> set(codes) ----
-zdb = sqlite3.connect(ZT_DB); zcur = zdb.cursor()
+zdb = sqlite3.connect(ZT_DB)
+zcur = zdb.cursor()
 zcur.execute("SELECT date, code FROM zt_history")
 zt_by_date = defaultdict(set)
 for d, c in zcur.fetchall():
@@ -35,17 +38,24 @@ zdb.close()
 # master trading calendar (sorted dates that have zt records ~ every trading day)
 cal = sorted(zt_by_date.keys())
 date_idx = {d: i for i, d in enumerate(cal)}
+
+
 def next_trading_date(d):
     i = date_idx.get(d)
     if i is None or i + 1 >= len(cal):
         return None
     return cal[i + 1]
 
+
 # restrict to kline overlap window
-T_MIN, T_MAX = "2025-12-25", "2026-09-17"  # T day; T+1 must be <= 2026-09-18 (kline end) for exit price; but label only needs zt which goes to 09-29
+T_MIN, T_MAX = (
+    "2025-12-25",
+    "2026-09-17",
+)  # T day; T+1 must be <= 2026-09-18 (kline end) for exit price; but label only needs zt which goes to 09-29
 
 # ---- load kline: code -> list[bar dict] sorted by date ----
-kdb = sqlite3.connect(KLINE_DB); kcur = kdb.cursor()
+kdb = sqlite3.connect(KLINE_DB)
+kcur = kdb.cursor()
 kcur.execute("SELECT code, bars_json FROM kline")
 code_bars = {}
 for code, bj in kcur.fetchall():
@@ -61,7 +71,7 @@ print(f"loaded {len(code_bars)} codes", file=sys.stderr)
 
 # index bars by date per code for fast lookup; also keep sorted date list
 code_bar_map = {}  # code -> {date: bar}
-code_dates = {}   # code -> sorted [date]
+code_dates = {}  # code -> sorted [date]
 for code, bars in code_bars.items():
     m = {}
     for b in bars:
@@ -74,6 +84,7 @@ for code, bars in code_bars.items():
     code_bar_map[code] = m
     code_dates[code] = ds
 
+
 def vol_ratio_5(code, idx):
     """T-day volume / mean(prev 5 days volume). idx = position in code_dates."""
     ds = code_dates[code]
@@ -81,7 +92,7 @@ def vol_ratio_5(code, idx):
     tbar = m[ds[idx]]
     if tbar.get("volume") is None:
         return None
-    prev = ds[max(0, idx-5):idx]
+    prev = ds[max(0, idx - 5) : idx]
     if len(prev) < 5:
         return None
     pv = [m[p].get("volume") for p in prev]
@@ -92,11 +103,13 @@ def vol_ratio_5(code, idx):
         return None
     return tbar["volume"] / avg5
 
+
 def close_in_range(bar):
     h, l, c = bar.get("high"), bar.get("low"), bar.get("close")
     if h is None or l is None or c is None or h == l:
         return None
     return (c - l) / (h - l)
+
 
 # ---- main loop: for each code, each T in overlap, build record ----
 records = []  # (pctChg, turn, vr5, cir, amount, label, is_st, code)
@@ -132,31 +145,39 @@ print(f"records (T-day non-limitup, full features): {n_total}", file=sys.stderr)
 print(f"T+1 limitup positives: {n_labeled_pos}", file=sys.stderr)
 
 base_rate = n_labeled_pos / n_total if n_total else 0
-print(f"BASE RATE P(T+1 ZT | T-day non-ZT) = {n_labeled_pos}/{n_total} = {base_rate*100:.3f}%  (n_pos={n_labeled_pos})", file=sys.stderr)
+print(
+    f"BASE RATE P(T+1 ZT | T-day non-ZT) = {n_labeled_pos}/{n_total} = {base_rate * 100:.3f}%  (n_pos={n_labeled_pos})",
+    file=sys.stderr,
+)
+
 
 # ---- Wilson 95% CI ----
 def wilson(k, n):
     if n == 0:
-        return (0,0)
+        return (0, 0)
     z = 1.9599639845
     phat = k / n
-    denom = 1 + z*z/n
-    center = (phat + z*z/(2*n)) / denom
-    half = z * math.sqrt(phat*(1-phat)/n + z*z/(4*n*n)) / denom
-    return (center-half, center+half)
+    denom = 1 + z * z / n
+    center = (phat + z * z / (2 * n)) / denom
+    half = z * math.sqrt(phat * (1 - phat) / n + z * z / (4 * n * n)) / denom
+    return (center - half, center + half)
+
 
 def report(name, mask_fn):
     sub = [r for r in records if mask_fn(r)]
     n = len(sub)
     k = sum(r[5] for r in sub)
-    rate = k/n if n else 0
+    rate = k / n if n else 0
     lo, hi = wilson(k, n)
     lift = rate / base_rate if base_rate else 0
-    lo_l, hi_l = lo/base_rate if base_rate else 0, hi/base_rate if base_rate else 0
-    print(f"{name:48s} | n={n:6d} hit={k:4d} rate={rate*100:6.2f}% lift={lift:5.2f}x CI=[{lo*100:.2f},{hi*100:.2f}]% liftCI=[{lo_l:.2f},{hi_l:.2f}]x")
+    lo_l, hi_l = lo / base_rate if base_rate else 0, hi / base_rate if base_rate else 0
+    print(
+        f"{name:48s} | n={n:6d} hit={k:4d} rate={rate * 100:6.2f}% lift={lift:5.2f}x CI=[{lo * 100:.2f},{hi * 100:.2f}]% liftCI=[{lo_l:.2f},{hi_l:.2f}]x"
+    )
+
 
 print("\n===== BASE =====")
-print(f"base rate = {base_rate*100:.3f}%  (n={n_total}, pos={n_labeled_pos})")
+print(f"base rate = {base_rate * 100:.3f}%  (n={n_total}, pos={n_labeled_pos})")
 
 print("\n===== SIGNAL A: 放量上涨未涨停 =====")
 report("pct 3-7% all", lambda r: 3 <= r[0] <= 7)
@@ -185,15 +206,22 @@ print("\n===== SIGNAL D: 缩量回调企稳(需近日涨停历史) =====")
 zt_codes_all = set()
 for s in zt_by_date.values():
     zt_codes_all |= s
+
+
 def had_recent_zt(code, d, lookback=5):
     i = date_idx.get(d)
     if i is None:
         return False
-    for j in range(max(0, i-lookback), i):
+    for j in range(max(0, i - lookback), i):
         if code in zt_by_date.get(cal[j], ()):
             return True
     return False
-report("recent ZT(<=5d) & pct[-3,3] & vr5<1 & cir>0.5", lambda r: had_recent_zt(r[7], r and 0) and -3 <= r[0] <= 3 and r[2] < 1.0 and r[3] > 0.5) if False else lambda r: False
+
+
+report(
+    "recent ZT(<=5d) & pct[-3,3] & vr5<1 & cir>0.5",
+    lambda r: had_recent_zt(r[7], r and 0) and -3 <= r[0] <= 3 and r[2] < 1.0 and r[3] > 0.5,
+) if False else lambda r: False
 # proper version (can't use r date directly; recompute with code lookup needs date). Use a second pass.
 
 print("\n===== CONTROLS / SANITY =====")
@@ -203,9 +231,9 @@ report("vr5 < 0.5 (缩量对照)", lambda r: r[2] < 0.5)
 report("pct 0-2 & vr5<0.8 (无量阴跌对照)", lambda r: 0 <= r[0] <= 2 and r[2] < 0.8)
 
 print("\n===== pctChg buckets (continuum) =====")
-for lo, hi in [(-99,-5),(-5,-2),(-2,0),(0,2),(2,4),(4,6),(6,8),(8,9.3)]:
+for lo, hi in [(-99, -5), (-5, -2), (-2, 0), (0, 2), (2, 4), (4, 6), (6, 8), (8, 9.3)]:
     report(f"pct [{lo},{hi}]", lambda r, lo=lo, hi=hi: lo <= r[0] < hi)
 
 print("\n===== vr5 buckets (continuum) =====")
-for lo, hi in [(0,0.5),(0.5,1),(1,1.5),(1.5,2),(2,3),(3,5),(5,99)]:
+for lo, hi in [(0, 0.5), (0.5, 1), (1, 1.5), (1.5, 2), (2, 3), (3, 5), (5, 99)]:
     report(f"vr5 [{lo},{hi})", lambda r, lo=lo, hi=hi: lo <= r[2] < hi)

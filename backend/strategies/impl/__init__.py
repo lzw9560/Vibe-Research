@@ -9,6 +9,7 @@
 - indicator_based（2）：weak_turn_strong / pattern_reversal
 - db_based（1）：reverse_package
 """
+
 from __future__ import annotations
 
 from strategies.impl.gene_based import (

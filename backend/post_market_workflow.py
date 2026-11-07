@@ -8,6 +8,7 @@
 4. 参数优化
 5. 生成次日策略
 """
+
 from __future__ import annotations
 
 import logging
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SettlementResult:
     """结算结果。"""
+
     code: str
     name: str
     date: str
@@ -35,6 +37,7 @@ class SettlementResult:
 @dataclass
 class PostMarketReport:
     """盘后报告。"""
+
     date: str
     generated_at: str
     settlements: list[SettlementResult] = field(default_factory=list)

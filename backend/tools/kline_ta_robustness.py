@@ -10,6 +10,7 @@
 
 用法：cd backend && .venv/bin/python tools/kline_ta_robustness.py
 """
+
 from __future__ import annotations
 
 import json
@@ -47,6 +48,7 @@ def _wilson(wins: int, n: int, z: float = 1.96) -> tuple[float, float]:
 def _compute_ta(bars: list[dict], target_date: str) -> dict | None:
     """复用 kline_ta_validation 的 TA 计算（T-1 features for target T）。"""
     from kline_ta_validation import _compute_ta as _ta
+
     return _ta(bars, target_date)
 
 
@@ -77,18 +79,34 @@ def main() -> int:
     cache = json.loads(KLINE_CACHE.read_bytes())
     conn = sqlite3.connect(str(DB), timeout=10)
     try:
-        em_dates = [r[0] for r in conn.execute(
-            "SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
-        ).fetchall()]
-        zt_by_date = {d: {r[0] for r in conn.execute(
-            "SELECT DISTINCT code FROM gene_scores WHERE date=? AND data_source='eastmoney_live'", (d,)).fetchall()}
-            for d in em_dates}
+        em_dates = [
+            r[0]
+            for r in conn.execute(
+                "SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
+            ).fetchall()
+        ]
+        zt_by_date = {
+            d: {
+                r[0]
+                for r in conn.execute(
+                    "SELECT DISTINCT code FROM gene_scores WHERE date=? AND data_source='eastmoney_live'", (d,)
+                ).fetchall()
+            }
+            for d in em_dates
+        }
         # 8 因子（gene_scores，今日涨停子集）
-        gene8_by_date = {d: {r[0]: r for r in conn.execute(
-            "SELECT code, factor_seal_rate, factor_rebound_rate, factor_red_rate, "
-            "factor_premium_rate, factor_freq_score, total_score "
-            "FROM gene_scores WHERE date=? AND data_source='eastmoney_live'", (d,)).fetchall()}
-            for d in em_dates}
+        gene8_by_date = {
+            d: {
+                r[0]: r
+                for r in conn.execute(
+                    "SELECT code, factor_seal_rate, factor_rebound_rate, factor_red_rate, "
+                    "factor_premium_rate, factor_freq_score, total_score "
+                    "FROM gene_scores WHERE date=? AND data_source='eastmoney_live'",
+                    (d,),
+                ).fetchall()
+            }
+            for d in em_dates
+        }
     finally:
         conn.close()
 
@@ -101,8 +119,7 @@ def main() -> int:
             if ta is None:
                 continue
             tr = _t_return(bars, T)
-            obs.append({"T": T, "code": code, "ta": ta,
-                        "is_zt": 1 if code in zt_T else 0, "t_return": tr})
+            obs.append({"T": T, "code": code, "ta": ta, "is_zt": 1 if code in zt_T else 0, "t_return": tr})
 
     n = len(obs)
     n_days = len(set(o["T"] for o in obs))
@@ -127,8 +144,10 @@ def main() -> int:
         lo = lifts[10]  # 5th percentile
         hi = lifts[190]  # 95th percentile
         med = lifts[100]
-        print(f"  {feat}: day-cluster lift median={med:.3f}x, 90%CI[{lo:.3f}, {hi:.3f}]"
-              f" → {'robust（下界>1）' if lo > 1.0 else 'NOT robust（日级 confound 风险）'}")
+        print(
+            f"  {feat}: day-cluster lift median={med:.3f}x, 90%CI[{lo:.3f}, {hi:.3f}]"
+            f" → {'robust（下界>1）' if lo > 1.0 else 'NOT robust（日级 confound 风险）'}"
+        )
 
     # === Step 2: premium-return（breakout/volatility → T return_open2close）===
     print("\n── Step 2: premium-return（T open2close）──")
@@ -141,8 +160,10 @@ def main() -> int:
         b_avg = sum(r[1] for r in bottom) / q
         t_avg = sum(r[1] for r in top) / q
         spread = t_avg - b_avg
-        print(f"  {feat}: top-quintile avg return={t_avg:.3f}%  bottom={b_avg:.3f}%  spread={spread:.3f}%"
-              f" → {'edge translate 到 PnL' if spread > 0.1 else 'NOT translate（涨停edge≠溢价edge）'}")
+        print(
+            f"  {feat}: top-quintile avg return={t_avg:.3f}%  bottom={b_avg:.3f}%  spread={spread:.3f}%"
+            f" → {'edge translate 到 PnL' if spread > 0.1 else 'NOT translate（涨停edge≠溢价edge）'}"
+        )
 
     # === Step 3: incremental-8（今日涨停子集，TA vs 8 vs 8+TA → T+1 涨停）===
     print("\n── Step 3: incremental-8（今日涨停子集 → T+1 涨停）──")
@@ -160,21 +181,22 @@ def main() -> int:
                 continue
             g = g8[code]  # (code, seal, rebound, red, premium, freq, total)
             total_score = g[6] or 0  # total_score
-            cont_obs.append({"T": T, "code": code, "ta": ta, "total": total_score,
-                             "is_zt_T1": 1 if code in zt_T1 else 0})
+            cont_obs.append(
+                {"T": T, "code": code, "ta": ta, "total": total_score, "is_zt_T1": 1 if code in zt_T1 else 0}
+            )
 
     print(f"  今日涨停子集: {len(cont_obs)} obs（有 8 因子 + TA + T+1 目标）")
     if cont_obs:
         base = sum(o["is_zt_T1"] for o in cont_obs) / len(cont_obs)
-        print(f"  T+1 涨停 base rate: {base*100:.1f}%")
+        print(f"  T+1 涨停 base rate: {base * 100:.1f}%")
         # TA-alone（breakout）
         ta_vals = [(o["ta"]["breakout"], o["is_zt_T1"]) for o in cont_obs]
         t_r, b_r, lift_ta, _, _ = _quintile_lift(ta_vals)
-        print(f"  TA-alone (breakout→T+1涨停): lift={lift_ta:.3f}x (top {t_r*100:.1f}% vs bot {b_r*100:.1f}%)")
+        print(f"  TA-alone (breakout→T+1涨停): lift={lift_ta:.3f}x (top {t_r * 100:.1f}% vs bot {b_r * 100:.1f}%)")
         # 8-alone（total_score）
         g_vals = [(o["total"], o["is_zt_T1"]) for o in cont_obs]
         t_r, b_r, lift_8, _, _ = _quintile_lift(g_vals)
-        print(f"  8-alone (total_score→T+1涨停): lift={lift_8:.3f}x (top {t_r*100:.1f}% vs bot {b_r*100:.1f}%)")
+        print(f"  8-alone (total_score→T+1涨停): lift={lift_8:.3f}x (top {t_r * 100:.1f}% vs bot {b_r * 100:.1f}%)")
         # 8+TA（combined rank: rank(total) + rank(breakout) + rank(volatility)）
         ranked = sorted(cont_obs, key=lambda o: o["total"])
         rank_total = {o["code"] + o["T"]: i for i, o in enumerate(ranked)}
@@ -182,10 +204,15 @@ def main() -> int:
         rank_brk = {o["code"] + o["T"]: i for i, o in enumerate(ranked2)}
         ranked3 = sorted(cont_obs, key=lambda o: o["ta"]["volatility"])
         rank_vol = {o["code"] + o["T"]: i for i, o in enumerate(ranked3)}
-        combined = [(rank_total[o["code"]+o["T"]] + rank_brk[o["code"]+o["T"]] + rank_vol[o["code"]+o["T"]],
-                     o["is_zt_T1"]) for o in cont_obs]
+        combined = [
+            (
+                rank_total[o["code"] + o["T"]] + rank_brk[o["code"] + o["T"]] + rank_vol[o["code"] + o["T"]],
+                o["is_zt_T1"],
+            )
+            for o in cont_obs
+        ]
         t_r, b_r, lift_combo, _, _ = _quintile_lift(combined)
-        print(f"  8+TA (combined rank→T+1涨停): lift={lift_combo:.3f}x (top {t_r*100:.1f}% vs bot {b_r*100:.1f}%)")
+        print(f"  8+TA (combined rank→T+1涨停): lift={lift_combo:.3f}x (top {t_r * 100:.1f}% vs bot {b_r * 100:.1f}%)")
         verdict = "8 有增量价值（保留）" if lift_combo > max(lift_ta, lift_8) + 0.05 else "8 无增量/稀释（可丢）"
         print(f"  → {verdict}（combo {lift_combo:.3f} vs max(TA {lift_ta:.3f}, 8 {lift_8:.3f})）")
     else:

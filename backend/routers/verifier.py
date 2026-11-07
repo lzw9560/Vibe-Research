@@ -12,6 +12,7 @@ Response shapes match ``frontend/src/lib/verifier-contract.ts`` EXACTLY
 R8 wiring: weight_multiplier + status come from ``lift_to_multiplier`` (production,
 replaces direct reads of frozen weight_multiplier — CLAUDE.md §1.2 P0).
 """
+
 from __future__ import annotations
 
 import json
@@ -38,7 +39,11 @@ _S159_WINDOW_BASELINE: dict[str, Any] = {
 
 # S161 overfit stats — all null until backtest-overfit skill wired (待建).
 _OVERFIT_PLACEHOLDER: dict[str, Any] = {
-    "pbo": None, "cscv": None, "dsr": None, "haircut": None, "min_trl": None,
+    "pbo": None,
+    "cscv": None,
+    "dsr": None,
+    "haircut": None,
+    "min_trl": None,
 }
 
 # M4 (track-d-edge): per-dimension edge_type mapping.
@@ -52,11 +57,11 @@ _OVERFIT_PLACEHOLDER: dict[str, Any] = {
 # Defaults to "selection" for dimensions not listed below (most §44 lift tests
 # are selection edges). Only non-selection dimensions are explicitly mapped.
 _DIMENSION_EDGE_TYPE: dict[str, str] = {
-    "path_lift": "path",           # 选股整体 path_lift — full path return
+    "path_lift": "path",  # 选股整体 path_lift — full path return
     "low_volatility": "population",  # 红利低波 9-12% triple-consensus (externally validated)
-    "ofi_accumulated": "event",     # 盘中 OFI 累积 → D收 (intraday event)
-    "seal_sincerity": "event",      # 封单诚意 → D收 (intraday event)
-    "bid_ask_pressure": "event",   # 买卖盘压力 → D收 (intraday event)
+    "ofi_accumulated": "event",  # 盘中 OFI 累积 → D收 (intraday event)
+    "seal_sincerity": "event",  # 封单诚意 → D收 (intraday event)
+    "bid_ask_pressure": "event",  # 买卖盘压力 → D收 (intraday event)
 }
 
 
@@ -127,33 +132,35 @@ def _dim_to_response(dim, data_snapshot_id: str | None = None) -> dict[str, Any]
     no fabrication).
     """
     status_cn, multiplier = lift_to_multiplier(
-        dim.lift, dim.n, days_robust=dim.days_robust,
+        dim.lift,
+        dim.n,
+        days_robust=dim.days_robust,
     )
     return {
         "dimension_id": dim.dimension_id,
         "label": dim.label,
         "lift": dim.lift,
-        "ci_low": None,           # 待 S161 v2 verifier
-        "ci_high": None,          # 待 S161 v2 verifier
+        "ci_low": None,  # 待 S161 v2 verifier
+        "ci_high": None,  # 待 S161 v2 verifier
         "n": dim.n,
-        "n_effective": None,      # 待 day_paired effective-n wiring
+        "n_effective": None,  # 待 day_paired effective-n wiring
         "days_robust": dim.days_robust,
         "status": _status_chinese_to_english(status_cn),
         "edge_type": _DIMENSION_EDGE_TYPE.get(dim.dimension_id, "selection"),  # M4 per-dim
-        "tradeable": False,        # 选股层无 validated 维度
-        "event_metrics": None,    # event edge 在 recorder records（§3 event verdict）
+        "tradeable": False,  # 选股层无 validated 维度
+        "event_metrics": None,  # event edge 在 recorder records（§3 event verdict）
         "event_status": None,
         "weight_multiplier": multiplier,
         "source_script": dim.source_script,
         "note": dim.note,
-        "dsr_method": "N/A",       # selection 维度 single-strategy
+        "dsr_method": "N/A",  # selection 维度 single-strategy
         "three_window_compare": _S159_WINDOW_BASELINE,  # universe-level, 待 per-dim
-        "overfit_stats": _OVERFIT_PLACEHOLDER,         # 待 backtest-overfit wire
+        "overfit_stats": _OVERFIT_PLACEHOLDER,  # 待 backtest-overfit wire
         "frozen_commit": dim.frozen_commit,
-        "updated_commit": None,   # 待回溯 task 填充
-        "updated_at": None,       # 待回溯 task 填充
+        "updated_commit": None,  # 待回溯 task 填充
+        "updated_at": None,  # 待回溯 task 填充
         "data_snapshot_id": data_snapshot_id,  # S162 R4: from recorder
-        "layer": "selection",     # R6 三层 reframe
+        "layer": "selection",  # R6 三层 reframe
     }
 
 
@@ -206,10 +213,7 @@ async def list_evaluation_dims() -> list[dict[str, Any]]:
         snapshot_map = recorder.latest_snapshot_ids_by_dimension(dim_ids)
     except Exception:  # noqa: BLE001 — DB unavailable → all None (honest, not 500)
         snapshot_map = {}
-    return [
-        _dim_to_response(dim, snapshot_map.get(dim.dimension_id))
-        for dim in DIMENSION_LIFT_REGISTRY.values()
-    ]
+    return [_dim_to_response(dim, snapshot_map.get(dim.dimension_id)) for dim in DIMENSION_LIFT_REGISTRY.values()]
 
 
 __all__ = ["router"]

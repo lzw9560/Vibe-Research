@@ -16,6 +16,7 @@ mootdx Quotes.transactions(symbol, date) 能拉**历史分笔**（price/vol/buyo
   python tools/mootdx_tick_ofi_proxy.py --code 000001 --start 20260901 --end 20260910
   python tools/mootdx_tick_ofi_proxy.py --codes 000001,600000 --start 20260701 --end 20260910 --output ofi_proxy.json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -42,7 +43,9 @@ def _trading_days(start: str, end: str) -> list[str]:
     return out
 
 
-def fetch_tick_ofi(code: str, date: str, page_size: int = 2000, max_pages: int = 20, return_raw: bool = False) -> dict | None:
+def fetch_tick_ofi(
+    code: str, date: str, page_size: int = 2000, max_pages: int = 20, return_raw: bool = False
+) -> dict | None:
     """拉某 code 某 date 全日分笔 → 算主动买卖 OFI proxy。
 
     mootdx transactions 分页：start=0,offset=2000 → 下一页 start+=offset。
@@ -71,6 +74,7 @@ def fetch_tick_ofi(code: str, date: str, page_size: int = 2000, max_pages: int =
     if not all_ticks:
         return {"code": code, "date": date, "n_ticks": 0, "note": "无分笔数据（非交易日/停牌）"}
     import pandas as pd  # noqa: PLC0415
+
     df_all = pd.concat(all_ticks, ignore_index=True)
     active_buy = int(df_all[df_all["buyorsell"] == 1]["vol"].sum())
     active_sell = int(df_all[df_all["buyorsell"] == 2]["vol"].sum())
@@ -126,7 +130,11 @@ def main() -> None:
     p.add_argument("--start", default=None, help="起始日 YYYYMMDD")
     p.add_argument("--end", default=None, help="结束日 YYYYMMDD")
     p.add_argument("--output", default=None, help="落盘 JSON 路径")
-    p.add_argument("--save-datalake", action="store_true", help="直接拉 raw ticks 落 datalake/ticks_YYYYMM.db（不经 stdout，供 daily_full_pull 用）")
+    p.add_argument(
+        "--save-datalake",
+        action="store_true",
+        help="直接拉 raw ticks 落 datalake/ticks_YYYYMM.db（不经 stdout，供 daily_full_pull 用）",
+    )
     args = p.parse_args()
 
     codes = []
@@ -149,6 +157,7 @@ def main() -> None:
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         from data.datalake.store import save_ticks  # noqa: PLC0415
         from vr_paths import resolve_data_dir  # noqa: PLC0415
+
         days = _trading_days(start, end)
         saved = 0
         for code in codes:

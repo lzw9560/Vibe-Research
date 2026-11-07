@@ -5,6 +5,7 @@
 探索性（stats only，不跑 verdict——verdict 是 confirm，深挖是 find）。
 复用 s203_consecutive_relay_harness 的 compute_obs 口径（decimal gap_ret + D 日一字板 filter）。
 """
+
 import sqlite3
 import statistics
 import sys
@@ -37,15 +38,11 @@ def _zt_picks_with_meta() -> list[dict]:
     conn = sqlite3.connect(str(ZT_DB))
     try:
         rows = conn.execute(
-            "SELECT date, code, lbc, hybk, ltsz FROM zt_history "
-            "WHERE lbc>=2 AND is_final=1 ORDER BY date"
+            "SELECT date, code, lbc, hybk, ltsz FROM zt_history WHERE lbc>=2 AND is_final=1 ORDER BY date"
         ).fetchall()
     finally:
         conn.close()
-    return [
-        {"date": r[0], "code": r[1], "lbc": r[2], "hybk": r[3], "ltsz": r[4]}
-        for r in rows if r[0] and r[1]
-    ]
+    return [{"date": r[0], "code": r[1], "lbc": r[2], "hybk": r[3], "ltsz": r[4]} for r in rows if r[0] and r[1]]
 
 
 def compute_obs_with_meta(

@@ -5,6 +5,7 @@
 `ai.tools.registry`，不直接依赖具体 *_tools（除非要强制触发注册——本
 `__init__` 已代劳）。
 """
+
 from __future__ import annotations
 
 from . import registry  # noqa: F401

@@ -8,6 +8,7 @@ backfill 2018-2025 完成（2123 天 150 万行）——本脚本 8 年 LHB 上�
 第一步：分层统计 + 跨年分布（先验，不算次日表现）。
 第二步（待做）：次日表现 T+1open→T+2close + day_paired t + Bonferroni（baostock kline N+1）。
 """
+
 import sqlite3
 from pathlib import Path
 from collections import defaultdict
@@ -26,8 +27,14 @@ DT_DB = DATA / "dragon_tiger_history.db"
 
 # R34 机构+外资席位关键词
 INST_KEYWORDS = (
-    "机构专用", "总部", "高盛", "瑞银", "股通", "摩根",
-    "中信证券股份有限公司上海分公司", "国际金融",
+    "机构专用",
+    "总部",
+    "高盛",
+    "瑞银",
+    "股通",
+    "摩根",
+    "中信证券股份有限公司上海分公司",
+    "国际金融",
 )
 
 
@@ -70,7 +77,7 @@ def audit_inst_gradient() -> dict:
         print(f"  {layer}: {len(items)} picks ({pct:.1f}%)")
         if items:
             inst_pcts = [x[2] for x in items]
-            print(f"    inst_net_pct mean={sum(inst_pcts)/len(inst_pcts):.3f}")
+            print(f"    inst_net_pct mean={sum(inst_pcts) / len(inst_pcts):.3f}")
 
     # 跨年分布
     print(f"\n=== 跨年分布（看生态变迁）===")
@@ -93,7 +100,9 @@ def audit_inst_gradient() -> dict:
         if inst_buy / total_buy > 0.5:
             year_inst[date[:4]] += 1
     for year in sorted(year_total):
-        print(f"  {year}: inst_dominant {year_inst[year]}/{year_total[year]} = {year_inst[year]/year_total[year]*100:.1f}%")
+        print(
+            f"  {year}: inst_dominant {year_inst[year]}/{year_total[year]} = {year_inst[year] / year_total[year] * 100:.1f}%"
+        )
 
     return {"layers": layers, "n_picks": len(picks)}
 

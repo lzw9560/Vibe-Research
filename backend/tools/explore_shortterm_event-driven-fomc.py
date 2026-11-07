@@ -22,6 +22,7 @@
 - walk-forward: 2018-2021 train / 2022-2026 test (n~35/35, borderline underpowered)。
 - 禁止外推: 单策略事件研究 ≠ 短线有/无 edge; 指数漂移 ≠ ETF 可交易 edge。
 """
+
 from __future__ import annotations
 import json
 import sys
@@ -33,7 +34,12 @@ from math import sqrt
 # import shared helpers (DRY) — reuse statistical functions
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tools._factor_helpers import (  # noqa: E402
-    ev_stats, day_paired_t, bonferroni_p, norm_sf_positive, ALPHA, COST,
+    ev_stats,
+    day_paired_t,
+    bonferroni_p,
+    norm_sf_positive,
+    ALPHA,
+    COST,
 )
 
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
@@ -52,41 +58,90 @@ FOMC_JSON = DATA / "fomc_calendar.json"
 # source: https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm
 FOMC_HISTORICAL = [
     # 2018
-    "2018-01-31", "2018-03-21", "2018-05-02", "2018-06-13",
-    "2018-08-01", "2018-09-26", "2018-11-08", "2018-12-19",
+    "2018-01-31",
+    "2018-03-21",
+    "2018-05-02",
+    "2018-06-13",
+    "2018-08-01",
+    "2018-09-26",
+    "2018-11-08",
+    "2018-12-19",
     # 2019
-    "2019-01-30", "2019-03-20", "2019-05-01", "2019-06-19",
-    "2019-07-31", "2019-09-18", "2019-10-30", "2019-12-11",
+    "2019-01-30",
+    "2019-03-20",
+    "2019-05-01",
+    "2019-06-19",
+    "2019-07-31",
+    "2019-09-18",
+    "2019-10-30",
+    "2019-12-11",
     # 2020 (含 2 次 COVID 紧急会议 03-03 / 03-15)
-    "2020-01-29", "2020-03-03", "2020-03-15", "2020-03-18",
-    "2020-04-29", "2020-06-10", "2020-07-29", "2020-09-16",
-    "2020-11-05", "2020-12-16",
+    "2020-01-29",
+    "2020-03-03",
+    "2020-03-15",
+    "2020-03-18",
+    "2020-04-29",
+    "2020-06-10",
+    "2020-07-29",
+    "2020-09-16",
+    "2020-11-05",
+    "2020-12-16",
     # 2021
-    "2021-01-27", "2021-03-17", "2021-04-28", "2021-06-16",
-    "2021-07-28", "2021-09-22", "2021-11-03", "2021-12-15",
+    "2021-01-27",
+    "2021-03-17",
+    "2021-04-28",
+    "2021-06-16",
+    "2021-07-28",
+    "2021-09-22",
+    "2021-11-03",
+    "2021-12-15",
     # 2022
-    "2022-01-26", "2022-03-16", "2022-05-04", "2022-06-15",
-    "2022-07-27", "2022-09-21", "2022-11-02", "2022-12-14",
+    "2022-01-26",
+    "2022-03-16",
+    "2022-05-04",
+    "2022-06-15",
+    "2022-07-27",
+    "2022-09-21",
+    "2022-11-02",
+    "2022-12-14",
     # 2023
-    "2023-02-01", "2023-03-22", "2023-05-03", "2023-06-14",
-    "2023-07-26", "2023-09-20", "2023-11-01", "2023-12-13",
+    "2023-02-01",
+    "2023-03-22",
+    "2023-05-03",
+    "2023-06-14",
+    "2023-07-26",
+    "2023-09-20",
+    "2023-11-01",
+    "2023-12-13",
     # 2024
-    "2024-01-31", "2024-03-20", "2024-05-01", "2024-06-12",
-    "2024-07-31", "2024-09-18", "2024-11-07", "2024-12-18",
+    "2024-01-31",
+    "2024-03-20",
+    "2024-05-01",
+    "2024-06-12",
+    "2024-07-31",
+    "2024-09-18",
+    "2024-11-07",
+    "2024-12-18",
     # 2025
-    "2025-01-29", "2025-03-19", "2025-05-07", "2025-06-18",
-    "2025-07-30", "2025-09-17", "2025-10-29", "2025-12-17",
+    "2025-01-29",
+    "2025-03-19",
+    "2025-05-07",
+    "2025-06-18",
+    "2025-07-30",
+    "2025-09-17",
+    "2025-10-29",
+    "2025-12-17",
 ]
 
 # 事件窗口配置: (name, entry_offset, exit_offset)
 # 负 offset = 公告前 k 交易日; 0 = 公告日; 正 = 公告后 k 交易日
 # T-k close 买 → T-m close 卖 (close-to-close, 含两端)
 WINDOWS = [
-    ("pre_drift_3d",  -3, -1),  # 纯公告前 3→1 日漂移 (pre-announcement)
-    ("pre_drift_2d",  -2, -1),  # 2→1 日
-    ("announce_day",  -1,  0),  # 公告前一日→公告日 (含 02:00 决议, T-close 已消化)
-    ("post_1d",        0,  1),  # 公告日→次日 (post-reaction)
-    ("post_3d",        0,  3),  # 公告日→+3 日
+    ("pre_drift_3d", -3, -1),  # 纯公告前 3→1 日漂移 (pre-announcement)
+    ("pre_drift_2d", -2, -1),  # 2→1 日
+    ("announce_day", -1, 0),  # 公告前一日→公告日 (含 02:00 决议, T-close 已消化)
+    ("post_1d", 0, 1),  # 公告日→次日 (post-reaction)
+    ("post_3d", 0, 3),  # 公告日→+3 日
 ]
 
 
@@ -121,6 +176,7 @@ def map_to_trading_day(fomc: str, days: list[str], direction: str = "on_or_befor
     direction: 'on_or_before' (公告日或之前最近交易日, 用于 entry anchor)
                'on_or_after'  (公告日或之后最近交易日, 用于 post exit anchor)"""
     import bisect
+
     idx = bisect.bisect_left(days, fomc)
     if direction == "on_or_before":
         # 公告日当天若交易则用当天, 否则之前最近交易日
@@ -134,8 +190,9 @@ def map_to_trading_day(fomc: str, days: list[str], direction: str = "on_or_befor
     return None
 
 
-def window_return(bars: dict[str, dict], days: list[str],
-                  fomc_idx: int, entry_off: int, exit_off: int) -> tuple[float, str, str] | None:
+def window_return(
+    bars: dict[str, dict], days: list[str], fomc_idx: int, entry_off: int, exit_off: int
+) -> tuple[float, str, str] | None:
     """算窗口 close-to-close 收益. fomc_idx = 公告日映射后的 trading-day index.
     entry_off/exit_off 相对 fomc_idx. 返回 (return%, entry_date, exit_date) or None."""
     e_idx = fomc_idx + entry_off
@@ -154,9 +211,9 @@ def window_return(bars: dict[str, dict], days: list[str],
     return ret, e_date, x_date
 
 
-def base_rate_for_window(bars: dict[str, dict], days: list[str],
-                         entry_off: int, exit_off: int,
-                         event_fomc_indices: set[int]) -> list[float]:
+def base_rate_for_window(
+    bars: dict[str, dict], days: list[str], entry_off: int, exit_off: int, event_fomc_indices: set[int]
+) -> list[float]:
     """全市场同长度 rolling 窗口收益 (排除 FOMC 事件窗, 防污染).
     返回 base rate 收益列表 (用于算 base mean + std)."""
     span = exit_off - entry_off
@@ -190,15 +247,16 @@ def per_event_t(ar_list: list[float]) -> dict:
     se = std / sqrt(n) if n > 0 else 0.0
     t = mean / se if se > 0 else 0.0
     p = norm_sf_positive(t)
-    return {"n": n, "mean": round(mean, 4), "std": round(std, 4),
-            "t": round(t, 2), "p_one_sided": round(p, 6)}
+    return {"n": n, "mean": round(mean, 4), "std": round(std, 4), "t": round(t, 2), "p_one_sided": round(p, 6)}
 
 
 def main() -> None:
     bars, days = load_regime()
     print(f"[data] regime trading days: {len(days)} ({days[0]}~{days[-1]})")
-    print(f"[data] index close range: {min(b['close'] for b in bars.values()):.1f} ~ "
-          f"{max(b['close'] for b in bars.values()):.1f} (上证综指代理)")
+    print(
+        f"[data] index close range: {min(b['close'] for b in bars.values()):.1f} ~ "
+        f"{max(b['close'] for b in bars.values()):.1f} (上证综指代理)"
+    )
 
     fomc_dates = load_fomc_dates(days[-1])
     print(f"[data] FOMC events: {len(fomc_dates)} ({fomc_dates[0]}~{fomc_dates[-1]})")
@@ -249,32 +307,42 @@ def main() -> None:
         ar_t = per_event_t(ar_list)
         net_ar = ar_t["mean"] - COST * 100  # 扣 round-trip cost
 
-        print(f"\n  [{wname}] entry_off={eoff} exit_off={xoff} (span={xoff-eoff}d)")
-        print(f"    event: n={ev_s['n']} mean={ev_s['ev']}% std={ev_s['std']}% "
-              f"WR={ev_s['wr']}% t={ev_s['t']}")
-        print(f"    base rate: n={len(base_rets)} mean={base_mean:.4f}% "
-              f"std={base_std:.4f}%")
-        print(f"    abnormal return (AR): mean={ar_t['mean']}% t={ar_t['t']} "
-              f"p_one_sided={ar_t['p_one_sided']} net_AR(after {COST*100:.1f}% cost)={net_ar:.4f}%")
+        print(f"\n  [{wname}] entry_off={eoff} exit_off={xoff} (span={xoff - eoff}d)")
+        print(f"    event: n={ev_s['n']} mean={ev_s['ev']}% std={ev_s['std']}% WR={ev_s['wr']}% t={ev_s['t']}")
+        print(f"    base rate: n={len(base_rets)} mean={base_mean:.4f}% std={base_std:.4f}%")
+        print(
+            f"    abnormal return (AR): mean={ar_t['mean']}% t={ar_t['t']} "
+            f"p_one_sided={ar_t['p_one_sided']} net_AR(after {COST * 100:.1f}% cost)={net_ar:.4f}%"
+        )
 
         all_event_rets_by_window[wname] = ev_rets
-        results.append({
-            "window": wname, "eoff": eoff, "xoff": xoff,
-            "n_event": ev_s["n"], "ev_mean": ev_s["ev"], "ev_std": ev_s["std"],
-            "ev_t": ev_s["t"], "wr": ev_s["wr"],
-            "base_mean": round(base_mean, 4), "base_std": round(base_std, 4),
-            "ar_mean": ar_t["mean"], "ar_t": ar_t["t"],
-            "ar_p_raw": ar_t["p_one_sided"], "net_ar": round(net_ar, 4),
-            "ev_dates": ev_dates,
-        })
+        results.append(
+            {
+                "window": wname,
+                "eoff": eoff,
+                "xoff": xoff,
+                "n_event": ev_s["n"],
+                "ev_mean": ev_s["ev"],
+                "ev_std": ev_s["std"],
+                "ev_t": ev_s["t"],
+                "wr": ev_s["wr"],
+                "base_mean": round(base_mean, 4),
+                "base_std": round(base_std, 4),
+                "ar_mean": ar_t["mean"],
+                "ar_t": ar_t["t"],
+                "ar_p_raw": ar_t["p_one_sided"],
+                "net_ar": round(net_ar, 4),
+                "ev_dates": ev_dates,
+            }
+        )
 
     if not results:
         print("\n[verdict] no windows with sufficient data → no-data")
         return
 
     # ---- regime stratification (strong/weak) ----
-    print(f"\n{'='*70}\n[regime stratification] pre_drift_3d by regime")
-    print(f"{'='*70}")
+    print(f"\n{'=' * 70}\n[regime stratification] pre_drift_3d by regime")
+    print(f"{'=' * 70}")
     for wname, eoff, xoff in WINDOWS:
         if wname != "pre_drift_3d":
             continue
@@ -320,12 +388,11 @@ def main() -> None:
             bm = sum(base) / len(base)
             ars_adj = [a - bm for a in ars]
             t = per_event_t(ars_adj)
-            print(f"  {rname}: n_event={len(ars)} AR_mean={t['mean']}% "
-                  f"t={t['t']} p={t['p_one_sided']}")
+            print(f"  {rname}: n_event={len(ars)} AR_mean={t['mean']}% t={t['t']} p={t['p_one_sided']}")
 
     # ---- walk-forward: 2018-2021 train / 2022-2026 test ----
-    print(f"\n{'='*70}\n[walk-forward] 2018-2021 train → 2022-2026 test")
-    print(f"{'='*70}")
+    print(f"\n{'=' * 70}\n[walk-forward] 2018-2021 train → 2022-2026 test")
+    print(f"{'=' * 70}")
     split_date = "2022-01-01"
     for wname, eoff, xoff in WINDOWS:
         ev_rets_train: list[float] = []
@@ -340,14 +407,18 @@ def main() -> None:
             (ev_rets_train if fd < split_date else ev_rets_test).append(r[0] - base_mean)
         tr_t = per_event_t(ev_rets_train)
         te_t = per_event_t(ev_rets_test)
-        print(f"  [{wname}] train(2018-21): n={tr_t['n']} AR={tr_t['mean']}% t={tr_t['t']} "
-              f"| test(2022-26): n={te_t['n']} AR={te_t['mean']}% t={te_t['t']} "
-              f"p={te_t['p_one_sided']}")
+        print(
+            f"  [{wname}] train(2018-21): n={tr_t['n']} AR={tr_t['mean']}% t={tr_t['t']} "
+            f"| test(2022-26): n={te_t['n']} AR={te_t['mean']}% t={te_t['t']} "
+            f"p={te_t['p_one_sided']}"
+        )
 
     # ---- Bonferroni + verdict (cross-window) ----
-    print(f"\n{'='*70}\n[verdict] cross-window Bonferroni ×{n_windows} "
-          f"(跨策略 ×5 由 sweep synthesis 加; 本脚本 ×{n_windows} windows)")
-    print(f"{'='*70}")
+    print(
+        f"\n{'=' * 70}\n[verdict] cross-window Bonferroni ×{n_windows} "
+        f"(跨策略 ×5 由 sweep synthesis 加; 本脚本 ×{n_windows} windows)"
+    )
+    print(f"{'=' * 70}")
     # 找最强窗口 (max AR mean)
     best = max(results, key=lambda r: r["ar_mean"])
     n_tests = n_windows
@@ -359,7 +430,7 @@ def main() -> None:
     print(f"\n  best window: [{best['window']}]")
     print(f"    AR_mean={best['ar_mean']}% AR_t={best['ar_t']} raw_p={best['ar_p_raw']}")
     print(f"    Bonferroni ×{n_tests} → p={p_bonf:.6f}")
-    print(f"    net_AR (after {COST*100:.1f}% cost) = {net_ar}%")
+    print(f"    net_AR (after {COST * 100:.1f}% cost) = {net_ar}%")
     print(f"    n_events = {n_ev}")
 
     # walk-forward for best window
@@ -376,8 +447,10 @@ def main() -> None:
         (train_ar if fd < split_d else test_ar).append(r[0] - base_m)
     tr = per_event_t(train_ar)
     te = per_event_t(test_ar)
-    print(f"    walk-forward: train_AR={tr['mean']}% (n={tr['n']}) | "
-          f"test_AR={te['mean']}% (n={te['n']}, t={te['t']}, p={te['p_one_sided']})")
+    print(
+        f"    walk-forward: train_AR={tr['mean']}% (n={tr['n']}) | "
+        f"test_AR={te['mean']}% (n={te['n']}, t={te['t']}, p={te['p_one_sided']})"
+    )
 
     # verdict cascade (§44 v3 adapted for event study)
     print("\n  --- verdict cascade ---")
@@ -403,8 +476,10 @@ def main() -> None:
     else:
         te_p_bonf = bonferroni_p(te["p_one_sided"], n_tests)
         if te_p_bonf >= ALPHA:
-            print(f"    OOS AR>0 but test p={te['p_one_sided']} Bonf×{n_tests}={te_p_bonf} "
-                  f">= {ALPHA} → not significant OOS (exploratory)")
+            print(
+                f"    OOS AR>0 but test p={te['p_one_sided']} Bonf×{n_tests}={te_p_bonf} "
+                f">= {ALPHA} → not significant OOS (exploratory)"
+            )
             verdict = "exploratory"
         else:
             print(f"    → EDGE-CONFIRMED (but see tradeability caveat)")
@@ -421,8 +496,8 @@ def main() -> None:
         print(f"      且无可交易 ETF 数据验证 fills, 不构成可落地短线 edge")
 
     # ---- DSR / PBO 适用性说明 ----
-    print(f"\n{'='*70}\n[overfitting check] DSR/PBO 适用性")
-    print(f"{'='*70}")
+    print(f"\n{'=' * 70}\n[overfitting check] DSR/PBO 适用性")
+    print(f"{'=' * 70}")
     print("  DSR (Deflated Sharpe Ratio) 设计用于规则时间序列策略回测的 Sharpe.")
     print("  本事件研究: ~70 个不规则间隔事件 (FOMC 6-8 周/次), 非规则日频策略.")
     print("  PBO (Probability of Backtest Overfitting) 需 combinatorial CV, n>=1000 trades 典型.")
@@ -445,15 +520,15 @@ def main() -> None:
         print(f"  → DSR<0 说明: 经多重检验校正后 Sharpe 不显著 (overfitting 风险高)")
 
     # ---- summary ----
-    print(f"\n{'='*70}\n[SUMMARY]")
-    print(f"{'='*70}")
+    print(f"\n{'=' * 70}\n[SUMMARY]")
+    print(f"{'=' * 70}")
     print(f"策略: FOMC 事件驱动 (pre-FOMC 漂移 / 公告日反应 / post-FOMC)")
     print(f"数据: 上证综指 close (regime file) 作市场代理 + {len(fomc_indices)} FOMC events")
     print(f"诚实约束: 指数级事件研究非可交易 ETF 回测 (无 ETF fills 数据)")
-    print(f"best window: [{best['window']}] AR={best['ar_mean']}% t={best['ar_t']} "
-          f"Bonf×{n_tests}={p_bonf:.4f} n={n_ev}")
-    print(f"walk-forward: train_AR={tr['mean']}% test_AR={te['mean']}% "
-          f"test_p={te['p_one_sided']}")
+    print(
+        f"best window: [{best['window']}] AR={best['ar_mean']}% t={best['ar_t']} Bonf×{n_tests}={p_bonf:.4f} n={n_ev}"
+    )
+    print(f"walk-forward: train_AR={tr['mean']}% test_AR={te['mean']}% test_p={te['p_one_sided']}")
     print(f"verdict: {verdict} (统计层) + no-data (可交易层: 无 ETF fills)")
 
 

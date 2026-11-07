@@ -10,6 +10,7 @@
 但 ``_get_connection`` 读的是 ``scheduler.db`` 模块自身的 global，故
 conftest monkeypatch 须指 ``scheduler.db._DB_PATH``（而非本 shim）才生效。
 """
+
 from __future__ import annotations
 
 # 核心数据结构

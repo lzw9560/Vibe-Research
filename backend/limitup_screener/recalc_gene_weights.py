@@ -11,6 +11,7 @@ grill 锁定边界：
 
     cd backend && .venv/bin/python -m limitup_screener.recalc_gene_weights [--dry-run]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -24,8 +25,11 @@ import vr_paths
 from limitup_screener.models import GENE_HIGH_THRESHOLD, GENE_QUALIFY_THRESHOLD, calc_total_score
 
 FACTOR_COLS = (
-    "factor_premium_rate", "factor_red_rate", "factor_seal_rate",
-    "factor_rebound_rate", "factor_freq_score",
+    "factor_premium_rate",
+    "factor_red_rate",
+    "factor_seal_rate",
+    "factor_rebound_rate",
+    "factor_freq_score",
 )
 _COL_TO_NAME = {
     "factor_premium_rate": "次日溢价率",
@@ -39,7 +43,8 @@ _COL_TO_NAME = {
 def recalc_live_rows(conn: sqlite3.Connection, dry_run: bool = False) -> dict:
     """复算 eastmoney_live 行。返回统计 dict。dry_run 只算不写。"""
     rows = conn.execute(
-        "SELECT rowid, total_score, qualify, high_gene, " + ", ".join(FACTOR_COLS)
+        "SELECT rowid, total_score, qualify, high_gene, "
+        + ", ".join(FACTOR_COLS)
         + " FROM gene_scores WHERE data_source = 'eastmoney_live'"
     ).fetchall()
     stats = {"n": len(rows), "changed": 0, "qualify_now": 0, "high_now": 0, "zero_factor_rows": 0}
@@ -94,12 +99,16 @@ def main() -> None:
     factors_ok = _factor_snapshot(conn) == snapshot
 
     print(f"模式: {'dry-run' if args.dry_run else 'WRITE'}")
-    print(f"live 行 n={stats['n']} 变更={stats['changed']} 新 qualify={stats['qualify_now']} "
-          f"新 high_gene={stats['high_now']} 全零因子行={stats['zero_factor_rows']}")
+    print(
+        f"live 行 n={stats['n']} 变更={stats['changed']} 新 qualify={stats['qualify_now']} "
+        f"新 high_gene={stats['high_now']} 全零因子行={stats['zero_factor_rows']}"
+    )
     if backup_path:
         print(f"备份: {backup_path}")
-    print(f"校验: 行数 {n_before}→{n_after} {'OK' if n_before == n_after else 'FAIL'}; "
-          f"因子列逐行不变 {'OK' if factors_ok else 'FAIL'}")
+    print(
+        f"校验: 行数 {n_before}→{n_after} {'OK' if n_before == n_after else 'FAIL'}; "
+        f"因子列逐行不变 {'OK' if factors_ok else 'FAIL'}"
+    )
     if n_before != n_after or not factors_ok:
         raise SystemExit("校验失败——请从备份恢复")
 

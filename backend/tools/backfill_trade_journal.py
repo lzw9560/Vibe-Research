@@ -6,7 +6,9 @@ breakout/floor/trend 记录 + net_pnl。确定性 signal_id（arm_date_code）IN
 用法：python tools/backfill_trade_journal.py [start_date] [end_date]
 默认 2026-09-01 ~ 2026-09-10。
 """
+
 import sys
+
 sys.path.insert(0, ".")
 from strategies.journal_recorder import JournalRecorder
 from engine.bars_provider import KlineCacheBarsProvider
@@ -35,7 +37,10 @@ while d <= end:
             r_b = rec._process_breakout(ds)
             r_f = rec._process_floor(ds)
             r_t = rec._process_trend(ds)
-            print(f"{ds}: breakout buyable={r_b.get('n_buyable')} unbuyable={r_b.get('n_unbuyable')} | floor buyable={r_f.get('n_buyable')} | trend buyable={r_t.get('n_buyable')}", flush=True)
+            print(
+                f"{ds}: breakout buyable={r_b.get('n_buyable')} unbuyable={r_b.get('n_unbuyable')} | floor buyable={r_f.get('n_buyable')} | trend buyable={r_t.get('n_buyable')}",
+                flush=True,
+            )
             total += 1
         except Exception as e:  # noqa: BLE001
             print(f"{ds} FAIL: {type(e).__name__}: {e}", flush=True)

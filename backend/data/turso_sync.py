@@ -17,6 +17,7 @@ Turso v2/pipeline API（实测确认 2026-09-11）：
     from data.turso_sync import sync_all
     result = sync_all()  # VR_TURSO_URL 未设返 {skipped: True}
 """
+
 import os
 import sqlite3
 import json
@@ -36,7 +37,11 @@ SYNC_TABLES = [
     {"db": "trade_journal.db", "table": "trade_journal", "pk": "signal_id"},
     {"db": "market_data.db", "table": "scheduled_tasks", "pk": "id"},
     {"db": "zt_history.db", "table": "zt_history", "pk": "date,code"},
-    {"db": "seal_intraday_2026.db", "table": "seal_intraday_snapshots_202609", "pk": "date,code,ts"},  # S185: 盘中数据沉淀（OFI 五档，按月分表）
+    {
+        "db": "seal_intraday_2026.db",
+        "table": "seal_intraday_snapshots_202609",
+        "pk": "date,code,ts",
+    },  # S185: 盘中数据沉淀（OFI 五档，按月分表）
 ]
 
 
@@ -57,6 +62,7 @@ def _get_breaker():
         return None
     try:
         from engine.circuit_breaker import get_breaker  # noqa: PLC0415
+
         return get_breaker("turso")
     except Exception:
         return None
@@ -114,9 +120,7 @@ def _ensure_turso_table(local_db: str, table: str) -> bool:
         return False
     conn = sqlite3.connect(str(db_path))
     try:
-        row = conn.execute(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)
-        ).fetchone()
+        row = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()
         if not row or not row[0]:
             return False
         schema_sql = row[0].replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS", 1)
@@ -161,7 +165,7 @@ def sync_table(local_db: str, table: str, pk: str, batch_size: int = 100) -> dic
         http_url = _get_http_url()
         breaker = _get_breaker()
         for i in range(0, len(rows), batch_size):
-            batch = rows[i:i + batch_size]
+            batch = rows[i : i + batch_size]
             # batch POST：500 行 = 500 INSERT OR REPLACE 一个 v2/pipeline request（7 POST 替代 3354）
             requests = []
             for row in batch:
@@ -190,7 +194,15 @@ def sync_table(local_db: str, table: str, pk: str, batch_size: int = 100) -> dic
                 if failed > 50:
                     logger.warning("[turso_sync] %s 连续失败 >50，跳过剩余", table)
                     break
-        logger.info("[turso_sync] %s.%s synced=%d failed=%d/%d (batch=%d/POST)", local_db, table, synced, failed, len(rows), batch_size)
+        logger.info(
+            "[turso_sync] %s.%s synced=%d failed=%d/%d (batch=%d/POST)",
+            local_db,
+            table,
+            synced,
+            failed,
+            len(rows),
+            batch_size,
+        )
         return {"synced": synced, "failed": failed, "table": table, "total": len(rows)}
     except Exception as e:  # noqa: BLE001
         logger.warning("[turso_sync] %s.%s sync 失败: %s（本地数据不受影响）", local_db, table, e)

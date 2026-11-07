@@ -18,6 +18,7 @@
   （飞书是主动发送模式——事件回调后调 send_to_feishu 发消息）
 - 企业微信不支持交互卡片，KG 结果只能格式化成纯文本
 """
+
 from __future__ import annotations
 
 import hashlib

@@ -1,6 +1,7 @@
 """
 Sector divergence router.
 """
+
 from fastapi import APIRouter, HTTPException, Query
 from typing import Any, Dict
 
@@ -10,7 +11,9 @@ router = APIRouter(tags=["sector"])
 
 
 @router.get("/api/sector/divergence")
-async def sector_divergence_api(date: str = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")) -> Dict[str, Any]:
+async def sector_divergence_api(
+    date: str = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日"),
+) -> Dict[str, Any]:
     """获取板块情绪分化度（客观数据，非行动建议）。"""
     try:
         result = await sector_divergence.get_sector_divergence(date)

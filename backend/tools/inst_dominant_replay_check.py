@@ -11,6 +11,7 @@
 
 关联：specs/S236 / specs/S237 / trade_journal.db arm=inst_dominant|a_group_t10
 """
+
 import sqlite3
 from pathlib import Path
 
@@ -47,8 +48,7 @@ def replay_check(arm: str = "inst_dominant") -> dict:
     backtest_mean = BACKTEST_MEANS.get(arm, 0.457)
     conn = sqlite3.connect(str(DB))
     rows = conn.execute(
-        "SELECT entry_date, net_pnl, unrealized_pnl, is_realized "
-        "FROM trade_journal WHERE arm=?",
+        "SELECT entry_date, net_pnl, unrealized_pnl, is_realized FROM trade_journal WHERE arm=?",
         (arm,),
     ).fetchall()
     if not rows:

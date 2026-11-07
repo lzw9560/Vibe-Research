@@ -1,6 +1,7 @@
 """
 Risk dashboard router.
 """
+
 import asyncio
 import time
 
@@ -37,9 +38,10 @@ async def _risk_one(code: str):
             return None
 
 
-
 @router.get("/api/risk/dashboard")
-async def risk_dashboard(date: str = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日")) -> Dict[str, Any]:
+async def risk_dashboard(
+    date: str = Query(None, description="日期，格式 YYYY-MM-DD；不传则取最近交易日"),
+) -> Dict[str, Any]:
     """获取风险仪表盘数据（客观数据，非行动建议）。"""
     cache_key = date or "latest"
     cached = _cache_get(f"dashboard:{cache_key}")
@@ -48,6 +50,7 @@ async def risk_dashboard(date: str = Query(None, description="日期，格式 YY
     try:
         # 获取今日推荐基因得分
         import limitup_screener as ls
+
         screener_result = await ls.get_screener_result(date)
 
         if not screener_result or not screener_result.gene_scores:
@@ -78,14 +81,16 @@ async def risk_dashboard(date: str = Query(None, description="日期，格式 YY
             if risk_data is None:
                 continue
             risk_levels[risk_data.risk_level] = risk_levels.get(risk_data.risk_level, 0) + 1
-            risk_scores.append({
-                "code": gene.code,
-                "name": gene.name,
-                "risk_score": risk_data.risk_score,
-                "risk_level": risk_data.risk_level,
-                "factors": risk_data.factors[:3],  # 只取前 3 个风险因素
-                "data_status": risk_data.data_status,  # S126：透 data_status（degraded 风险不伪装权威）
-            })
+            risk_scores.append(
+                {
+                    "code": gene.code,
+                    "name": gene.name,
+                    "risk_score": risk_data.risk_score,
+                    "risk_level": risk_data.risk_level,
+                    "factors": risk_data.factors[:3],  # 只取前 3 个风险因素
+                    "data_status": risk_data.data_status,  # S126：透 data_status（degraded 风险不伪装权威）
+                }
+            )
 
         # 风险因素统计
         factor_counts: dict[str, int] = {}
@@ -142,15 +147,17 @@ async def risk_oneday_list(
             if risk_data is None:
                 continue
             if risk_data.risk_score >= min_risk_score:
-                high_risk.append({
-                    "code": gene.code,
-                    "name": gene.name,
-                    "risk_score": risk_data.risk_score,
-                    "risk_level": risk_data.risk_level,
-                    "factors": risk_data.factors[:3],
-                    "last_updated": risk_data.last_updated,
-                    "data_status": risk_data.data_status,  # S126：透 data_status
-                })
+                high_risk.append(
+                    {
+                        "code": gene.code,
+                        "name": gene.name,
+                        "risk_score": risk_data.risk_score,
+                        "risk_level": risk_data.risk_level,
+                        "factors": risk_data.factors[:3],
+                        "last_updated": risk_data.last_updated,
+                        "data_status": risk_data.data_status,  # S126：透 data_status
+                    }
+                )
 
         # 按风险评分降序，取前 50
         high_risk.sort(key=lambda x: x["risk_score"], reverse=True)
@@ -182,6 +189,7 @@ async def risk_seats() -> Dict[str, Any]:
 # S055：炸板预警 + 封单时序端点
 # =============================================================================
 
+
 @router.get("/api/risk/bomb-alerts")
 async def bomb_alerts(date: str = Query(None, description="交易日 YYYY-MM-DD；不传取最近交易日")) -> Dict[str, Any]:
     """获取当日炸板预警列表（历史表）。
@@ -191,6 +199,7 @@ async def bomb_alerts(date: str = Query(None, description="交易日 YYYY-MM-DD�
     try:
         from risk.bomb_alert_dispatcher import get_active_alerts
         from vr_paths import last_trading_date_str
+
         target = date or last_trading_date_str()
         alerts = get_active_alerts(target)
         return {
@@ -217,6 +226,7 @@ async def seal_snapshots(
     try:
         from risk.seal_intraday_collector import get_snapshots_by_code
         from vr_paths import last_trading_date_str
+
         target = date or last_trading_date_str()
         rows = get_snapshots_by_code(code, target)
         return {

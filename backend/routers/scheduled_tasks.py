@@ -1,6 +1,7 @@
 """
 Scheduled tasks router.
 """
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
@@ -14,6 +15,7 @@ router = APIRouter(tags=["scheduled_tasks"])
 
 
 # ---- today_status 推算（S092 R18：后端算，不前端算）----
+
 
 def _compute_today_status(task: Any) -> str:
     """根据 last_run_at/last_run_status 推算今日完成状态。
@@ -48,6 +50,7 @@ def _compute_today_status(task: Any) -> str:
 
 # ---- Models ----
 
+
 class TaskCreateBody(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: str = Field(default="", max_length=500)
@@ -71,6 +74,7 @@ class TaskUpdateBody(BaseModel):
 
 
 # ---- Routes ----
+
 
 @router.get("/api/scheduled-tasks")
 async def list_scheduled_tasks() -> Dict[str, Any]:
@@ -226,4 +230,3 @@ async def list_task_runs(task_id: int, limit: int = Query(50, ge=1, le=200)) -> 
 
 
 __all__ = ["router"]
-

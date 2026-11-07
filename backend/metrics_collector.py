@@ -12,6 +12,7 @@ from typing import Any, Dict, List
 @dataclass
 class MetricSample:
     """单次采样。"""
+
     duration: float = 0.0
     endpoint: str = ""
     tier: str = ""

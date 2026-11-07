@@ -39,6 +39,7 @@ DATA:
 USAGE:
   cd backend && .venv/bin/python tools/explore_rotation_capm-alpha.py
 """
+
 from __future__ import annotations
 import json
 import sys
@@ -70,29 +71,51 @@ DATA_JSON = resolve_data_dir() / "sector_rotation_data.json"
 # NOTE: 银行Ⅱ (banks, 42 codes) and 保险Ⅱ (insurance) have ZERO long-history
 # codes => major financial sectors ABSENT from this 2018-2025 rotation.
 DENSE_INDUSTRIES = [
-    "电网设备", "电力", "化学制药", "通用设备", "IT服务Ⅱ", "化学制品",
-    "专用设备", "软件开发", "房地产开发", "半导体", "汽车零部件", "通信设备",
-    "计算机设备", "元件", "消费电子", "光学光电子", "中药Ⅱ", "塑料",
-    "医疗服务", "工业金属", "煤炭开采", "一般零售", "电池", "环境治理", "化学原料",
+    "电网设备",
+    "电力",
+    "化学制药",
+    "通用设备",
+    "IT服务Ⅱ",
+    "化学制品",
+    "专用设备",
+    "软件开发",
+    "房地产开发",
+    "半导体",
+    "汽车零部件",
+    "通信设备",
+    "计算机设备",
+    "元件",
+    "消费电子",
+    "光学光电子",
+    "中药Ⅱ",
+    "塑料",
+    "医疗服务",
+    "工业金属",
+    "煤炭开采",
+    "一般零售",
+    "电池",
+    "环境治理",
+    "化学原料",
 ]
 
 TRADING_DAYS_PER_WEEK = 5
-HOLDING_WEEKS = 2          # hold 2 weeks = 10 trading days, rebalance every 10 days
-FORMATION_WEEKS_GRID = [2, 3, 4]   # search formation lookback
+HOLDING_WEEKS = 2  # hold 2 weeks = 10 trading days, rebalance every 10 days
+FORMATION_WEEKS_GRID = [2, 3, 4]  # search formation lookback
 TOP_K = 3
-N_METHODS = 4              # Bonferroni: 4 parallel alpha-isolation methods
-N_FORMATION_SEARCH = 3    # Bonferroni: 3 formation periods searched
-N_BONF = N_METHODS * N_FORMATION_SEARCH   # = 12
+N_METHODS = 4  # Bonferroni: 4 parallel alpha-isolation methods
+N_FORMATION_SEARCH = 3  # Bonferroni: 3 formation periods searched
+N_BONF = N_METHODS * N_FORMATION_SEARCH  # = 12
 ALPHA_LEVEL = 0.05
-ROUND_TRIP_COST = 0.003    # 0.3% round-trip (commission+stamp+slippage), per project COST
+ROUND_TRIP_COST = 0.003  # 0.3% round-trip (commission+stamp+slippage), per project COST
 HOLD_DAYS = HOLDING_WEEKS * TRADING_DAYS_PER_WEEK  # 10
-HAC_MAXLAG = HOLD_DAYS    # Newey-West lag >= holding period (within-block autocorrelation)
+HAC_MAXLAG = HOLD_DAYS  # Newey-West lag >= holding period (within-block autocorrelation)
 BLOCKS_PER_YEAR = 252 / HOLD_DAYS  # ~25.2 two-week blocks per year
 TRADING_DAYS_PER_YEAR = 252
-MIN_BLOCKS = 60           # power floor (n_rebalances >= 60)
+MIN_BLOCKS = 60  # power floor (n_rebalances >= 60)
 
 
 # ---------- data loading ----------
+
 
 def load_clean_window() -> tuple[list[str], list[str], np.ndarray, np.ndarray]:
     """Load sector_rotation_data.json, restrict to 25 dense industries, cut to
@@ -115,14 +138,10 @@ def load_clean_window() -> tuple[list[str], list[str], np.ndarray, np.ndarray]:
         for i, v in enumerate(col):
             if v is not None:
                 R_all[i, j] = float(v)
-    bench_all_arr = np.array(
-        [float(b) if b is not None else np.nan for b in bench_all], dtype=float
-    )
+    bench_all_arr = np.array([float(b) if b is not None else np.nan for b in bench_all], dtype=float)
 
     # cut at 2025-12-01 (recent-wave onset) to keep cross-section composition stable
-    cut_idx = next(
-        (i for i, dt in enumerate(dates_all) if dt >= "2025-12-01"), n_all
-    )
+    cut_idx = next((i for i, dt in enumerate(dates_all) if dt >= "2025-12-01"), n_all)
     # also drop any trailing degenerate dates (dense coverage < 20) inside the window
     dense_cov = np.sum(~np.isnan(R_all[:cut_idx]), axis=1)
     good = dense_cov >= 20
@@ -136,6 +155,7 @@ def load_clean_window() -> tuple[list[str], list[str], np.ndarray, np.ndarray]:
 
 
 # ---------- strategy construction ----------
+
 
 def sector_momentum(R: np.ndarray, t_idx: int, form_days: int) -> np.ndarray:
     """Cumulative return over past `form_days` returns ending at t_idx (inclusive).
@@ -198,9 +218,9 @@ def build_rotation(
         turnover = n_new / top_k  # fraction of portfolio rotated
 
         # hold t+1 .. t+hold_days
-        hold = R[t + 1 : t + 1 + hold_days]          # hold_days x n_inds
-        sub = hold[:, top_idx]                        # hold_days x top_k
-        strat = np.nanmean(sub, axis=1)               # equal-weight, nan-safe
+        hold = R[t + 1 : t + 1 + hold_days]  # hold_days x n_inds
+        sub = hold[:, top_idx]  # hold_days x top_k
+        strat = np.nanmean(sub, axis=1)  # equal-weight, nan-safe
         mkt = bench[t + 1 : t + 1 + hold_days]
 
         for i in range(hold_days):
@@ -215,15 +235,17 @@ def build_rotation(
         cost = turnover * ROUND_TRIP_COST
         strat_block_net = strat_block - cost
 
-        blocks.append({
-            "rebalance_date": dates[t],
-            "top_sectors_idx": top_idx,
-            "n_new": n_new,
-            "turnover": round(turnover, 4),
-            "strat_block_gross": strat_block,
-            "strat_block_net": strat_block_net,
-            "mkt_block": mkt_block,
-        })
+        blocks.append(
+            {
+                "rebalance_date": dates[t],
+                "top_sectors_idx": top_idx,
+                "n_new": n_new,
+                "turnover": round(turnover, 4),
+                "strat_block_gross": strat_block,
+                "strat_block_net": strat_block_net,
+                "mkt_block": mkt_block,
+            }
+        )
         prev_top = top_set
         t += hold_days
 
@@ -237,9 +259,8 @@ def build_rotation(
 
 # ---------- alpha-isolated implementations ----------
 
-def capm_regression(
-    strat_rets: np.ndarray, mkt_rets: np.ndarray, hac: bool = False, maxlag: int = 0
-) -> dict:
+
+def capm_regression(strat_rets: np.ndarray, mkt_rets: np.ndarray, hac: bool = False, maxlag: int = 0) -> dict:
     """OLS  r_strat = alpha + beta * r_mkt + e.
     hac=True => Newey-West SE with `maxlag`; else standard OLS SE (non-overlapping).
     Returns alpha, beta, t(alpha) [two-sided], p_two_sided, p_one_sided_pos, n, r2.
@@ -250,8 +271,15 @@ def capm_regression(
     x = mkt_rets[mask]
     n = len(y)
     if n < 5:
-        return {"alpha": np.nan, "beta": np.nan, "t_alpha": np.nan,
-                "p_two": np.nan, "p_one_pos": np.nan, "n": n, "r2": np.nan}
+        return {
+            "alpha": np.nan,
+            "beta": np.nan,
+            "t_alpha": np.nan,
+            "p_two": np.nan,
+            "p_one_pos": np.nan,
+            "n": n,
+            "r2": np.nan,
+        }
     X = sm.add_constant(x)  # [1, r_mkt]
     if hac:
         res = sm.OLS(y, X).fit(cov_type="HAC", cov_kwds={"maxlags": maxlag})
@@ -263,8 +291,15 @@ def capm_regression(
     p_two = float(res.pvalues[0])
     # one-sided positive: if t>0, p_one = p_two/2; if t<0, p_one = 1 - p_two/2 (~1)
     p_one = p_two / 2.0 if t_a > 0 else 1.0 - p_two / 2.0
-    return {"alpha": alpha, "beta": beta, "t_alpha": t_a,
-            "p_two": p_two, "p_one_pos": p_one, "n": n, "r2": float(res.rsquared)}
+    return {
+        "alpha": alpha,
+        "beta": beta,
+        "t_alpha": t_a,
+        "p_two": p_two,
+        "p_one_pos": p_one,
+        "n": n,
+        "r2": float(res.rsquared),
+    }
 
 
 def annualize_block_alpha(alpha_block: float) -> float:
@@ -295,10 +330,16 @@ def walk_forward_capm(blocks: list[dict], net: bool = False) -> dict:
     )
     return {
         "status": "ok",
-        "n_train": len(train), "n_test": len(test),
-        "train_alpha": tr["alpha"], "train_t": tr["t_alpha"], "train_p_one": tr["p_one_pos"],
-        "test_alpha": te["alpha"], "test_t": te["t_alpha"], "test_p_one": te["p_one_pos"],
-        "train_beta": tr["beta"], "test_beta": te["beta"],
+        "n_train": len(train),
+        "n_test": len(test),
+        "train_alpha": tr["alpha"],
+        "train_t": tr["t_alpha"],
+        "train_p_one": tr["p_one_pos"],
+        "test_alpha": te["alpha"],
+        "test_t": te["t_alpha"],
+        "test_p_one": te["p_one_pos"],
+        "train_beta": tr["beta"],
+        "test_beta": te["beta"],
     }
 
 
@@ -315,9 +356,15 @@ def strategy_sharpe(strat_daily: np.ndarray) -> float:
 
 # ---------- verdict ----------
 
+
 def verdict_capm(
-    alpha_gross: float, alpha_net: float, t_block: float, p_one_block: float,
-    n_blocks: int, wf: dict, n_bonf: int = N_BONF,
+    alpha_gross: float,
+    alpha_net: float,
+    t_block: float,
+    p_one_block: float,
+    n_blocks: int,
+    wf: dict,
+    n_bonf: int = N_BONF,
 ) -> tuple[str, float, str]:
     """Honest verdict cascade. Returns (verdict, p_bonf, reason).
 
@@ -337,52 +384,81 @@ def verdict_capm(
     train_alpha = wf.get("train_alpha", float("nan")) if wf_ok else float("nan")
 
     if alpha_gross < 0:
-        return "falsified", p_bonf, f"gross alpha={alpha_gross*100:.3f}%/block < 0 (no positive risk-adjusted edge)"
+        return "falsified", p_bonf, f"gross alpha={alpha_gross * 100:.3f}%/block < 0 (no positive risk-adjusted edge)"
     if n_blocks < MIN_BLOCKS:
         return "underpowered", p_bonf, f"n_rebalances={n_blocks} < {MIN_BLOCKS}"
     if alpha_net < 0:
-        return "falsified", p_bonf, f"net alpha={alpha_net*100:.3f}%/block < 0 (gross edge eaten by turnover cost — not tradeable)"
+        return (
+            "falsified",
+            p_bonf,
+            f"net alpha={alpha_net * 100:.3f}%/block < 0 (gross edge eaten by turnover cost — not tradeable)",
+        )
     # Bonferroni fail: split on OOS directional consistency
     if p_bonf >= ALPHA_LEVEL:
         if wf_ok and test_alpha > 0 and train_alpha > 0:
-            return ("exploratory", p_bonf,
-                    f"alpha POSITIVE in-sample (gross {alpha_gross*100:.3f}%/blk, net {alpha_net*100:.3f}%/blk) "
-                    f"and OOS-direction-consistent (train {train_alpha*100:.3f}, test {test_alpha*100:.3f}%/blk both >0), "
-                    f"but Bonferroni p={p_bonf:.4f} (x{n_bonf}) >= {ALPHA_LEVEL} — positive beta-isolated residual "
-                    f"NOT robust to multiple-testing; likely partly survivorship-inflated (long-only does not "
-                    f"cross-sectionally mitigate)")
-        return "falsified", p_bonf, f"Bonferroni p={p_bonf:.4f} (x{n_bonf}) >= {ALPHA_LEVEL} and no OOS support (test_alpha={test_alpha*100:.3f}%/blk)"
+            return (
+                "exploratory",
+                p_bonf,
+                f"alpha POSITIVE in-sample (gross {alpha_gross * 100:.3f}%/blk, net {alpha_net * 100:.3f}%/blk) "
+                f"and OOS-direction-consistent (train {train_alpha * 100:.3f}, test {test_alpha * 100:.3f}%/blk both >0), "
+                f"but Bonferroni p={p_bonf:.4f} (x{n_bonf}) >= {ALPHA_LEVEL} — positive beta-isolated residual "
+                f"NOT robust to multiple-testing; likely partly survivorship-inflated (long-only does not "
+                f"cross-sectionally mitigate)",
+            )
+        return (
+            "falsified",
+            p_bonf,
+            f"Bonferroni p={p_bonf:.4f} (x{n_bonf}) >= {ALPHA_LEVEL} and no OOS support (test_alpha={test_alpha * 100:.3f}%/blk)",
+        )
     # Bonferroni passes -> require OOS confirmation
     if not wf_ok:
         return "exploratory", p_bonf, "in-sample Bonferroni PASS but walk-forward unavailable"
     if train_alpha <= 0:
-        return "exploratory", p_bonf, f"Bonferroni PASS but train_alpha={train_alpha*100:.3f}%/blk <= 0 (edge not in train half -> test may be regime overfit)"
+        return (
+            "exploratory",
+            p_bonf,
+            f"Bonferroni PASS but train_alpha={train_alpha * 100:.3f}%/blk <= 0 (edge not in train half -> test may be regime overfit)",
+        )
     if test_alpha <= 0:
-        return "falsified", p_bonf, f"walk-forward test_alpha={test_alpha*100:.3f}%/blk <= 0 (in-sample edge did not survive OOS)"
+        return (
+            "falsified",
+            p_bonf,
+            f"walk-forward test_alpha={test_alpha * 100:.3f}%/blk <= 0 (in-sample edge did not survive OOS)",
+        )
     wf_p_bonf = bonferroni_p(wf["test_p_one"], n_bonf)
     if wf_p_bonf >= ALPHA_LEVEL:
-        return ("exploratory", p_bonf,
-                f"in-sample Bonferroni PASS but OOS test alpha={test_alpha*100:.3f}%/blk not significant "
-                f"(test p Bonf x{n_bonf}={wf_p_bonf:.4f} >= {ALPHA_LEVEL})")
-    return "edge-confirmed", p_bonf, f"gross+net alpha>0, Bonferroni PASS, OOS test alpha={test_alpha*100:.3f}%/blk significant"
+        return (
+            "exploratory",
+            p_bonf,
+            f"in-sample Bonferroni PASS but OOS test alpha={test_alpha * 100:.3f}%/blk not significant "
+            f"(test p Bonf x{n_bonf}={wf_p_bonf:.4f} >= {ALPHA_LEVEL})",
+        )
+    return (
+        "edge-confirmed",
+        p_bonf,
+        f"gross+net alpha>0, Bonferroni PASS, OOS test alpha={test_alpha * 100:.3f}%/blk significant",
+    )
 
 
 # ---------- main ----------
 
+
 def main() -> None:
     dates, inds, R, bench = load_clean_window()
-    print(f"Clean window: {dates[0]} -> {dates[-1]}  ({len(dates)} trading days, "
-          f"{len(inds)} dense industries)")
-    print(f"  NOTE: 银行Ⅱ (banks) & 保险Ⅱ (insurance) ABSENT (zero long-history codes) "
-          f"— major financial sectors missing from this rotation.")
-    print(f"  Bonferroni: x{N_METHODS} (methods) x{N_FORMATION_SEARCH} (formation search) "
-          f"= x{N_BONF}")
-    print(f"  Holding: {HOLDING_WEEKS} wk ({HOLD_DAYS} days), rebalance every {HOLD_DAYS} days. "
-          f"Top-{TOP_K} equal-weight long.")
+    print(f"Clean window: {dates[0]} -> {dates[-1]}  ({len(dates)} trading days, {len(inds)} dense industries)")
+    print(
+        f"  NOTE: 银行Ⅱ (banks) & 保险Ⅱ (insurance) ABSENT (zero long-history codes) "
+        f"— major financial sectors missing from this rotation."
+    )
+    print(f"  Bonferroni: x{N_METHODS} (methods) x{N_FORMATION_SEARCH} (formation search) = x{N_BONF}")
+    print(
+        f"  Holding: {HOLDING_WEEKS} wk ({HOLD_DAYS} days), rebalance every {HOLD_DAYS} days. "
+        f"Top-{TOP_K} equal-weight long."
+    )
 
     results: list[dict] = []
     for fw in FORMATION_WEEKS_GRID:
-        print(f"\n{'='*72}\nFORMATION = {fw} weeks ({fw*TRADING_DAYS_PER_WEEK}-day momentum)\n{'='*72}")
+        print(f"\n{'=' * 72}\nFORMATION = {fw} weeks ({fw * TRADING_DAYS_PER_WEEK}-day momentum)\n{'=' * 72}")
         strat = build_rotation(dates, R, bench, formation_weeks=fw)
         blocks = strat["blocks"]
         n_blk = strat["n_rebalances"]
@@ -420,89 +496,119 @@ def main() -> None:
         alpha_net_ann = annualize_block_alpha(alpha_net_blk)
         alpha_daily_ann = annualize_daily_alpha(daily_gross["alpha"])
 
-        print(f"\n  n_rebalances (blocks) = {n_blk}  "
-              f"(>= {MIN_BLOCKS}? {'OK' if n_blk >= MIN_BLOCKS else 'UNDERPOWERED'})")
-        print(f"  avg turnover/block = {avg_turn*100:.1f}%  "
-              f"avg cost/block = {avg_cost*100:.3f}%  annual cost drag ~= {annual_cost*100:.2f}%")
+        print(
+            f"\n  n_rebalances (blocks) = {n_blk}  (>= {MIN_BLOCKS}? {'OK' if n_blk >= MIN_BLOCKS else 'UNDERPOWERED'})"
+        )
+        print(
+            f"  avg turnover/block = {avg_turn * 100:.1f}%  "
+            f"avg cost/block = {avg_cost * 100:.3f}%  annual cost drag ~= {annual_cost * 100:.2f}%"
+        )
         print(f"\n  --- BLOCK-level CAPM (primary, per-rebalance-block) ---")
-        print(f"  GROSS: alpha={alpha_gross_blk*100:.4f}%/block  "
-              f"(annual {alpha_gross_ann*100:.2f}%)  beta={blk_gross['beta']:.3f}  "
-              f"t={blk_gross['t_alpha']:.3f}  p_one_pos={blk_gross['p_one_pos']:.5f}  "
-              f"R2={blk_gross['r2']:.3f}  n={blk_gross['n']}")
-        print(f"  NET  : alpha={alpha_net_blk*100:.4f}%/block  "
-              f"(annual {alpha_net_ann*100:.2f}%)  beta={blk_net['beta']:.3f}  "
-              f"t={blk_net['t_alpha']:.3f}  p_one_pos={blk_net['p_one_pos']:.5f}")
+        print(
+            f"  GROSS: alpha={alpha_gross_blk * 100:.4f}%/block  "
+            f"(annual {alpha_gross_ann * 100:.2f}%)  beta={blk_gross['beta']:.3f}  "
+            f"t={blk_gross['t_alpha']:.3f}  p_one_pos={blk_gross['p_one_pos']:.5f}  "
+            f"R2={blk_gross['r2']:.3f}  n={blk_gross['n']}"
+        )
+        print(
+            f"  NET  : alpha={alpha_net_blk * 100:.4f}%/block  "
+            f"(annual {alpha_net_ann * 100:.2f}%)  beta={blk_net['beta']:.3f}  "
+            f"t={blk_net['t_alpha']:.3f}  p_one_pos={blk_net['p_one_pos']:.5f}"
+        )
         print(f"\n  --- DAILY-level CAPM (HAC cross-check, Newey-West maxlag={HAC_MAXLAG}) ---")
-        print(f"  GROSS: alpha={daily_gross['alpha']*100*TRADING_DAYS_PER_YEAR:.4f}%/yr (daily annualized) "
-              f"= {daily_gross['alpha']*100:.5f}%/day  beta={daily_gross['beta']:.3f}  "
-              f"t={daily_gross['t_alpha']:.3f}  p_one_pos={daily_gross['p_one_pos']:.5f}  "
-              f"n={daily_gross['n']}")
+        print(
+            f"  GROSS: alpha={daily_gross['alpha'] * 100 * TRADING_DAYS_PER_YEAR:.4f}%/yr (daily annualized) "
+            f"= {daily_gross['alpha'] * 100:.5f}%/day  beta={daily_gross['beta']:.3f}  "
+            f"t={daily_gross['t_alpha']:.3f}  p_one_pos={daily_gross['p_one_pos']:.5f}  "
+            f"n={daily_gross['n']}"
+        )
         print(f"\n  --- walk-forward OOS (block-level) ---")
-        print(f"  GROSS: train_alpha={wf_gross.get('train_alpha',float('nan'))*100:.4f}%/blk "
-              f"(t={wf_gross.get('train_t',float('nan')):.3f}) | "
-              f"test_alpha={wf_gross.get('test_alpha',float('nan'))*100:.4f}%/blk "
-              f"(t={wf_gross.get('test_t',float('nan')):.3f}, p_one={wf_gross.get('test_p_one',float('nan')):.5f})")
-        print(f"  NET  : train_alpha={wf_net.get('train_alpha',float('nan'))*100:.4f}%/blk | "
-              f"test_alpha={wf_net.get('test_alpha',float('nan'))*100:.4f}%/blk "
-              f"(p_one={wf_net.get('test_p_one',float('nan')):.5f})")
+        print(
+            f"  GROSS: train_alpha={wf_gross.get('train_alpha', float('nan')) * 100:.4f}%/blk "
+            f"(t={wf_gross.get('train_t', float('nan')):.3f}) | "
+            f"test_alpha={wf_gross.get('test_alpha', float('nan')) * 100:.4f}%/blk "
+            f"(t={wf_gross.get('test_t', float('nan')):.3f}, p_one={wf_gross.get('test_p_one', float('nan')):.5f})"
+        )
+        print(
+            f"  NET  : train_alpha={wf_net.get('train_alpha', float('nan')) * 100:.4f}%/blk | "
+            f"test_alpha={wf_net.get('test_alpha', float('nan')) * 100:.4f}%/blk "
+            f"(p_one={wf_net.get('test_p_one', float('nan')):.5f})"
+        )
         print(f"\n  strategy Sharpe (gross, annualized) = {sharpe:.3f}")
 
         verdict, p_bonf, reason = verdict_capm(
-            alpha_gross_blk, alpha_net_blk, blk_gross["t_alpha"],
-            blk_gross["p_one_pos"], n_blk, wf_net, n_bonf=N_BONF,
+            alpha_gross_blk,
+            alpha_net_blk,
+            blk_gross["t_alpha"],
+            blk_gross["p_one_pos"],
+            n_blk,
+            wf_net,
+            n_bonf=N_BONF,
         )
         print(f"\n  VERDICT: {verdict.upper()}")
         print(f"    Bonferroni p (x{N_BONF}) = {p_bonf:.5f}")
         print(f"    reason: {reason}")
 
-        results.append({
-            "formation_weeks": fw,
-            "n_rebalances": n_blk,
-            "alpha_block_gross": alpha_gross_blk,
-            "alpha_block_net": alpha_net_blk,
-            "alpha_annual_gross": alpha_gross_ann,
-            "alpha_annual_net": alpha_net_ann,
-            "alpha_daily_annual": alpha_daily_ann,
-            "beta_block": blk_gross["beta"],
-            "t_block": blk_gross["t_alpha"],
-            "p_one_block": blk_gross["p_one_pos"],
-            "p_bonf_block": p_bonf,
-            "sharpe": sharpe,
-            "avg_turnover": avg_turn,
-            "annual_cost_drag": annual_cost,
-            "walk_forward": wf_net,
-            "verdict": verdict,
-            "reason": reason,
-        })
+        results.append(
+            {
+                "formation_weeks": fw,
+                "n_rebalances": n_blk,
+                "alpha_block_gross": alpha_gross_blk,
+                "alpha_block_net": alpha_net_blk,
+                "alpha_annual_gross": alpha_gross_ann,
+                "alpha_annual_net": alpha_net_ann,
+                "alpha_daily_annual": alpha_daily_ann,
+                "beta_block": blk_gross["beta"],
+                "t_block": blk_gross["t_alpha"],
+                "p_one_block": blk_gross["p_one_pos"],
+                "p_bonf_block": p_bonf,
+                "sharpe": sharpe,
+                "avg_turnover": avg_turn,
+                "annual_cost_drag": annual_cost,
+                "walk_forward": wf_net,
+                "verdict": verdict,
+                "reason": reason,
+            }
+        )
 
     # ---- pick best formation (lowest one-sided p = strongest evidence) ----
-    print(f"\n{'#'*72}\n# FORMATION SEARCH SUMMARY (pick best, Bonferroni-corrected)\n{'#'*72}")
+    print(f"\n{'#' * 72}\n# FORMATION SEARCH SUMMARY (pick best, Bonferroni-corrected)\n{'#' * 72}")
     best = min(results, key=lambda r: r["p_one_block"])
     for r in results:
         flag = "  <== BEST" if r is best else ""
-        print(f"  form={r['formation_weeks']}wk: alpha_gross_ann={r['alpha_annual_gross']*100:6.2f}%  "
-              f"alpha_net_ann={r['alpha_annual_net']*100:6.2f}%  t={r['t_block']:6.3f}  "
-              f"p_one={r['p_one_block']:.5f}  p_bonf(x{N_BONF})={r['p_bonf_block']:.5f}  "
-              f"sharpe={r['sharpe']:.3f}  verdict={r['verdict']}{flag}")
+        print(
+            f"  form={r['formation_weeks']}wk: alpha_gross_ann={r['alpha_annual_gross'] * 100:6.2f}%  "
+            f"alpha_net_ann={r['alpha_annual_net'] * 100:6.2f}%  t={r['t_block']:6.3f}  "
+            f"p_one={r['p_one_block']:.5f}  p_bonf(x{N_BONF})={r['p_bonf_block']:.5f}  "
+            f"sharpe={r['sharpe']:.3f}  verdict={r['verdict']}{flag}"
+        )
 
     wf = best["walk_forward"]
     print(f"\nBEST formation = {best['formation_weeks']} weeks:")
-    print(f"  block-level GROSS alpha = {best['alpha_block_gross']*100:.4f}%/block "
-          f"(annual {best['alpha_annual_gross']*100:.2f}%)")
-    print(f"  block-level NET   alpha = {best['alpha_block_net']*100:.4f}%/block "
-          f"(annual {best['alpha_annual_net']*100:.2f}%)  [after {best['annual_cost_drag']*100:.2f}%/yr turnover cost]")
+    print(
+        f"  block-level GROSS alpha = {best['alpha_block_gross'] * 100:.4f}%/block "
+        f"(annual {best['alpha_annual_gross'] * 100:.2f}%)"
+    )
+    print(
+        f"  block-level NET   alpha = {best['alpha_block_net'] * 100:.4f}%/block "
+        f"(annual {best['alpha_annual_net'] * 100:.2f}%)  [after {best['annual_cost_drag'] * 100:.2f}%/yr turnover cost]"
+    )
     print(f"  beta = {best['beta_block']:.3f}  (beta isolated: alpha is residual after beta*r_mkt)")
-    print(f"  t(alpha) = {best['t_block']:.3f}  p_one_sided = {best['p_one_block']:.5f}  "
-          f"Bonferroni(x{N_BONF}) = {best['p_bonf_block']:.5f}")
+    print(
+        f"  t(alpha) = {best['t_block']:.3f}  p_one_sided = {best['p_one_block']:.5f}  "
+        f"Bonferroni(x{N_BONF}) = {best['p_bonf_block']:.5f}"
+    )
     print(f"  Sharpe = {best['sharpe']:.3f} (annualized, gross)")
     if wf.get("status") == "ok":
-        print(f"  walk-forward: train_alpha={wf['train_alpha']*100:.4f}%/blk  "
-              f"test_alpha={wf['test_alpha']*100:.4f}%/blk  test_p_one={wf['test_p_one']:.5f}")
+        print(
+            f"  walk-forward: train_alpha={wf['train_alpha'] * 100:.4f}%/blk  "
+            f"test_alpha={wf['test_alpha'] * 100:.4f}%/blk  test_p_one={wf['test_p_one']:.5f}"
+        )
     print(f"  n_rebalances = {best['n_rebalances']}")
     print(f"  VERDICT: {best['verdict'].upper()} — {best['reason']}")
 
-    print(f"\n{'='*72}\nHONEST ASSESSMENT")
-    print(f"{'='*72}")
+    print(f"\n{'=' * 72}\nHONEST ASSESSMENT")
+    print(f"{'=' * 72}")
     print(f"  Alpha-isolation check (CORE): CAPM regression strips beta*r_mkt from")
     print(f"    strategy returns; the intercept (alpha) is the pure timing/skill residual.")
     print(f"    beta={best['beta_block']:.3f} means the strategy carries {best['beta_block']:.3f} of market")

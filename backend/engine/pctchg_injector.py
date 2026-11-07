@@ -8,6 +8,7 @@ baostock_kline_cache.json bar keys=[date,open,high,low,close,volume,amount]—�
 注入值 `pctChg=(close[d]-close[d-1])/close[d-1]*100`（可复算非臆造）。首日无前收返 0.0。
 fallback 方案——优先 `refresh_kline_cache.py` 全量刷新 cache 补 baostock 原值（T1a），本模块是 stale cache 回退。
 """
+
 from __future__ import annotations
 
 

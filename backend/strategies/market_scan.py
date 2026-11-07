@@ -15,6 +15,7 @@ S2 落地：
 后续形态子/因子装配按 S3 R10 等任务扩入。零 em_get：纯本地 bars 计算（code_industry
 name 反查为本地 DB，非东财）。
 """
+
 from __future__ import annotations
 
 from strategies.pattern_scan import _compute_ma, compute_relative_strength, get_sector_stocks
@@ -83,6 +84,7 @@ def _load_code_names(codes: list[str]) -> dict[str, str]:
     try:
         import sqlite3
         from vr_paths import resolve_data_dir
+
         db = resolve_data_dir() / "gene_scores.db"
         if not db.exists():
             return {}
@@ -139,10 +141,7 @@ def build_non_limitup_candidates(
 
     name_map = _load_code_names(all_codes)
     # 板块内排名（全成分，非 per_sector 采样子集）——每板块算一次
-    sector_rank_intra = {
-        ind: compute_sector_stock_rank_map(stocks, _get)
-        for ind, stocks in sector_stocks_map.items()
-    }
+    sector_rank_intra = {ind: compute_sector_stock_rank_map(stocks, _get) for ind, stocks in sector_stocks_map.items()}
     for cand in candidates:
         code = cand["code"]
         ind = cand["sector"]
@@ -215,6 +214,7 @@ def gather_non_limitup_candidates(
     # S148 接入点②：可交易性过滤（ST radar carve-out + 创业板/科创板/北交所 排除），与涨停叉 R1 同口径
     from candidate_funnel.sources._filters import classify_tradability  # noqa: PLC0415
     from candidate_funnel.sources.st_play_radar import load_st_play_radar  # noqa: PLC0415
+
     radar_set = load_st_play_radar()
     kept_cands: list[dict] = []
     for cand in candidates:

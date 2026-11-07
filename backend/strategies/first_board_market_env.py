@@ -25,6 +25,7 @@
 合规：本模块按用户传入 date 返回客观市场环境判定，不预置标的、不排名、不建议。
 仓位建议是 spec 2.3 明确的灯位映射规则（非主观建议）。
 """
+
 from __future__ import annotations
 
 import logging
@@ -34,6 +35,7 @@ from typing import Optional
 
 ROOT = Path(__file__).resolve().parents[1]
 import sys
+
 sys.path.insert(0, str(ROOT))
 
 from astock import em_zt_topic_pool, index_quote  # noqa: E402
@@ -51,21 +53,21 @@ logger = logging.getLogger(__name__)
 # 单位说明：hs300_pct 是百分数（1.61=+1.61%），阈值 0.5 即 +0.5%。
 MARKET_ENV_THRESHOLDS: dict = {
     # ── 因素1 沪深300涨跌幅 ──────────────────────────────────────────────
-    "hs300_green": 0.5,        # 沪深300 > +0.5% → 绿灯因素
-    "hs300_red": -0.5,         # 沪深300 < -0.5% → 红灯因素
+    "hs300_green": 0.5,  # 沪深300 > +0.5% → 绿灯因素
+    "hs300_red": -0.5,  # 沪深300 < -0.5% → 红灯因素
     # ── 因素2 涨停家数对比（T日竞价 vs T-1全天）─────────────────────────
-    "zt_ratio_green": 0.5,     # T日涨停数 > T-1的 50% → 绿灯因素
-    "zt_ratio_red": 0.3,       # T日涨停数 < T-1的 30% → 红灯因素
+    "zt_ratio_green": 0.5,  # T日涨停数 > T-1的 50% → 绿灯因素
+    "zt_ratio_red": 0.3,  # T日涨停数 < T-1的 30% → 红灯因素
     # ── 因素3 连板最高板 ──────────────────────────────────────────────
-    "max_boards_green": 4,     # 最高板 ≥ 4 → 绿灯因素
-    "max_boards_red": 2,      # 最高板 ≤ 2 → 红灯因素
+    "max_boards_green": 4,  # 最高板 ≥ 4 → 绿灯因素
+    "max_boards_red": 2,  # 最高板 ≤ 2 → 红灯因素
     # ── 因素4 国内流动性 gate（DR007 + QVIX，S215 宏观接入 workflow）──────────────
     # ⚠️ 阈值标 overfit 风险（社区阈值须 sweep 校准，当前骨架占位）
     # DR007：银行间流动性（高紧/低松）；QVIX：中国 VIX（恐慌）
-    "dr007_green": 1.8,        # DR007 < 1.8% → 流动性宽松 → 绿灯因素
-    "dr007_red": 2.5,          # DR007 > 2.5% → 流动性紧张 → 红灯因素
-    "qvix_green": 20,          # QVIX < 20 → 低恐慌 → 绿灯因素
-    "qvix_red": 35,            # QVIX > 35 → 高恐慌 → 红灯因素
+    "dr007_green": 1.8,  # DR007 < 1.8% → 流动性宽松 → 绿灯因素
+    "dr007_red": 2.5,  # DR007 > 2.5% → 流动性紧张 → 红灯因素
+    "qvix_green": 20,  # QVIX < 20 → 低恐慌 → 绿灯因素
+    "qvix_red": 35,  # QVIX > 35 → 高恐慌 → 红灯因素
 }
 
 # 权重（spec 2.3）：沪深300 50% + 涨停家数 30% + 连板 20%
@@ -111,6 +113,7 @@ def _to_float(v) -> float | None:
 # 034 沪深300涨跌幅
 # ===========================================================================
 
+
 def fetch_hs300_pct() -> float | None:
     """T日9:25 取沪深300当日涨跌幅。
 
@@ -147,6 +150,7 @@ def fetch_hs300_pct() -> float | None:
 # ===========================================================================
 # 035 涨停家数对比
 # ===========================================================================
+
 
 def fetch_zt_count_compare(date: str) -> dict:
     """涨停家数对比——T日竞价涨停数 vs T-1全天。
@@ -226,6 +230,7 @@ def fetch_zt_count_compare(date: str) -> dict:
 # 036 连板最高板
 # ===========================================================================
 
+
 def fetch_max_boards(date: str) -> dict:
     """连板最高板。
 
@@ -299,6 +304,7 @@ def fetch_max_boards(date: str) -> dict:
 # 036b 国内流动性 gate（DR007 + QVIX，S215 宏观接入第 4 因素）
 # ===========================================================================
 
+
 def fetch_domestic_liquidity() -> dict:
     """国内流动性 gate——DR007（银行间流动性）+ QVIX（中国 VIX 恐慌）组合。
 
@@ -330,6 +336,7 @@ def fetch_domestic_liquidity() -> dict:
 # ===========================================================================
 # 037 3因素组合判定
 # ===========================================================================
+
 
 def judge_market_env(
     hs300_pct: float | None,
@@ -404,12 +411,20 @@ def judge_market_env(
     else:
         # DR007 低=宽松绿 / 高=紧张红；QVIX 低=平稳绿 / 高=恐慌红
         # 取两者最严（任一红→红，都绿→绿，否则黄）
-        dr007_f = ("red" if dr007 is not None and dr007 > MARKET_ENV_THRESHOLDS["dr007_red"]
-                   else "green" if dr007 is not None and dr007 < MARKET_ENV_THRESHOLDS["dr007_green"]
-                   else "yellow")
-        qvix_f = ("red" if qvix is not None and qvix > MARKET_ENV_THRESHOLDS["qvix_red"]
-                  else "green" if qvix is not None and qvix < MARKET_ENV_THRESHOLDS["qvix_green"]
-                  else "yellow")
+        dr007_f = (
+            "red"
+            if dr007 is not None and dr007 > MARKET_ENV_THRESHOLDS["dr007_red"]
+            else "green"
+            if dr007 is not None and dr007 < MARKET_ENV_THRESHOLDS["dr007_green"]
+            else "yellow"
+        )
+        qvix_f = (
+            "red"
+            if qvix is not None and qvix > MARKET_ENV_THRESHOLDS["qvix_red"]
+            else "green"
+            if qvix is not None and qvix < MARKET_ENV_THRESHOLDS["qvix_green"]
+            else "yellow"
+        )
         sub = [dr007_f, qvix_f]
         if "red" in sub:
             dl_factor = "red"
@@ -454,6 +469,7 @@ def judge_market_env(
 # ===========================================================================
 # 038 飞书通知
 # ===========================================================================
+
 
 def _format_market_env_message(result: dict) -> str:
     """格式化市场环境判定结果为 Markdown 消息（飞书推送用）。"""
@@ -506,7 +522,7 @@ def _fmt_ratio(v) -> str:
     if v is None:
         return "N/A"
     try:
-        return f"{float(v)*100:.0f}%"
+        return f"{float(v) * 100:.0f}%"
     except (TypeError, ValueError):
         return "N/A"
 
@@ -546,6 +562,7 @@ def notify_market_env(result: dict) -> bool:
 
     try:
         from notification.notification_service import NotificationService
+
         ns = NotificationService()
         if not ns.is_available():
             logger.warning("通知服务无可用渠道，跳过推送")
@@ -564,6 +581,7 @@ def notify_market_env(result: dict) -> bool:
 # ===========================================================================
 # 判定合并入口（market_env vs storm，S215 宏观接入 workflow）
 # ===========================================================================
+
 
 def merge_env_and_storm(market_light: str, storm_light: str) -> str:
     """判定合并入口——first_board_market_env（A 股内部）vs storm（全球风险）两门合并。
@@ -590,6 +608,7 @@ def merge_env_and_storm(market_light: str, storm_light: str) -> str:
 # ===========================================================================
 # 主入口
 # ===========================================================================
+
 
 def run_market_env_check(date: str) -> dict:
     """Phase 2 大盘3因素主入口。
@@ -647,6 +666,7 @@ def run_market_env_check(date: str) -> dict:
 if __name__ == "__main__":
     # 骨架自测：python -m strategies.first_board_market_env 20260818
     import sys as _sys
+
     d = _sys.argv[1] if len(_sys.argv) > 1 else "20260818"
     r = run_market_env_check(d)
     print(f"日期: {r['date']}")

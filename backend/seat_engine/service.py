@@ -55,10 +55,16 @@ class SeatEngine:
                 except Exception:
                     continue
 
-    def _pull_records(self, report_name: str, columns: str,
-                      filter_str: str, page_size: int = 5000,
-                      sort_columns: str = "", sort_types: str = "-1",
-                      raise_on_failure: bool = False) -> list[dict]:
+    def _pull_records(
+        self,
+        report_name: str,
+        columns: str,
+        filter_str: str,
+        page_size: int = 5000,
+        sort_columns: str = "",
+        sort_types: str = "-1",
+        raise_on_failure: bool = False,
+    ) -> list[dict]:
         """Wrapper around astock.eastmoney_datacenter with pagination.
 
         raise_on_failure=True 时透传给 eastmoney_datacenter——源断 raise（非吞 []），
@@ -111,17 +117,13 @@ class SeatEngine:
         if is_active_youzi:
             return "活跃游资"
 
-        is_follower = (
-            profile.total_appearances >= SEAT_ACTIVE_MIN
-            and profile.avg_buy_amt < SEAT_SMALL_POS
-        )
+        is_follower = profile.total_appearances >= SEAT_ACTIVE_MIN and profile.avg_buy_amt < SEAT_SMALL_POS
         if is_follower:
             return "跟风席位"
 
         return "inactive"
 
-    def _merge_record_into_profile(self, record: dict, profile: SeatProfile,
-                                    side: str) -> None:
+    def _merge_record_into_profile(self, record: dict, profile: SeatProfile, side: str) -> None:
         """将一条龙虎榜明细记录合并到席位画像中。"""
         rec = billboard_detail_from_dict(record)
         buy_amt = rec.buy or 0
@@ -157,7 +159,7 @@ class SeatEngine:
         start_dt = datetime.now(BEIJING_TZ) - timedelta(days=lookback_days)
         start_date = start_dt.strftime("%Y-%m-%d")
 
-        filter_str = f'(TRADE_DATE>=\'{start_date}\')(TRADE_DATE<=\'{end_date}\')'
+        filter_str = f"(TRADE_DATE>='{start_date}')(TRADE_DATE<='{end_date}')"
 
         buy_data = self._pull_records(
             report_name="RPT_BILLBOARD_DAILYDETAILSBUY",
@@ -290,13 +292,15 @@ class SeatEngine:
             if seat_name == "机构专用" or (profile and profile.get("seat_type") == "机构专用"):
                 institution_buy_amt += buy_amt
 
-            buy_seats.append({
-                "name": seat_name,
-                "buy_amt": round(buy_amt / 10000, 1),
-                "sell_amt": round(sell_amt / 10000, 1),
-                "net": round(net / 10000, 1),
-                "seat_type": seat_type if profile else "未知席位",
-            })
+            buy_seats.append(
+                {
+                    "name": seat_name,
+                    "buy_amt": round(buy_amt / 10000, 1),
+                    "sell_amt": round(sell_amt / 10000, 1),
+                    "net": round(net / 10000, 1),
+                    "seat_type": seat_type if profile else "未知席位",
+                }
+            )
 
         sell_seats: list[dict[str, Any]] = []
         sell_seat_types: set[str] = set()
@@ -324,13 +328,15 @@ class SeatEngine:
             if seat_name == "机构专用" or (profile and profile.get("seat_type") == "机构专用"):
                 institution_sell_amt += sell_amt
 
-            sell_seats.append({
-                "name": seat_name,
-                "buy_amt": round(buy_amt / 10000, 1),
-                "sell_amt": round(sell_amt / 10000, 1),
-                "net": round(net / 10000, 1),
-                "seat_type": seat_type if profile else "未知席位",
-            })
+            sell_seats.append(
+                {
+                    "name": seat_name,
+                    "buy_amt": round(buy_amt / 10000, 1),
+                    "sell_amt": round(sell_amt / 10000, 1),
+                    "net": round(net / 10000, 1),
+                    "seat_type": seat_type if profile else "未知席位",
+                }
+            )
 
         signal = self._determine_signal(
             buy_seat_types=buy_seat_types,
@@ -450,12 +456,8 @@ class SeatEngine:
 
             for seat_name in updated_seats:
                 profile = self._profiles[seat_name]
-                profile.avg_buy_amt = round(
-                    profile.total_buy_amt / max(profile._buy_appearances, 1), 1
-                )
-                profile.avg_sell_amt = round(
-                    profile.total_sell_amt / max(profile._sell_appearances, 1), 1
-                )
+                profile.avg_buy_amt = round(profile.total_buy_amt / max(profile._buy_appearances, 1), 1)
+                profile.avg_sell_amt = round(profile.total_sell_amt / max(profile._sell_appearances, 1), 1)
                 profile.stock_cooldown = len(profile._stocks_traded)
                 profile.seat_type = self._classify_seat_type(profile)
 

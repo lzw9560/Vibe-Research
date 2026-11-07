@@ -30,6 +30,7 @@ from config import GENE_SCORES_DB_PATH  # noqa: E402  (S037 路径)
 
 # ── 交易日枚举 ────────────────────────────────────────────────
 
+
 def _load_holidays() -> set[str]:
     """从 data/trading_calendar.json 加载节假日；缺失返空（降级为仅跳周末）。"""
     try:
@@ -38,6 +39,7 @@ def _load_holidays() -> set[str]:
             return set(json.loads(cal_file.read_text(encoding="utf-8")).get("holidays", []))
     except Exception as e:  # noqa: BLE001
         import logging
+
         logging.getLogger(__name__).warning("backfill_history 失败（降级，不阻塞）: %s", e)
     return set()
 
@@ -73,6 +75,7 @@ def trading_days_between(start_date: str, end_date: str) -> list[str]:
 
 # ── DB 查询（只读统计）────────────────────────────────────────
 
+
 def db_stats(db_path: str | None = None) -> tuple[int, str | None, str | None]:
     """返回 (总行数, 最早日期, 最晚日期)。DB 不存在/空表返 (0, None, None)。"""
     path = db_path or GENE_SCORES_DB_PATH
@@ -105,16 +108,19 @@ def db_earliest_date(db_path: str | None = None) -> str | None:
 
 # ── 熔断器感知 ────────────────────────────────────────────────
 
+
 def breaker_state() -> str:
     """读取东财熔断器当前状态（peek 不消耗试探名额）。"""
     try:
         from circuit_breaker import get_breaker
+
         return get_breaker("eastmoney").peek_state().value
     except Exception as exc:  # noqa: BLE001
         return f"unknown({exc})"
 
 
 # ── 核心回填 ──────────────────────────────────────────────────
+
 
 async def backfill_dates(
     dates: list[str],
@@ -145,6 +151,7 @@ async def backfill_dates(
     kline_codes = None
     if source == "kline" and not dry_run:
         from limitup_screener.data import get_db as _get_db
+
         try:
             conn = _get_db()
             rows = conn.execute("SELECT DISTINCT code FROM gene_scores").fetchall()
@@ -164,6 +171,7 @@ async def backfill_dates(
         # 即便上游 trading_days_* 节假日表与 vr_paths 不同步也能拦住。非交易日直接跳过，不打东财。
         try:
             from vr_paths import is_trading_day as _is_trading_day
+
             d_obj = datetime.strptime(date, "%Y-%m-%d").date()
             if not _is_trading_day(d_obj):
                 stats["empty_pool"] += 1
@@ -222,13 +230,7 @@ async def backfill_dates(
                 break
 
         # 批间暂停（仅正式模式、交互确认）
-        if (
-            not dry_run
-            and not no_confirm
-            and i > 0
-            and (i + 1) % batch_size == 0
-            and i + 1 < len(dates)
-        ):
+        if not dry_run and not no_confirm and i > 0 and (i + 1) % batch_size == 0 and i + 1 < len(dates):
             state = breaker_state()
             if state == "open":
                 print("熔断器 OPEN，等待 65s 恢复后继续……")
@@ -245,8 +247,10 @@ def _print_summary(stats: dict[str, int], db_path: str | None) -> None:
     total, earliest, latest = db_stats(db_path)
     print()
     print("=" * 60)
-    print(f"回填完成：成功 {stats['success']} | 已有跳过 {stats['skipped_existing']}"
-          f" | 空池 {stats['empty_pool']} | 失败 {stats['failed']}")
+    print(
+        f"回填完成：成功 {stats['success']} | 已有跳过 {stats['skipped_existing']}"
+        f" | 空池 {stats['empty_pool']} | 失败 {stats['failed']}"
+    )
     print(f"DB 覆盖：{earliest or '?'} ~ {latest or '?'} · 共 {total} 行 · {len(existing_dates(db_path))} 个交易日")
     print("=" * 60)
 
@@ -255,15 +259,20 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="S040 基因得分历史回填")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--days", type=int, help="从 DB 最早日期往前补 N 个交易日")
-    group.add_argument("--range", nargs=2, metavar=("START", "END"),
-                       help="显式日期范围 YYYY-MM-DD YYYY-MM-DD（含端点）")
+    group.add_argument(
+        "--range", nargs=2, metavar=("START", "END"), help="显式日期范围 YYYY-MM-DD YYYY-MM-DD（含端点）"
+    )
     parser.add_argument("--dry-run", action="store_true", help="只探测涨停池，不写 DB")
     parser.add_argument("--force", action="store_true", help="强制重算已有日期")
     parser.add_argument("--batch-size", type=int, default=10, help="批大小（连续失败达此数中止，默认 10）")
     parser.add_argument("--no-confirm", action="store_true", help="跳过批间交互确认")
     parser.add_argument("--db", default=None, help="DB 路径（默认 config.GENE_SCORES_DB_PATH，测试用）")
-    parser.add_argument("--source", choices=["eastmoney", "kline"], default="eastmoney",
-                        help="数据源：eastmoney（默认，完整5因子，窗口约4周）/ kline（K线重建3因子降级，可回溯数年）")
+    parser.add_argument(
+        "--source",
+        choices=["eastmoney", "kline"],
+        default="eastmoney",
+        help="数据源：eastmoney（默认，完整5因子，窗口约4周）/ kline（K线重建3因子降级，可回溯数年）",
+    )
     args = parser.parse_args()
 
     if args.range:
@@ -282,15 +291,17 @@ def main() -> None:
     total_before, earliest, latest = db_stats(args.db)
     print(f"回填前 DB：{earliest or '?'} ~ {latest or '?'} · {total_before} 行")
 
-    stats = asyncio.run(backfill_dates(
-        dates,
-        dry_run=args.dry_run,
-        force=args.force,
-        batch_size=args.batch_size,
-        no_confirm=args.no_confirm,
-        db_path=args.db,
-        source=args.source,
-    ))
+    stats = asyncio.run(
+        backfill_dates(
+            dates,
+            dry_run=args.dry_run,
+            force=args.force,
+            batch_size=args.batch_size,
+            no_confirm=args.no_confirm,
+            db_path=args.db,
+            source=args.source,
+        )
+    )
     _print_summary(stats, args.db)
 
 

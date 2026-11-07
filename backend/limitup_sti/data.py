@@ -13,6 +13,7 @@ from migrations import MigrationManager
 from limitup_sti.models import STIResult
 
 import logging
+
 _logger = logging.getLogger(__name__)
 
 DB_PATH = STI_TIMELINE_DB_PATH
@@ -22,12 +23,10 @@ def run_initial_migrations() -> None:
     """执行初始 schema 迁移（仅一次）。"""
     manager = MigrationManager(db_path=DB_PATH)
     migration_v1 = (
-        Path(__file__).resolve().parent.parent
-        / "migrations" / "sti" / "20250613-001_create_sti_timeline.sql"
+        Path(__file__).resolve().parent.parent / "migrations" / "sti" / "20250613-001_create_sti_timeline.sql"
     ).read_text(encoding="utf-8")
     migration_v2 = (
-        Path(__file__).resolve().parent.parent
-        / "migrations" / "sti" / "20250613-002_add_sti_indexes.sql"
+        Path(__file__).resolve().parent.parent / "migrations" / "sti" / "20250613-002_add_sti_indexes.sql"
     ).read_text(encoding="utf-8")
     migrations = [
         {
@@ -71,14 +70,24 @@ def migrate_schema(db: sqlite3.Connection) -> None:
     sel_score = "score" if "score" in columns else "NULL"
     sel_phase = "phase" if "phase" in columns else "NULL"
     sel_dims = []
-    for c in ("dimension_limit_up_count", "dimension_limit_down_count", "dimension_seal_rate",
-              "dimension_advance_decline_ratio", "dimension_promotion_rate",
-              "dimension_prev_zt_performance", "dimension_max_boards"):
+    for c in (
+        "dimension_limit_up_count",
+        "dimension_limit_down_count",
+        "dimension_seal_rate",
+        "dimension_advance_decline_ratio",
+        "dimension_promotion_rate",
+        "dimension_prev_zt_performance",
+        "dimension_max_boards",
+    ):
         sel_dims.append(c if c in columns else "NULL")
     sel_market = "market_factor" if "market_factor" in columns else "NULL"
     sel_conf = "confidence" if "confidence" in columns else "NULL"
     sel_srcok = "source_ok" if "source_ok" in columns else "NULL"
-    sel_chg = "change_from_yesterday" if "change_from_yesterday" in columns else ("momentum" if "momentum" in columns else "NULL")
+    sel_chg = (
+        "change_from_yesterday"
+        if "change_from_yesterday" in columns
+        else ("momentum" if "momentum" in columns else "NULL")
+    )
     sel_du = "data_updated" if "data_updated" in columns else "NULL"
     sel_computed = "computed_at" if "computed_at" in columns else "CURRENT_TIMESTAMP"
     select_cols = f"{sel_date}, {sel_score}, {sel_phase}, {', '.join(sel_dims)}, {sel_market}, {sel_conf}, {sel_srcok}, {sel_chg}, {sel_du}, {sel_computed}"
@@ -196,9 +205,7 @@ def load_last_score() -> float | None:
     """加载昨日 STI 分数（用于动量计算）。"""
     try:
         db = get_db()
-        row = db.execute(
-            "SELECT score FROM sti_timeline WHERE score IS NOT NULL ORDER BY date DESC LIMIT 1"
-        ).fetchone()
+        row = db.execute("SELECT score FROM sti_timeline WHERE score IS NOT NULL ORDER BY date DESC LIMIT 1").fetchone()
         return float(row["score"]) if row else None
     except Exception:
         return None
@@ -219,6 +226,7 @@ def load_history_scores() -> list[float]:
 # ============================================================================
 # S063 T1：sti_intraday 盘中采样表 CRUD
 # ============================================================================
+
 
 def save_intraday(snapshot: dict) -> None:
     """持久化单条盘中 snapshot 到 sti_intraday 表。
@@ -253,7 +261,9 @@ def save_intraday(snapshot: dict) -> None:
         )
         db.commit()
     except Exception as e:  # S094 audit: 旧 bare except:pass 吞错致盘中 snapshot 静默丢；现 log
-        _logger.warning("save_intraday 写 sti_intraday 失败 date=%s time=%s: %s", snapshot.get("date"), snapshot.get("time"), e)
+        _logger.warning(
+            "save_intraday 写 sti_intraday 失败 date=%s time=%s: %s", snapshot.get("date"), snapshot.get("time"), e
+        )
 
 
 def load_intraday_day(date: str) -> list[dict]:
@@ -299,8 +309,7 @@ def load_recent_intraday_scores(days: int = 20) -> list[dict]:
     try:
         db = get_db()
         rows = db.execute(
-            "SELECT * FROM sti_intraday WHERE score IS NOT NULL "
-            "ORDER BY date DESC, time ASC LIMIT ?",
+            "SELECT * FROM sti_intraday WHERE score IS NOT NULL ORDER BY date DESC, time ASC LIMIT ?",
             (days * 20,),  # 每日约 12-14 条，取 days*20 覆盖
         ).fetchall()
         return [dict(r) for r in rows]

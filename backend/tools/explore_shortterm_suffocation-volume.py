@@ -24,6 +24,7 @@
 跑法:
   cd backend && .venv/bin/python tools/explore_shortterm_suffocation-volume.py
 """
+
 from __future__ import annotations
 
 import json
@@ -67,17 +68,18 @@ DIVIDEND_PATH = resolve_data_dir() / "dividend_events_cache.json"
 
 # Bonferroni: 3 N-variants × 5 cross-strategy = 15 (×2 subsets = 30 tests)
 # Hold periods + vol thresholds are sensitivity, not independent hypotheses
-N_VARIANTS = 3      # N_down = 3, 4, 5
+N_VARIANTS = 3  # N_down = 3, 4, 5
 N_CROSS_STRATEGY = 5
 N_CROSS_FACTOR = N_VARIANTS * N_CROSS_STRATEGY  # 15
 
-VOL_RATIO_THRESH = 0.30   # volume < 30% of 5-day average = suffocation
-MIN_BARS = 25             # need at least 5 bars for vol avg + 20 for indicators
+VOL_RATIO_THRESH = 0.30  # volume < 30% of 5-day average = suffocation
+MIN_BARS = 25  # need at least 5 bars for vol avg + 20 for indicators
 
 
 # ------------------------------------------------------------------
 # 一字跌停检测 (can't sell on exit day) — from mean-reversion script
 # ------------------------------------------------------------------
+
 
 def is_yizi_down(bar: dict, prev_close: float, limit: float) -> bool:
     """一字跌停: open 和 high 都在跌停价附近 (locked at limit-down, 卖不出)."""
@@ -92,6 +94,7 @@ def is_yizi_down(bar: dict, prev_close: float, limit: float) -> bool:
 # ------------------------------------------------------------------
 # market benchmark precompute (equal-weighted cross-section)
 # ------------------------------------------------------------------
+
 
 def precompute_market_benchmarks(
     code_map: dict[str, dict[str, dict]],
@@ -131,6 +134,7 @@ def precompute_market_benchmarks(
 # ------------------------------------------------------------------
 # build picks: suffocation signal (non-zt, scans full market)
 # ------------------------------------------------------------------
+
 
 def build_picks_suffocation(
     code_map: dict[str, dict[str, dict]],
@@ -244,26 +248,28 @@ def build_picks_suffocation(
             if is_yizi_t1(t1_bar, t_close, limit):
                 continue
 
-            picks.append({
-                "code": code,
-                "zt_date": d,          # signal date (key name for walk_forward compat)
-                "t1_date": t1_date,
-                "t2_date": t2_date,
-                "t3_date": t3_date,
-                "t4_date": t4_date,
-                "t5_date": t5_date,
-                "entry": t1_open,     # T+1 open (for close_ev口径)
-                "t1_bar": t1_bar,
-                "t2_bar": t2_bar,
-                "t3_bar": dm.get(t3_date),
-                "t4_bar": dm.get(t4_date),
-                "t5_bar": dm.get(t5_date),
-                "t_close": t_close,   # T close (for overnight gap口径)
-                "t_bar": t_bar,
-                "vol_ratio": vol_ratio,
-                "n_down_streak": downs[i],
-                "lbc": 0,
-            })
+            picks.append(
+                {
+                    "code": code,
+                    "zt_date": d,  # signal date (key name for walk_forward compat)
+                    "t1_date": t1_date,
+                    "t2_date": t2_date,
+                    "t3_date": t3_date,
+                    "t4_date": t4_date,
+                    "t5_date": t5_date,
+                    "entry": t1_open,  # T+1 open (for close_ev口径)
+                    "t1_bar": t1_bar,
+                    "t2_bar": t2_bar,
+                    "t3_bar": dm.get(t3_date),
+                    "t4_bar": dm.get(t4_date),
+                    "t5_bar": dm.get(t5_date),
+                    "t_close": t_close,  # T close (for overnight gap口径)
+                    "t_bar": t_bar,
+                    "vol_ratio": vol_ratio,
+                    "n_down_streak": downs[i],
+                    "lbc": 0,
+                }
+            )
 
     return picks
 
@@ -271,6 +277,7 @@ def build_picks_suffocation(
 # ------------------------------------------------------------------
 # return functions
 # ------------------------------------------------------------------
+
 
 def overnight_gap_ev(p: dict) -> float | None:
     """Overnight gap: entry=T close, exit=T+1 open.
@@ -314,9 +321,7 @@ def close_ev_t5(p: dict) -> float | None:
     return (c - p["entry"]) / p["entry"] * 100
 
 
-def close_ev_stop_t5(
-    p: dict, stop_pct: float = STOP_PCT, realistic: bool = True
-) -> tuple[float, str] | None:
+def close_ev_stop_t5(p: dict, stop_pct: float = STOP_PCT, realistic: bool = True) -> tuple[float, str] | None:
     """-3% stop + R6, exit T+5 close if no stop hit.
 
     Checks stop on T+1 (can't sell → T+2 open), T+2..T+5.
@@ -376,12 +381,12 @@ def close_ev_stop_t5(
 # DSR (Deflated Sharpe Ratio) — from mean-reversion script
 # ------------------------------------------------------------------
 
+
 def compute_dsr(rets: list[float], n_trials: int) -> dict:
     """Deflated Sharpe Ratio (Bailey & López de Prado 2014)."""
     n = len(rets)
     if n < 10:
-        return {"dsr": 0.0, "sr_obs": 0.0, "sr_0": 0.0, "n": n,
-                "note": "too few samples"}
+        return {"dsr": 0.0, "sr_obs": 0.0, "sr_0": 0.0, "n": n, "note": "too few samples"}
 
     r = [x / 100 for x in rets]
     mean_r = sum(r) / n
@@ -392,13 +397,14 @@ def compute_dsr(rets: list[float], n_trials: int) -> dict:
     sr_obs = mean_r / std_r * sqrt(250)
 
     if n > 3:
-        skew = sum((x - mean_r) ** 3 for x in r) / (n * std_r ** 3)
-        kurt = sum((x - mean_r) ** 4 for x in r) / (n * std_r ** 4) - 3
+        skew = sum((x - mean_r) ** 3 for x in r) / (n * std_r**3)
+        kurt = sum((x - mean_r) ** 4 for x in r) / (n * std_r**4) - 3
     else:
         skew = 0.0
         kurt = 0.0
 
     from math import log, sqrt as msqrt
+
     euler_gamma = 0.5772156649
 
     def norm_ppf(p: float) -> float:
@@ -406,39 +412,57 @@ def compute_dsr(rets: list[float], n_trials: int) -> dict:
             return -10
         if p >= 1:
             return 10
-        a = [-3.969683028665376e+01, 2.209460984245205e+02,
-             -2.759285104469687e+02, 1.383577518672690e+02,
-             -3.066479806614716e+01, 2.506628277459239e+00]
-        b = [-5.447609879822406e+01, 1.615858368580409e+02,
-             -1.556989798598866e+02, 6.680131188771972e+01,
-             -1.328068155288572e+01]
-        c = [-7.784894002430293e-03, -3.223964580411365e-01,
-             -2.400758277161838e+00, -2.549732539343734e+00,
-             4.374664141444968e+00, 2.938163982698783e+00]
-        d = [7.784695709041462e-03, 3.224671290700398e-01,
-             2.445134137142996e+00, 3.754408661907416e+00]
+        a = [
+            -3.969683028665376e01,
+            2.209460984245205e02,
+            -2.759285104469687e02,
+            1.383577518672690e02,
+            -3.066479806614716e01,
+            2.506628277459239e00,
+        ]
+        b = [
+            -5.447609879822406e01,
+            1.615858368580409e02,
+            -1.556989798598866e02,
+            6.680131188771972e01,
+            -1.328068155288572e01,
+        ]
+        c = [
+            -7.784894002430293e-03,
+            -3.223964580411365e-01,
+            -2.400758277161838e00,
+            -2.549732539343734e00,
+            4.374664141444968e00,
+            2.938163982698783e00,
+        ]
+        d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e00, 3.754408661907416e00]
         p_low = 0.02425
         p_high = 1 - p_low
         if p < p_low:
             q = msqrt(-2 * log(p))
-            x = (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / \
-                ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+            x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
+                (((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1
+            )
         elif p <= p_high:
             q = p - 0.5
             rv = q * q
-            x = (((((a[0]*rv+a[1])*rv+a[2])*rv+a[3])*rv+a[4])*rv+a[5]) * q / \
-                (((((b[0]*rv+b[1])*rv+b[2])*rv+b[3])*rv+b[4])*rv+1)
+            x = (
+                (((((a[0] * rv + a[1]) * rv + a[2]) * rv + a[3]) * rv + a[4]) * rv + a[5])
+                * q
+                / (((((b[0] * rv + b[1]) * rv + b[2]) * rv + b[3]) * rv + b[4]) * rv + 1)
+            )
         else:
             q = msqrt(-2 * log(1 - p))
-            x = -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / \
-                ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+            x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
+                (((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1
+            )
         return x
 
     sr_0_annual = sqrt(2 * log(max(n_trials, 2)))
     sr_per_trade = mean_r / std_r
     T = n
     numerator = (sr_per_trade - sr_0_annual) * sqrt(T)
-    denominator_sq = 1 + skew * sr_per_trade + (kurt / 4) * sr_per_trade ** 2
+    denominator_sq = 1 + skew * sr_per_trade + (kurt / 4) * sr_per_trade**2
     denominator = sqrt(max(denominator_sq, 0.01))
     z_dsr = numerator / denominator
     dsr = 0.5 * (1 + erf(z_dsr / sqrt(2)))
@@ -457,6 +481,7 @@ def compute_dsr(rets: list[float], n_trials: int) -> dict:
 # ------------------------------------------------------------------
 # analysis for one variant
 # ------------------------------------------------------------------
+
 
 def analyze_variant(
     name: str,
@@ -498,9 +523,11 @@ def analyze_variant(
     basic_s = ev_stats(basic_rets)
     net_basic = basic_s["ev"] - COST * 100
     print(f"\n--- basic {'BHAR' if use_bhar else 'close_ev'} (no stop) ---")
-    print(f"  n={basic_s['n']} gross_EV={basic_s['ev']}% std={basic_s['std']}% "
-          f"WR={basic_s['wr']}% t={basic_s['t']} CI[{basic_s['ci_lo']},{basic_s['ci_hi']}]")
-    print(f"  net EV (after {COST*100:.1f}% cost): {net_basic:.3f}%")
+    print(
+        f"  n={basic_s['n']} gross_EV={basic_s['ev']}% std={basic_s['std']}% "
+        f"WR={basic_s['wr']}% t={basic_s['t']} CI[{basic_s['ci_lo']},{basic_s['ci_hi']}]"
+    )
+    print(f"  net EV (after {COST * 100:.1f}% cost): {net_basic:.3f}%")
 
     # day-paired t
     basic_by_date: dict[str, list[float]] = defaultdict(list)
@@ -514,23 +541,26 @@ def analyze_variant(
             if r is not None:
                 basic_by_date[p["zt_date"]].append(r)
     basic_dt = day_paired_t(basic_by_date)
-    print(f"  day-paired: n_days={basic_dt['n_days']} mean={basic_dt['mean']}% "
-          f"t={basic_dt['t']} p_one_sided={basic_dt['p_one_sided']}")
+    print(
+        f"  day-paired: n_days={basic_dt['n_days']} mean={basic_dt['mean']}% "
+        f"t={basic_dt['t']} p_one_sided={basic_dt['p_one_sided']}"
+    )
 
     # ---- stop variant (only for close_ev口径, not overnight gap) ----
-    stop_s = {"n": 0, "ev": 0.0, "std": 0.0, "t": 0.0,
-              "ci_lo": 0.0, "ci_hi": 0.0, "wr": 0.0}
+    stop_s = {"n": 0, "ev": 0.0, "std": 0.0, "t": 0.0, "ci_lo": 0.0, "ci_hi": 0.0, "wr": 0.0}
     stop_dt = {"n_days": 0, "mean": 0.0, "std": 0.0, "t": 0.0, "p_one_sided": 1.0}
     stop_reasons: dict[str, int] = defaultdict(int)
 
     if ret_fn_stop is not None:
-        print(f"\n--- stop variant (-{STOP_PCT*100:.0f}% stop + R6 gap-through) ---")
+        print(f"\n--- stop variant (-{STOP_PCT * 100:.0f}% stop + R6 gap-through) ---")
         stop_rets = [ret_fn_stop(p) for p in picks]
         stop_rets_clean = [r[0] for r in stop_rets if r is not None]
         stop_s = ev_stats(stop_rets_clean)
         net_stop = stop_s["ev"] - COST * 100
-        print(f"  n={stop_s['n']} gross_EV={stop_s['ev']}% std={stop_s['std']}% "
-              f"WR={stop_s['wr']}% t={stop_s['t']} CI[{stop_s['ci_lo']},{stop_s['ci_hi']}]")
+        print(
+            f"  n={stop_s['n']} gross_EV={stop_s['ev']}% std={stop_s['std']}% "
+            f"WR={stop_s['wr']}% t={stop_s['t']} CI[{stop_s['ci_lo']},{stop_s['ci_hi']}]"
+        )
         print(f"  net EV (after cost): {net_stop:.3f}%")
 
         for p in picks:
@@ -541,7 +571,7 @@ def analyze_variant(
         if total_r > 0:
             print(f"  exit reasons:")
             for rsn, cnt in sorted(stop_reasons.items(), key=lambda x: -x[1]):
-                print(f"    {rsn}: {cnt} ({cnt/max(total_r,1)*100:.1f}%)")
+                print(f"    {rsn}: {cnt} ({cnt / max(total_r, 1) * 100:.1f}%)")
 
         stop_by_date: dict[str, list[float]] = defaultdict(list)
         for p in picks:
@@ -549,18 +579,22 @@ def analyze_variant(
             if r is not None:
                 stop_by_date[p["zt_date"]].append(r[0])
         stop_dt = day_paired_t(stop_by_date)
-        print(f"  day-paired: n_days={stop_dt['n_days']} mean={stop_dt['mean']}% "
-              f"t={stop_dt['t']} p_one_sided={stop_dt['p_one_sided']}")
+        print(
+            f"  day-paired: n_days={stop_dt['n_days']} mean={stop_dt['mean']}% "
+            f"t={stop_dt['t']} p_one_sided={stop_dt['p_one_sided']}"
+        )
 
     # ---- walk-forward OOS ----
     print(f"\n--- walk-forward OOS (basic, 前半 train → 后半 test) ---")
     # For BHAR, wrap ret_fn to include benchmark subtraction
     if use_bhar and market_gap is not None:
+
         def ret_fn_bhar(p, _fn=ret_fn_basic, _mg=market_gap):
             raw = _fn(p)
             if raw is None:
                 return None
             return raw - _mg.get(p["zt_date"], 0.0)
+
         wf = walk_forward(picks, ret_fn_bhar)
     else:
         wf = walk_forward(picks, ret_fn_basic)
@@ -576,13 +610,13 @@ def analyze_variant(
         wf_train_ev = tr["ev"]
         wf_test_ev = te["ev"]
         wf_test_p = te_dt["p_one_sided"]
-        print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} "
-              f"EV={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
-        print(f"  test:  n={te['n']} n_dates={wf['n_test_dates']} "
-              f"EV={te['ev']}% t={te['t']} day_t={te_dt['t']} "
-              f"p={te_dt['p_one_sided']}")
-        decay = ((tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100
-                 if tr["ev"] != 0 else 0)
+        print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} EV={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
+        print(
+            f"  test:  n={te['n']} n_dates={wf['n_test_dates']} "
+            f"EV={te['ev']}% t={te['t']} day_t={te_dt['t']} "
+            f"p={te_dt['p_one_sided']}"
+        )
+        decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
         print(f"  decay: {decay:.0f}% (train→test)")
     else:
         print(f"  {wf['status']} (n_dates={wf.get('n_dates', 0)})")
@@ -611,6 +645,7 @@ def analyze_variant(
 # main
 # ------------------------------------------------------------------
 
+
 def main() -> None:
     print("=" * 70)
     print("短线策略探索: 窒息量低吸 (suffocation-volume mean-reversion)")
@@ -625,17 +660,15 @@ def main() -> None:
     print(f"  calendar range: {calendar[0]} ~ {calendar[-1]}")
 
     # volume field coverage check
-    n_vol = sum(1 for dm in code_map.values() for b in dm.values()
-                if b.get("volume") not in (None, 0))
+    n_vol = sum(1 for dm in code_map.values() for b in dm.values() if b.get("volume") not in (None, 0))
     n_bars = sum(len(dm) for dm in code_map.values())
-    print(f"  volume coverage: {n_vol}/{n_bars} ({n_vol/n_bars*100:.1f}%)")
+    print(f"  volume coverage: {n_vol}/{n_bars} ({n_vol / n_bars * 100:.1f}%)")
 
     # regime
     regime_data = json.loads(REGIME_PATH.read_text())
-    regime_map: dict[str, str] = {
-        d: v.get("regime", "unknown") for d, v in regime_data.items()
-    }
+    regime_map: dict[str, str] = {d: v.get("regime", "unknown") for d, v in regime_data.items()}
     from collections import Counter
+
     rc = Counter(r for d, r in regime_map.items() if d >= "2018-01-01")
     print(f"  regime (2018+): strong={rc.get('strong', 0)}, weak={rc.get('weak', 0)}")
 
@@ -654,23 +687,23 @@ def main() -> None:
     print("\n[2] 预计算市场基准 (equal-weighted cross-section overnight gap + cc)...")
     market_gap, market_cc = precompute_market_benchmarks(code_map)
     gaps = [v for v in market_gap.values()]
-    print(f"  market overnight gap: mean={statistics.mean(gaps):.4f}% "
-          f"std={statistics.pstdev(gaps):.4f}% n={len(gaps)}")
+    print(f"  market overnight gap: mean={statistics.mean(gaps):.4f}% std={statistics.pstdev(gaps):.4f}% n={len(gaps)}")
     ccs = [v for v in market_cc.values()]
-    print(f"  market close-to-close: mean={statistics.mean(ccs):.4f}% "
-          f"std={statistics.pstdev(ccs):.4f}% n={len(ccs)}")
+    print(f"  market close-to-close: mean={statistics.mean(ccs):.4f}% std={statistics.pstdev(ccs):.4f}% n={len(ccs)}")
 
     # ---- main sweep: 3 N-variants × overnight gap (primary) ----
     N_CONFIGS = [(3, "连跌3日"), (4, "连跌4日"), (5, "连跌5日")]
     print(f"\n[3] 主 sweep: {N_VARIANTS} N-variants × overnight gap (primary exit)")
-    print(f"    Bonferroni n_cross_factor = {N_CROSS_FACTOR} (×{N_CROSS_FACTOR*2} tests)")
+    print(f"    Bonferroni n_cross_factor = {N_CROSS_FACTOR} (×{N_CROSS_FACTOR * 2} tests)")
 
     results: list[dict] = []
     all_picks_by_n: dict[int, list[dict]] = {}
 
     for n_down, n_label in N_CONFIGS:
         picks = build_picks_suffocation(
-            code_map, calendar, n_down=n_down,
+            code_map,
+            calendar,
+            n_down=n_down,
             vol_ratio_thresh=VOL_RATIO_THRESH,
         )
         all_picks_by_n[n_down] = picks
@@ -678,15 +711,22 @@ def main() -> None:
         # primary: overnight gap (raw)
         r = analyze_variant(
             f"suffocation_{n_down}day ({n_label}, vol<{VOL_RATIO_THRESH})",
-            picks, overnight_gap_ev, None, "overnight gap (T close→T+1 open)",
+            picks,
+            overnight_gap_ev,
+            None,
+            "overnight gap (T close→T+1 open)",
         )
         results.append(r)
         if r["n_picks"] > 0:
             verdict_for(
-                ev_gross=r["basic_ev_gross"], t_day=r["basic_day_t"],
-                p_raw=r["basic_p_raw"], wf_status=r["wf_status"],
-                wf_train_ev=r["wf_train_ev"], wf_test_ev=r["wf_test_ev"],
-                wf_test_p=r["wf_test_p"], n_days=r["n_days"],
+                ev_gross=r["basic_ev_gross"],
+                t_day=r["basic_day_t"],
+                p_raw=r["basic_p_raw"],
+                wf_status=r["wf_status"],
+                wf_train_ev=r["wf_train_ev"],
+                wf_test_ev=r["wf_test_ev"],
+                wf_test_p=r["wf_test_p"],
+                n_days=r["n_days"],
                 net_ev=r["basic_ev_net"],
                 subset_name=f"  suffocation_{n_down}day overnight (raw)",
                 n_cross_factor=N_CROSS_FACTOR,
@@ -695,17 +735,24 @@ def main() -> None:
         # BHAR-adjusted overnight gap
         r_bhar = analyze_variant(
             f"suffocation_{n_down}day BHAR ({n_label}, vol<{VOL_RATIO_THRESH})",
-            picks, overnight_gap_ev, None,
+            picks,
+            overnight_gap_ev,
+            None,
             "overnight gap BHAR (T close→T+1 open, mkt-adj)",
-            market_gap=market_gap, use_bhar=True,
+            market_gap=market_gap,
+            use_bhar=True,
         )
         results.append(r_bhar)
         if r_bhar["n_picks"] > 0:
             verdict_for(
-                ev_gross=r_bhar["basic_ev_gross"], t_day=r_bhar["basic_day_t"],
-                p_raw=r_bhar["basic_p_raw"], wf_status=r_bhar["wf_status"],
-                wf_train_ev=r_bhar["wf_train_ev"], wf_test_ev=r_bhar["wf_test_ev"],
-                wf_test_p=r_bhar["wf_test_p"], n_days=r_bhar["n_days"],
+                ev_gross=r_bhar["basic_ev_gross"],
+                t_day=r_bhar["basic_day_t"],
+                p_raw=r_bhar["basic_p_raw"],
+                wf_status=r_bhar["wf_status"],
+                wf_train_ev=r_bhar["wf_train_ev"],
+                wf_test_ev=r_bhar["wf_test_ev"],
+                wf_test_p=r_bhar["wf_test_p"],
+                n_days=r_bhar["n_days"],
                 net_ev=r_bhar["basic_ev_net"],
                 subset_name=f"  suffocation_{n_down}day overnight (BHAR)",
                 n_cross_factor=N_CROSS_FACTOR,
@@ -715,16 +762,19 @@ def main() -> None:
     print(f"\n\n{'=' * 70}")
     print(f"[4] 主 sweep 汇总表 (overnight gap, vol<{VOL_RATIO_THRESH})")
     print(f"{'=' * 70}")
-    print(f"{'variant':<45} {'n_picks':>8} {'n_days':>7} {'gross%':>8} "
-          f"{'net%':>8} {'day_t':>7} {'p_raw':>9} {'Bonf':>9}")
+    print(
+        f"{'variant':<45} {'n_picks':>8} {'n_days':>7} {'gross%':>8} {'net%':>8} {'day_t':>7} {'p_raw':>9} {'Bonf':>9}"
+    )
     print("-" * 110)
     for r in results:
         if r["n_picks"] == 0:
             continue
         p_bonf = bonferroni_p(r["basic_p_raw"], N_CROSS_FACTOR * 2)
-        print(f"{r['name'][:45]:<45} {r['n_picks']:>8} {r['n_days']:>7} "
-              f"{r['basic_ev_gross']:>8.3f} {r['basic_ev_net']:>8.3f} "
-              f"{r['basic_day_t']:>7.2f} {r['basic_p_raw']:>9.6f} {p_bonf:>9.6f}")
+        print(
+            f"{r['name'][:45]:<45} {r['n_picks']:>8} {r['n_days']:>7} "
+            f"{r['basic_ev_gross']:>8.3f} {r['basic_ev_net']:>8.3f} "
+            f"{r['basic_day_t']:>7.2f} {r['basic_p_raw']:>9.6f} {p_bonf:>9.6f}"
+        )
     print()
 
     # ---- hold variants for N=3 (most picks) ----
@@ -742,16 +792,23 @@ def main() -> None:
             ("close_ev T+5 (T+1 open→T+5 close)", close_ev_t5, close_ev_stop_t5),
         ]:
             r = analyze_variant(
-                f"suffocation_{best_n}day", best_picks,
-                ret_basic, ret_stop, hold_label,
+                f"suffocation_{best_n}day",
+                best_picks,
+                ret_basic,
+                ret_stop,
+                hold_label,
             )
             hold_results.append(r)
             if r["n_picks"] > 0:
                 verdict_for(
-                    ev_gross=r["basic_ev_gross"], t_day=r["basic_day_t"],
-                    p_raw=r["basic_p_raw"], wf_status=r["wf_status"],
-                    wf_train_ev=r["wf_train_ev"], wf_test_ev=r["wf_test_ev"],
-                    wf_test_p=r["wf_test_p"], n_days=r["n_days"],
+                    ev_gross=r["basic_ev_gross"],
+                    t_day=r["basic_day_t"],
+                    p_raw=r["basic_p_raw"],
+                    wf_status=r["wf_status"],
+                    wf_train_ev=r["wf_train_ev"],
+                    wf_test_ev=r["wf_test_ev"],
+                    wf_test_p=r["wf_test_p"],
+                    n_days=r["n_days"],
                     net_ev=r["basic_ev_net"],
                     subset_name=f"  suffocation_{best_n}day ({hold_label})",
                     n_cross_factor=N_CROSS_FACTOR,
@@ -765,21 +822,30 @@ def main() -> None:
 
         # ex-div filtered
         picks_nodiv = build_picks_suffocation(
-            code_map, calendar, n_down=best_n,
+            code_map,
+            calendar,
+            n_down=best_n,
             vol_ratio_thresh=VOL_RATIO_THRESH,
-            filter_ex_div=True, ex_div_dates=ex_div_dates,
+            filter_ex_div=True,
+            ex_div_dates=ex_div_dates,
         )
         r_nodiv = analyze_variant(
             f"suffocation_{best_n}day (ex-div filtered)",
-            picks_nodiv, overnight_gap_ev, None,
+            picks_nodiv,
+            overnight_gap_ev,
+            None,
             "overnight gap (ex-div removed)",
         )
         if r_nodiv["n_picks"] > 0:
             verdict_for(
-                ev_gross=r_nodiv["basic_ev_gross"], t_day=r_nodiv["basic_day_t"],
-                p_raw=r_nodiv["basic_p_raw"], wf_status=r_nodiv["wf_status"],
-                wf_train_ev=r_nodiv["wf_train_ev"], wf_test_ev=r_nodiv["wf_test_ev"],
-                wf_test_p=r_nodiv["wf_test_p"], n_days=r_nodiv["n_days"],
+                ev_gross=r_nodiv["basic_ev_gross"],
+                t_day=r_nodiv["basic_day_t"],
+                p_raw=r_nodiv["basic_p_raw"],
+                wf_status=r_nodiv["wf_status"],
+                wf_train_ev=r_nodiv["wf_train_ev"],
+                wf_test_ev=r_nodiv["wf_test_ev"],
+                wf_test_p=r_nodiv["wf_test_p"],
+                n_days=r_nodiv["n_days"],
                 net_ev=r_nodiv["basic_ev_net"],
                 subset_name=f"  suffocation_{best_n}day overnight (ex-div filtered)",
                 n_cross_factor=N_CROSS_FACTOR,
@@ -787,20 +853,29 @@ def main() -> None:
 
         # low-price filtered (>5 yuan)
         picks_nolow = build_picks_suffocation(
-            code_map, calendar, n_down=best_n,
-            vol_ratio_thresh=VOL_RATIO_THRESH, min_price=5.0,
+            code_map,
+            calendar,
+            n_down=best_n,
+            vol_ratio_thresh=VOL_RATIO_THRESH,
+            min_price=5.0,
         )
         r_nolow = analyze_variant(
             f"suffocation_{best_n}day (price>=5)",
-            picks_nolow, overnight_gap_ev, None,
+            picks_nolow,
+            overnight_gap_ev,
+            None,
             "overnight gap (price>=5)",
         )
         if r_nolow["n_picks"] > 0:
             verdict_for(
-                ev_gross=r_nolow["basic_ev_gross"], t_day=r_nolow["basic_day_t"],
-                p_raw=r_nolow["basic_p_raw"], wf_status=r_nolow["wf_status"],
-                wf_train_ev=r_nolow["wf_train_ev"], wf_test_ev=r_nolow["wf_test_ev"],
-                wf_test_p=r_nolow["wf_test_p"], n_days=r_nolow["n_days"],
+                ev_gross=r_nolow["basic_ev_gross"],
+                t_day=r_nolow["basic_day_t"],
+                p_raw=r_nolow["basic_p_raw"],
+                wf_status=r_nolow["wf_status"],
+                wf_train_ev=r_nolow["wf_train_ev"],
+                wf_test_ev=r_nolow["wf_test_ev"],
+                wf_test_p=r_nolow["wf_test_p"],
+                n_days=r_nolow["n_days"],
                 net_ev=r_nolow["basic_ev_net"],
                 subset_name=f"  suffocation_{best_n}day overnight (price>=5)",
                 n_cross_factor=N_CROSS_FACTOR,
@@ -808,21 +883,31 @@ def main() -> None:
 
         # both filters
         picks_clean = build_picks_suffocation(
-            code_map, calendar, n_down=best_n,
+            code_map,
+            calendar,
+            n_down=best_n,
             vol_ratio_thresh=VOL_RATIO_THRESH,
-            filter_ex_div=True, ex_div_dates=ex_div_dates, min_price=5.0,
+            filter_ex_div=True,
+            ex_div_dates=ex_div_dates,
+            min_price=5.0,
         )
         r_clean = analyze_variant(
             f"suffocation_{best_n}day (ex-div+price filters)",
-            picks_clean, overnight_gap_ev, None,
+            picks_clean,
+            overnight_gap_ev,
+            None,
             "overnight gap (clean: ex-div+price>=5)",
         )
         if r_clean["n_picks"] > 0:
             verdict_for(
-                ev_gross=r_clean["basic_ev_gross"], t_day=r_clean["basic_day_t"],
-                p_raw=r_clean["basic_p_raw"], wf_status=r_clean["wf_status"],
-                wf_train_ev=r_clean["wf_train_ev"], wf_test_ev=r_clean["wf_test_ev"],
-                wf_test_p=r_clean["wf_test_p"], n_days=r_clean["n_days"],
+                ev_gross=r_clean["basic_ev_gross"],
+                t_day=r_clean["basic_day_t"],
+                p_raw=r_clean["basic_p_raw"],
+                wf_status=r_clean["wf_status"],
+                wf_train_ev=r_clean["wf_train_ev"],
+                wf_test_ev=r_clean["wf_test_ev"],
+                wf_test_p=r_clean["wf_test_p"],
+                n_days=r_clean["n_days"],
                 net_ev=r_clean["basic_ev_net"],
                 subset_name=f"  suffocation_{best_n}day overnight (clean)",
                 n_cross_factor=N_CROSS_FACTOR,
@@ -835,20 +920,28 @@ def main() -> None:
         print(f"{'=' * 70}")
         for thresh in [0.20, 0.30, 0.50]:
             picks_s = build_picks_suffocation(
-                code_map, calendar, n_down=best_n,
+                code_map,
+                calendar,
+                n_down=best_n,
                 vol_ratio_thresh=thresh,
             )
             r = analyze_variant(
                 f"suffocation_{best_n}day (vol<{thresh})",
-                picks_s, overnight_gap_ev, None,
+                picks_s,
+                overnight_gap_ev,
+                None,
                 f"overnight gap (vol<{thresh})",
             )
             if r["n_picks"] > 0:
                 verdict_for(
-                    ev_gross=r["basic_ev_gross"], t_day=r["basic_day_t"],
-                    p_raw=r["basic_p_raw"], wf_status=r["wf_status"],
-                    wf_train_ev=r["wf_train_ev"], wf_test_ev=r["wf_test_ev"],
-                    wf_test_p=r["wf_test_p"], n_days=r["n_days"],
+                    ev_gross=r["basic_ev_gross"],
+                    t_day=r["basic_day_t"],
+                    p_raw=r["basic_p_raw"],
+                    wf_status=r["wf_status"],
+                    wf_train_ev=r["wf_train_ev"],
+                    wf_test_ev=r["wf_test_ev"],
+                    wf_test_p=r["wf_test_p"],
+                    n_days=r["n_days"],
                     net_ev=r["basic_ev_net"],
                     subset_name=f"  suffocation_{best_n}day overnight (vol<{thresh})",
                     n_cross_factor=N_CROSS_FACTOR,
@@ -861,21 +954,30 @@ def main() -> None:
         print(f"{'=' * 70}")
         for regime_filter in ["strong", "weak"]:
             picks_reg = build_picks_suffocation(
-                code_map, calendar, n_down=best_n,
+                code_map,
+                calendar,
+                n_down=best_n,
                 vol_ratio_thresh=VOL_RATIO_THRESH,
-                regime_map=regime_map, regime_filter=regime_filter,
+                regime_map=regime_map,
+                regime_filter=regime_filter,
             )
             r = analyze_variant(
                 f"suffocation_{best_n}day ({regime_filter})",
-                picks_reg, overnight_gap_ev, None,
+                picks_reg,
+                overnight_gap_ev,
+                None,
                 f"overnight gap [{regime_filter}]",
             )
             if r["n_picks"] > 0:
                 verdict_for(
-                    ev_gross=r["basic_ev_gross"], t_day=r["basic_day_t"],
-                    p_raw=r["basic_p_raw"], wf_status=r["wf_status"],
-                    wf_train_ev=r["wf_train_ev"], wf_test_ev=r["wf_test_ev"],
-                    wf_test_p=r["wf_test_p"], n_days=r["n_days"],
+                    ev_gross=r["basic_ev_gross"],
+                    t_day=r["basic_day_t"],
+                    p_raw=r["basic_p_raw"],
+                    wf_status=r["wf_status"],
+                    wf_train_ev=r["wf_train_ev"],
+                    wf_test_ev=r["wf_test_ev"],
+                    wf_test_p=r["wf_test_p"],
+                    n_days=r["n_days"],
                     net_ev=r["basic_ev_net"],
                     subset_name=f"  suffocation_{best_n}day overnight [{regime_filter}]",
                     n_cross_factor=N_CROSS_FACTOR,
@@ -889,10 +991,12 @@ def main() -> None:
         overnight_rets = [overnight_gap_ev(p) for p in best_picks]
         overnight_rets = [r for r in overnight_rets if r is not None]
         dsr_overnight = compute_dsr(overnight_rets, n_trials=N_CROSS_FACTOR)
-        print(f"  overnight gap (N={best_n}): DSR={dsr_overnight.get('dsr', 0)} "
-              f"SR_obs={dsr_overnight.get('sr_obs', 0)} SR_0={dsr_overnight.get('sr_0', 0)} "
-              f"skew={dsr_overnight.get('skew', 0)} kurt={dsr_overnight.get('kurt_excess', 0)} "
-              f"n_trials={dsr_overnight.get('n_trials', 0)} n={dsr_overnight.get('n', 0)}")
+        print(
+            f"  overnight gap (N={best_n}): DSR={dsr_overnight.get('dsr', 0)} "
+            f"SR_obs={dsr_overnight.get('sr_obs', 0)} SR_0={dsr_overnight.get('sr_0', 0)} "
+            f"skew={dsr_overnight.get('skew', 0)} kurt={dsr_overnight.get('kurt_excess', 0)} "
+            f"n_trials={dsr_overnight.get('n_trials', 0)} n={dsr_overnight.get('n', 0)}"
+        )
         if dsr_overnight.get("dsr", 0) > 0.95:
             print(f"  → DSR > 0.95: Sharpe 可能在多重测试后仍显著")
         else:
@@ -903,33 +1007,37 @@ def main() -> None:
         t2_rets = [r for r in t2_rets if r is not None]
         if t2_rets:
             dsr_t2 = compute_dsr(t2_rets, n_trials=N_CROSS_FACTOR)
-            print(f"  close_ev T+2 (N={best_n}): DSR={dsr_t2.get('dsr', 0)} "
-                  f"SR_obs={dsr_t2.get('sr_obs', 0)} n={dsr_t2.get('n', 0)}")
+            print(
+                f"  close_ev T+2 (N={best_n}): DSR={dsr_t2.get('dsr', 0)} "
+                f"SR_obs={dsr_t2.get('sr_obs', 0)} n={dsr_t2.get('n', 0)}"
+            )
 
     # ---- final summary ----
     print(f"\n\n{'=' * 70}")
     print(f"[10] 最终总结")
     print(f"{'=' * 70}")
     print(f"  策略: 窒息量低吸 (suffocation-volume mean-reversion)")
-    print(f"  信号: 连跌N日 + 量比<5日均量{VOL_RATIO_THRESH} (volume 字段, {n_vol/n_bars*100:.1f}%覆盖)")
+    print(f"  信号: 连跌N日 + 量比<5日均量{VOL_RATIO_THRESH} (volume 字段, {n_vol / n_bars * 100:.1f}%覆盖)")
     print(f"  口径: T close→T+1 open (隔夜 gap) + T+1 open→T+2/T+5 close (close_ev)")
-    print(f"  Bonferroni: n_cross_factor={N_CROSS_FACTOR} (×{N_CROSS_FACTOR*2} tests)")
-    print(f"  数据: {len(code_map)} codes, {len(calendar)} trading days "
-          f"({calendar[0]}~{calendar[-1]})")
+    print(f"  Bonferroni: n_cross_factor={N_CROSS_FACTOR} (×{N_CROSS_FACTOR * 2} tests)")
+    print(f"  数据: {len(code_map)} codes, {len(calendar)} trading days ({calendar[0]}~{calendar[-1]})")
 
     # primary result
-    primary = next((r for r in results
-                    if "3day" in r["name"] and "overnight" in r.get("hold", "")
-                    and "BHAR" not in r["name"]), None)
+    primary = next(
+        (r for r in results if "3day" in r["name"] and "overnight" in r.get("hold", "") and "BHAR" not in r["name"]),
+        None,
+    )
     if primary and primary["n_picks"] > 0:
         print(f"\n  主结果 (N=3, overnight gap, raw):")
         print(f"    n_picks={primary['n_picks']} n_days={primary['n_days']}")
         print(f"    gross EV={primary['basic_ev_gross']}% net EV={primary['basic_ev_net']}%")
         print(f"    day_t={primary['basic_day_t']} p_raw={primary['basic_p_raw']}")
         p_bonf = bonferroni_p(primary["basic_p_raw"], N_CROSS_FACTOR * 2)
-        print(f"    Bonferroni p(×{N_CROSS_FACTOR*2})={p_bonf}")
-        print(f"    walk-forward: train={primary['wf_train_ev']}% "
-              f"test={primary['wf_test_ev']}% test_p={primary['wf_test_p']}")
+        print(f"    Bonferroni p(×{N_CROSS_FACTOR * 2})={p_bonf}")
+        print(
+            f"    walk-forward: train={primary['wf_train_ev']}% "
+            f"test={primary['wf_test_ev']}% test_p={primary['wf_test_p']}"
+        )
 
     n_neg = sum(1 for r in results if r["n_picks"] > 0 and r["basic_ev_gross"] < 0)
     n_pos = sum(1 for r in results if r["n_picks"] > 0 and r["basic_ev_gross"] > 0)
@@ -937,11 +1045,12 @@ def main() -> None:
     print(f"\n  结果: {n_neg}/{n_total} variants gross EV < 0, {n_pos} gross EV > 0")
 
     print(f"\n  禁止外推: 本测试仅覆盖窒息量低吸, 不代表短线策略整体有/无 edge")
-    print(f"  局限性: kline 未复价 (ex-div 日有假 gap, 已做 ex-div 过滤 robustness); "
-          f"volume 字段非 turn (turn 仅 42.5% 覆盖, volume 99.5%); "
-          f"非组合级 (无再平衡), 仅日线粒度")
-    print(f"  量缩信号在 A 股: volume 枯竭 = 无买盘/退市风险 非 卖方衰竭, "
-          f"gap 方向 = 继续下跌非反弹")
+    print(
+        f"  局限性: kline 未复价 (ex-div 日有假 gap, 已做 ex-div 过滤 robustness); "
+        f"volume 字段非 turn (turn 仅 42.5% 覆盖, volume 99.5%); "
+        f"非组合级 (无再平衡), 仅日线粒度"
+    )
+    print(f"  量缩信号在 A 股: volume 枯竭 = 无买盘/退市风险 非 卖方衰竭, gap 方向 = 继续下跌非反弹")
 
 
 if __name__ == "__main__":

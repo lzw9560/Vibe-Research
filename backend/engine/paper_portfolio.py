@@ -14,6 +14,7 @@ drawdown_breaker.full_status() 已算 portfolio + per-arm。PaperPortfolio 是 t
 非独立 state store——价值在 scheduler 路径提供 equity 给 R9 sizing（drawdown_breaker
 当前只在 API 层不在 sizing 路径，grill C6）。
 """
+
 from __future__ import annotations
 
 import logging
@@ -35,7 +36,8 @@ class PaperPortfolio:
     """
 
     def __init__(
-        self, journal: TradeJournal | None = None,
+        self,
+        journal: TradeJournal | None = None,
         breaker: DrawdownBreaker | None = None,
         initial_capital: float = DEFAULT_INITIAL_CAPITAL,
     ) -> None:
@@ -56,8 +58,12 @@ class PaperPortfolio:
         return self._breaker.full_status()
 
     def final_size(
-        self, arm: str, arm_size: float, lift_multiplier: float | None = None,
-        intraday_mult: float = 1.0, regime: str | None = None,
+        self,
+        arm: str,
+        arm_size: float,
+        lift_multiplier: float | None = None,
+        intraday_mult: float = 1.0,
+        regime: str | None = None,
     ) -> float:
         """T4（S209 §4）：4-layer final_size = arm_size × arm_mult × portfolio_mult × lift_mult × intraday_mult。
 
@@ -73,10 +79,12 @@ class PaperPortfolio:
         """
         if lift_multiplier is None:
             from candidate_funnel.evaluation import lift_for_arm  # noqa: PLC0415
+
             lift_multiplier = lift_for_arm(arm, regime)[0]
         arm_mult, _ = self._breaker.size_multiplier(arm=arm)
         port_mult, _ = self._breaker.portfolio_multiplier()
         from risk.intraday_loss_breaker import compute_final_size  # noqa: PLC0415
+
         return compute_final_size(arm_size * arm_mult, port_mult, lift_multiplier, intraday_mult)
 
     def bayesian_arm_size(self, arm: str, max_size: float = 1.0) -> float:

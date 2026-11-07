@@ -42,8 +42,7 @@ def _fetch_single(c: str, as_of: str) -> tuple[str, dict]:
         anns = astock.announcements(c, limit=10) or []
         models = [announcement_from_dict(a) for a in anns]
         entry["announcements"] = [
-            {"title": m.title, "date": m.date, "type": classify_announcement({"title": m.title})}
-            for m in models
+            {"title": m.title, "date": m.date, "type": classify_announcement({"title": m.title})} for m in models
         ]
         if not entry["announcements"]:
             entry["missing"]["announcements"] = "近期无公告"
@@ -51,9 +50,7 @@ def _fetch_single(c: str, as_of: str) -> tuple[str, dict]:
         entry["missing"]["announcements"] = "公告未取得"
     try:
         cb = astock.concept_blocks(c, raise_on_failure=True) or {}
-        entry["concepts"] = [
-            b.name for b in concept_blocks_from_dict(cb) if b.name
-        ]
+        entry["concepts"] = [b.name for b in concept_blocks_from_dict(cb) if b.name]
     except Exception:
         entry["missing"]["concepts"] = "板块未取得"
     try:

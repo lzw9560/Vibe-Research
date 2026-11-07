@@ -17,6 +17,7 @@ R12 lottery 中位负不可长仓兑现）。引擎代码保留供复现/参考�
 回测基准：strategy4_backtest_result.md（2198事件，Bootstrap p=0.743不显著，
 但右尾分布有alpha——>+10%占5.1% vs <-10%仅2.0%）
 """
+
 from __future__ import annotations
 
 import logging
@@ -47,19 +48,19 @@ logger = logging.getLogger("tail_dip_engine")
 
 # 硬风控阈值——多专家审计后不可变，任何策略路径必须通过
 HARD_THRESHOLDS: dict[str, float] = {
-    "max_limitup_boards": 4,        # 连板>=4直接拉黑（高位非线性退潮）
-    "max_goodwill_ratio": 0.15,     # 商誉/净资产 >= 15%
-    "max_receivable_ratio": 0.40,   # 应收账款/营收 >= 40%
-    "max_pledge_ratio": 0.50,       # 大股东质押率 >= 50%
-    "max_drop_pct": -5.0,           # 跌幅 < -5% 不接（重跌是基本面恶化）
-    "min_drop_pct": -3.0,           # 跌幅 > -3% 不接（不算错杀）
-    "min_amount": 1e7,              # 成交额下限 1000万
-    "max_amount_sweet": 5e7,        # 甜区成交额上限 0.5亿
-    "min_price": 2.0,               # 价格下限
-    "max_price_sweet": 10.0,        # 甜区价格上限
-    "max_stop_loss": -0.10,         # 止损 -10%（误杀率仅9.8%）
-    "take_profit": 0.10,            # 止盈 +10%
-    "max_hold_days": 5,             # 最大持有5日
+    "max_limitup_boards": 4,  # 连板>=4直接拉黑（高位非线性退潮）
+    "max_goodwill_ratio": 0.15,  # 商誉/净资产 >= 15%
+    "max_receivable_ratio": 0.40,  # 应收账款/营收 >= 40%
+    "max_pledge_ratio": 0.50,  # 大股东质押率 >= 50%
+    "max_drop_pct": -5.0,  # 跌幅 < -5% 不接（重跌是基本面恶化）
+    "min_drop_pct": -3.0,  # 跌幅 > -3% 不接（不算错杀）
+    "min_amount": 1e7,  # 成交额下限 1000万
+    "max_amount_sweet": 5e7,  # 甜区成交额上限 0.5亿
+    "min_price": 2.0,  # 价格下限
+    "max_price_sweet": 10.0,  # 甜区价格上限
+    "max_stop_loss": -0.10,  # 止损 -10%（误杀率仅9.8%）
+    "take_profit": 0.10,  # 止盈 +10%
+    "max_hold_days": 5,  # 最大持有5日
     "reduction_announce_days": 90,  # 近90天减持公告
 }
 
@@ -67,6 +68,7 @@ HARD_THRESHOLDS: dict[str, float] = {
 @dataclass
 class FinancialRedLine:
     """单只股票的财务红线检查结果。"""
+
     code: str
     name: str = ""
     passed: bool = True
@@ -160,10 +162,7 @@ def financial_red_line_shield(
         result.blocked_reasons.append("近90天有减持公告（内部人出货）")
 
     # v10 安全补丁：所有财务因子全为None → 标记"不可验证"，不默认放行
-    _has_any_financial = (
-        goodwill is not None or accounts_receivable is not None
-        or pledge_ratio is not None
-    )
+    _has_any_financial = goodwill is not None or accounts_receivable is not None or pledge_ratio is not None
     if not _has_any_financial and not is_st and limitup_boards == 0:
         result.passed = False
         result.blocked_reasons.append("财务数据全部缺失（新股或数据源故障），安全优先拦截")
@@ -175,16 +174,18 @@ def financial_red_line_shield(
 # Phase 2 核心因子1：个股日内无量错杀因子
 # ===========================================================================
 
+
 @dataclass
 class AnomalousDeviationResult:
     """错杀偏离度计算结果。"""
+
     code: str
-    anomalous_deviation: float       # 错杀偏离度（正=错杀，负=板块共跌）
-    is_anomalous: bool              # 是否判定为错杀
-    individual_change: float        # 个股跌幅%
-    sector_change: float           # 板块涨跌幅%
-    volume_contraction: float      # 量能收缩比（今日/5日均量）
-    confidence: str                # high/medium/low
+    anomalous_deviation: float  # 错杀偏离度（正=错杀，负=板块共跌）
+    is_anomalous: bool  # 是否判定为错杀
+    individual_change: float  # 个股跌幅%
+    sector_change: float  # 板块涨跌幅%
+    volume_contraction: float  # 量能收缩比（今日/5日均量）
+    confidence: str  # high/medium/low
     detail: str = ""
 
 
@@ -195,9 +196,9 @@ def calculate_anomalous_deviation(
     volume_today: float,
     volume_ma5: float,
     *,
-    min_deviation: float = 3.0,      # 个股vs板块偏离>=3%才算错杀
+    min_deviation: float = 3.0,  # 个股vs板块偏离>=3%才算错杀
     high_confidence_deviation: float = 5.0,  # 偏离>=5%才算高信心（v10.2防边界噪声）
-    max_volume_ratio: float = 0.8,   # 量能收缩比<0.8才算无量
+    max_volume_ratio: float = 0.8,  # 量能收缩比<0.8才算无量
     low_cf_threshold: float = 10.0,  # 现金流/净利<10%时降信心（v10.2基本面黄灯）
 ) -> AnomalousDeviationResult:
     """个股日内无量错杀因子。
@@ -230,7 +231,9 @@ def calculate_anomalous_deviation(
 
     if deviation >= min_deviation:
         is_anomalous = True
-        detail_parts.append(f"错杀偏离度{deviation:.1f}%>={min_deviation}%（个股{individual_change_pct:.1f}% vs 板块{sector_change_pct:.1f}%）")
+        detail_parts.append(
+            f"错杀偏离度{deviation:.1f}%>={min_deviation}%（个股{individual_change_pct:.1f}% vs 板块{sector_change_pct:.1f}%）"
+        )
 
         if vol_ratio < max_volume_ratio:
             # v10.2：偏离>=5%才high，3~5%只给medium（防边界噪声）
@@ -261,14 +264,16 @@ def calculate_anomalous_deviation(
 # Phase 2 核心因子2：尾盘防诱多庄股过滤因子
 # ===========================================================================
 
+
 @dataclass
 class TailVolatilityResult:
     """尾盘波动率过滤结果。"""
+
     code: str
     passed: bool
-    tail_volatility: float          # 尾盘15分钟250日波动率
-    random_walk_p_value: float     # 随机游走KS检验p值
-    is_manipulated: bool           # 是否判定为恶庄操控
+    tail_volatility: float  # 尾盘15分钟250日波动率
+    random_walk_p_value: float  # 随机游走KS检验p值
+    is_manipulated: bool  # 是否判定为恶庄操控
     detail: str = ""
 
 
@@ -364,15 +369,17 @@ def check_tail_volatility(
 # Phase 2 核心因子3：动态跨领域风控斩仓止损策略
 # ===========================================================================
 
+
 @dataclass
 class IronStopLossResult:
     """铁血止损执行结果。"""
+
     code: str
-    action: str               # hold / stop_loss / take_profit / time_exit
-    trigger_price: float     # 触发价
-    current_price: float     # 当前价
-    entry_price: float       # 入场价
-    pnl_pct: float           # 当前盈亏%
+    action: str  # hold / stop_loss / take_profit / time_exit
+    trigger_price: float  # 触发价
+    current_price: float  # 当前价
+    entry_price: float  # 入场价
+    pnl_pct: float  # 当前盈亏%
     reason: str
     urgency: str = "normal"  # normal / urgent / critical
 
@@ -385,9 +392,9 @@ def execute_iron_stop_loss(
     intraday_high: float,
     days_held: int,
     *,
-    market_phase: str = "normal",        # normal / crash / euphoria
-    is_weekend_eve: bool = False,       # 周五 → 收紧止损
-    sector_crash_pct: float = 0.0,       # 板块当日跌幅（正数=跌）
+    market_phase: str = "normal",  # normal / crash / euphoria
+    is_weekend_eve: bool = False,  # 周五 → 收紧止损
+    sector_crash_pct: float = 0.0,  # 板块当日跌幅（正数=跌）
     position_size_multiplier: float = 1.0,  # 回撤断路器乘数
 ) -> IronStopLossResult:
     """T+1动态跨领域风控斩仓止损策略。
@@ -446,7 +453,7 @@ def execute_iron_stop_loss(
             entry_price=entry_price,
             pnl_pct=round(pnl_pct * 100, 2),
             reason=f"止损触发：日内最低{intraday_low:.2f}≤止损线{stop_loss_line:.2f}"
-                   f"（{base_stop:.0%}{' 周末收紧' if is_weekend_eve else ''}）",
+            f"（{base_stop:.0%}{' 周末收紧' if is_weekend_eve else ''}）",
             urgency="urgent",
         )
 
@@ -484,8 +491,7 @@ def execute_iron_stop_loss(
         current_price=current_price,
         entry_price=entry_price,
         pnl_pct=round(pnl_pct * 100, 2),
-        reason=f"持有中（{days_held}/{max_hold}日，止损{stop_loss_line:.2f}，"
-               f"止盈{take_profit_line:.2f}）",
+        reason=f"持有中（{days_held}/{max_hold}日，止损{stop_loss_line:.2f}，止盈{take_profit_line:.2f}）",
         urgency="normal",
     )
 
@@ -494,9 +500,11 @@ def execute_iron_stop_loss(
 # Phase 1 辅助：9:20集合竞价核按钮前置熔断
 # ===========================================================================
 
+
 @dataclass
 class PremarketFuseResult:
     """集合竞价前置熔断结果。"""
+
     code: str
     blocked: bool
     reason: str
@@ -521,14 +529,16 @@ def premarket_liquidity_fuse(
     # 1. 反向核按钮
     if auction_pct < -7.0 and sector_gap_pct > -1.0:
         return PremarketFuseResult(
-            code=code, blocked=True,
+            code=code,
+            blocked=True,
             reason=f"反向核按钮：个股竞价{auction_pct:.1f}% vs 板块{sector_gap_pct:.1f}%",
         )
 
     # 2. 流动性锁死
     if auction_volume_ratio < 0.3 and auction_unmatched > 0:
         return PremarketFuseResult(
-            code=code, blocked=True,
+            code=code,
+            blocked=True,
             reason=f"流动性锁死：竞价量比{auction_volume_ratio:.2f}+未匹配{auction_unmatched:.0f}",
         )
 
@@ -536,7 +546,8 @@ def premarket_liquidity_fuse(
     estimated_open = prev_close * (1 + auction_pct / 100)
     if estimated_open <= entry_stop_loss_line:
         return PremarketFuseResult(
-            code=code, blocked=True,
+            code=code,
+            blocked=True,
             reason=f"隔夜gap-down：预估开盘{estimated_open:.2f}≤止损线{entry_stop_loss_line:.2f}",
         )
 
@@ -546,6 +557,7 @@ def premarket_liquidity_fuse(
 # ===========================================================================
 # Phase 2 辅助：财务因子替代（季报更替期数据滞后补丁）
 # ===========================================================================
+
 
 def fetch_financial_substitute_factors(code: str) -> dict[str, Any]:
     """用替代因子补盲季报更替期的财务数据滞后。
@@ -648,9 +660,11 @@ def fetch_financial_substitute_factors(code: str) -> dict[str, Any]:
 # 综合筛选入口
 # ===========================================================================
 
+
 @dataclass
 class TailDipCandidate:
     """策略4进化版完整候选结果。"""
+
     code: str
     name: str
     passed: bool
@@ -698,12 +712,16 @@ def screen_tail_dip_candidate(
 
     # ━━━ 1. 财务红线防火墙 ━━━
     redline = financial_red_line_shield(
-        code=code, name=name,
-        goodwill=goodwill, net_assets=net_assets,
-        accounts_receivable=accounts_receivable, revenue=revenue,
+        code=code,
+        name=name,
+        goodwill=goodwill,
+        net_assets=net_assets,
+        accounts_receivable=accounts_receivable,
+        revenue=revenue,
         pledge_ratio=pledge_ratio,
         has_reduction_announce=has_reduction_announce,
-        is_st=is_st, limitup_boards=limitup_boards,
+        is_st=is_st,
+        limitup_boards=limitup_boards,
         is_weekend_eve=is_weekend_eve,
     )
     candidate.financial_redline = redline
@@ -719,16 +737,20 @@ def screen_tail_dip_candidate(
 
     if turnover < HARD_THRESHOLDS["min_amount"]:
         candidate.passed = False
-        candidate.rejection_reasons.append(f"成交额{turnover/1e4:.0f}万<{HARD_THRESHOLDS['min_amount']/1e4:.0f}万")
+        candidate.rejection_reasons.append(f"成交额{turnover / 1e4:.0f}万<{HARD_THRESHOLDS['min_amount'] / 1e4:.0f}万")
 
     # 跌幅范围检查：-3% ~ -5%是甜区
     if individual_change_pct > HARD_THRESHOLDS["min_drop_pct"]:
         candidate.passed = False
-        candidate.rejection_reasons.append(f"跌幅{individual_change_pct:.1f}%>{HARD_THRESHOLDS['min_drop_pct']}%（不算错杀）")
+        candidate.rejection_reasons.append(
+            f"跌幅{individual_change_pct:.1f}%>{HARD_THRESHOLDS['min_drop_pct']}%（不算错杀）"
+        )
 
     if individual_change_pct < HARD_THRESHOLDS["max_drop_pct"]:
         candidate.passed = False
-        candidate.rejection_reasons.append(f"跌幅{individual_change_pct:.1f}%<{HARD_THRESHOLDS['max_drop_pct']}%（重跌是基本面恶化）")
+        candidate.rejection_reasons.append(
+            f"跌幅{individual_change_pct:.1f}%<{HARD_THRESHOLDS['max_drop_pct']}%（重跌是基本面恶化）"
+        )
 
     if not candidate.passed:
         return candidate  # 短路
@@ -791,18 +813,20 @@ __all__ = [
 # v4.00 新增：实时板块偏离度计算（从intraday_quote_snapshots提取）
 # ===========================================================================
 
+
 @dataclass
 class SectorDeviationResult:
     """个股vs全市场实时偏离度结果。"""
+
     code: str
-    ts: str                    # 时间点
-    stock_change: float        # 个股涨跌幅%
-    sector_median: float       # 全市场中位数涨跌幅%
-    sector_mean: float         # 全市场均值涨跌幅%
+    ts: str  # 时间点
+    stock_change: float  # 个股涨跌幅%
+    sector_median: float  # 全市场中位数涨跌幅%
+    sector_mean: float  # 全市场均值涨跌幅%
     deviation_from_median: float  # 偏离度（个股-中位数 绝对值）
-    deviation_from_mean: float    # 偏离度（个股-均值 绝对值）
-    is_anomalous: bool         # 偏离度>=3%
-    sample_size: int           # 板本样本量
+    deviation_from_mean: float  # 偏离度（个股-均值 绝对值）
+    is_anomalous: bool  # 偏离度>=3%
+    sample_size: int  # 板本样本量
 
 
 def compute_realtime_sector_deviation(
@@ -834,9 +858,7 @@ def compute_realtime_sector_deviation(
     try:
         # 确定日期
         if date is None:
-            row = db.execute(
-                "SELECT date FROM intraday_quote_snapshots ORDER BY date DESC LIMIT 1"
-            ).fetchone()
+            row = db.execute("SELECT date FROM intraday_quote_snapshots ORDER BY date DESC LIMIT 1").fetchone()
             if not row:
                 return []
             date = row[0]
@@ -851,8 +873,7 @@ def compute_realtime_sector_deviation(
         for (ts,) in ts_rows:
             # 全市场涨跌幅
             sector_rows = db.execute(
-                "SELECT change_pct FROM intraday_quote_snapshots "
-                "WHERE date=? AND ts=? AND change_pct IS NOT NULL",
+                "SELECT change_pct FROM intraday_quote_snapshots WHERE date=? AND ts=? AND change_pct IS NOT NULL",
                 (date, ts),
             ).fetchall()
             sector_vals = [r[0] for r in sector_rows]
@@ -876,17 +897,19 @@ def compute_realtime_sector_deviation(
             dev_mean = abs(stock_chg - sector_mean)
             dev_ref = dev_median if use_median else dev_mean
 
-            results.append(SectorDeviationResult(
-                code=code,
-                ts=ts,
-                stock_change=round(stock_chg, 2),
-                sector_median=round(sector_median, 2),
-                sector_mean=round(sector_mean, 2),
-                deviation_from_median=round(dev_median, 2),
-                deviation_from_mean=round(dev_mean, 2),
-                is_anomalous=dev_ref >= min_deviation,
-                sample_size=len(sector_vals),
-            ))
+            results.append(
+                SectorDeviationResult(
+                    code=code,
+                    ts=ts,
+                    stock_change=round(stock_chg, 2),
+                    sector_median=round(sector_median, 2),
+                    sector_mean=round(sector_mean, 2),
+                    deviation_from_median=round(dev_median, 2),
+                    deviation_from_mean=round(dev_mean, 2),
+                    is_anomalous=dev_ref >= min_deviation,
+                    sample_size=len(sector_vals),
+                )
+            )
 
         db.close()
         return results
@@ -900,21 +923,23 @@ def compute_realtime_sector_deviation(
 # v4.00 新增：回撤断路器永久锁定诊断
 # ===========================================================================
 
+
 @dataclass
 class DrawdownLockDiagnosis:
     """回撤断路器锁定状态诊断结果。"""
-    current_equity: float         # 当前权益
-    peak_equity: float            # 历史峰值
-    drawdown_cny: float           # 回撤金额
-    drawdown_pct: float           # 回撤百分比
-    size_multiplier: float        # 当前乘数
-    status: str                   # enforced/underpowered/disabled
-    days_tracked: int             # 跟踪天数
+
+    current_equity: float  # 当前权益
+    peak_equity: float  # 历史峰值
+    drawdown_cny: float  # 回撤金额
+    drawdown_pct: float  # 回撤百分比
+    size_multiplier: float  # 当前乘数
+    status: str  # enforced/underpowered/disabled
+    days_tracked: int  # 跟踪天数
     # 诊断
-    is_permanently_locked: bool   # 是否永久锁定
-    recovery_target: float        # 恢复所需cum_pnl
-    recovery_needed: float        # 需要赚多少才能解锁
-    diagnosis: str                # 诊断说明
+    is_permanently_locked: bool  # 是否永久锁定
+    recovery_target: float  # 恢复所需cum_pnl
+    recovery_needed: float  # 需要赚多少才能解锁
+    diagnosis: str  # 诊断说明
 
 
 def diagnose_drawdown_lock(
@@ -952,7 +977,7 @@ def diagnose_drawdown_lock(
             f"永久锁定：回撤{drawdown_pct:.1f}%>{dd_threshold_stop}%，"
             f"需赚{recovery_needed:+.0f}元（权益从{current_equity:.0f}涨到{peak_equity:.0f}）"
             f"才能解锁。当前资金{current_equity:.0f}下需收益率"
-            f"{recovery_needed/current_equity*100:.1f}%才可恢复。"
+            f"{recovery_needed / current_equity * 100:.1f}%才可恢复。"
         )
     elif days_tracked < 60:
         diagnosis = f"underpowered：跟踪{days_tracked}<60天，不enforce"
@@ -978,6 +1003,7 @@ def diagnose_drawdown_lock(
 # v5.00 新增：peak渐进衰减恢复机制（DrawdownBreaker 重置方案）
 # ===========================================================================
 
+
 @dataclass
 class PeakDecayProposal:
     """peak渐进衰减方案——供人工审批后实施。
@@ -988,14 +1014,15 @@ class PeakDecayProposal:
     - 衰减后size_mult上限0.5（保留"曾经大跌过"的风控记忆）
     - 需要人工确认后实施（不自主修改风控核心逻辑）
     """
-    current_peak: float             # 当前峰值
-    proposed_peak: float            # 衰减后峰值
-    decay_factor: float             # 衰减系数
-    trigger_reason: str             # 触发原因
-    new_recovery_needed: float      # 衰减后恢复所需金额
-    new_recovery_pct: float         # 衰减后恢复所需收益率
-    size_mult_cap: float            # 衰减后size_mult上限（0.5）
-    recommendation: str             # 建议操作
+
+    current_peak: float  # 当前峰值
+    proposed_peak: float  # 衰减后峰值
+    decay_factor: float  # 衰减系数
+    trigger_reason: str  # 触发原因
+    new_recovery_needed: float  # 衰减后恢复所需金额
+    new_recovery_pct: float  # 衰减后恢复所需收益率
+    size_mult_cap: float  # 衰减后size_mult上限（0.5）
+    recommendation: str  # 建议操作
 
 
 def propose_peak_decay(
@@ -1074,16 +1101,18 @@ def propose_peak_decay(
 # v8.00 新增：轻量版尾盘波动率检查（用14:50→15:00快照替代5分钟bar）
 # ===========================================================================
 
+
 @dataclass
 class TailSnapVolatilityResult:
     """用14:50→15:00快照计算的尾盘波动率结果。"""
+
     code: str
     passed: bool
-    tail_volatility: float          # 尾盘10分钟收益率波动率
-    daily_volatility: float        # 日K波动率（基准）
-    volatility_ratio: float        # 尾盘/日K 比值
-    sample_days: int               # 样本天数
-    is_manipulated: bool           # 是否判定为恶庄压价
+    tail_volatility: float  # 尾盘10分钟收益率波动率
+    daily_volatility: float  # 日K波动率（基准）
+    volatility_ratio: float  # 尾盘/日K 比值
+    sample_days: int  # 样本天数
+    is_manipulated: bool  # 是否判定为恶庄压价
     detail: str = ""
 
 
@@ -1093,7 +1122,7 @@ def check_tail_volatility_from_snapshots(
     kline_db_path: str = str(resolve_data_dir() / "baostock_kline_cache.db"),
     *,
     min_days: int = 15,
-    manipulation_ratio: float = 0.3,   # 尾盘波动率<日K的30% → 疑似恶庄
+    manipulation_ratio: float = 0.3,  # 尾盘波动率<日K的30% → 疑似恶庄
 ) -> TailSnapVolatilityResult:
     """轻量版尾盘波动率检查——用14:50→15:00快照替代5分钟bar。
 
@@ -1117,33 +1146,41 @@ def check_tail_volatility_from_snapshots(
         db = sqlite3.connect(db_path)
     except sqlite3.Error:
         return TailSnapVolatilityResult(
-            code=code, passed=True, tail_volatility=0.0,
-            daily_volatility=0.0, volatility_ratio=1.0,
-            sample_days=0, is_manipulated=False,
+            code=code,
+            passed=True,
+            tail_volatility=0.0,
+            daily_volatility=0.0,
+            volatility_ratio=1.0,
+            sample_days=0,
+            is_manipulated=False,
             detail="数据库连接失败",
         )
 
     try:
         # 找有14:50和15:00的交易日
-        dates_1450 = set(r[0] for r in db.execute(
-            "SELECT DISTINCT date FROM intraday_quote_snapshots WHERE ts LIKE '%T14:50%'"
-        ).fetchall())
-        dates_1500 = set(r[0] for r in db.execute(
-            "SELECT DISTINCT date FROM intraday_quote_snapshots WHERE ts LIKE '%T15:00%'"
-        ).fetchall())
+        dates_1450 = set(
+            r[0]
+            for r in db.execute(
+                "SELECT DISTINCT date FROM intraday_quote_snapshots WHERE ts LIKE '%T14:50%'"
+            ).fetchall()
+        )
+        dates_1500 = set(
+            r[0]
+            for r in db.execute(
+                "SELECT DISTINCT date FROM intraday_quote_snapshots WHERE ts LIKE '%T15:00%'"
+            ).fetchall()
+        )
         both_dates = sorted(dates_1450 & dates_1500)
 
         # 计算尾盘收益率
         tail_returns = []
         for date in both_dates:
             r1 = db.execute(
-                "SELECT price FROM intraday_quote_snapshots "
-                "WHERE date=? AND code=? AND ts LIKE '%T14:50%'",
+                "SELECT price FROM intraday_quote_snapshots WHERE date=? AND code=? AND ts LIKE '%T14:50%'",
                 (date, code),
             ).fetchone()
             r2 = db.execute(
-                "SELECT price FROM intraday_quote_snapshots "
-                "WHERE date=? AND code=? AND ts LIKE '%T15:00%'",
+                "SELECT price FROM intraday_quote_snapshots WHERE date=? AND code=? AND ts LIKE '%T15:00%'",
                 (date, code),
             ).fetchone()
             if r1 and r2 and r1[0] and r2[0] and r1[0] > 0:
@@ -1154,9 +1191,13 @@ def check_tail_volatility_from_snapshots(
     except Exception as e:  # noqa: BLE001
         db.close()
         return TailSnapVolatilityResult(
-            code=code, passed=True, tail_volatility=0.0,
-            daily_volatility=0.0, volatility_ratio=1.0,
-            sample_days=0, is_manipulated=False,
+            code=code,
+            passed=True,
+            tail_volatility=0.0,
+            daily_volatility=0.0,
+            volatility_ratio=1.0,
+            sample_days=0,
+            is_manipulated=False,
             detail=f"快照查询失败: {e}",
         )
 
@@ -1164,9 +1205,13 @@ def check_tail_volatility_from_snapshots(
 
     if sample_days < min_days:
         return TailSnapVolatilityResult(
-            code=code, passed=True, tail_volatility=0.0,
-            daily_volatility=0.0, volatility_ratio=1.0,
-            sample_days=sample_days, is_manipulated=False,
+            code=code,
+            passed=True,
+            tail_volatility=0.0,
+            daily_volatility=0.0,
+            volatility_ratio=1.0,
+            sample_days=sample_days,
+            is_manipulated=False,
             detail=f"样本不足{sample_days}<{min_days}天，跳过过滤",
         )
 
@@ -1175,34 +1220,43 @@ def check_tail_volatility_from_snapshots(
     # 从baostock_kline_cache拉日K波动率
     try:
         kdb = sqlite3.connect(kline_db_path)
-        krow = kdb.execute(
-            "SELECT bars_json FROM kline WHERE code=?", (code,)
-        ).fetchone()
+        krow = kdb.execute("SELECT bars_json FROM kline WHERE code=?", (code,)).fetchone()
         kdb.close()
         if not krow:
             return TailSnapVolatilityResult(
-                code=code, passed=True, tail_volatility=round(tail_vol, 6),
-                daily_volatility=0.0, volatility_ratio=1.0,
-                sample_days=sample_days, is_manipulated=False,
+                code=code,
+                passed=True,
+                tail_volatility=round(tail_vol, 6),
+                daily_volatility=0.0,
+                volatility_ratio=1.0,
+                sample_days=sample_days,
+                is_manipulated=False,
                 detail=f"尾盘vol={tail_vol:.6f}但无日K缓存",
             )
         bars = _json.loads(krow[0])
         closes = [float(b["close"]) for b in bars[-30:] if b.get("close")]
         if len(closes) < 2:
             return TailSnapVolatilityResult(
-                code=code, passed=True, tail_volatility=round(tail_vol, 6),
-                daily_volatility=0.0, volatility_ratio=1.0,
-                sample_days=sample_days, is_manipulated=False,
+                code=code,
+                passed=True,
+                tail_volatility=round(tail_vol, 6),
+                daily_volatility=0.0,
+                volatility_ratio=1.0,
+                sample_days=sample_days,
+                is_manipulated=False,
                 detail=f"尾盘vol={tail_vol:.6f}但日K不足",
             )
-        daily_rets = [(closes[i] - closes[i - 1]) / closes[i - 1]
-                      for i in range(1, len(closes))]
+        daily_rets = [(closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes))]
         daily_vol = float(np.std(daily_rets, ddof=1))
     except Exception as e:  # noqa: BLE001
         return TailSnapVolatilityResult(
-            code=code, passed=True, tail_volatility=round(tail_vol, 6),
-            daily_volatility=0.0, volatility_ratio=1.0,
-            sample_days=sample_days, is_manipulated=False,
+            code=code,
+            passed=True,
+            tail_volatility=round(tail_vol, 6),
+            daily_volatility=0.0,
+            volatility_ratio=1.0,
+            sample_days=sample_days,
+            is_manipulated=False,
             detail=f"日K查询失败: {e}",
         )
 

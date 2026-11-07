@@ -15,6 +15,7 @@ H2 特征，不依赖 60s 封单时序。
 
 诚实：不事后调参，结果写 stdout。pre-register 冻结 commit（本 spec 创建时）。
 """
+
 from __future__ import annotations
 
 import json
@@ -33,15 +34,15 @@ from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2 ver
 from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
 
 # 预注册冻结参数
-EARLY_LOCK_CUTOFF = "100000000"   # 早封板 = first_lock time <= 10:00
-LATE_LOCK_CUTOFF = "140000000"     # 晚封板（尾盘）= first_lock time > 14:00（end_of_day_sneak）
-HIGH_DROP_PCT = 3.0               # 大回撤阈值（max_drop_pct > 3%）
-AUCTION_HIGH_PCT = 0.03            # 竞价高开阈值（fraction > 3%，auction_open_pct 存 fraction）
-ALPHA_ADJ = 0.05 / 6              # Bonferroni K=6（早封板/一字板/开板/晚封板/大回撤/晚封×竞价高开）
+EARLY_LOCK_CUTOFF = "100000000"  # 早封板 = first_lock time <= 10:00
+LATE_LOCK_CUTOFF = "140000000"  # 晚封板（尾盘）= first_lock time > 14:00（end_of_day_sneak）
+HIGH_DROP_PCT = 3.0  # 大回撤阈值（max_drop_pct > 3%）
+AUCTION_HIGH_PCT = 0.03  # 竞价高开阈值（fraction > 3%，auction_open_pct 存 fraction）
+ALPHA_ADJ = 0.05 / 6  # Bonferroni K=6（早封板/一字板/开板/晚封板/大回撤/晚封×竞价高开）
 N_PERM = 2000
 PERM_SEED = 42
-BAOSTOCK_SLEEP = 0.1             # baostock fetch 礼貌间隔（非防封必需）
-_BS_READY = False                # baostock 单次 login（避免 per-call 840 次登录）
+BAOSTOCK_SLEEP = 0.1  # baostock fetch 礼貌间隔（非防封必需）
+_BS_READY = False  # baostock 单次 login（避免 per-call 840 次登录）
 
 
 def _ensure_bs_login() -> None:
@@ -50,6 +51,7 @@ def _ensure_bs_login() -> None:
     if _BS_READY:
         return
     import baostock as bs  # noqa: PLC0415
+
     bs.login()
     _BS_READY = True
 
@@ -66,32 +68,42 @@ def fetch_5min_bars(code: str, date: str, days: int = 1) -> list[dict]:
     baostock login 单次（main 起 _ensure_bs_login，不 per-call 重登）。
     """
     import baostock as bs  # noqa: PLC0415
+
     _ensure_bs_login()
     bars: list[dict] = []
     bc = _six_to_baostock(code)
     from datetime import datetime, timedelta
+
     start = date
     end = (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=days * 2 + 3)).strftime("%Y-%m-%d")
     try:
         rs = bs.query_history_k_data_plus(
-            bc, "date,time,open,high,low,close,volume",
-            start_date=start, end_date=end, frequency="5", adjustflag="2",
+            bc,
+            "date,time,open,high,low,close,volume",
+            start_date=start,
+            end_date=end,
+            frequency="5",
+            adjustflag="2",
         )
         while rs.error_code == "0" and rs.next():
             row = rs.get_row_data()
-            bars.append({
-                "date": row[0], "time": row[1],
-                "open": float(row[2]), "high": float(row[3]),
-                "low": float(row[4]), "close": float(row[5]),
-                "volume": float(row[6]) if row[6] else 0.0,
-            })
+            bars.append(
+                {
+                    "date": row[0],
+                    "time": row[1],
+                    "open": float(row[2]),
+                    "high": float(row[3]),
+                    "low": float(row[4]),
+                    "close": float(row[5]),
+                    "volume": float(row[6]) if row[6] else 0.0,
+                }
+            )
     except Exception:
         return []
     return bars
 
 
-def compute_h2_features(today_bars: list[dict], next_bars: list[dict],
-                         prev_close: float | None = None) -> dict | None:
+def compute_h2_features(today_bars: list[dict], next_bars: list[dict], prev_close: float | None = None) -> dict | None:
     """R3：5min bars → H2 特征 + next_day_return + auction_open_pct。
 
     涨停价 = max(close) 当日（涨停股必触涨停价）。
@@ -117,7 +129,7 @@ def compute_h2_features(today_bars: list[dict], next_bars: list[dict],
         return None
     first_lock_time = today_bars[first_lock_idx]["time"]
     # open_count：封板后 close<zt 的 bar 数（含开板后重新封板又开）
-    open_count = sum(1 for b in today_bars[first_lock_idx + 1:] if b["close"] < zt_price)
+    open_count = sum(1 for b in today_bars[first_lock_idx + 1 :] if b["close"] < zt_price)
     broken_duration_min = open_count * 5
     is_one_word = (first_lock_idx == 0) and (open_count == 0)
     # next_day_return：次日 open→close（T+0 intraday）
@@ -152,15 +164,21 @@ def fetch_prev_close(code: str, date: str) -> float | None:
     复用 _ensure_bs_login（单次 session）。baostock daily kline frequency='d'。
     """
     import baostock as bs  # noqa: PLC0415
+
     _ensure_bs_login()
     bc = _six_to_baostock(code)
     from datetime import datetime, timedelta
+
     start = (datetime.strptime(date, "%Y-%m-%d") - timedelta(days=8)).strftime("%Y-%m-%d")
     end = (datetime.strptime(date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
     try:
         rs = bs.query_history_k_data_plus(
-            bc, "date,close", start_date=start, end_date=end,
-            frequency="d", adjustflag="2",
+            bc,
+            "date,close",
+            start_date=start,
+            end_date=end,
+            frequency="d",
+            adjustflag="2",
         )
         rows = []
         while rs.error_code == "0" and rs.next():
@@ -245,6 +263,7 @@ def _load_universe(max_per_day: int | None = None) -> dict[str, list[str]]:
     """
     from config import GENE_SCORES_DB_PATH
     from db_health import get_healthy_conn
+
     conn = get_healthy_conn(GENE_SCORES_DB_PATH)
     try:
         if max_per_day:
@@ -265,16 +284,17 @@ def _load_universe(max_per_day: int | None = None) -> dict[str, list[str]]:
             by_day[r[0]].append((code, r[2]) if max_per_day else code)
     if max_per_day:
         # 每日去重（按 code 保首）后取 top N
-        return {d: [c for c, _ in list(dict.fromkeys(codes))[:max_per_day]]
-                for d, codes in by_day.items()}
+        return {d: [c for c, _ in list(dict.fromkeys(codes))[:max_per_day]] for d, codes in by_day.items()}
     return {d: list(dict.fromkeys(codes)) for d, codes in by_day.items()}
 
 
 def main() -> int:
     import argparse
+
     ap = argparse.ArgumentParser(description="S152 盘中 H2 harness（baostock 5min 封板时间×开板次数 lift）")
-    ap.add_argument("--max-per-day", type=int, default=15,
-                    help="每日取 top N 涨停股（preliminary；None=全量，default 15）")
+    ap.add_argument(
+        "--max-per-day", type=int, default=15, help="每日取 top N 涨停股（preliminary；None=全量，default 15）"
+    )
     ap.add_argument("--full", action="store_true", help="全量跑（忽略 max-per-day）")
     ap.add_argument("--no-cache", action="store_true", help="强制 re-fetch（忽略 features cache）")
     args = ap.parse_args()
@@ -282,6 +302,7 @@ def main() -> int:
 
     # features cache（re-run 秒级，避免 re-fetch baostock ~13min）
     from vr_paths import resolve_data_dir
+
     suffix = "_full" if args.full else f"_top{max_per_day or 'all'}"
     cache_path = Path(resolve_data_dir()) / f"h2_features_cache{suffix}.json"
 
@@ -293,18 +314,22 @@ def main() -> int:
     else:
         universe = _load_universe(max_per_day=max_per_day)
         total_pairs = sum(len(v) for v in universe.values())
-        print(f"universe: {len(universe)} 信号日, {total_pairs} (date, code) pairs"
-              f"{' [preliminary top-' + str(max_per_day) + '/day]' if max_per_day else ' [full]'}", flush=True)
+        print(
+            f"universe: {len(universe)} 信号日, {total_pairs} (date, code) pairs"
+            f"{' [preliminary top-' + str(max_per_day) + '/day]' if max_per_day else ' [full]'}",
+            flush=True,
+        )
 
         # R2-R3: fetch 5min + compute H2 features per (date, code)
         features = []  # [{date, code, feat}]
         skipped = 0
         for di, (date, codes) in enumerate(universe.items()):
-            print(f"  [{di+1}/{len(universe)}] {date}: {len(codes)} codes fetching...", flush=True)
+            print(f"  [{di + 1}/{len(universe)}] {date}: {len(codes)} codes fetching...", flush=True)
             for code in codes:
                 time.sleep(BAOSTOCK_SLEEP)
                 today_bars = fetch_5min_bars(code, date, days=1)
                 from datetime import datetime, timedelta
+
                 next_start = (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
                 time.sleep(BAOSTOCK_SLEEP)
                 next_bars = fetch_5min_bars(code, next_start, days=1)
@@ -322,15 +347,18 @@ def main() -> int:
         # baostock logout（单次 login 的收尾）
         try:
             import baostock as bs
+
             bs.logout()
         except Exception as e:  # noqa: BLE001
             import logging
+
             logging.getLogger(__name__).warning("first_plate_h2_lift 失败（降级，不阻塞）: %s", e)
         try:
             cache_path.write_text(json.dumps(features, ensure_ascii=False), encoding="utf-8")
             print(f"cached {len(features)} features → {cache_path.name}", flush=True)
         except Exception as e:  # noqa: BLE001
             import logging
+
             logging.getLogger(__name__).warning("first_plate_h2_lift cache 写入失败（降级，不阻塞）: %s", e)
 
     if len(features) < 30:
@@ -378,11 +406,11 @@ def main() -> int:
             latexa_by_day[f["date"]].append(ret)
 
     groups = {
-        "early_lock": early_by_day,      # T2.2 早封板
-        "one_word": oneword_by_day,      # T2.2 一字板
-        "open_board": open_by_day,       # T2.3 开板（reverse_package 近似）
-        "late_lock": late_by_day,        # T2.3 晚封板（end_of_day_sneak 近似）
-        "high_drop": drop_by_day,        # T2.3 大回撤（weak_turn_strong 候选）
+        "early_lock": early_by_day,  # T2.2 早封板
+        "one_word": oneword_by_day,  # T2.2 一字板
+        "open_board": open_by_day,  # T2.3 开板（reverse_package 近似）
+        "late_lock": late_by_day,  # T2.3 晚封板（end_of_day_sneak 近似）
+        "high_drop": drop_by_day,  # T2.3 大回撤（weak_turn_strong 候选）
         "late_x_auction": latexa_by_day,  # 预注册交互：晚封×竞价高开
     }
     results = {}
@@ -396,9 +424,13 @@ def main() -> int:
         null_p95 = round(sorted(nulls)[int(len(nulls) * 0.95)], 4) if nulls else None
         null_mean = round(statistics.mean(nulls), 4) if nulls else None
         results[name] = {
-            "n": n, "lift": lift, "state": state,
-            "n_days": lr["n_days"], "mean_lift": lr["mean_lift_avg"],
-            "null_p95": null_p95, "null_mean": null_mean,
+            "n": n,
+            "lift": lift,
+            "state": state,
+            "n_days": lr["n_days"],
+            "mean_lift": lr["mean_lift_avg"],
+            "null_p95": null_p95,
+            "null_mean": null_mean,
             "pass_filter_edge": lift is not None and null_p95 is not None and lift > null_p95,
         }
 
@@ -406,10 +438,15 @@ def main() -> int:
     print(f"universe: {len(features)} features across {len(raw_by_day)} 日")
     print(f"Bonferroni K=6 α_adj={ALPHA_ADJ}（早封板/一字板/开板/晚封板/大回撤/晚封×竞价高开）")
     for name, r in results.items():
-        print(f"  {name}: n={r['n']} lift={r['lift']} state={r['state']} "
-              f"null_p95={r['null_p95']} pass_filter_edge={r['pass_filter_edge']}")
-    overall = "validated" if any(r["state"] == "validated" and r["pass_filter_edge"] for r in results.values()) \
+        print(
+            f"  {name}: n={r['n']} lift={r['lift']} state={r['state']} "
+            f"null_p95={r['null_p95']} pass_filter_edge={r['pass_filter_edge']}"
+        )
+    overall = (
+        "validated"
+        if any(r["state"] == "validated" and r["pass_filter_edge"] for r in results.values())
         else "未validated/劣于随机"
+    )
     print(f"overall: {overall}")
     print("caveat: next_day_return=T+0 intraday o2c（未剔 unbuyable 一字板，S144 口径 follow-up）")
     print("caveat: 5min 粒度（60s 封单 60s→5min coarser，broken_duration<5min 漏标）")
@@ -448,8 +485,11 @@ def main() -> int:
             },
         )
         s168_verdicts[_arm_name] = {
-            "status": _v.status, "selection_lift": _v.selection_lift,
-            "n": _v.n, "days_robust": _v.days_robust, "note": _v.note,
+            "status": _v.status,
+            "selection_lift": _v.selection_lift,
+            "n": _v.n,
+            "days_robust": _v.days_robust,
+            "note": _v.note,
         }
     return 0
 
