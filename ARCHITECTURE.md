@@ -4,7 +4,7 @@
 > 定位：**把客观数据配齐摆好看板，三条出口接用户自己的 AI 做分析。** 研判/推荐/买卖时机属系统能力（CLAUDE.md §1.1，2026-07-30），仅挂轻量风险提醒「历史统计特征，市场有风险」。
 > 文档基准：仓库 develop 分支，2026-09-26（v5 审查后更新；前基准 2026-09-25 v4）。
 >
-> **项目状态：维护模式（2026-09-26 v5 后）**——所有 trading arms falsified（consecutive_relay V2 证否 + 6 盘中 edge 全假 underpowered + 126 verdict 无 robust_edge），0 tradable signals since 2026-09-24。A 投研助手骨架 80%+ 已闭环（信息聚合看板，非盈利工具）。B 战法回测冻结。**停止主动开发新功能/新 edge 验证**，维护现有数据管道 + 等数据期（S167 盘中数据到 60 天 ~11 月中复验 OFI）。Reactivation conditions（当前 0/4）：registry validated（lift≥2.0 days≥60）/ forward-OOS p<0.05 n≥60 / cross-regime replication / manual_trades ≥10。
+> **项目状态：工具链进化期（2026-11-08 更新）**——trading arms falsified 结论不变（consecutive_relay V2 证否 + 6 盘中 edge 全假 underpowered + 126 verdict 无 robust_edge），但工具链基础设施仍在活跃进化：feishu 推送重构（8模块+161测试+tenacity重试+日志轮转）、数据层路径收口（245文件走vr_paths）、DuckDB MCP 激活（21DB可查）、skill 生态扩展（52→79 skill + 8 MCP + AGENTS.md 护栏）。A 投研助手骨架 90%+ 闭环。B 战法回测冻结不变。Reactivation conditions 不变：registry validated（lift≥2.0 days≥60）/ forward-OOS p<0.05 n≥60 / cross-regime replication / manual_trades ≥10。
 
 ---
 
