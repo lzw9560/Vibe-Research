@@ -154,10 +154,14 @@ def test_main_trading_day_normal_push(monkeypatch, caplog):
 # ─── main() 未知 mode ───
 
 def test_main_unknown_mode_exits_nonzero(monkeypatch, caplog):
-    """未知 mode → logger.error + sys.exit(1)。"""
+    """BUILDERS 中无对应 mode → logger.error + sys.exit(1)。
+
+    argparse choices 会拦截非法 mode（exit 2），所以这里 mock BUILDERS 为空
+    来覆盖 main() 内部的 `if builder is None` 路径。
+    """
     monkeypatch.setattr(main_mod, "is_trading_day", lambda dt: True)
-    monkeypatch.setattr(main_mod, "BUILDERS", {"premarket": lambda: {}})
-    monkeypatch.setattr(sys, "argv", ["feishu.main", "--mode", "nonexistent"])
+    monkeypatch.setattr(main_mod, "BUILDERS", {})  # 空 BUILDERS → 任何 mode 都找不到
+    monkeypatch.setattr(sys, "argv", ["feishu.main", "--mode", "premarket"])
     with caplog.at_level("ERROR"):
         with pytest.raises(SystemExit) as exc_info:
             main()
