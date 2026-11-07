@@ -9,6 +9,7 @@ import argparse
 import logging
 import sys
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 
 from .calendar import is_trading_day
 from .cards import (
@@ -53,10 +54,21 @@ def main() -> None:
     parser.add_argument("--force", action="store_true", help="强制推送，跳过交易日判断")
     args = parser.parse_args()
 
-    # 配置 logging（CLI 运行时）
+    # 配置 logging（CLI 运行时）——stdout + 持久文件 + 轮转
+    from logging.handlers import RotatingFileHandler
+    log_dir = Path.home() / ".vibe-research" / "logs" / "feishu"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    file_handler = RotatingFileHandler(
+        log_dir / "feishu_push.log",
+        maxBytes=5_000_000,  # 5MB
+        backupCount=7,       # 保留 7 天
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        handlers=[logging.StreamHandler(), file_handler],
     )
 
     # test 模式不受交易日限制
