@@ -581,3 +581,38 @@ def test_check_buy_signals_signal_fields(monkeypatch):
                   "trigger_detail", "reason", "buy_condition", "stop_loss_pct",
                   "target_pct", "weight"]:
         assert field in s
+
+
+# ─── check_buy_signals else 观望路径 ───
+
+def test_check_buy_signals_price_below_ma5_observe(monkeypatch):
+    """价格在5日线下方且不触发任何条件 → 观望。"""
+    watch = [{"code": "600001.SH", "name": "测试", "reason": "test", "buy_condition": "none",
+              "stop_loss_pct": -5, "target_pct": 10, "weight": 1}]
+    monkeypatch.setattr(data, "get_watch_list", lambda: watch)
+    # open <= prev*0.99（不低开）, price < ma5（在均线下方）, chg < 3
+    monkeypatch.setattr(data, "get_realtime_price", lambda codes: {
+        "600001.SH": {"last_price": 9.5, "price_change_ratio_pct": 0.5, "turnover": 1000,
+                      "open_price": 10.0, "prev_price": 10.0}})
+    klines = [{"close_price": 10.0}] * 5  # ma5=10.0, price=9.5 < ma5
+    monkeypatch.setattr(data, "get_recent_klines", lambda code, days: klines)
+    signals = data.check_buy_signals()
+    assert signals[0]["signal"] == "观望"
+    assert "未触发条件" in signals[0]["trigger_detail"]
+
+
+def test_check_buy_signals_chg_too_high_observe(monkeypatch):
+    """chg >= 3 且不触发高开 → 走 else 观望（price > ma5 但 chg >= 3）。"""
+    watch = [{"code": "600001.SH", "name": "测试", "reason": "test", "buy_condition": "none",
+              "stop_loss_pct": -5, "target_pct": 10, "weight": 1}]
+    monkeypatch.setattr(data, "get_watch_list", lambda: watch)
+    # open <= prev*1.03（不高开）, price > ma5, chg >= 3
+    monkeypatch.setattr(data, "get_realtime_price", lambda codes: {
+        "600001.SH": {"last_price": 11.0, "price_change_ratio_pct": 5.0, "turnover": 1000,
+                      "open_price": 10.1, "prev_price": 10.0}})
+    klines = [{"close_price": 10.0}] * 5  # ma5=10.0, price=11 > ma5, chg=5% >= 3%
+    monkeypatch.setattr(data, "get_recent_klines", lambda code, days: klines)
+    signals = data.check_buy_signals()
+    # chg=5% >= 3 → 不触发站稳（需 chg < 3）→ 走 else
+    assert signals[0]["signal"] == "观望"
+    assert "未触发条件" in signals[0]["trigger_detail"]
