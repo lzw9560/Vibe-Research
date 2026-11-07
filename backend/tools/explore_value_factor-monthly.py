@@ -42,9 +42,110 @@ from vr_paths import resolve_data_dir  # noqa: E402
 DATA = resolve_data_dir()
 KLINE_DB = DATA / "baostock_kline_cache.db"
 FUND_DB = DATA / "fundamentals_cache.db"
+RAW_CLOSE_DB = DATA / "monthly_raw_close.db"  # akshare 不复权月线（E/P D/P 用）
 COST = 0.004  # 0.4% round-trip
 UNIVERSE_SIZE = 250
-N_BONF = 6  # 3 factors × 2 versions (v1 B/P raw 占 2 tests)
+N_BONF = 6  # 3 factors × 2 versions (v1 B/P raw + E/P raw 占 4 tests)
+
+
+# ── 不复权月线 close backfill（akshare，0.1s/股，E/P D/P 因子价格用）──────────────
+
+def ensure_raw_close_table() -> None:
+    conn = sqlite3.connect(str(RAW_CLOSE_DB))
+    conn.execute("""CREATE TABLE IF NOT EXISTS raw_close (
+        code TEXT, date TEXT, close REAL, PRIMARY KEY (code, date))""")
+    conn.commit()
+    conn.close()
+
+
+def backfill_raw_close_one(code_bare: str) -> int:
+    import akshare as ak  # noqa: PLC0415
+    try:
+        df = ak.stock_zh_a_hist(symbol=code_bare, period="monthly",
+                                start_date="20180101", end_date="20261101", adjust="")
+    except Exception:
+        return 0
+    if df is None or len(df) == 0:
+        return 0
+    rows = []
+    for _, r in df.iterrows():
+        d = str(r.get("日期", "")).strip()
+        if not d or len(d) < 10:
+            continue
+        d = d[:10]
+        c = r.get("收盘")
+        try:
+            c = float(c) if str(c) not in ("nan", "None", "") else None
+        except (ValueError, TypeError):
+            c = None
+        if c is not None and c > 0:
+            rows.append((code_bare, d, c))
+    if not rows:
+        return 0
+    conn = sqlite3.connect(str(RAW_CLOSE_DB))
+    conn.executemany("INSERT OR REPLACE INTO raw_close (code, date, close) VALUES (?,?,?)", rows)
+    conn.commit()
+    conn.close()
+    return len(rows)
+
+
+def backfill_raw_close_all(universe: list[str]) -> None:
+    ensure_raw_close_table()
+    conn = sqlite3.connect(str(RAW_CLOSE_DB))
+    done = {r[0] for r in conn.execute("SELECT DISTINCT code FROM raw_close").fetchall()}
+    conn.close()
+    todo = [c for c in universe if c not in done]
+    print(f"raw_close backfill: {len(universe)} universe, {len(done)} cached, {len(todo)} todo")
+    import time as _t
+    for i, code in enumerate(todo):
+        n = backfill_raw_close_one(code)
+        if (i + 1) % 50 == 0:
+            print(f"  [{i+1}/{len(todo)}] backfilled", flush=True)
+        _t.sleep(0.1)  # 防封 pacing
+
+
+def load_raw_close() -> dict[str, dict[str, float]]:
+    """code -> {month_end_date: 不复权 close}。"""
+    if not RAW_CLOSE_DB.exists():
+        return {}
+    conn = sqlite3.connect(str(RAW_CLOSE_DB))
+    by_code: dict[str, dict[str, float]] = defaultdict(dict)
+    for code, d, c in conn.execute("SELECT code, date, close FROM raw_close"):
+        by_code[code][d] = c
+    conn.close()
+    return dict(by_code)
+
+
+# ── TTM EPS 重建（从 akshare 累计 eps，baostock epsTTM 验证=重建值）─────────────────
+
+def reconstruct_ttm_eps(funds: list[dict], rebalance_date: str) -> float | None:
+    """TTM EPS = 当前季累计 + 去年年报 - 去年同季累计。
+    当前是年报(Q4)时 TTM=年报 EPS 直接用。须三份报告各自 PIT 可用才重建。"""
+    avail = [f for f in funds if f["pit"] <= rebalance_date and f.get("eps") is not None]
+    if not avail:
+        return None
+    cur = avail[-1]  # 最新 PIT 可用季报
+    cur_stat = cur["stat"]
+    cur_y, cur_m = int(cur_stat[:4]), int(cur_stat[5:7])
+    cur_eps = cur["eps"]
+    if cur_eps is None:
+        return None
+    # 年报(Q4, 12月)→TTM=年报EPS 直接
+    if cur_m == 12:
+        return cur_eps
+    # 找去年年报(Q4 of cur_y-1) + 去年同季(同 month of cur_y-1)
+    prior_year = cur_y - 1
+    prior_annual = next((f for f in avail if f["stat"] == f"{prior_year}-12-31"), None)
+    prior_same_q = next((f for f in avail if f["stat"] == f"{prior_year}-{cur_stat[5:]}"), None)
+    if prior_annual is None or prior_same_q is None:
+        return None  # insufficient history，不臆造
+    if prior_annual["eps"] is None or prior_same_q["eps"] is None:
+        return None
+    ttm = cur_eps + prior_annual["eps"] - prior_same_q["eps"]
+    return ttm
+
+
+
 
 
 def pit_pubdate(stat_date: str) -> str:
@@ -273,14 +374,256 @@ def slippage_sensitivity_bp(funds, prices, month_rets, month_dates) -> None:
             print(f"  COST={cost_pct:.1f}%: net_excess={nw['mean']:.4f}%/月 t_nw={nw['t']} (n={nw['n']})")
 
 
+def backtest_ep(funds: dict[str, list[dict]], raw_close: dict[str, dict[str, float]],
+                month_rets: dict[str, dict[str, float]], month_dates: list[str]) -> dict:
+    """E/P raw: TTM_EPS(PIT重建) / 不复权_close(D). EP+ 排除负 TTM EPS（~32%，报排除率）。
+    benchmark = filtered universe（正盈利股）等权（消除机械排除效应）。"""
+    rebal_dates = [d for d in month_dates if d >= "2018-04-01"]
+    excess_rets: list[float] = []
+    strategy_rets: list[float] = []
+    benchmark_rets: list[float] = []
+    dates_used: list[str] = []
+    n_excluded_neg = 0
+    n_total_cand = 0
+    for rd in rebal_dates:
+        candidates: list[tuple[str, float]] = []
+        bench_codes: list[str] = []  # 正盈利 universe（filtered benchmark）
+        for code in raw_close:
+            if rd not in month_rets.get(code, {}):
+                continue
+            close = raw_close[code].get(rd)
+            if not close or close <= 0:
+                continue
+            fl = funds.get(code)
+            if not fl:
+                continue
+            ttm = reconstruct_ttm_eps(fl, rd)
+            if ttm is None:
+                continue
+            n_total_cand += 1
+            if ttm <= 0:
+                n_excluded_neg += 1
+                continue  # EP+ 排除负盈利（价值陷阱+亏损），报排除率
+            ep = ttm / close
+            candidates.append((code, ep))
+            bench_codes.append(code)  # 正盈利股进 filtered benchmark
+        if len(candidates) < 20:
+            continue
+        candidates.sort(key=lambda x: -x[1])  # high E/P = value
+        n_top = max(5, len(candidates) // 10)
+        top_codes = [c for c, _ in candidates[:n_top]]
+        s_r = statistics.mean(month_rets[c][rd] for c in top_codes)
+        b_r = statistics.mean(month_rets[c][rd] for c in bench_codes)  # filtered benchmark
+        strat_net = s_r - COST
+        excess = strat_net - b_r
+        excess_rets.append(excess * 100)
+        strategy_rets.append(strat_net * 100)
+        benchmark_rets.append(b_r * 100)
+        dates_used.append(rd)
+    if len(excess_rets) < 24:
+        return {"status": "too_few", "n": len(excess_rets)}
+    mid = len(dates_used) // 2
+    excl_rate = n_excluded_neg / n_total_cand * 100 if n_total_cand else 0
+    return {
+        "status": "ok", "n_months": len(excess_rets), "dates": dates_used,
+        "excess": excess_rets, "strategy": strategy_rets, "benchmark": benchmark_rets,
+        "train": excess_rets[:mid], "test": excess_rets[mid:],
+        "n_excluded_neg": n_excluded_neg, "excl_rate": round(excl_rate, 1),
+    }
+
+
+def slippage_sensitivity_ep(funds, raw_close, month_rets, month_dates) -> None:
+    print(f"\n--- 滑点敏感性（E/P，net @ 多 COST）---")
+    rebal_dates = [d for d in month_dates if d >= "2018-04-01"]
+    for cost_pct in (0.2, 0.4, 0.6, 0.8):
+        cost = cost_pct / 100
+        excess: list[float] = []
+        for rd in rebal_dates:
+            cand: list[tuple[str, float]] = []
+            bench: list[str] = []
+            for code in raw_close:
+                if rd not in month_rets.get(code, {}):
+                    continue
+                close = raw_close[code].get(rd)
+                if not close or close <= 0:
+                    continue
+                fl = funds.get(code)
+                if not fl:
+                    continue
+                ttm = reconstruct_ttm_eps(fl, rd)
+                if ttm is None or ttm <= 0:
+                    continue
+                cand.append((code, ttm / close))
+                bench.append(code)
+            if len(cand) < 20:
+                continue
+            cand.sort(key=lambda x: -x[1])
+            top = [c for c, _ in cand[:max(5, len(cand) // 10)]]
+            s_r = statistics.mean(month_rets[c][rd] for c in top)
+            b_r = statistics.mean(month_rets[c][rd] for c in bench)
+            excess.append((s_r - cost - b_r) * 100)
+        if excess:
+            nw = nw_t_monthly(excess)
+            print(f"  COST={cost_pct:.1f}%: net_excess={nw['mean']:.4f}%/月 t_nw={nw['t']} (n={nw['n']})")
+
+
+# ── D/P 分红 backfill（akshare stock_history_dividend_detail）────────────────────
+
+DIV_DB = DATA / "dividends_cache.db"
+
+
+def ensure_div_table() -> None:
+    conn = sqlite3.connect(str(DIV_DB))
+    conn.execute("""CREATE TABLE IF NOT EXISTS dividends (
+        code TEXT, ex_date TEXT, cash_per_share REAL, PRIMARY KEY (code, ex_date))""")
+    conn.commit()
+    conn.close()
+
+
+def backfill_div_one(code_bare: str) -> int:
+    import akshare as ak  # noqa: PLC0415
+    try:
+        df = ak.stock_history_dividend_detail(symbol=code_bare, indicator="分红")
+    except Exception:
+        return 0
+    if df is None or len(df) == 0:
+        return 0
+    rows = []
+    for _, r in df.iterrows():
+        status = str(r.get("进度", "")).strip()
+        if status != "实施":
+            continue
+        ex = r.get("除权除息日")
+        ex_str = str(ex).strip()[:10] if ex is not None else ""
+        if not ex_str or ex_str == "NaT" or len(ex_str) < 10:
+            continue
+        cash = r.get("派息")
+        try:
+            cash = float(cash) if str(cash) not in ("nan", "None", "") else None
+        except (ValueError, TypeError):
+            cash = None
+        if cash is None or cash <= 0:
+            continue
+        rows.append((code_bare, ex_str, cash / 10.0))  # 派息元/10股 → 每股
+    if not rows:
+        return 0
+    conn = sqlite3.connect(str(DIV_DB))
+    conn.executemany("INSERT OR REPLACE INTO dividends (code, ex_date, cash_per_share) VALUES (?,?,?)", rows)
+    conn.commit()
+    conn.close()
+    return len(rows)
+
+
+def backfill_div_all(universe: list[str]) -> None:
+    ensure_div_table()
+    conn = sqlite3.connect(str(DIV_DB))
+    done = {r[0] for r in conn.execute("SELECT DISTINCT code FROM dividends").fetchall()}
+    conn.close()
+    todo = [c for c in universe if c not in done]
+    print(f"dividends backfill: {len(universe)} universe, {len(done)} cached, {len(todo)} todo")
+    import time as _t
+    for i, code in enumerate(todo):
+        backfill_div_one(code)
+        if (i + 1) % 50 == 0:
+            print(f"  [{i+1}/{len(todo)}] backfilled", flush=True)
+        _t.sleep(0.1)
+
+
+def load_dividends() -> dict[str, list[tuple[str, float]]]:
+    """code -> [(ex_date, cash_per_share)] 按 ex_date 排序。"""
+    if not DIV_DB.exists():
+        return {}
+    conn = sqlite3.connect(str(DIV_DB))
+    by_code: dict[str, list[tuple[str, float]]] = defaultdict(list)
+    for code, ex, cash in conn.execute("SELECT code, ex_date, cash_per_share FROM dividends ORDER BY code, ex_date"):
+        by_code[code].append((ex, cash))
+    conn.close()
+    return dict(by_code)
+
+
+def trailing_dp(divs: list[tuple[str, float]], rebalance_date: str) -> float | None:
+    """D/P 分子 = 过去 365 天 ex-date 的每股现金分红之和。ex_date<D 天然 PIT。"""
+    # rebalance_date 'YYYY-MM-DD' → 比较 ex_date in [D-365, D]
+    try:
+        from datetime import datetime, timedelta
+        rd = datetime.strptime(rebalance_date, "%Y-%m-%d")
+        lo = rd - timedelta(days=365)
+    except Exception:
+        return None
+    total = 0.0
+    for ex, cash in divs:
+        try:
+            ed = datetime.strptime(ex, "%Y-%m-%d")
+        except Exception:
+            continue
+        if lo <= ed <= rd:
+            total += cash
+    return total if total > 0 else None
+
+
+def backtest_dp(dividends: dict[str, list[tuple[str, float]]], raw_close: dict[str, dict[str, float]],
+                month_rets: dict[str, dict[str, float]], month_dates: list[str]) -> dict:
+    """D/P raw: trailing 12月 cash dividend / 不复权_close. benchmark = filtered universe（有分红股）等权。"""
+    rebal_dates = [d for d in month_dates if d >= "2018-04-01"]
+    excess_rets: list[float] = []
+    strategy_rets: list[float] = []
+    benchmark_rets: list[float] = []
+    dates_used: list[str] = []
+    for rd in rebal_dates:
+        candidates: list[tuple[str, float]] = []
+        bench_codes: list[str] = []
+        for code in raw_close:
+            if rd not in month_rets.get(code, {}):
+                continue
+            close = raw_close[code].get(rd)
+            if not close or close <= 0:
+                continue
+            divs = dividends.get(code)
+            if not divs:
+                continue
+            dp_num = trailing_dp(divs, rd)
+            if dp_num is None or dp_num <= 0:
+                continue
+            dp = dp_num / close
+            candidates.append((code, dp))
+            bench_codes.append(code)
+        if len(candidates) < 20:
+            continue
+        candidates.sort(key=lambda x: -x[1])  # high D/P = value income
+        n_top = max(5, len(candidates) // 10)
+        top_codes = [c for c, _ in candidates[:n_top]]
+        s_r = statistics.mean(month_rets[c][rd] for c in top_codes)
+        b_r = statistics.mean(month_rets[c][rd] for c in bench_codes)
+        strat_net = s_r - COST
+        excess = strat_net - b_r
+        excess_rets.append(excess * 100)
+        strategy_rets.append(strat_net * 100)
+        benchmark_rets.append(b_r * 100)
+        dates_used.append(rd)
+    if len(excess_rets) < 24:
+        return {"status": "too_few", "n": len(excess_rets)}
+    mid = len(dates_used) // 2
+    return {"status": "ok", "n_months": len(excess_rets), "dates": dates_used,
+            "excess": excess_rets, "strategy": strategy_rets, "benchmark": benchmark_rets,
+            "train": excess_rets[:mid], "test": excess_rets[mid:]}
+
+
 def main() -> None:
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--size", type=int, default=UNIVERSE_SIZE)
+    ap.add_argument("--backfill-raw", action="store_true", help="先 backfill 不复权月线（E/P 用）")
+    ap.add_argument("--backfill-div", action="store_true", help="先 backfill 分红（D/P 用）")
+    ap.add_argument("--skip-bp", action="store_true", help="跳过 B/P 只跑 E/P")
     args = ap.parse_args()
 
     universe = select_universe(args.size)
     print(f"universe: top-{args.size} liquidity, {len(universe)} stocks (≥6yr history, survivorship caveat)")
+
+    if args.backfill_raw:
+        backfill_raw_close_all(universe)
+    if args.backfill_div:
+        backfill_div_all(universe)
 
     print("\n=== load data ===")
     funds = load_fundamentals_pit()
@@ -289,58 +632,93 @@ def main() -> None:
     print(f"prices(qfq): {len(prices)} stocks, {len(month_dates)} month-ends")
     month_rets = compute_monthly_returns(prices, month_dates)
 
-    print(f"\n{'='*70}\n=== B/P 月频 long-only top-decile（2018-2026, PIT 对齐, filtered benchmark）===\n{'='*70}")
-    r = backtest_bp(funds, prices, month_rets, month_dates)
-    if r["status"] != "ok":
-        print(f"  {r['status']} (n={r.get('n', 0)})")
-        return
-    print(f"  bvps<=0 排除: {r.get('n_excluded_neg_bvps',0)}（B/P 无负值，仅排除 bvps<=0 异常）")
-    full = stats_block(r["excess"], "full", N_BONF)
-    train = stats_block(r["train"], "train(2018-2022)", N_BONF)
-    test = stats_block(r["test"], "test(2022-2026)", N_BONF)
-    if train and test and train.get("mean", 0) != 0:
-        decay = (train["mean"] - test["mean"]) / abs(train["mean"]) * 100
-        print(f"  衰减: {decay:.0f}% (train→test) — regime caveat: value cycle-timing, 2018-2026 growth-favorable")
-    if r["benchmark"]:
-        print(f"  benchmark(filtered universe等权) mean: {statistics.mean(r['benchmark']):.4f}%/月")
-        print(f"  strategy mean: {statistics.mean(r['strategy']):.4f}%/月 (net @ 0.4% cost)")
+    if not args.skip_bp:
+        print(f"\n{'='*70}\n=== B/P 月频 long-only top-decile（2018-2026, PIT, filtered benchmark）===\n{'='*70}")
+        r = backtest_bp(funds, prices, month_rets, month_dates)
+        if r["status"] == "ok":
+            print(f"  bvps<=0 排除: {r.get('n_excluded_neg_bvps',0)}")
+            stats_block(r["excess"], "full", N_BONF)
+            stats_block(r["train"], "train(2018-2022)", N_BONF)
+            stats_block(r["test"], "test(2022-2026)", N_BONF)
+            if r["benchmark"]:
+                print(f"  benchmark(filtered等权) mean: {statistics.mean(r['benchmark']):.4f}%/月 | strategy: {statistics.mean(r['strategy']):.4f}%/月")
+            slippage_sensitivity_bp(funds, prices, month_rets, month_dates)
+            _verdict(r, "B/P raw")
 
-    slippage_sensitivity_bp(funds, prices, month_rets, month_dates)
+    # E/P（需不复权 close）
+    raw_close = load_raw_close()
+    if len(raw_close) < 50:
+        print(f"\n⚠️ raw_close 不足 50（{len(raw_close)}），E/P 跳过。请先 --backfill-raw")
+    else:
+        print(f"\n{'='*70}\n=== E/P 月频 long-only top-decile（TTM EPS 重建 + 不复权 close, filtered benchmark）===\n{'='*70}")
+        # E/P 用 raw_close 的 month_dates（不复权月线日期可能与 qfq 不同，用 raw_close 的 keys）
+        raw_dates = sorted({d for md in raw_close.values() for d in md.keys()})
+        # month_rets 用 qfq 算（return 含 split+dividend 经济回报），但日期须对齐 raw_close
+        # 复用 qfq month_rets（日期基本对齐月末）
+        re = backtest_ep(funds, raw_close, month_rets, month_dates)
+        if re["status"] == "ok":
+            print(f"  负 TTM EPS 排除: {re['n_excluded_neg']}（排除率 {re['excl_rate']}%，价值陷阱+亏损，方向 inflate value premium）")
+            stats_block(re["excess"], "full", N_BONF)
+            stats_block(re["train"], "train(2018-2022)", N_BONF)
+            stats_block(re["test"], "test(2022-2026)", N_BONF)
+            if re["benchmark"]:
+                print(f"  benchmark(正盈利等权) mean: {statistics.mean(re['benchmark']):.4f}%/月 | strategy: {statistics.mean(re['strategy']):.4f}%/月")
+            slippage_sensitivity_ep(funds, raw_close, month_rets, month_dates)
+            _verdict(re, "E/P raw")
 
-    # verdict
-    print(f"\n{'='*70}\n=== VERDICT（B/P raw, Bonf×{N_BONF}, walk-forward, kill criteria）===\n{'='*70}")
-    test = r["test"]
-    if test:
-        nw = nw_t_monthly(test)
-        train_mean = statistics.mean(r["train"]) if r["train"] else 0
-        test_mean = statistics.mean(test)
-        decay = (train_mean - test_mean) / abs(train_mean) * 100 if train_mean != 0 else 0
-        p_bonf = bonferroni_p(nw["p"], N_BONF)
-        print(f"  test: net_excess={test_mean:.4f}%/月 t_nw={nw['t']} p={nw['p']} Bonf×{N_BONF}={p_bonf:.4f}")
-        print(f"  train={train_mean:.4f}% test={test_mean:.4f}% 衰减={decay:.0f}%")
-        if test_mean < 0.1:
-            print(f"  → FALSIFIED: test net_excess {test_mean:.4f}% < +0.1%/月")
-        elif test_mean < 0.3:
-            if nw["t"] >= 2.9 and p_bonf < 0.05:
-                print(f"  → EXPLORATORY thin-edge: test +0.1~0.3% t_nw>2.9 Bonf PASS（须 OOS+独立复现）")
-            else:
-                print(f"  → FALSIFIED: test +0.1~0.3% BUT t_nw={nw['t']}<2.9 或 Bonf={p_bonf:.4f}>=0.05")
-        elif nw["t"] < 2.9:
-            print(f"  → KILL: test net_excess {test_mean:.4f}%>=0.3 BUT t_nw {nw['t']}<2.9")
-        elif decay > 50:
-            print(f"  → regime caveat: 衰减 {decay:.0f}%>50 BUT value cycle-timing（2018-2026 growth-favorable），降级 regime-dependent period-specific 非硬 kill")
-        elif p_bonf < 0.05:
-            print(f"  → ✅ edge-confirmed-provisional: test net>0.3% t_nw>2.9 衰减<50% Bonf PASS（须幸存者审查：value 通过 0.3%/月门槛 likely bias-inflated）")
-        else:
-            print(f"  → exploratory: Bonf {p_bonf:.4f}>=0.05")
+    # D/P（需分红 + 不复权 close）
+    dividends = load_dividends()
+    if len(dividends) < 50:
+        print(f"\n⚠️ dividends 不足 50（{len(dividends)}），D/P 跳过。请先 --backfill-div")
+    elif len(raw_close) < 50:
+        print(f"\n⚠️ raw_close 不足 50，D/P 跳过")
+    else:
+        print(f"\n{'='*70}\n=== D/P 月频 long-only top-decile（trailing 12月 ex-date cash / 不复权 close）===\n{'='*70}")
+        rd = backtest_dp(dividends, raw_close, month_rets, month_dates)
+        if rd["status"] == "ok":
+            stats_block(rd["excess"], "full", N_BONF)
+            stats_block(rd["train"], "train(2018-2022)", N_BONF)
+            stats_block(rd["test"], "test(2022-2026)", N_BONF)
+            if rd["benchmark"]:
+                print(f"  benchmark(有分红股等权) mean: {statistics.mean(rd['benchmark']):.4f}%/月 | strategy: {statistics.mean(rd['strategy']):.4f}%/月")
+            _verdict(rd, "D/P raw")
+
     # 存 result
-    out = {"bp_raw": {k: v for k, v in r.items() if k in ("status", "n_months", "n_excluded_neg_bvps")},
-           "_meta": {"universe_size": args.size, "n_bonf": N_BONF, "cost": COST,
-                     "survivorship_caveat": "≥6yr history survivors, v1 不纠正（v2 加退市股）",
-                     "data_note": "B/P=bvps_调整后/qfq_close（同调整口径自洽，无需不复权）"}}
-    p = Path(__file__).parent / "_value_factor_bp_result.json"
+    out = {"_meta": {"universe_size": args.size, "n_bonf": N_BONF, "cost": COST,
+                     "survivorship_caveat": "≥6yr survivors, v1 不纠正",
+                     "data_note": "B/P=bvps_调整后/qfq(自洽); E/P=TTM重建/不复权close(as-reported口径)"}}
+    p = Path(__file__).parent / "_value_factor_result.json"
     p.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\nresult JSON -> {p}")
+
+
+def _verdict(r: dict, label: str) -> None:
+    print(f"\n--- VERDICT {label}（Bonf×{N_BONF}, walk-forward, kill criteria）---")
+    test = r["test"]
+    if not test:
+        return
+    nw = nw_t_monthly(test)
+    train_mean = statistics.mean(r["train"]) if r["train"] else 0
+    test_mean = statistics.mean(test)
+    decay = (train_mean - test_mean) / abs(train_mean) * 100 if train_mean != 0 else 0
+    p_bonf = bonferroni_p(nw["p"], N_BONF)
+    print(f"  test: net_excess={test_mean:.4f}%/月 t_nw={nw['t']} p={nw['p']} Bonf×{N_BONF}={p_bonf:.4f}")
+    print(f"  train={train_mean:.4f}% test={test_mean:.4f}% 衰减={decay:.0f}%")
+    if test_mean < 0.1:
+        print(f"  → FALSIFIED: test net_excess {test_mean:.4f}% < +0.1%/月")
+    elif test_mean < 0.3:
+        if nw["t"] >= 2.9 and p_bonf < 0.05:
+            print(f"  → EXPLORATORY thin-edge: test +0.1~0.3% t_nw>2.9 Bonf PASS（须 OOS+独立复现）")
+        else:
+            print(f"  → FALSIFIED: test +0.1~0.3% BUT t_nw={nw['t']}<2.9 或 Bonf={p_bonf:.4f}>=0.05")
+    elif nw["t"] < 2.9:
+        print(f"  → KILL: test>=0.3% BUT t_nw {nw['t']}<2.9")
+    elif decay > 50:
+        print(f"  → regime caveat: 衰减 {decay:.0f}%>50 BUT value cycle-timing，降级 regime-dependent period-specific")
+    elif p_bonf < 0.05:
+        print(f"  → ✅ edge-confirmed-provisional（须幸存者审查：value 通过 0.3%/月 likely bias-inflated）")
+    else:
+        print(f"  → exploratory: Bonf {p_bonf:.4f}>=0.05")
 
 
 if __name__ == "__main__":
