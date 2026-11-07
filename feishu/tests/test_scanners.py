@@ -85,8 +85,9 @@ def _mock_engine(monkeypatch):
     }
     # 注入 fake 父包 + 子模块，阻止真实 import
     fake_pkg = MagicMock()
-    monkeypatch.setitem(sys.modules, "strategies", fake_pkg)
-    monkeypatch.setitem(sys.modules, "strategies.tail_dip_engine", fake_engine)
+    monkeypatch.setitem(sys.modules, "backend", MagicMock())
+    monkeypatch.setitem(sys.modules, "backend.strategies", fake_pkg)
+    monkeypatch.setitem(sys.modules, "backend.strategies.tail_dip_engine", fake_engine)
     return fake_engine
 
 

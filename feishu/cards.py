@@ -87,7 +87,7 @@ def build_premarket_card() -> dict:
         except Exception:
             pass
 
-        from strategies.tail_dip_engine import diagnose_drawdown_lock, propose_peak_decay
+        from backend.strategies.tail_dip_engine import diagnose_drawdown_lock, propose_peak_decay
 
         # 从API拉回撤状态
         import urllib.request as _urllib

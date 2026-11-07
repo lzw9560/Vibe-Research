@@ -45,7 +45,7 @@ def scan_strategy4_tail_drop() -> list:
     if backend_path not in sys.path:
         sys.path.insert(0, backend_path)
     try:
-        from strategies.tail_dip_engine import (
+        from backend.strategies.tail_dip_engine import (
             calculate_anomalous_deviation,
             financial_red_line_shield,
             HARD_THRESHOLDS,
