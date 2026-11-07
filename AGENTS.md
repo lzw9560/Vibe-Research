@@ -81,3 +81,31 @@
 ### Domain docs
 
 单上下文：根 `CONTEXT.md`（或等价的 ARCHITECTURE.md） + `docs/adr/`（或 specs/decision-log.md）；缺失时静默跳过，由 `/domain-modeling` 懒创建。详见 `docs/agents/domain.md`。
+
+## 知识管理三系统分工
+
+### 职责边界
+
+| 系统 | 定位 | 负责 | 不负责 |
+|---|---|---|---|
+| **Obsidian Vault** | 权威认知层（真相源） | 实体/关系/决策/战法的定稿知识；跨工具共享 | 会话过程、临时状态、未验证结论 |
+| **evolver** | 过程记忆·推送型 | 蒸馏后的成功/失败经验（带 score），SessionStart 主动注入 | 原始对话检索、结构化知识 |
+| **文件 memory** | 过程记忆·状态层 | `.scratch/` issues + `specs/` + git log——"上次干到哪" | 经验蒸馏、定稿知识 |
+
+**agentmemory MCP 已停用**（2026-09-20 数据层清空事故 + opencode 侧无消费方 + 与文件 memory 重叠）。
+
+### 图谱回写协议
+
+**agent 不直接改 vault 定稿区。** 代码/策略改了实体/关系/决策时，写 `inbox/YYYYMMDD-HHMMSS-<type>-<slug>.md`（沿用 kg_inject 已有格式），commit 到 knowledge repo，等人工审核合入。
+
+**两类例外可直写**：
+1. 代码实体契约变更（Pydantic 模型增删字段）→ 同步对应实体页 schema 段（机械映射，直写 + commit message 标注）
+2. spec 归档联动 → spec 验收时 `specs/` 实体页状态更新（收拢流程第 5 步已要求）
+
+**inbox 审核节奏**：每周固定审核 inbox 积压笔记，否则回写协议变成只写不审的暗债。
+
+### evolver 播种纪律
+
+- 只播**已验证**的结论（outcome: success/verified_success），与"数据支撑优先"铁律一致
+- 触发时机：spec 验收通过时、护栏评审得出结论时、调试出反直觉根因时
+- 每 workspace 保持 ≤30 条，超限淘汰低分旧条（SessionStart 注入是 token 成本）
