@@ -298,9 +298,7 @@ def run_non_limitup_funnel(
                 "pattern": pattern,
                 "name": cand.get("name", ""),
                 "sector_rank": cand.get("sector_rank"),
-                "close": cand.get("close")
-                if cand.get("close") is not None
-                else (bars[-1].get("close") if bars else None),
+                "close": cand.get("close") if cand.get("close") is not None else (bars[-1].get("close") if bars else None),
             }
         )
     return produced

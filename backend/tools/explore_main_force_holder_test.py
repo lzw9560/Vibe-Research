@@ -250,8 +250,7 @@ def main():
     calendar = sorted(all_dates)
     date_idx = {d: i for i, d in enumerate(calendar)}
     print(
-        f"\n[数据] holder codes={len(holder)}, kline codes={len(kline_map)}, "
-        f"calendar {calendar[0]}~{calendar[-1]} ({len(calendar)} dates)"
+        f"\n[数据] holder codes={len(holder)}, kline codes={len(kline_map)}, calendar {calendar[0]}~{calendar[-1]} ({len(calendar)} dates)"
     )
 
     # BHAR 需要 index 同窗口
@@ -329,10 +328,7 @@ def main():
         # flaw 9: phantom alpha（BHAR vs raw_ev 差）
         if bhar_s:
             phantom = bhar_s["ev"] - raw_s["ev"]
-            print(
-                f"  flaw9 phantom: BHAR-raw={phantom:+.4f}% "
-                f"({'BHAR>raw=可能虚增' if phantom > 0.1 else 'BHAR<=raw=保守'})"
-            )
+            print(f"  flaw9 phantom: BHAR-raw={phantom:+.4f}% ({'BHAR>raw=可能虚增' if phantom > 0.1 else 'BHAR<=raw=保守'})")
         # flaw 1: 一字涨停跳过数
         # flaw 2: survivorship (kline 仅有近期=已知)
         print(f"  flaw2 survivorship: kline 仅近期 → 测的是存活股（已知偏差）")

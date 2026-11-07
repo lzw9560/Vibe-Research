@@ -520,10 +520,7 @@ def analyze_hold_variant(
         if r is not None:
             basic_by_date[p["zt_date"]].append(r)
     basic_dt = day_paired_t(basic_by_date)
-    print(
-        f"  day-paired: n_days={basic_dt['n_days']} mean={basic_dt['mean']}% "
-        f"t={basic_dt['t']} p_one_sided={basic_dt['p_one_sided']}"
-    )
+    print(f"  day-paired: n_days={basic_dt['n_days']} mean={basic_dt['mean']}% t={basic_dt['t']} p_one_sided={basic_dt['p_one_sided']}")
 
     # ---- stop variant ----
     print(f"\n--- stop variant (-{STOP_PCT * 100:.0f}% stop + R6 gap-through) ---")
@@ -554,10 +551,7 @@ def analyze_hold_variant(
         if r is not None:
             stop_by_date[p["zt_date"]].append(r[0])
     stop_dt = day_paired_t(stop_by_date)
-    print(
-        f"  day-paired: n_days={stop_dt['n_days']} mean={stop_dt['mean']}% "
-        f"t={stop_dt['t']} p_one_sided={stop_dt['p_one_sided']}"
-    )
+    print(f"  day-paired: n_days={stop_dt['n_days']} mean={stop_dt['mean']}% t={stop_dt['t']} p_one_sided={stop_dt['p_one_sided']}")
 
     # ---- walk-forward OOS ----
     print(f"\n--- walk-forward OOS (basic, 前半 train → 后半 test) ---")
@@ -574,11 +568,7 @@ def analyze_hold_variant(
         wf_test_ev = te["ev"]
         wf_test_p = te_dt["p_one_sided"]
         print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} EV={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
-        print(
-            f"  test:  n={te['n']} n_dates={wf['n_test_dates']} "
-            f"EV={te['ev']}% t={te['t']} day_t={te_dt['t']} "
-            f"p={te_dt['p_one_sided']}"
-        )
+        print(f"  test:  n={te['n']} n_dates={wf['n_test_dates']} EV={te['ev']}% t={te['t']} day_t={te_dt['t']} p={te_dt['p_one_sided']}")
         decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
         print(f"  decay: {decay:.0f}% (train→test)")
     else:
@@ -945,10 +935,7 @@ def main() -> None:
         print(f"    day_t={best_r['basic_day_t']} p_raw={best_r['basic_p_raw']}")
         p_bonf = bonferroni_p(best_r["basic_p_raw"], N_CROSS_FACTOR * 2)
         print(f"    Bonferroni p(×{N_CROSS_FACTOR * 2})={p_bonf}")
-        print(
-            f"    walk-forward: train={best_r['wf_train_ev']}% test={best_r['wf_test_ev']}% "
-            f"test_p={best_r['wf_test_p']}"
-        )
+        print(f"    walk-forward: train={best_r['wf_train_ev']}% test={best_r['wf_test_ev']}% test_p={best_r['wf_test_p']}")
         if dsr_result:
             print(f"    DSR={dsr_result.get('dsr', 0)} (n_trials={N_CROSS_FACTOR})")
 

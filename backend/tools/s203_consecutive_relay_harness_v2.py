@@ -168,10 +168,7 @@ def main() -> dict:
         n_test = chrono.get("n_test_days", 0) or 0
         chrono["underpowered"] = n_test < 30
         print(f"\n[V2 chrono-OOS] {tag} regime 2/3-1/3 chronological holdout:")
-        print(
-            f"  n_train_days={chrono['n_train_days']} n_test_days={chrono['n_test_days']} "
-            f"train_day_mean={chrono['train_day_mean']}"
-        )
+        print(f"  n_train_days={chrono['n_train_days']} n_test_days={chrono['n_test_days']} train_day_mean={chrono['train_day_mean']}")
         print(
             f"  test_day_mean={chrono['test_day_mean']} test_p_one_sided={chrono['test_p_one_sided']} "
             f"test_win_rate={chrono['test_win_rate']}"

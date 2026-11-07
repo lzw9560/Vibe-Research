@@ -37,9 +37,7 @@ def _zt_picks_with_meta() -> list[dict]:
         return []
     conn = sqlite3.connect(str(ZT_DB))
     try:
-        rows = conn.execute(
-            "SELECT date, code, lbc, hybk, ltsz FROM zt_history WHERE lbc>=2 AND is_final=1 ORDER BY date"
-        ).fetchall()
+        rows = conn.execute("SELECT date, code, lbc, hybk, ltsz FROM zt_history WHERE lbc>=2 AND is_final=1 ORDER BY date").fetchall()
     finally:
         conn.close()
     return [{"date": r[0], "code": r[1], "lbc": r[2], "hybk": r[3], "ltsz": r[4]} for r in rows if r[0] and r[1]]

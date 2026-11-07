@@ -25,12 +25,12 @@ DB_PATH = STI_TIMELINE_DB_PATH
 def run_initial_migrations() -> None:
     """执行初始 schema 迁移（仅一次）。"""
     manager = MigrationManager(db_path=DB_PATH)
-    migration_v1 = (
-        Path(__file__).resolve().parent.parent / "migrations" / "sti" / "20250613-001_create_sti_timeline.sql"
-    ).read_text(encoding="utf-8")
-    migration_v2 = (
-        Path(__file__).resolve().parent.parent / "migrations" / "sti" / "20250613-002_add_sti_indexes.sql"
-    ).read_text(encoding="utf-8")
+    migration_v1 = (Path(__file__).resolve().parent.parent / "migrations" / "sti" / "20250613-001_create_sti_timeline.sql").read_text(
+        encoding="utf-8"
+    )
+    migration_v2 = (Path(__file__).resolve().parent.parent / "migrations" / "sti" / "20250613-002_add_sti_indexes.sql").read_text(
+        encoding="utf-8"
+    )
     migrations = [
         {
             "version": "20250613-001",
@@ -86,11 +86,7 @@ def migrate_schema(db: sqlite3.Connection) -> None:
     sel_market = "market_factor" if "market_factor" in columns else "NULL"
     sel_conf = "confidence" if "confidence" in columns else "NULL"
     sel_srcok = "source_ok" if "source_ok" in columns else "NULL"
-    sel_chg = (
-        "change_from_yesterday"
-        if "change_from_yesterday" in columns
-        else ("momentum" if "momentum" in columns else "NULL")
-    )
+    sel_chg = "change_from_yesterday" if "change_from_yesterday" in columns else ("momentum" if "momentum" in columns else "NULL")
     sel_du = "data_updated" if "data_updated" in columns else "NULL"
     sel_computed = "computed_at" if "computed_at" in columns else "CURRENT_TIMESTAMP"
     select_cols = f"{sel_date}, {sel_score}, {sel_phase}, {', '.join(sel_dims)}, {sel_market}, {sel_conf}, {sel_srcok}, {sel_chg}, {sel_du}, {sel_computed}"
@@ -218,9 +214,7 @@ def load_history_scores() -> list[float]:
     """加载历史 STI 分数（用于 3 日平滑 + 动态分位数）。"""
     try:
         db = get_db()
-        rows = db.execute(
-            "SELECT score FROM sti_timeline WHERE score IS NOT NULL ORDER BY date DESC LIMIT 252"
-        ).fetchall()
+        rows = db.execute("SELECT score FROM sti_timeline WHERE score IS NOT NULL ORDER BY date DESC LIMIT 252").fetchall()
         return [float(r["score"]) for r in rows][::-1]
     except Exception:
         return []
@@ -264,9 +258,7 @@ def save_intraday(snapshot: dict) -> None:
         )
         db.commit()
     except Exception as e:  # S094 audit: 旧 bare except:pass 吞错致盘中 snapshot 静默丢；现 log
-        _logger.warning(
-            "save_intraday 写 sti_intraday 失败 date=%s time=%s: %s", snapshot.get("date"), snapshot.get("time"), e
-        )
+        _logger.warning("save_intraday 写 sti_intraday 失败 date=%s time=%s: %s", snapshot.get("date"), snapshot.get("time"), e)
 
 
 def load_intraday_day(date: str) -> list[dict]:

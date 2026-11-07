@@ -529,14 +529,8 @@ def main() -> None:
     ideal_s = per_day_stats(capped3, ideal_stop_ret)
     real_s = s_c3  # already computed
     over_credit = ideal_s["per_day_mean_ev"] - real_s["per_day_mean_ev"]
-    print(
-        f"\nideal   (over-credit): per_day_mean_EV={ideal_s['per_day_mean_ev']:+.4f}%  "
-        f"day_t={ideal_s['day_clustered_t']:+.4f}"
-    )
-    print(
-        f"realistic (R6):        per_day_mean_EV={real_s['per_day_mean_ev']:+.4f}%  "
-        f"day_t={real_s['day_clustered_t']:+.4f}"
-    )
+    print(f"\nideal   (over-credit): per_day_mean_EV={ideal_s['per_day_mean_ev']:+.4f}%  day_t={ideal_s['day_clustered_t']:+.4f}")
+    print(f"realistic (R6):        per_day_mean_EV={real_s['per_day_mean_ev']:+.4f}%  day_t={real_s['day_clustered_t']:+.4f}")
     print(f"over-credit = {over_credit:+.4f}% (ideal - realistic)")
 
     # Gap-through stats
@@ -698,23 +692,15 @@ def main() -> None:
         reason = f"n_days={n_days} < 60, insufficient power for definitive verdict"
     elif wf_open["train_ev"] > 0 and wf_test_ev <= 0:
         verdict = "edge-falsified"
-        reason = (
-            f"walk-forward decay: train {wf_open['train_ev']:+.4f}% → "
-            f"test {wf_test_ev:+.4f}% (regime-dependent, not robust)"
-        )
+        reason = f"walk-forward decay: train {wf_open['train_ev']:+.4f}% → test {wf_test_ev:+.4f}% (regime-dependent, not robust)"
     elif close_ev <= 0 and open_ev > 0:
         verdict = "edge-falsified"
         reason = (
-            f"close_ev honest caliber per-day-mean EV = {close_ev:+.4f}% ≤ 0 "
-            f"(open_stop EV {open_ev:+.4f}% is intraday leakage fake edge)"
+            f"close_ev honest caliber per-day-mean EV = {close_ev:+.4f}% ≤ 0 (open_stop EV {open_ev:+.4f}% is intraday leakage fake edge)"
         )
     elif open_t < 2 or not bonf_pass:
         verdict = "exploratory"
-        reason = (
-            f"EV={open_ev:+.4f}% but t={open_t:.2f} < 2 or "
-            f"Bonferroni fail (p={bonf['main_bonf_p']:.4f}), "
-            f"not robust enough to confirm"
-        )
+        reason = f"EV={open_ev:+.4f}% but t={open_t:.2f} < 2 or Bonferroni fail (p={bonf['main_bonf_p']:.4f}), not robust enough to confirm"
     elif open_ev > 0 and open_t > 2 and bonf_pass and wf_test_ev > 0 and close_ev > 0:
         verdict = "edge-confirmed"
         reason = "all checks pass: EV>0, t>2, Bonferroni pass, walk-forward test>0, close_ev>0"

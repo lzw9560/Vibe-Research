@@ -132,9 +132,7 @@ def main() -> None:
         r = stats(all_d, by_date, field)
         results.append((label, r))
         if r:
-            print(
-                f"{label:<16}{r['n_days']:>6}{r['net'] * 100:>+9.3f}%{r['mean'] * 100:>+9.3f}%{r['wr'] * 100:>6.1f}%{r['t']:>6.2f}"
-            )
+            print(f"{label:<16}{r['n_days']:>6}{r['net'] * 100:>+9.3f}%{r['mean'] * 100:>+9.3f}%{r['wr'] * 100:>6.1f}%{r['t']:>6.2f}")
     print()
     valid = [(l, r) for l, r in results if r]
     if valid:

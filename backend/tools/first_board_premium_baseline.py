@@ -211,9 +211,7 @@ def _trading_dates_from_db() -> list[str]:
         return []
     conn = sqlite3.connect(str(DB), timeout=10)
     try:
-        rows = conn.execute(
-            "SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
-        ).fetchall()
+        rows = conn.execute("SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date").fetchall()
     finally:
         conn.close()
     return [r[0] for r in rows]
@@ -252,10 +250,7 @@ def main(days_back: int = 120):
     cutoff = (datetime.strptime(max_cache_date, "%Y-%m-%d") - timedelta(days=days_back)).strftime("%Y-%m-%d")
     dates = [d for d in all_em_dates if d < max_cache_date and d >= cutoff]
     if not dates:
-        print(
-            f"[baseline] 无满足条件的交易日（em_dates={len(all_em_dates)}, "
-            f"max_cache_date={max_cache_date}, cutoff={cutoff}）"
-        )
+        print(f"[baseline] 无满足条件的交易日（em_dates={len(all_em_dates)}, max_cache_date={max_cache_date}, cutoff={cutoff}）")
         return 1
 
     print(f"[baseline] 交易日：{len(dates)}（{dates[0]} ~ {dates[-1]}），cache max_date={max_cache_date}")
@@ -343,9 +338,7 @@ def main(days_back: int = 120):
                 )
             n_fb += 1
         print(
-            f"[baseline] T={t_date} 涨停池={len(pool)} 首板={n_fb} "
-            f"zt_count={zt_count_t} 档={market_cond_t} "
-            f"累计首板={len(first_boards)}",
+            f"[baseline] T={t_date} 涨停池={len(pool)} 首板={n_fb} zt_count={zt_count_t} 档={market_cond_t} 累计首板={len(first_boards)}",
             flush=True,
         )
 
@@ -382,15 +375,11 @@ def main(days_back: int = 120):
                         except Exception as e:  # noqa: BLE001
                             import logging
 
-                            logging.getLogger(__name__).warning(
-                                "first_board_premium_baseline 失败（降级，不阻塞）: %s", e
-                            )
+                            logging.getLogger(__name__).warning("first_board_premium_baseline 失败（降级，不阻塞）: %s", e)
                         if not _login():
                             print(f"[baseline] re-login 失败 @ {i}")
                             break
-                        print(
-                            f"[baseline] re-login @ {i}/{len(uniq_codes)} elapsed={time.time() - t0:.0f}s", flush=True
-                        )
+                        print(f"[baseline] re-login @ {i}/{len(uniq_codes)} elapsed={time.time() - t0:.0f}s", flush=True)
                     # 取该股所有首板日期的最小 T 和最大 T+1 窗口
                     fbs_for_code = [fb for fb in need_bs if fb["code"] == code]
                     if not fbs_for_code:
@@ -536,11 +525,7 @@ def main(days_back: int = 120):
         pr = s.get("pos_ratio", 0.0)
         nm = s.get("net_mean_pct", 0.0)
         tag = "  （探索性，N<30）" if s.get("exploratory") else ""
-        print(
-            f"  {_condition_label(name, lo, hi):<16} "
-            f"N={n:<4d} mean={m:+.2f}%  正占比={pr * 100:.1f}%  "
-            f"成本后净={nm:+.2f}%{tag}"
-        )
+        print(f"  {_condition_label(name, lo, hi):<16} N={n:<4d} mean={m:+.2f}%  正占比={pr * 100:.1f}%  成本后净={nm:+.2f}%{tag}")
     if "未知" in by_market_condition:
         s = by_market_condition["未知"]
         tag = "  （探索性，N<30）" if s.get("exploratory") else ""
@@ -561,10 +546,7 @@ def main(days_back: int = 120):
             "n_days": n_days,
             "market_condition_groups": {
                 "dimension": "zt_count",
-                "thresholds": [
-                    {"name": n, "range": [lo, hi] if hi < 10**9 else [lo, None]}
-                    for n, lo, hi in MARKET_CONDITION_THRESHOLDS
-                ],
+                "thresholds": [{"name": n, "range": [lo, hi] if hi < 10**9 else [lo, None]} for n, lo, hi in MARKET_CONDITION_THRESHOLDS],
                 "exploratory_n": EXPLORATORY_N,
                 "calibration": "待回测校准",
             },

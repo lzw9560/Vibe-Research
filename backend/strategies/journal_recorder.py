@@ -133,9 +133,7 @@ class JournalRecorder:
         if target_date is None:
             from vr_paths import prev_trading_date_str  # noqa: PLC0415
 
-            target_date = (
-                prev_trading_date_str()
-            )  # S175 R4：T-1 信号日，T1OpenFill 在 T 成交（C5 fix no_t1_bar 误标 unbuyable）
+            target_date = prev_trading_date_str()  # S175 R4：T-1 信号日，T1OpenFill 在 T 成交（C5 fix no_t1_bar 误标 unbuyable）
 
         _logger.info("journal_recorder run_daily target_date=%s arms=%s", target_date, arms)
 
@@ -436,9 +434,7 @@ class JournalRecorder:
                 exit_reason=exit_reason,
                 net_pnl=round(net_pnl, 2),
                 cost_pct=cost_pct,
-                exit_model_version=(
-                    "s211_overnight_gap" if exit_reason == "overnight_gap" else "s211_locked_gap_unlocked"
-                ),
+                exit_model_version=("s211_overnight_gap" if exit_reason == "overnight_gap" else "s211_locked_gap_unlocked"),
             )
             if updated:
                 n_settled += 1
@@ -1067,9 +1063,7 @@ class JournalRecorder:
                 exit_reason="hold",  # C3：不主动平仓
                 is_realized=0,
                 unrealized_pnl=unrealized_pnl,
-                gross_return=round((current_close - entry_price) / entry_price * 100, 4)
-                if current_close and entry_price
-                else None,
+                gross_return=round((current_close - entry_price) / entry_price * 100, 4) if current_close and entry_price else None,
                 fills_json=json.dumps(
                     {
                         "fill_status": filled.fill_status,

@@ -294,10 +294,7 @@ def analyze_subset(name: str, picks: list[dict], verbose: bool = True) -> dict:
             f"day_t={cor_dt['t']} p={cor_dt['p_one_sided']} WR={cor_s['wr']}%"
         )
         print(f"    raw EV:     gross={raw_s['ev']:+.3f}% net={raw_s['ev'] - ETF_COST:+.3f}% WR={raw_s['wr']}%")
-        print(
-            f"    beta 泄漏 = R1 - 修正 = {r1_s['ev'] - cor_s['ev']:+.3f}% "
-            f"({'R1 通胀' if r1_s['ev'] > cor_s['ev'] else 'R1 通缩'})"
-        )
+        print(f"    beta 泄漏 = R1 - 修正 = {r1_s['ev'] - cor_s['ev']:+.3f}% ({'R1 通胀' if r1_s['ev'] > cor_s['ev'] else 'R1 通缩'})")
         if wf["status"] == "ok":
             tr = wf["train_ev"]
             te = wf["test_ev"]
@@ -411,9 +408,7 @@ def main() -> None:
     index_map = load_index()
     calendar = build_calendar(etf_data)
     total_bars = sum(len(v) for v in etf_data.values())
-    print(
-        f"\n[数据] {len(etf_data)} ETFs, {total_bars} bar-days, {calendar[0]} ~ {calendar[-1]} ({len(calendar)} dates)"
-    )
+    print(f"\n[数据] {len(etf_data)} ETFs, {total_bars} bar-days, {calendar[0]} ~ {calendar[-1]} ({len(calendar)} dates)")
     print(f"[指数] sh.000001 {len(index_map)} days")
 
     broad_codes = {c for c, (_, t) in ETF_UNIVERSE.items() if t == "broad"}
@@ -486,10 +481,7 @@ def main() -> None:
     print("维度 2: regime 分层——edge 是否集中在 bear/危机？")
     print("=" * 78)
     by_regime = tag_regime(picks_full, index_map)
-    print(
-        f"bull={len(by_regime['bull'])} bear={len(by_regime['bear'])} "
-        f"range={len(by_regime['range'])} crisis={len(by_regime['crisis'])}"
-    )
+    print(f"bull={len(by_regime['bull'])} bear={len(by_regime['bear'])} range={len(by_regime['range'])} crisis={len(by_regime['crisis'])}")
     regime_results = {}
     for rname in ("bull", "bear", "range", "crisis"):
         r = analyze_subset(f"regime={rname}", by_regime[rname])
@@ -544,9 +536,7 @@ def main() -> None:
     for thr in (-0.3, -0.5, -1.0):
         for hd in (1, 2, 4):
             for fname, fset in (("all", None), ("broad", broad_codes), ("sector", sector_codes)):
-                pk = build_picks_window(
-                    etf_data, calendar, thr, hold_days=hd, etf_filter=fset, date_lo=RECENT_LO, date_hi=RECENT_HI
-                )
+                pk = build_picks_window(etf_data, calendar, thr, hold_days=hd, etf_filter=fset, date_lo=RECENT_LO, date_hi=RECENT_HI)
                 if not pk:
                     continue
                 # regime split
@@ -603,16 +593,12 @@ def main() -> None:
     print("=" * 78)
 
     # 全样本（disc<-0.3% 1d）
-    v_full = formal_verdict(
-        sub_full, n_cross=N_CROSS_STRATEGY, n_within=N_FAMILY_VARIANTS, label="全样本 disc<-0.3% 1d (修正BHAR)"
-    )
+    v_full = formal_verdict(sub_full, n_cross=N_CROSS_STRATEGY, n_within=N_FAMILY_VARIANTS, label="全样本 disc<-0.3% 1d (修正BHAR)")
 
     # 2023-2026 全样本
     picks_recent = build_picks_window(etf_data, calendar, -0.3, hold_days=1, date_lo=RECENT_LO, date_hi=RECENT_HI)
     sub_recent = analyze_subset("2023-2026 disc<-0.3% 1d", picks_recent)
-    v_recent = formal_verdict(
-        sub_recent, n_cross=N_CROSS_STRATEGY, n_within=N_FAMILY_VARIANTS, label="2023-2026 disc<-0.3% 1d (修正BHAR)"
-    )
+    v_recent = formal_verdict(sub_recent, n_cross=N_CROSS_STRATEGY, n_within=N_FAMILY_VARIANTS, label="2023-2026 disc<-0.3% 1d (修正BHAR)")
 
     # ============================================================
     # 诚实总结
@@ -639,10 +625,7 @@ def main() -> None:
 
     # 窗口最佳
     best_win = max(window_results, key=lambda x: x[1]["cor"]["ev"])
-    print(
-        f"\n[窗口] 最佳 hold={best_win[0]}d BHAR={best_win[1]['cor']['ev']:+.3f}% "
-        f"(1d={window_results[0][1]['cor']['ev']:+.3f}%)"
-    )
+    print(f"\n[窗口] 最佳 hold={best_win[0]}d BHAR={best_win[1]['cor']['ev']:+.3f}% (1d={window_results[0][1]['cor']['ev']:+.3f}%)")
 
     # 阈值单调性
     print(f"\n[阈值单调] ", end="")
@@ -654,10 +637,7 @@ def main() -> None:
     if survivors:
         print("  存活子条件：")
         for s in survivors:
-            print(
-                f"    {s['name']}: BHAR={s['cor']['ev']:+.3f}% "
-                f"n={s['n']} n_days={s['n_days']} p_bonf={s['p_bonf_sub']:.6f}"
-            )
+            print(f"    {s['name']}: BHAR={s['cor']['ev']:+.3f}% n={s['n']} n_days={s['n_days']} p_bonf={s['p_bonf_sub']:.6f}")
 
     print(f"\n[正式 verdict]")
     print(f"  全样本(2005-2026): {v_full}")

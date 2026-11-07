@@ -155,17 +155,12 @@ def main():
 
     overnight_convergence = [discount_t1_stale[i] - discount_t_list[i] for i in range(n)]
     print(f"\n  Overnight convergence (d_entry_stale - disc_t):")
-    print(
-        f"    mean={statistics.mean(overnight_convergence):.4f}% median={statistics.median(overnight_convergence):.4f}%"
-    )
+    print(f"    mean={statistics.mean(overnight_convergence):.4f}% median={statistics.median(overnight_convergence):.4f}%")
     print(f"    -> positive = discount narrowed overnight (price gapped toward NAV)")
 
     # How many picks still have discount < -0.3% at T+1 open (stale NAV)?
     still_discount = sum(1 for d in discount_t1_stale if d < -0.3)
-    print(
-        f"\n  Picks where T+1 open discount (stale nav_T) still < -0.3%: "
-        f"{still_discount}/{n} ({still_discount / n * 100:.1f}%)"
-    )
+    print(f"\n  Picks where T+1 open discount (stale nav_T) still < -0.3%: {still_discount}/{n} ({still_discount / n * 100:.1f}%)")
     print(
         f"  Picks where T+1 open discount (stale nav_T) >= -0.3% (converged): "
         f"{n - still_discount}/{n} ({(n - still_discount) / n * 100:.1f}%)"
@@ -228,11 +223,7 @@ def main():
     print(f"  BHAR R1 (price_ret - nav_ret, Round 1):  mean={statistics.mean(bhar_r1_list):.4f}%")
     print(f"  raw EV (retail P&L):                     mean={statistics.mean(raw_ev_list):.4f}%")
     print()
-    print(
-        f"  Stale-NAV bias (stale - fresh):          "
-        f"mean={statistics.mean(bias_list):.4f}% "
-        f"median={statistics.median(bias_list):.4f}%"
-    )
+    print(f"  Stale-NAV bias (stale - fresh):          mean={statistics.mean(bias_list):.4f}% median={statistics.median(bias_list):.4f}%")
     print(f"  -> positive bias = stale NAV INFLATES alpha")
     print(f"  -> negative bias = stale NAV DEFLATES alpha")
 
@@ -309,10 +300,7 @@ def main():
             by_date[p["signal_date"]].append(r)
         dt = day_t(by_date)
         net = statistics.mean(rets) - ETF_COST
-        print(
-            f"  {label:<22}: per-pick={statistics.mean(rets):+.4f}% "
-            f"net={net:+.4f}% n_days={dt['n_days']} day_t={dt['t']}"
-        )
+        print(f"  {label:<22}: per-pick={statistics.mean(rets):+.4f}% net={net:+.4f}% n_days={dt['n_days']} day_t={dt['t']}")
 
     # ================================================================
     # TEST 5: The REAL question — is T+1 open discount still capturable?
@@ -352,18 +340,9 @@ def main():
     print("=" * 78)
     d_entry_stale_all = [(p["entry"] - p["nav_T"]) / p["nav_T"] * 100 for p in picks]
     d_entry_fresh_all = [(p["entry"] - p["nav_T1"]) / p["nav_T1"] * 100 for p in picks]
-    print(
-        f"  d_entry stale (nav_T):   mean={statistics.mean(d_entry_stale_all):.4f}% "
-        f"median={statistics.median(d_entry_stale_all):.4f}%"
-    )
-    print(
-        f"  d_entry fresh (nav_T1):  mean={statistics.mean(d_entry_fresh_all):.4f}% "
-        f"median={statistics.median(d_entry_fresh_all):.4f}%"
-    )
-    print(
-        f"  signal discount (nav_T): mean={statistics.mean(discount_t_list):.4f}% "
-        f"median={statistics.median(discount_t_list):.4f}%"
-    )
+    print(f"  d_entry stale (nav_T):   mean={statistics.mean(d_entry_stale_all):.4f}% median={statistics.median(d_entry_stale_all):.4f}%")
+    print(f"  d_entry fresh (nav_T1):  mean={statistics.mean(d_entry_fresh_all):.4f}% median={statistics.median(d_entry_fresh_all):.4f}%")
+    print(f"  signal discount (nav_T): mean={statistics.mean(discount_t_list):.4f}% median={statistics.median(discount_t_list):.4f}%")
     print()
     print(f"  -> If d_entry_fresh >> d_entry_stale (less negative), stale NAV")
     print(f"     shows bigger entry discount than reality -> inflates convergence alpha")

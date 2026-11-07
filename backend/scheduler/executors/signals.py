@@ -395,9 +395,7 @@ def _render_weekly_review(
         lines.append("  只能看 paper 表现，没真交易收益；接券商才有真 closure")
     if paper_trends:
         last = paper_trends[-1]
-        lines.append(
-            f"  最近周胜率 {last.get('win_rate', 0) * 100:.1f}%（n={last.get('n_decided', 0)}，{last.get('label', '')}）"
-        )
+        lines.append(f"  最近周胜率 {last.get('win_rate', 0) * 100:.1f}%（n={last.get('n_decided', 0)}，{last.get('label', '')}）")
     else:
         lines.append("  暂无 paper 交易记录")
     lines.append("")
@@ -499,9 +497,7 @@ def weekly_review(payload: dict[str, Any]) -> dict[str, Any]:
     cap_down_triggered = _evaluate_cap_down_trigger(decay_pct=decay_stats["decay_pct"])
 
     # 4. 生成报告（传 decay_stats + cap_up_ready 动态渲染，非硬编码）
-    review_text = _render_weekly_review(
-        signals, paper_trends, arm_status, decay_stats, cap_up_ready, cap_down_triggered
-    )
+    review_text = _render_weekly_review(signals, paper_trends, arm_status, decay_stats, cap_up_ready, cap_down_triggered)
 
     # 5. process-theater 自检：paper P&L mean<0 OR 衰减跨 negative → cap-down 提案
     #    S218 P0: 优先用实际 P&L（手动交易记录），没有才降级 paper P&L
@@ -750,10 +746,7 @@ def regime_flip_notify(payload: dict[str, Any]) -> dict[str, Any]:
             "cap": cap,
             "reason": "战法 archive cap=0 或未知，不推飞书",
         }
-    text = (
-        f"regime→bull（连续 3 天 {recent_dates[0]}~{recent_dates[-1]}），"
-        f"{tradable_n} 个可做信号，cap=×{cap}，记录成交以闭合真钱反馈"
-    )
+    text = f"regime→bull（连续 3 天 {recent_dates[0]}~{recent_dates[-1]}），{tradable_n} 个可做信号，cap=×{cap}，记录成交以闭合真钱反馈"
     _send_text_notification(text)
     logger.info("[S222] regime→bull alert sent: %s", text)
 

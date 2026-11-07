@@ -163,8 +163,7 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
         validation_status="劣于随机",
         weight_multiplier=0.1,
         source_script="tools/first_plate_h2_lift.py --full",
-        note="S152 baostock 5min 早封板 lift<1（null_p95=1.048，pass_filter_edge=False）；"
-        "盘中封板时间无 edge；caveat: T+0 o2c+5min 粒度",
+        note="S152 baostock 5min 早封板 lift<1（null_p95=1.048，pass_filter_edge=False）；盘中封板时间无 edge；caveat: T+0 o2c+5min 粒度",
     ),
     "late_lock": DimensionValidation(
         dimension_id="late_lock",
@@ -219,8 +218,7 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
         validation_status="未validated",
         weight_multiplier=0.5,
         source_script="tools/low_absorption_c3_lift.py",
-        note="S153 R8 C3 vol_brk<1.0 lift≈1.0 null n=92308; regime_strong0.997<1; "
-        "walk-forward0.99-1.04; pre_register 74295b9; 无 edge",
+        note="S153 R8 C3 vol_brk<1.0 lift≈1.0 null n=92308; regime_strong0.997<1; walk-forward0.99-1.04; pre_register 74295b9; 无 edge",
     ),
     # 板块/regime 层（2026-09-05 跑出，闭合 verdict 外推缺口——此层原未测）
     "sector_heat": DimensionValidation(
@@ -244,8 +242,7 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
         validation_status="劣于随机",
         weight_multiplier=0.1,
         source_script="tools/_archive/sector_phase_regression.py (archived 2026-09-19, 劣于随机 ×0.1)",
-        note="winrate 0.52-0.60 非单调(启动0.563→发酵0.565→高潮0.605→退潮0.569回落); "
-        "CI 重叠; label-only(B); 修饰方向单调=False; 无 edge",
+        note="winrate 0.52-0.60 非单调(启动0.563→发酵0.565→高潮0.605→退潮0.569回落); CI 重叠; label-only(B); 修饰方向单调=False; 无 edge",
     ),
     # S181 R7：trend 臂进 cron paper_track 后需 ×0.5 provisional cap（EXPLORATORY 未验证）。
     # days_robust=0/n=0/lift=None → lift_to_multiplier 返 ('探索性', 0.5) 复用 §44v2 R8 逻辑，不新建路径
@@ -286,8 +283,7 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
         validation_status="探索性",
         weight_multiplier=0.5,
         source_script="(未测——S176 ofi_collect cron */3 9-14 累积中，60d live 后复验)",
-        note="OFI 归一化 [-1,1] 累积；compute_ofi 已建（engine/intraday_ofi.py）；"
-        "§44 窗口盘中→D收；breakout 臂盘中 conditioning",
+        note="OFI 归一化 [-1,1] 累积；compute_ofi 已建（engine/intraday_ofi.py）；§44 窗口盘中→D收；breakout 臂盘中 conditioning",
     ),
     "seal_sincerity": DimensionValidation(
         dimension_id="seal_sincerity",
@@ -390,9 +386,7 @@ DIM_ARM_MAP: dict[str, list[str] | None] = {
 # memory kline-backfill-x1-unlock-2026-09-19）：baostock kline backfill 后 bear chrono
 # cross-regime oos_supporting +0.97% p=0.0013 / n_test=64>=60 adequate power /
 # train bias -0.074%→+0.236%（证原负 train 是稀疏 artifact 非 edge 假象）。
-_FRESH_HARNESS_VERDICT: bool = (
-    False  # 默认 False——×1.0 unlock 须 env VR_ALLOW_X1DOT0=1（deploy 时设），保留 #7 runtime 控制非代码永久许可
-)
+_FRESH_HARNESS_VERDICT: bool = False  # 默认 False——×1.0 unlock 须 env VR_ALLOW_X1DOT0=1（deploy 时设），保留 #7 runtime 控制非代码永久许可
 
 
 def _x1dot0_upgrade_permitted() -> bool:
@@ -455,9 +449,7 @@ def lift_for_arm(arm: str, regime: str | None = None) -> tuple[float, str]:
                     # S218 #7: ×1.0 freeze 升级守卫 —— cap==1.0 须 fresh harness 许可
                     # （stats.py:483 oos_supporting caps at ×0.75 NOT ×1.0 until cross-regime replication）
                     if cap == 1.0 and not _x1dot0_upgrade_permitted():
-                        multipliers.append(
-                            (0.75, f"{dim_id} regime={regime} ×1.0 freeze→保守×0.75（须 fresh harness run 许可）")
-                        )
+                        multipliers.append((0.75, f"{dim_id} regime={regime} ×1.0 freeze→保守×0.75（须 fresh harness run 许可）"))
                         continue
                     note_suffix = " ×1.0 升级许可（fresh harness run）" if cap == 1.0 else ""
                     multipliers.append((cap, f"{dim_id} regime={regime}{note_suffix}"))

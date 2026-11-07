@@ -387,10 +387,7 @@ def stats_block(rets: list[float], label: str, n_bonf: int) -> dict:
     nw = nw_t_monthly(rets)
     wr = sum(1 for x in rets if x > 0) / len(rets) * 100
     p_bonf = bonferroni_p(nw["p"], n_bonf)
-    print(
-        f"  {label}: n={nw['n']} mean={nw['mean']:.4f}%/月 WR={wr:.1f}% "
-        f"t_nw={nw['t']} p={nw['p']} Bonf×{n_bonf}={p_bonf:.6f}"
-    )
+    print(f"  {label}: n={nw['n']} mean={nw['mean']:.4f}%/月 WR={wr:.1f}% t_nw={nw['t']} p={nw['p']} Bonf×{n_bonf}={p_bonf:.6f}")
     return {**nw, "wr": round(wr, 1), "p_bonf": round(p_bonf, 6)}
 
 
@@ -565,9 +562,7 @@ def main() -> None:
         stats_block(rc["train"], "train(2018-2022)", N_BONF)
         stats_block(rc["test"], "test(2022-2026)", N_BONF)
         if rc["benchmark"]:
-            print(
-                f"  benchmark mean: {statistics.mean(rc['benchmark']):.4f}%/月 | strategy: {statistics.mean(rc['strategy']):.4f}%/月"
-            )
+            print(f"  benchmark mean: {statistics.mean(rc['benchmark']):.4f}%/月 | strategy: {statistics.mean(rc['strategy']):.4f}%/月")
 
     # 滑点敏感性（最强因子）
     best_field = max(

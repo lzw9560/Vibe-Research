@@ -87,9 +87,7 @@ def compute_stop_intraday(code: str, trade_date: str, kline_cache: dict) -> tupl
         kline_cache[code] = load_kline(code)
     bars = kline_cache[code]
     after = [
-        b
-        for b in bars
-        if b.get("date", "") > trade_date and float(b.get("volume", 0) or 0) > 0 and float(b.get("amount", 0) or 0) > 0
+        b for b in bars if b.get("date", "") > trade_date and float(b.get("volume", 0) or 0) > 0 and float(b.get("amount", 0) or 0) > 0
     ]  # P0 修高危(orderbook-sanity 2026-11-07)：剔停牌冻结 bar vol=0/amt=0（原 after 不过滤→停牌冻结价当真实买卖点虚增 inst 回测）
     if len(after) < 2:
         return None, None
@@ -207,9 +205,7 @@ def compute_nostop_return(code: str, trade_date: str, kline_cache: dict) -> floa
         kline_cache[code] = load_kline(code)
     bars = kline_cache[code]
     after = [
-        b
-        for b in bars
-        if b.get("date", "") > trade_date and float(b.get("volume", 0) or 0) > 0 and float(b.get("amount", 0) or 0) > 0
+        b for b in bars if b.get("date", "") > trade_date and float(b.get("volume", 0) or 0) > 0 and float(b.get("amount", 0) or 0) > 0
     ]  # P0 修高危(orderbook-sanity 2026-11-07)：剔停牌冻结 bar vol=0/amt=0（原 after 不过滤→停牌冻结价当真实买卖点虚增 inst 回测）
     if len(after) < 2:
         return None
@@ -234,8 +230,7 @@ def audit_top6_combo(mode: str = "basic") -> dict:
     foreign_kw = ("高盛", "瑞银", "股通", "摩根", "国际金融", "总部")
     conn = sqlite3.connect(str(DT_DB))
     rows = conn.execute(
-        "SELECT trade_date, security_code, dept_name, buy, change_rate, close_price "
-        "FROM dragon_tiger_rows WHERE side='buy' AND buy>0"
+        "SELECT trade_date, security_code, dept_name, buy, change_rate, close_price FROM dragon_tiger_rows WHERE side='buy' AND buy>0"
     ).fetchall()
     conn.close()
     picks: dict = defaultdict(list)

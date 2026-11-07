@@ -80,10 +80,7 @@ def main() -> int:
     conn = sqlite3.connect(str(DB), timeout=10)
     try:
         em_dates = [
-            r[0]
-            for r in conn.execute(
-                "SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
-            ).fetchall()
+            r[0] for r in conn.execute("SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date").fetchall()
         ]
         zt_by_date = {
             d: {
@@ -181,9 +178,7 @@ def main() -> int:
                 continue
             g = g8[code]  # (code, seal, rebound, red, premium, freq, total)
             total_score = g[6] or 0  # total_score
-            cont_obs.append(
-                {"T": T, "code": code, "ta": ta, "total": total_score, "is_zt_T1": 1 if code in zt_T1 else 0}
-            )
+            cont_obs.append({"T": T, "code": code, "ta": ta, "total": total_score, "is_zt_T1": 1 if code in zt_T1 else 0})
 
     print(f"  今日涨停子集: {len(cont_obs)} obs（有 8 因子 + TA + T+1 目标）")
     if cont_obs:

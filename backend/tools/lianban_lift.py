@@ -49,11 +49,7 @@ def fetch_lb(date_compact):
         time.sleep(0.5)
         # S163 R1: 坏 ths 行（缺 code/错型/缺失率）拒绝进 §44 verdict
         validate_or_reject("ths_limit_up_pool", rows)
-        out = [
-            {"code": str(r.get("code") or "").zfill(6), "boards": parse_boards(r.get("high_days"))}
-            for r in rows
-            if r.get("code")
-        ]
+        out = [{"code": str(r.get("code") or "").zfill(6), "boards": parse_boards(r.get("high_days"))} for r in rows if r.get("code")]
         cache[date_compact] = out
         LB_CACHE.write_text(json.dumps(cache, ensure_ascii=False))
         return out
@@ -65,16 +61,11 @@ def fetch_lb(date_compact):
 def main():
     cache = _load_kline_cache()  # S204 T1: enriched（一字板 pctChg=0.0 修复）
     # S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
-    validate_or_reject(
-        "baostock_kline", [b for bars in cache.values() for b in bars], as_of=datetime.date.today().isoformat()
-    )
+    validate_or_reject("baostock_kline", [b for bars in cache.values() for b in bars], as_of=datetime.date.today().isoformat())
     conn = sqlite3.connect(str(DB), timeout=10)
     try:
         em_dates = [
-            r[0]
-            for r in conn.execute(
-                "SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
-            ).fetchall()
+            r[0] for r in conn.execute("SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date").fetchall()
         ]
     finally:
         conn.close()
@@ -103,9 +94,7 @@ def main():
             entry_price = float(bars[d_idx + 1].get("open", 0) or 0)
             cost = _cost_pct(entry_price, 100.0, D) if entry_price > 0 else 0.0
             net = sim["return_pct"] - cost
-            obs.append(
-                {"D": D, "code": code, "boards": s["boards"], "net": net, "win": 1 if net > 0 else 0, "cost": cost}
-            )
+            obs.append({"D": D, "code": code, "boards": s["boards"], "net": net, "win": 1 if net > 0 else 0, "cost": cost})
 
     if len(obs) < 30:
         print(f"n={len(obs)} <30 探索性")

@@ -274,12 +274,7 @@ if not _API_KEY:
 
 @app.middleware("http")
 async def _require_api_key(request: Request, call_next):
-    if (
-        _API_KEY
-        and request.method != "OPTIONS"
-        and request.url.path.startswith("/api/")
-        and request.url.path != "/api/health"
-    ):
+    if _API_KEY and request.method != "OPTIONS" and request.url.path.startswith("/api/") and request.url.path != "/api/health":
         if request.headers.get("authorization", "") != f"Bearer {_API_KEY}":
             return JSONResponse({"detail": "未授权：缺少或错误的 API Key（VR_API_KEY）"}, status_code=401)
     return await call_next(request)
@@ -296,11 +291,7 @@ async def _metrics_middleware(request: Request, call_next):
         duration = time.perf_counter() - start
         # 按路径前缀分层
         path = request.url.path
-        if (
-            path.startswith("/api/limitup")
-            or path.startswith("/api/recommendation")
-            or path.startswith("/api/strategy")
-        ):
+        if path.startswith("/api/limitup") or path.startswith("/api/recommendation") or path.startswith("/api/strategy"):
             tier = "compute"
         elif path.startswith("/api/metrics"):
             tier = "api_response"
@@ -367,9 +358,7 @@ app.include_router(prediction_ledger_router_mod.router)  # S061：预测账本
 app.include_router(advisory.router)
 app.include_router(intraday_sentiment_router.router)  # S063：盘中情绪辅助决策
 app.include_router(intraday_ofi_router.router)  # S178：OFI 盘中数据只读看板
-app.include_router(
-    coach_router.router
-)  # 2026-09-27 restored: v6 发现前端依赖（IntradayCockpit/IntradayCoach 调 useCoachStatus）
+app.include_router(coach_router.router)  # 2026-09-27 restored: v6 发现前端依赖（IntradayCockpit/IntradayCoach 调 useCoachStatus）
 app.include_router(debate_router.router)  # main：多空辩论 + 反思审计
 app.include_router(verifier_router.router)  # S165：§44 验证卡 + 实验记录
 app.include_router(journal_router.router)  # S166：交易日志 + 风险账本（Trade Journal + Risk Ledger）

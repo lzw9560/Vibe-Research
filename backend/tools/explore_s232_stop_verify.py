@@ -245,9 +245,7 @@ def main():
     sr = ev_stats(rets_real)
     trig_total = sum(1 for r in records if r["t2_low"] <= r["t1_open"] * 0.97)
     print(f"stop 触发总数: {trig_total}/{len(records)} ({trig_total / len(records) * 100:.1f}%)")
-    print(
-        f"其中 gap 穿 stop (t2_open<=stop): {gap_through} ({gap_through / max(trig_total, 1) * 100:.1f}% of triggers)"
-    )
+    print(f"其中 gap 穿 stop (t2_open<=stop): {gap_through} ({gap_through / max(trig_total, 1) * 100:.1f}% of triggers)")
     print(f"ideal (代码同款):     EV={si['ev']}% std={si['std']}% t={si['t']}")
     print(f"realistic (gap穿按open): EV={sr['ev']}% std={sr['std']}% t={sr['t']}")
     print(f"over-credit = {round(si['ev'] - sr['ev'], 3)}% （理想 - 真实）")
@@ -272,15 +270,9 @@ def main():
     sb = ev_stats(rets_close_base)
     so = ev_stats(rets_close_ovnt)
     ss = ev_stats(rets_close_stop)
-    print(
-        f"close-anchored baseline (T+1close→T+2close): EV={sb['ev']}% t={sb['t']} CI[{sb['ci_lo']},{sb['ci_hi']}] n={sb['n']}"
-    )
-    print(
-        f"close-anchored overnight (T+1close→T+2open, commit33a93e7口径): EV={so['ev']}% t={so['t']} CI[{so['ci_lo']},{so['ci_hi']}]"
-    )
-    print(
-        f"close-anchored -3% stop (realistic fill):           EV={ss['ev']}% t={ss['t']} CI[{ss['ci_lo']},{ss['ci_hi']}]"
-    )
+    print(f"close-anchored baseline (T+1close→T+2close): EV={sb['ev']}% t={sb['t']} CI[{sb['ci_lo']},{sb['ci_hi']}] n={sb['n']}")
+    print(f"close-anchored overnight (T+1close→T+2open, commit33a93e7口径): EV={so['ev']}% t={so['t']} CI[{so['ci_lo']},{so['ci_hi']}]")
+    print(f"close-anchored -3% stop (realistic fill):           EV={ss['ev']}% t={ss['t']} CI[{ss['ci_lo']},{ss['ci_hi']}]")
 
     # ---- 4. Bonferroni：20 cells, best vs baseline ----
     print("\n=== 4. Bonferroni（20 grid cells, best -3%stop/0take vs baseline 0/0）===")
@@ -290,11 +282,7 @@ def main():
         entry = r["t1_open"]
         sp = entry * 0.97
         st_trig = r["t2_low"] <= sp
-        ret_stop = (
-            ((sp if (st_trig and r["t2_open"] > sp) else (r["t2_open"] if st_trig else r["t2_close"])) - entry)
-            / entry
-            * 100
-        )
+        ret_stop = ((sp if (st_trig and r["t2_open"] > sp) else (r["t2_open"] if st_trig else r["t2_close"])) - entry) / entry * 100
         ret_base = (r["t2_close"] - entry) / entry * 100
         diffs.append(ret_stop - ret_base)
     nd = len(diffs)
@@ -310,9 +298,7 @@ def main():
         return 0.5 * (1 - erf(abs(t) / sqrt(2)))
 
     p_raw = norm_sf(td)
-    print(
-        f"stop-vs-baseline 配对差: mean={round(md, 3)}% std={round(sd, 3)}% t={round(td, 2)} p(one-sided)≈{round(p_raw, 4)}"
-    )
+    print(f"stop-vs-baseline 配对差: mean={round(md, 3)}% std={round(sd, 3)}% t={round(td, 2)} p(one-sided)≈{round(p_raw, 4)}")
     print(f"Bonferroni 阈值 (20 cells): p < {p_bonf} → {'PASS' if p_raw < p_bonf else 'FAIL (overfit risk)'}")
     print(f"原始 p={round(p_raw, 4)} vs Bonferroni p<{p_bonf}")
 

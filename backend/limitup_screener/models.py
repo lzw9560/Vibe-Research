@@ -244,9 +244,7 @@ def compute_gene_score(
         lianban_count = sum(1 for p in bt_points if p["actual_next_day"] >= 1)
         total_samples = len(bt_points) if bt_points else 0
         avg_score_lianban = (
-            round(sum(p["gene_score"] for p in bt_points if p["actual_next_day"] >= 1) / lianban_count, 1)
-            if lianban_count > 0
-            else None
+            round(sum(p["gene_score"] for p in bt_points if p["actual_next_day"] >= 1) / lianban_count, 1) if lianban_count > 0 else None
         )
         bt_summary = {
             "samples": total_samples,

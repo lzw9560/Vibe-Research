@@ -72,9 +72,7 @@ class IcePointDetector:
 
     def _ensure_tables(self) -> None:
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "CREATE TABLE IF NOT EXISTS ice_point_history (date TEXT PRIMARY KEY, limit_down_count INTEGER)"
-            )
+            conn.execute("CREATE TABLE IF NOT EXISTS ice_point_history (date TEXT PRIMARY KEY, limit_down_count INTEGER)")
 
     def count_limit_down(self) -> int:
         """今日跌停家数（board-aware，CLI 跌停池 pagination.total）。失败返 0。"""

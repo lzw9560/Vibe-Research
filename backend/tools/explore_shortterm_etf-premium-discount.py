@@ -243,10 +243,7 @@ def analyze_variant(name: str, picks: list[dict], threshold: float) -> dict:
     for p in picks:
         raw_by_date[p["signal_date"]].append(raw_ev(p))
     raw_dt = day_paired_t(raw_by_date)
-    print(
-        f"  day-paired: n_days={raw_dt['n_days']} mean={raw_dt['mean']}% "
-        f"t={raw_dt['t']} p_one_sided={raw_dt['p_one_sided']}"
-    )
+    print(f"  day-paired: n_days={raw_dt['n_days']} mean={raw_dt['mean']}% t={raw_dt['t']} p_one_sided={raw_dt['p_one_sided']}")
 
     # ---- BHAR (alpha vs NAV) ----
     bhar_rets = [bhar(p) for p in picks]
@@ -262,10 +259,7 @@ def analyze_variant(name: str, picks: list[dict], threshold: float) -> dict:
     for p in picks:
         bhar_by_date[p["signal_date"]].append(bhar(p))
     bhar_dt = day_paired_t(bhar_by_date)
-    print(
-        f"  day-paired: n_days={bhar_dt['n_days']} mean={bhar_dt['mean']}% "
-        f"t={bhar_dt['t']} p_one_sided={bhar_dt['p_one_sided']}"
-    )
+    print(f"  day-paired: n_days={bhar_dt['n_days']} mean={bhar_dt['mean']}% t={bhar_dt['t']} p_one_sided={bhar_dt['p_one_sided']}")
 
     # ---- walk-forward (BHAR) ----
     print(f"\n--- walk-forward OOS (BHAR, 前半 train → 后半 test) ---")
@@ -276,11 +270,7 @@ def analyze_variant(name: str, picks: list[dict], threshold: float) -> dict:
         tr_dt = wf["train_day_t"]
         te_dt = wf["test_day_t"]
         print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} BHAR={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
-        print(
-            f"  test:  n={te['n']} n_dates={wf['n_test_dates']} "
-            f"BHAR={te['ev']}% t={te['t']} day_t={te_dt['t']} "
-            f"p={te_dt['p_one_sided']}"
-        )
+        print(f"  test:  n={te['n']} n_dates={wf['n_test_dates']} BHAR={te['ev']}% t={te['t']} day_t={te_dt['t']} p={te_dt['p_one_sided']}")
         decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
         print(f"  decay: {decay:.0f}% (train→test)")
     else:
@@ -294,10 +284,7 @@ def analyze_variant(name: str, picks: list[dict], threshold: float) -> dict:
 
     # Bonferroni: cross-strategy ×5 AND within-family ×3 → 保守取乘积
     n_tests = N_CROSS_STRATEGY * N_FAMILY_VARIANTS
-    print(
-        f"\n--- verdict (BHAR alpha, Bonferroni ×{N_CROSS_STRATEGY}(cross-strat) "
-        f"×{N_FAMILY_VARIANTS}(family) = ×{n_tests}) ---"
-    )
+    print(f"\n--- verdict (BHAR alpha, Bonferroni ×{N_CROSS_STRATEGY}(cross-strat) ×{N_FAMILY_VARIANTS}(family) = ×{n_tests}) ---")
     v = verdict_for(
         ev_gross=bhar_s["ev"],
         t_day=bhar_dt["t"],
@@ -436,10 +423,7 @@ def main() -> None:
     print(f"\n\n{'=' * 72}")
     print("汇总（BHAR alpha = 折价收敛，隔离市场 beta）")
     print(f"{'=' * 72}")
-    print(
-        f"{'变体':<14} {'n':>6} {'n_days':>7} {'BHAR%':>8} {'net%':>7} "
-        f"{'day_t':>7} {'p_raw':>9} {'wf_test%':>9} {'verdict':<16}"
-    )
+    print(f"{'变体':<14} {'n':>6} {'n_days':>7} {'BHAR%':>8} {'net%':>7} {'day_t':>7} {'p_raw':>9} {'wf_test%':>9} {'verdict':<16}")
     for r in results:
         if r.get("n_picks", 0) == 0:
             continue

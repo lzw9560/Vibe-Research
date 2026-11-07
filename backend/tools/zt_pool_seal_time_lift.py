@@ -79,16 +79,11 @@ def _time_hhmmss(t: str) -> str:
 def main(smoke_days=None):
     cache = _load_kline_cache()  # S204 T1: enriched（一字板 pctChg=0.0/None 修复）
     # S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
-    validate_or_reject(
-        "baostock_kline", [b for bars in cache.values() for b in bars], as_of=datetime.date.today().isoformat()
-    )
+    validate_or_reject("baostock_kline", [b for bars in cache.values() for b in bars], as_of=datetime.date.today().isoformat())
     conn = sqlite3.connect(str(DB), timeout=10)
     try:
         em_dates = [
-            r[0]
-            for r in conn.execute(
-                "SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
-            ).fetchall()
+            r[0] for r in conn.execute("SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date").fetchall()
         ]
     finally:
         conn.close()

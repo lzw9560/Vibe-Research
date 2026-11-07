@@ -43,9 +43,7 @@ def main() -> None:
     conn = sqlite3.connect(SEAT_PROFILES_DB_PATH)
     try:
         count = conn.execute("SELECT COUNT(*) FROM seat_profiles").fetchone()[0]
-        a_nonempty = conn.execute("SELECT COUNT(*) FROM seat_profiles WHERE total_appearances IS NOT NULL").fetchone()[
-            0
-        ]
+        a_nonempty = conn.execute("SELECT COUNT(*) FROM seat_profiles WHERE total_appearances IS NOT NULL").fetchone()[0]
         b_null = conn.execute("SELECT COUNT(*) FROM seat_profiles WHERE next_day_sell_rate IS NULL").fetchone()[0]
     finally:
         conn.close()

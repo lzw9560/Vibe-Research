@@ -154,8 +154,7 @@ def build(limit: int = 500) -> dict:
                     {
                         "key": "low_capture",
                         "text": f"这段最多能赚 {ex['mfe_pct']:.1f}%，实际落袋 "
-                        f"{ex['realized_pct']:.1f}%（吃到 {cr:.0%}）"
-                        + ("；同日进出，MFE 只是上界" if ex["same_day"] else ""),
+                        f"{ex['realized_pct']:.1f}%（吃到 {cr:.0%}）" + ("；同日进出，MFE 只是上界" if ex["same_day"] else ""),
                     }
                 )
 

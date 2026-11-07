@@ -164,9 +164,7 @@ class AuctionScreener:
 
         # 1. 获取涨停池数据
         zt_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicZTPool", date_fmt, "fbt:asc")]
-        yzt_pool = [
-            zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getYesterdayZTPool", date_fmt, "zs:desc")
-        ]
+        yzt_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getYesterdayZTPool", date_fmt, "zs:desc")]
         [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicZBPool", date_fmt, "fbt:asc")]
 
         if not zt_pool:

@@ -109,9 +109,7 @@ def main() -> None:
         print(
             f"  train: mean {tr['mean'] * 100:+.4f}% median {tr['median'] * 100:+.4f}% WR {tr['wr'] * 100:.1f}% t={tr['t']:.2f} (n_days={tr['n_days']})"
         )
-        print(
-            f"  test:  mean {te['mean'] * 100:+.4f}% median {te['median'] * 100:+.4f}% WR {te['wr'] * 100:.1f}% t={te['t']:.2f}"
-        )
+        print(f"  test:  mean {te['mean'] * 100:+.4f}% median {te['median'] * 100:+.4f}% WR {te['wr'] * 100:.1f}% t={te['t']:.2f}")
         print(
             f"         扣成本({COST}%): net {te['net'] * 100:+.4f}%  | median {'正(稳)' if te['median'] > 0 else '负(lottery)'} | WR {'>50%' if te['wr'] > 0.5 else '<50%'}"
         )

@@ -121,9 +121,7 @@ def _migrate_legacy_tables(conn: sqlite3.Connection) -> bool:
     if "trade_date" in cols:
         return True  # 已是新 schema
     state_n = conn.execute("SELECT COUNT(*) FROM workflow_state").fetchone()[0]
-    has_history = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='workflow_state_history'"
-    ).fetchone()
+    has_history = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='workflow_state_history'").fetchone()
     history_n = conn.execute("SELECT COUNT(*) FROM workflow_state_history").fetchone()[0] if has_history else 0
     if state_n == 0 and history_n == 0:
         logger.info("[workflow_state] 检测到空旧 schema 表，DROP 重建（S032 迁移）")
@@ -133,8 +131,7 @@ def _migrate_legacy_tables(conn: sqlite3.Connection) -> bool:
         conn.commit()
         return True
     logger.warning(
-        "[workflow_state] 旧 schema 表非空（state=%d history=%d），保留不动；"
-        "S032 新表未建，状态端点将不可用，请人工迁移",
+        "[workflow_state] 旧 schema 表非空（state=%d history=%d），保留不动；S032 新表未建，状态端点将不可用，请人工迁移",
         state_n,
         history_n,
     )

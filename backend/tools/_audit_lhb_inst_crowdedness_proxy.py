@@ -142,9 +142,7 @@ def audit_crowdedness() -> None:
     print(
         f"  proxy<5%:                    n={low_s['n']} mean={low_s['mean']:.3f}% WR={low_s['wr']:.1f}% t={low_s['t']:.2f} p={low_s['p']:.4f}"
     )
-    print(
-        f"\n  → {'claim 方向成立（>=5% 组 mean 更低）' if high_s['mean'] < low_s['mean'] else 'claim 方向证否（>=5% 组未更差）'}"
-    )
+    print(f"\n  → {'claim 方向成立（>=5% 组 mean 更低）' if high_s['mean'] < low_s['mean'] else 'claim 方向证否（>=5% 组未更差）'}")
     print(f"  注：proxy=inst_buy/20d_amt 非用户 claim 的 free_float 阈值，proxy 5% 阈值须校准")
     print(f"  但如果 >5% 组显著更差，claim 方向成立（机构买占比高 → 次日差）")
 

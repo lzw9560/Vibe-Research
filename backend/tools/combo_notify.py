@@ -111,9 +111,7 @@ def main() -> None:
     ]
     for i, p in enumerate(picks, 1):
         pos_1pct = p["amount"] * 100  # 1%ADV 万元（amount亿×1e8×0.01=amount×1e6元=amount×100万，低冲击<10bps）
-        lines.append(
-            f"  {i:>2}. {p['code']}: 涨{p['today_ret']}% gap{p['gap']}% 额{p['amount']}亿 仓≈{pos_1pct:.0f}万(1%ADV)"
-        )
+        lines.append(f"  {i:>2}. {p['code']}: 涨{p['today_ret']}% gap{p['gap']}% 额{p['amount']}亿 仓≈{pos_1pct:.0f}万(1%ADV)")
     lines += [
         "",
         "【怎么执行】",

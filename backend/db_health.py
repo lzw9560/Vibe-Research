@@ -78,9 +78,7 @@ def ensure_gene_scores_cover_index(db_path: str) -> bool:
                 _GENE_SCORES_COVER_INDEX_THRESHOLD,
             )
             return False
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_gene_scores_cover ON gene_scores(date, code, data_source, total_score)"
-        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_gene_scores_cover ON gene_scores(date, code, data_source, total_score)")
         conn.commit()
         _logger.info(
             "[gene_scores_cover] 行数 %d > %d，已建覆盖索引 idx_gene_scores_cover",

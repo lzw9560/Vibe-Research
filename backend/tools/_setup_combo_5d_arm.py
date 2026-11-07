@@ -21,9 +21,7 @@ from engine.trade_journal import TradeJournal  # noqa: E402
 
 def main() -> None:
     tj = TradeJournal()  # _ensure_table 自动建表
-    tj.set_arm_status(
-        "combo_5d", is_active=True, weight_override=0.0
-    )  # 2026-11-08 combo FALSIFIED，零权重止血，paper tracking 保留
+    tj.set_arm_status("combo_5d", is_active=True, weight_override=0.0)  # 2026-11-08 combo FALSIFIED，零权重止血，paper tracking 保留
     st = tj.query_arm_status("combo_5d")
     print("✅ combo_5d arm 注册:", st)
 

@@ -742,15 +742,11 @@ def screen_tail_dip_candidate(
     # 跌幅范围检查：-3% ~ -5%是甜区
     if individual_change_pct > HARD_THRESHOLDS["min_drop_pct"]:
         candidate.passed = False
-        candidate.rejection_reasons.append(
-            f"跌幅{individual_change_pct:.1f}%>{HARD_THRESHOLDS['min_drop_pct']}%（不算错杀）"
-        )
+        candidate.rejection_reasons.append(f"跌幅{individual_change_pct:.1f}%>{HARD_THRESHOLDS['min_drop_pct']}%（不算错杀）")
 
     if individual_change_pct < HARD_THRESHOLDS["max_drop_pct"]:
         candidate.passed = False
-        candidate.rejection_reasons.append(
-            f"跌幅{individual_change_pct:.1f}%<{HARD_THRESHOLDS['max_drop_pct']}%（重跌是基本面恶化）"
-        )
+        candidate.rejection_reasons.append(f"跌幅{individual_change_pct:.1f}%<{HARD_THRESHOLDS['max_drop_pct']}%（重跌是基本面恶化）")
 
     if not candidate.passed:
         return candidate  # 短路
@@ -885,8 +881,7 @@ def compute_realtime_sector_deviation(
 
             # 个股涨跌幅
             stock_row = db.execute(
-                "SELECT change_pct FROM intraday_quote_snapshots "
-                "WHERE date=? AND ts=? AND code=? AND change_pct IS NOT NULL",
+                "SELECT change_pct FROM intraday_quote_snapshots WHERE date=? AND ts=? AND code=? AND change_pct IS NOT NULL",
                 (date, ts, code),
             ).fetchone()
             if not stock_row:
@@ -1159,18 +1154,8 @@ def check_tail_volatility_from_snapshots(
 
     try:
         # 找有14:50和15:00的交易日
-        dates_1450 = set(
-            r[0]
-            for r in db.execute(
-                "SELECT DISTINCT date FROM intraday_quote_snapshots WHERE ts LIKE '%T14:50%'"
-            ).fetchall()
-        )
-        dates_1500 = set(
-            r[0]
-            for r in db.execute(
-                "SELECT DISTINCT date FROM intraday_quote_snapshots WHERE ts LIKE '%T15:00%'"
-            ).fetchall()
-        )
+        dates_1450 = set(r[0] for r in db.execute("SELECT DISTINCT date FROM intraday_quote_snapshots WHERE ts LIKE '%T14:50%'").fetchall())
+        dates_1500 = set(r[0] for r in db.execute("SELECT DISTINCT date FROM intraday_quote_snapshots WHERE ts LIKE '%T15:00%'").fetchall())
         both_dates = sorted(dates_1450 & dates_1500)
 
         # 计算尾盘收益率

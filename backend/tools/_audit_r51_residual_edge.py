@@ -254,9 +254,7 @@ def main() -> None:
     print("==> R51: 加载涨跌停事件（流式读 baostock_kline_cache.db）...", flush=True)
     events, baseline_by_date = load_events()
     all_dates = sorted({e["date"] for e in events} | set(baseline_by_date.keys()))
-    print(
-        f"    codes 扫描完；事件 {len(events)} 个；交易日 {len(all_dates)}：{all_dates[0]}~{all_dates[-1]}", flush=True
-    )
+    print(f"    codes 扫描完；事件 {len(events)} 个；交易日 {len(all_dates)}：{all_dates[0]}~{all_dates[-1]}", flush=True)
 
     base_dm = [statistics.mean(v) for v in baseline_by_date.values() if v]
     base_stat = group_stats(base_dm, "BASE")
@@ -270,10 +268,7 @@ def main() -> None:
         ("LD", 0.20, "跌停→次日(创业科创20%)"),
     ]
     print(f"=== R51 潜伏同号持续性（Bonferroni×{N_COMPARISONS}, α={BONF_ALPHA:.4f} 单侧）===")
-    print(
-        f"{'分层':<22}{'n日':>6}{'mean':>10}{'median':>10}{'WR':>7}"
-        f"{'net':>9}{'t_nw':>7}{'p_one':>9}{'Bonf':>6}{'edge':>9}"
-    )
+    print(f"{'分层':<22}{'n日':>6}{'mean':>10}{'median':>10}{'WR':>7}{'net':>9}{'t_nw':>7}{'p_one':>9}{'Bonf':>6}{'edge':>9}")
     results = {}
     for direction, band, label in strata:
         dm = daily_means_for(events, direction, band)
@@ -333,10 +328,7 @@ def main() -> None:
     # ---- 可交易性（combo R4 教训：涨停收盘封板不可买，潜伏 edge 多为隔夜 gap 不可捕获）----
     # 关键区分：latent(T收→T+1收) entry@T收盘 UNBUYABLE；realizable proxy = intraday(T+1开→T+1收)
     print("\n=== 可交易性诊断（realizability）===")
-    print(
-        f"{'分层':<22}{'n':>7}{'再同向板%':>10}{'反向板%':>9}{'可买%':>8}"
-        f"{'intra mean':>11}{'intra net':>10}{'intra t_nw':>11}{'n日':>6}"
-    )
+    print(f"{'分层':<22}{'n':>7}{'再同向板%':>10}{'反向板%':>9}{'可买%':>8}{'intra mean':>11}{'intra net':>10}{'intra t_nw':>11}{'n日':>6}")
     for direction, band, label in strata:
         t = tradability(events, direction, band)
         if t["n"] == 0:
@@ -370,11 +362,7 @@ def main() -> None:
 
     # event-level intraday（每只 pick 等权，非每日等权）—— 真实 per-pick 体验
     def event_intraday(direction, band):
-        sub = [
-            e["t1_intra"]
-            for e in events
-            if e["direction"] == direction and abs(e["band"] - band) < 1e-9 and e["t1_buyable"]
-        ]
+        sub = [e["t1_intra"] for e in events if e["direction"] == direction and abs(e["band"] - band) < 1e-9 and e["t1_buyable"]]
         if not sub:
             return 0.0, 0, 0.0
         m = statistics.mean(sub)
@@ -392,9 +380,7 @@ def main() -> None:
     yr20_tot = len(by_year20)
 
     print(f"理论 P1(同号)+P2(带宽单调): {'成立' if theory_confirmed else '不成立'}")
-    print(
-        f"潜伏同号 Bonferroni 显著: {'是' if latent_sig else '否'} (t_nw LU10={lu10['t_nw']:.1f} LU20={lu20['t_nw']:.1f})"
-    )
+    print(f"潜伏同号 Bonferroni 显著: {'是' if latent_sig else '否'} (t_nw LU10={lu10['t_nw']:.1f} LU20={lu20['t_nw']:.1f})")
     print(f"潜伏最佳 mean={lu_best['mean'] * 100:+.4f}% edge over base={edge_over_base * 100:+.4f}%")
     print(f"潜伏 entry@T收盘: UNBUYABLE(涨停封板) → 潜伏 edge 多为隔夜 gap 不可捕获")
     print(

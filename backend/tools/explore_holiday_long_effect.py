@@ -421,7 +421,9 @@ elif wf_all["status"] == "ok":
         reason = f"walk-forward test_EV={wf_test_ev:.3f}% <= 0"
     elif bonferroni_p(wf_test_p, N_TESTS) >= ALPHA:
         verdict = "exploratory"
-        reason = f"OOS test EV={wf_test_ev:.3f}% > 0 but test p={wf_test_p:.6f} Bonf×{N_TESTS}={bonferroni_p(wf_test_p, N_TESTS):.6f} >= {ALPHA}"
+        reason = (
+            f"OOS test EV={wf_test_ev:.3f}% > 0 but test p={wf_test_p:.6f} Bonf×{N_TESTS}={bonferroni_p(wf_test_p, N_TESTS):.6f} >= {ALPHA}"
+        )
     else:
         verdict = "edge-confirmed"
         reason = f"all gates pass: gross+net>0, Bonf PASS, OOS significant"

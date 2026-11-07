@@ -71,10 +71,7 @@ def sweep_param(
     robust：edge ≥2 个 v（多邻近）→ 稳健。
     no_edge：0 个 v 出 edge → 无 selection edge 不进融合。
     """
-    results = tuple(
-        SweepResult(param=param, value=v, verdict=verdict_fn(v)[0], lift=verdict_fn(v)[1], n=verdict_fn(v)[2])
-        for v in values
-    )
+    results = tuple(SweepResult(param=param, value=v, verdict=verdict_fn(v)[0], lift=verdict_fn(v)[1], n=verdict_fn(v)[2]) for v in values)
     edge_count = _edge_count(results)
     overfit = edge_count == 1  # 仅单一 v 有 edge（邻近无）
     robust = edge_count >= 2  # 多邻近 v 有 edge

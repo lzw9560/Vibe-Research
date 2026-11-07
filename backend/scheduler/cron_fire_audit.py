@@ -109,11 +109,7 @@ def log_fire_receipt(
         "status": result.get("status") if isinstance(result, dict) else None,
         "output_path": _extract_output_path(result),
         "n_rows": _extract_n_rows(result),
-        "duration_ms": (
-            round(duration_ms, 2)
-            if isinstance(duration_ms, (int, float)) and not isinstance(duration_ms, bool)
-            else None
-        ),
+        "duration_ms": (round(duration_ms, 2) if isinstance(duration_ms, (int, float)) and not isinstance(duration_ms, bool) else None),
     }
     try:
         path = _fire_log_path()

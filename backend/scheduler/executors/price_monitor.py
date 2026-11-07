@@ -107,13 +107,8 @@ def _get_alerts() -> list[dict]:
     _ensure_price_alerts_table()
     db = sqlite3.connect(_get_alerts_db(), timeout=10)
     try:
-        rows = db.execute(
-            "SELECT code, name, support1, support2, resistance1, resistance2 FROM price_alerts"
-        ).fetchall()
-        return [
-            {"code": r[0], "name": r[1], "support1": r[2], "support2": r[3], "resistance1": r[4], "resistance2": r[5]}
-            for r in rows
-        ]
+        rows = db.execute("SELECT code, name, support1, support2, resistance1, resistance2 FROM price_alerts").fetchall()
+        return [{"code": r[0], "name": r[1], "support1": r[2], "support2": r[3], "resistance1": r[4], "resistance2": r[5]} for r in rows]
     finally:
         db.close()
 

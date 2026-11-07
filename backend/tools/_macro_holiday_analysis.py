@@ -128,12 +128,7 @@ for hi, h in enumerate(holidays):
             month_days = [d for d in calendar if d[:7] == ym]
             is_tom = False
             if month_days:
-                is_tom = (
-                    d_buy in month_days[:3]
-                    or d_buy in month_days[-3:]
-                    or d_sell in month_days[:3]
-                    or d_sell in month_days[-3:]
-                )
+                is_tom = d_buy in month_days[:3] or d_buy in month_days[-3:] or d_sell in month_days[:3] or d_sell in month_days[-3:]
             # policy proximity
             policy_near = False
             # 两会 (early March, ~3/3-3/15)

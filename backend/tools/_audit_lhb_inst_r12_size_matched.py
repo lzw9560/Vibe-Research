@@ -185,9 +185,7 @@ def audit_r12() -> None:
     p = normal_p(t)
     verdict = "PASS" if p < ALPHA else "FAIL"
     print(f"\nR12 size-matched alpha (inst_bhar - peers_median, 同日同 decile):")
-    print(
-        f"  n={n} days={n_days} mean_alpha={mean:.4f}% median={median:.4f}% WR={wr:.1f}% day_t={t:.2f} p={p:.4f} {verdict}"
-    )
+    print(f"  n={n} days={n_days} mean_alpha={mean:.4f}% median={median:.4f}% WR={wr:.1f}% day_t={t:.2f} p={p:.4f} {verdict}")
     print(
         f"\n  → {'size-matched edge-confirmed（alpha 非 size premium）' if p < ALPHA and mean > 0 else 'alpha 被 size premium 解释（非真 edge，或 underpowered）'}"
     )

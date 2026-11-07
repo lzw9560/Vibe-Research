@@ -155,18 +155,12 @@ def honest_close_ev(p: dict) -> float:
 # ── 6. Verdict cascade (×3 Bonferroni, matching task spec) ───────────────
 def verdict_inline(ev_gross, t_day, p_raw, wf, n_days, net_ev, name):
     p_bonf = bonferroni_p(p_raw, N_BUCKETS)
-    print(
-        f"\n  [{name}] gross_EV={ev_gross}% net_EV={net_ev}% day_t={t_day} "
-        f"p_raw={p_raw} Bonf×{N_BUCKETS}={p_bonf:.6f} n_days={n_days}"
-    )
+    print(f"\n  [{name}] gross_EV={ev_gross}% net_EV={net_ev}% day_t={t_day} p_raw={p_raw} Bonf×{N_BUCKETS}={p_bonf:.6f} n_days={n_days}")
     if wf["status"] == "ok":
         tr = wf["train_ev"]
         te = wf["test_ev"]
         te_dt = wf["test_day_t"]
-        print(
-            f"    walk-forward: train_EV={tr['ev']}% test_EV={te['ev']}% "
-            f"test_day_t={te_dt['t']} test_p={te_dt['p_one_sided']}"
-        )
+        print(f"    walk-forward: train_EV={tr['ev']}% test_EV={te['ev']}% test_day_t={te_dt['t']} test_p={te_dt['p_one_sided']}")
     if ev_gross < 0:
         print(f"    → FALSIFIED: gross EV < 0 (negative edge)")
         return "falsified"
@@ -181,20 +175,14 @@ def verdict_inline(ev_gross, t_day, p_raw, wf, n_days, net_ev, name):
         return "falsified"
     if wf["status"] == "ok":
         if wf["train_ev"]["ev"] <= 0:
-            print(
-                f"    → EXPLORATORY: train_EV={wf['train_ev']['ev']}% <= 0 "
-                f"(edge not in train half; test may be regime overfit)"
-            )
+            print(f"    → EXPLORATORY: train_EV={wf['train_ev']['ev']}% <= 0 (edge not in train half; test may be regime overfit)")
             return "exploratory"
         if wf["test_ev"]["ev"] <= 0:
             print(f"    → FALSIFIED: walk-forward test_EV={wf['test_ev']['ev']}% <= 0")
             return "falsified"
         wf_p_bonf = bonferroni_p(wf["test_day_t"]["p_one_sided"], N_BUCKETS)
         if wf_p_bonf >= ALPHA:
-            print(
-                f"    → EXPLORATORY: OOS test EV>0 but test_p Bonf×{N_BUCKETS}="
-                f"{wf_p_bonf} >= {ALPHA} (not significant OOS)"
-            )
+            print(f"    → EXPLORATORY: OOS test EV>0 but test_p Bonf×{N_BUCKETS}={wf_p_bonf} >= {ALPHA} (not significant OOS)")
             return "exploratory"
         print(f"    → EDGE-CONFIRMED: all gates pass")
         return "edge-confirmed"
@@ -222,10 +210,7 @@ for bname, bfn in BUCKETS.items():
         rets = [r for r in rets if r is not None]
         s = ev_stats(rets)
         net_ev = round(s["ev"] - COST * 100, 3)
-        print(
-            f"  n={s['n']} gross_EV={s['ev']}% std={s['std']}% WR={s['wr']}% "
-            f"per-trade t={s['t']} CI[{s['ci_lo']},{s['ci_hi']}]"
-        )
+        print(f"  n={s['n']} gross_EV={s['ev']}% std={s['std']}% WR={s['wr']}% per-trade t={s['t']} CI[{s['ci_lo']},{s['ci_hi']}]")
         print(f"  net EV (after {COST * 100:.1f}% cost): {net_ev}%")
 
         by_date: dict[str, list[float]] = defaultdict(list)
@@ -234,19 +219,13 @@ for bname, bfn in BUCKETS.items():
             if r is not None:
                 by_date[p["bt_date"]].append(r)
         dt = day_paired_t(by_date)
-        print(
-            f"  per-day-mean: n_days={dt['n_days']} day_mean={dt['mean']}% "
-            f"day_t={dt['t']} p_one_sided={dt['p_one_sided']}"
-        )
+        print(f"  per-day-mean: n_days={dt['n_days']} day_mean={dt['mean']}% day_t={dt['t']} p_one_sided={dt['p_one_sided']}")
 
         wf = walk_forward(picks, ret_fn)
         if wf["status"] == "ok":
             tr = wf["train_ev"]
             te = wf["test_ev"]
-            print(
-                f"  walk-forward: train n={tr['n']} EV={tr['ev']}% | "
-                f"test n={te['n']} EV={te['ev']}% test_day_t={wf['test_day_t']['t']}"
-            )
+            print(f"  walk-forward: train n={tr['n']} EV={tr['ev']}% | test n={te['n']} EV={te['ev']}% test_day_t={wf['test_day_t']['t']}")
         else:
             print(f"  walk-forward: {wf['status']}")
 
@@ -303,7 +282,6 @@ print(f"   同家族 (5日跌/RSI超卖) 此前 9/9 falsified. 本信号是同�
 print(f"   verdict 基于 (B) HONEST 口径 (可交易). (A) NAIVE 仅诊断 look-ahead 通胀.")
 print(f"⚠️ 不外推: 大宗折价信号 ≠ 事件驱动有/无 edge ≠ 短线有/无 edge.")
 print(
-    f"   对照: 2026-09-08 selection_lift 测过 (9 verdict 全 exploratory, "
-    f"best 1.17x). 本脚本测 ABSOLUTE close_ev, 桶定义不同, 互补非重复."
+    f"   对照: 2026-09-08 selection_lift 测过 (9 verdict 全 exploratory, best 1.17x). 本脚本测 ABSOLUTE close_ev, 桶定义不同, 互补非重复."
 )
 print(f"\n数据窗口: {len(dates)} 交易日 ({dates[0]}~{dates[-1]}), <60 门下属 underpowered 区间.")

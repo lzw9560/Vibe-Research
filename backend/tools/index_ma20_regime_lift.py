@@ -52,13 +52,7 @@ def is_limit_up(code, pctchg):
         return False
     if code.startswith("30") or code.startswith("688"):
         return 19.5 <= pctchg <= 20.5  # ChiNext / STAR: +20%
-    if (
-        code.startswith("8")
-        or code.startswith("43")
-        or code.startswith("83")
-        or code.startswith("87")
-        or code.startswith("92")
-    ):
+    if code.startswith("8") or code.startswith("43") or code.startswith("83") or code.startswith("87") or code.startswith("92"):
         return 29.0 <= pctchg <= 30.5  # BSE: +30% (broad catch)
     return 9.8 <= pctchg <= 10.2  # main board: +10%
 
@@ -79,9 +73,7 @@ def find_idx(bars, D):
 print("loading data...")
 cache = _load_kline_cache()  # S204 T1: enriched（一字板 pctChg=0.0/None 修复）
 # S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
-validate_or_reject(
-    "baostock_kline", [b for bars in cache.values() for b in bars], as_of=datetime.date.today().isoformat()
-)
+validate_or_reject("baostock_kline", [b for bars in cache.values() for b in bars], as_of=datetime.date.today().isoformat())
 regime = json.loads(REGIME_F.read_text())
 # NOTE: index_ma20_regime.json（index_ma20_regime_fetch 派生产物，dict_of_dicts）无对应 schema — 派生 artifact
 
@@ -138,9 +130,7 @@ for code, bars in cache.items():
             }
         )
 
-print(
-    f"scanned {n_codes} codes | obs={len(obs)} | excluded: no_d1={n_no_d1} one_word={n_one_word} no_regime={n_no_regime}"
-)
+print(f"scanned {n_codes} codes | obs={len(obs)} | excluded: no_d1={n_no_d1} one_word={n_one_word} no_regime={n_no_regime}")
 unique_days = sorted(set(o["D"] for o in obs))
 print(f"unique days={len(unique_days)} | zt-tagged={sum(1 for o in obs if o['from_zt'])}")
 
@@ -193,18 +183,12 @@ for label, days in [("strong(bull)", strong_days), ("weak(bear)", weak_days)]:
     print(
         f"    gross_gap mean={statistics.mean(mg):.2f}% net_gap mean={statistics.mean(ng):.2f}% net_WR mean={statistics.mean(wr) * 100:.1f}%"
     )
-    print(
-        f"    net_gap median={statistics.median(ng):.2f}% net_gap std={statistics.pstdev(ng):.2f}%"
-        if len(ng) > 1
-        else ""
-    )
+    print(f"    net_gap median={statistics.median(ng):.2f}% net_gap std={statistics.pstdev(ng):.2f}%" if len(ng) > 1 else "")
 
 # overall
 all_ng = [o["net_gap"] for o in obs]
 all_wr = sum(o["win"] for o in obs) / len(obs)
-print(
-    f"  ALL: n_days={len(day_summary)} n_picks={len(obs)} net_gap mean={statistics.mean(all_ng):.2f}% net_WR={all_wr * 100:.1f}%"
-)
+print(f"  ALL: n_days={len(day_summary)} n_picks={len(obs)} net_gap mean={statistics.mean(all_ng):.2f}% net_WR={all_wr * 100:.1f}%")
 
 # 2. day_paired lift (strong vs weak)
 print("\n[2] day_paired lift (strong vs weak, per-day means):")
@@ -330,9 +314,7 @@ else:
         statistics.mean(agg(strong_days, "mean_net_gap")) / (statistics.mean(all_ng) or 1),
         statistics.mean(agg(weak_days, "mean_net_gap")) / (statistics.mean(all_ng) or 1),
     )
-    ratio_val = statistics.mean(agg(strong_days, "mean_net_gap")) / (
-        statistics.mean(agg(weak_days, "mean_net_gap")) or 1
-    )
+    ratio_val = statistics.mean(agg(strong_days, "mean_net_gap")) / (statistics.mean(agg(weak_days, "mean_net_gap")) or 1)
     print(f"  days={len(day_summary)} ({len(strong_days)} strong / {len(weak_days)} weak) picks={len(obs)}")
     print(f"  max lift vs all = {max_lift:.3f}x | strong/weak ratio = {ratio_val:.3f}x")
     if max_lift >= 2 or (p_perm < 0.05 if "p_perm" in dir() else False):

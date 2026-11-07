@@ -69,14 +69,9 @@ def main(limit: int | None = None) -> int:
         conn = sqlite3.connect(GENE_SCORES_DB_PATH)
         try:
             # picks: code + strategy_code（取首个战法 params）；build strategy_params_map
-            pick_rows = conn.execute(
-                "SELECT code, strategy_code FROM forward_test_records WHERE signal_date=?", (signal_date,)
-            ).fetchall()
+            pick_rows = conn.execute("SELECT code, strategy_code FROM forward_test_records WHERE signal_date=?", (signal_date,)).fetchall()
             uni_codes = [
-                r[0]
-                for r in conn.execute(
-                    "SELECT DISTINCT code FROM universe_returns WHERE signal_date=?", (signal_date,)
-                ).fetchall()
+                r[0] for r in conn.execute("SELECT DISTINCT code FROM universe_returns WHERE signal_date=?", (signal_date,)).fetchall()
             ]
         finally:
             conn.close()
@@ -94,14 +89,8 @@ def main(limit: int | None = None) -> int:
         if not returns_map:
             logger.warning("[%d/%d] %s baostock 不可用，中断", i, len(dates), signal_date)
             break
-        picks_returns = {
-            c: returns_map[c]
-            for c in pick_codes
-            if c in returns_map and returns_map[c]["return_open2close"] is not None
-        }
-        uni_returns = {
-            c: returns_map[c] for c in uni_codes if c in returns_map and returns_map[c]["return_open2close"] is not None
-        }
+        picks_returns = {c: returns_map[c] for c in pick_codes if c in returns_map and returns_map[c]["return_open2close"] is not None}
+        uni_returns = {c: returns_map[c] for c in uni_codes if c in returns_map and returns_map[c]["return_open2close"] is not None}
         n_picks = record_actual_returns(signal_date, picks_returns)
         n_uni = record_universe_returns(signal_date, uni_returns)
         n_path_pick = sum(1 for c in pick_codes if c in returns_map and returns_map[c].get("return_path") is not None)
@@ -124,20 +113,14 @@ def main(limit: int | None = None) -> int:
     print("=" * 70)
     result = get_forward_test_summary(benchmark_win_rate=60.0, min_days=20)
     print(f"total_days={result.total_days} settled(o2c)={result.settled_count}/{result.total_recommendations}")
-    print(
-        f"[o2c endpoint] win_rate={result.win_rate}% lift(buyable-only)={result.lift}x | lift_unfiltered={result.lift_unfiltered}x"
-    )
-    print(
-        f"[o2nc T+1] win_rate_open2next_close={result.win_rate_open2next_close}% (o2nc_settled={result.o2nc_settled})"
-    )
+    print(f"[o2c endpoint] win_rate={result.win_rate}% lift(buyable-only)={result.lift}x | lift_unfiltered={result.lift_unfiltered}x")
+    print(f"[o2nc T+1] win_rate_open2next_close={result.win_rate_open2next_close}% (o2nc_settled={result.o2nc_settled})")
     print(
         f"[path-dependent] win_rate_path={result.win_rate_path}% (path_settled={result.path_settled}) "
         f"| random_path={result.random_win_rate_path}% (settled={result.random_path_settled}) "
         f"| path_lift={result.path_lift}x  ← §44 真·gate"
     )
-    print(
-        f"unbuyable_count={result.unbuyable_count} validation_status={result.validation_status} passed={result.passed}"
-    )
+    print(f"unbuyable_count={result.unbuyable_count} validation_status={result.validation_status} passed={result.passed}")
     print(f"note: {result.note}")
     return 0
 

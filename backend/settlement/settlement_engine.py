@@ -34,8 +34,7 @@ class SettlementEngine:
         return_pct = ((item.exit_price - item.entry_price) / item.entry_price) * 100 if item.entry_price else 0.0
         win = return_pct > 0
         hold_days = (
-            datetime.strptime(settle_date, "%Y-%m-%d").toordinal()
-            - datetime.strptime(signal_date, "%Y-%m-%d").toordinal()
+            datetime.strptime(settle_date, "%Y-%m-%d").toordinal() - datetime.strptime(signal_date, "%Y-%m-%d").toordinal()
             if signal_date and settle_date
             else 0
         )

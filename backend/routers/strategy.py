@@ -86,11 +86,7 @@ async def strategy_backtest(lookback_days: int = Query(60, ge=1, le=365)) -> Dic
                 "sample_size": r.sample_size,
                 "available_days": r.available_days,
                 "note": next(
-                    (
-                        s.get("note", "")
-                        for s in __import__("limitup_strategy").STRATEGY_REGISTRY
-                        if s["code"] == r.strategy_code
-                    ),
+                    (s.get("note", "") for s in __import__("limitup_strategy").STRATEGY_REGISTRY if s["code"] == r.strategy_code),
                     "",
                 ),
             }
@@ -152,9 +148,7 @@ async def get_funnel_strategies() -> Dict[str, Any]:
                     "max_hold_days": s.position_params.max_hold_days,
                     "position_scale": s.position_params.position_scale,
                 },
-                "quality_standards": [
-                    {"name": q.name, "required": q.required, "description": q.description} for q in s.quality_standards
-                ],
+                "quality_standards": [{"name": q.name, "required": q.required, "description": q.description} for q in s.quality_standards],
                 "note": s.note,
                 "activation_note": s.activation_note,
             }

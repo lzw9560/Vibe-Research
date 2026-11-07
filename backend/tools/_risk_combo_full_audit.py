@@ -44,11 +44,7 @@ for code, bj in rows:
     if nb < 70:
         continue
     c0 = code.replace("sz.", "").replace("sh.", "").replace("bj.", "")
-    bl = (
-        0.20
-        if (c0.startswith("30") or c0.startswith("68"))
-        else (0.30 if (c0.startswith("8") or c0.startswith("4")) else 0.10)
-    )
+    bl = 0.20 if (c0.startswith("30") or c0.startswith("68")) else (0.30 if (c0.startswith("8") or c0.startswith("4")) else 0.10)
     closes = [0.0] * nb
     opens = [0.0] * nb
     amts = [0.0] * nb

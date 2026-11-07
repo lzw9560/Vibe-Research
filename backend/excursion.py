@@ -279,10 +279,7 @@ def summary(limit: int = 300) -> dict:
             f"其中 {same_day_n} 笔是同日进出，整段窗口都只能给上界。"
             "真实 MFE 落在每笔的 mfe_certain（确定赚到过）与 mfe_pct（上界）之间。"
         ),
-        "caveat": (
-            "日线看不出最高点发生在盘中买入之前还是之后。跨日持有时，"
-            "中间那些完整交易日的高低点一定在持仓期内、那部分可靠。"
-        ),
+        "caveat": ("日线看不出最高点发生在盘中买入之前还是之后。跨日持有时，中间那些完整交易日的高低点一定在持仓期内、那部分可靠。"),
     }
 
 
@@ -295,9 +292,7 @@ def render(rep: dict) -> str:
         return ""
     lines = [f"· MFE/MAE（{rep['trades']} 笔已平仓）："]
     if rep.get("median_capture_rate") is not None:
-        lines.append(
-            f"  - 捕获率中位数 {rep['median_capture_rate']:.0%}（{rep['capture_samples']} 笔有讨论价值的行情）"
-        )
+        lines.append(f"  - 捕获率中位数 {rep['median_capture_rate']:.0%}（{rep['capture_samples']} 笔有讨论价值的行情）")
     lines.append(f"  - 盈利回吐中位数 {rep['median_give_back']:+.1f}%，最大浮亏中位数 {rep['median_mae']:+.1f}%")
     if not rep.get("enough_samples"):
         lines.append(f"  ⚠️ 只有 {rep['trades']} 笔，样本太少，别下结论")

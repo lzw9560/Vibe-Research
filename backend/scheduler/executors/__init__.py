@@ -161,8 +161,7 @@ class TaskExecutor:
         missing = [t for t in seeded_types if t not in registered]
         for task_type in missing:
             logger.error(
-                "[selfcheck] task_type %r seeded but not in dispatch dict"
-                "（stale __init__？worktree merge 未 reload？）",
+                "[selfcheck] task_type %r seeded but not in dispatch dict（stale __init__？worktree merge 未 reload？）",
                 task_type,
             )
         logger.info(

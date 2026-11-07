@@ -210,9 +210,7 @@ def persist_trajectory(date: str, code: str, name: str | None, traj: dict[str, A
     )
 
 
-def persist_derived_features(
-    date: str, code: str, name: str | None, derived: dict[str, Any], conn: sqlite3.Connection
-) -> None:
+def persist_derived_features(date: str, code: str, name: str | None, derived: dict[str, Any], conn: sqlite3.Connection) -> None:
     """R7：派生结果写入 seal_derived_features 表（INSERT OR REPLACE）。
 
     conn 由调用方管理（executor 批量写时复用连接）。

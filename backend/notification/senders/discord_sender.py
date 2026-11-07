@@ -37,9 +37,7 @@ class DiscordSender:
             "channel_id": getattr(config, "discord_main_channel_id", None),
             "webhook_url": getattr(config, "discord_webhook_url", None),
         }
-        self._discord_max_words = self._normalize_max_words(
-            getattr(config, "discord_max_words", DISCORD_MAX_CONTENT_LENGTH)
-        )
+        self._discord_max_words = self._normalize_max_words(getattr(config, "discord_max_words", DISCORD_MAX_CONTENT_LENGTH))
         self._webhook_verify_ssl = getattr(config, "webhook_verify_ssl", True)
 
     @staticmethod

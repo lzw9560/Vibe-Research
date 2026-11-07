@@ -165,10 +165,7 @@ def main() -> None:
     )
     for s in summary_rows:
         if s.get("verdict") == "no-data":
-            print(
-                f"  {s['name']:<18} {'-':>6} {'-':>5} {'-':>8} {'-':>7} "
-                f"{'-':>6} {'-':>8} {'-':>8} {'-':>7} {'-':>7} no-data"
-            )
+            print(f"  {s['name']:<18} {'-':>6} {'-':>5} {'-':>8} {'-':>7} {'-':>6} {'-':>8} {'-':>8} {'-':>7} {'-':>7} no-data")
             continue
         print(
             f"  {s['name']:<18} {s['n_picks']:>6} {s['n_days']:>5} "
@@ -193,10 +190,7 @@ def main() -> None:
     print(f"\n注: 本实验只测 lbc tier 细分 (lbc=2/3/>=4 接力段), 禁止外推成'打板有/无 edge'。")
     print(f"R6: stop 变体用 gap-through fill (T+2 open+slippage 0.2%), basic 无 stop R6 N/A。")
     print(f"realistic entry: T+1 open (非 T+1 close), 一字涨停跳过 (limit_for_code FIXED 2026-10-06)。")
-    print(
-        f"Bonferroni: cross-factor ×12 (6 factors × 2 subsets); "
-        f"本因子 3 子集 full correction 应 ×18, 按跨因子标准 ×12 报告。"
-    )
+    print(f"Bonferroni: cross-factor ×12 (6 factors × 2 subsets); 本因子 3 子集 full correction 应 ×18, 按跨因子标准 ×12 报告。")
 
 
 if __name__ == "__main__":

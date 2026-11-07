@@ -415,14 +415,8 @@ def wire_q1_excess_universe(months: list[str] | None = None) -> dict:
             month_universe = set(kline_raw.keys())
         # T8 select_quintiles 取 Q1（低 PE value，long-only 可实现）
         q1_codes, _q5_codes, _pe_map = select_quintiles(month, month_universe, kline_raw, profit_cache)
-        q1_returns = [
-            r for code in q1_codes if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None
-        ]
-        u_returns = [
-            r
-            for code in month_universe
-            if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None
-        ]
+        q1_returns = [r for code in q1_codes if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None]
+        u_returns = [r for code in month_universe if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None]
         if q1_returns and u_returns:
             survivors_by_month[month] = q1_returns
             universe_by_month[month] = u_returns
@@ -530,9 +524,7 @@ def _build_survivors_universe_with_inject(
             month_universe = set(kline_raw.keys())
         q1_codes, _q5_codes, _pe_map = select_quintiles(month, month_universe, kline_raw, profit_cache)
         q1_returns = [
-            r
-            for code in q1_codes
-            if (r := _delisting_return(code, month, prev_month, kline_raw, delisting_map, inject_return)) is not None
+            r for code in q1_codes if (r := _delisting_return(code, month, prev_month, kline_raw, delisting_map, inject_return)) is not None
         ]
         u_returns = [
             r
@@ -706,15 +698,9 @@ def wire_auxiliary_low_high(
         if not month_universe:
             month_universe = set(kline_raw.keys())
         q1_codes, q5_codes, _pe_map = select_quintiles(month, month_universe, kline_raw, profit_cache)
-        q1_returns = [
-            r for code in q1_codes if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None
-        ]
+        q1_returns = [r for code in q1_codes if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None]
         # universe 用全 active returns（基准，跟 T10 一致；Q5 作对比但 universe 须 >= survivors 维度）
-        u_returns = [
-            r
-            for code in month_universe
-            if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None
-        ]
+        u_returns = [r for code in month_universe if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None]
         if q1_returns and u_returns:
             survivors_by_month[month] = q1_returns
             universe_by_month[month] = u_returns
@@ -801,9 +787,7 @@ def wire_secondary_q1_hs300(
         if not month_universe:
             month_universe = set(kline_raw.keys())
         q1_codes, _q5_codes, _pe_map = select_quintiles(month, month_universe, kline_raw, profit_cache)
-        q1_returns = [
-            r for code in q1_codes if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None
-        ]
+        q1_returns = [r for code in q1_codes if (r := _monthly_return(kline_raw.get(code, []), month, prev_month)) is not None]
         hs300_ret = _benchmark_monthly_return(hs300_bars, month, prev_month)
         if q1_returns and hs300_ret is not None:
             q1_mean = sum(q1_returns) / len(q1_returns)
@@ -995,9 +979,7 @@ def dry_run(months: list[str] | None = None) -> dict:
         return {"data_status": "empty", "note": "months<2 无法算月度收益"}
 
     delisting_map = _build_delisting_map(stock_basic)
-    survivors, universe = _build_survivors_universe_with_inject(
-        months, kline_raw, profit_cache, universe_cache, delisting_map, -1.0
-    )
+    survivors, universe = _build_survivors_universe_with_inject(months, kline_raw, profit_cache, universe_cache, delisting_map, -1.0)
 
     # 验收 1: PIT gate——spot-check 几个 code 的 pub_date < rebalance_date 严格
     pit_ok = True
@@ -1028,9 +1010,7 @@ def dry_run(months: list[str] | None = None) -> dict:
         _q1_raw, _q5_raw, pe_raw = select_quintiles(m, u, kline_raw, profit_cache)
         _q1_qfq, _q5_qfq, pe_qfq = select_quintiles(m, u, kline_qfq or {}, profit_cache)
         # stability: 两法都剔停牌+无 PIT → size 应一致或 raw>0（qfq 空时仍 raw 有值）
-        stability_ok = len(pe_raw) > 0 and (
-            len(pe_qfq) == 0 or abs(len(pe_raw) - len(pe_qfq)) <= max(len(pe_raw), len(pe_qfq)) // 2
-        )
+        stability_ok = len(pe_raw) > 0 and (len(pe_qfq) == 0 or abs(len(pe_raw) - len(pe_qfq)) <= max(len(pe_raw), len(pe_qfq)) // 2)
 
     # 验收 4: 停牌过滤——_close_on_or_before volume==0 跳过（select_quintiles 已调它）
     suspended_ok = True
@@ -1079,9 +1059,7 @@ def mini_wire(months: list[str] | None = None, *, recorder_db: str | Path | None
         return {"data_status": "empty", "note": "months<4 无法 PurgedKFold n_splits=2"}
 
     delisting_map = _build_delisting_map(stock_basic)
-    survivors, universe = _build_survivors_universe_with_inject(
-        months, kline_raw, profit_cache, universe_cache, delisting_map, -1.0
-    )
+    survivors, universe = _build_survivors_universe_with_inject(months, kline_raw, profit_cache, universe_cache, delisting_map, -1.0)
     if not survivors:
         return {"data_status": "empty", "note": "无 survivors（cache 空或 PIT profit 全缺）"}
 

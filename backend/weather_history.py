@@ -48,11 +48,7 @@ def save_weather_snapshot(row: dict[str, Any]) -> None:
     values = [row.get(f) for f in _TABLE_FIELDS]
     placeholders = ", ".join(["?"] * len(_TABLE_FIELDS))
     updates = ", ".join([f"{f}=excluded.{f}" for f in _TABLE_FIELDS[1:]])
-    sql = (
-        f"INSERT INTO weather_history ({', '.join(_TABLE_FIELDS)}) "
-        f"VALUES ({placeholders}) "
-        f"ON CONFLICT(date) DO UPDATE SET {updates}"
-    )
+    sql = f"INSERT INTO weather_history ({', '.join(_TABLE_FIELDS)}) VALUES ({placeholders}) ON CONFLICT(date) DO UPDATE SET {updates}"
     conn = _get_conn()
     try:
         conn.execute(sql, values)

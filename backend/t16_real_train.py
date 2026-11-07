@@ -54,9 +54,7 @@ FRED_KEY_PATH = "/home/vdb/turing/code/Vibe-Research/.vibe-research/fred_api_key
 
 def fetch_kline() -> list[dict]:
     df = ak.stock_zh_index_daily(symbol=SYMBOL).tail(N_TAIL_DAYS).reset_index(drop=True)
-    return [
-        {"date": str(r["date"]), "close": float(r["close"]), "volume": float(r["volume"])} for _, r in df.iterrows()
-    ]
+    return [{"date": str(r["date"]), "close": float(r["close"]), "volume": float(r["volume"])} for _, r in df.iterrows()]
 
 
 def fetch_fred(series_id: str, start: str, end: str, api_key: str) -> dict[str, float]:
@@ -246,9 +244,7 @@ def run_variant(name, dates, X, y, cfg: TrainConfig):
         embargo_days=cfg.embargo_days,
         purge_days=cfg.purge_days,
     )
-    print(
-        f"  feasible folds={len(splits)} (train_size={cfg.train_size} test_size={cfg.test_size} gap={cfg.embargo_days + cfg.purge_days})"
-    )
+    print(f"  feasible folds={len(splits)} (train_size={cfg.train_size} test_size={cfg.test_size} gap={cfg.embargo_days + cfg.purge_days})")
     if not splits:
         print("  no fold feasible — skipping")
         return

@@ -132,9 +132,7 @@ def fetch_radar() -> dict:
     industries, tasks = [], []
     for i, ind in enumerate(cfg["industries"]):
         pool = byhint.get(ind["key"], [])
-        industries.append(
-            {"key": ind["key"], "name": ind["name"], "accent": ind["accent"], "total": len(pool), "items": []}
-        )
+        industries.append({"key": ind["key"], "name": ind["name"], "accent": ind["accent"], "total": len(pool), "items": []})
         for s in pool:
             tasks.append((i, s))
 

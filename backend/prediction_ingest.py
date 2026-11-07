@@ -33,9 +33,7 @@ def ingest_funnel_candidates(date_str: str | None = None, db_path: str = pl.WINR
         d = AssistantDefaultConfig()
         cfg = ThresholdConfig(
             mode=d.CANDIDATE_FUNNEL_MODE,
-            base=__import__("candidate_funnel.models", fromlist=["BaseThreshold"]).BaseThreshold(
-                **d.CANDIDATE_FUNNEL_BASE
-            ),
+            base=__import__("candidate_funnel.models", fromlist=["BaseThreshold"]).BaseThreshold(**d.CANDIDATE_FUNNEL_BASE),
         )
     except Exception as exc:
         _logger.warning("[prediction_ingest] 漏斗配置失败: %s", exc)

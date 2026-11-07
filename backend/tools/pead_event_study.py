@@ -115,8 +115,7 @@ def collect_forecast_reports() -> list[dict]:
         if (i + 1) % 200 == 0:
             el = time.time() - t0
             print(
-                f"  {i + 1}/{len(codes)} events={len(events)} "
-                f"elapsed={el:.0f}s eta={el / (i + 1) * (len(codes) - i - 1):.0f}s",
+                f"  {i + 1}/{len(codes)} events={len(events)} elapsed={el:.0f}s eta={el / (i + 1) * (len(codes) - i - 1):.0f}s",
                 flush=True,
             )
         if (i + 1) % 500 == 0:
@@ -542,19 +541,13 @@ def run_pead_analysis() -> dict:
 
     # Step 4: §44 分析
     print("\n=== ALL EVENTS ===")
-    all_results = analyze_subset(
-        all_by_day, universe_returns_by_day, universe_winrate_by_day, horizons, all_returns, "all"
-    )
+    all_results = analyze_subset(all_by_day, universe_returns_by_day, universe_winrate_by_day, horizons, all_returns, "all")
 
     print("\n=== GOOD NEWS (预增/略增/扭亏/续盈/减亏) ===")
-    good_results = analyze_subset(
-        good_by_day, universe_returns_by_day, universe_winrate_by_day, horizons, all_returns, "good"
-    )
+    good_results = analyze_subset(good_by_day, universe_returns_by_day, universe_winrate_by_day, horizons, all_returns, "good")
 
     print("\n=== BAD NEWS (预减/略减/首亏/增亏/续亏) ===")
-    bad_results = analyze_subset(
-        bad_by_day, universe_returns_by_day, universe_winrate_by_day, horizons, all_returns, "bad"
-    )
+    bad_results = analyze_subset(bad_by_day, universe_returns_by_day, universe_winrate_by_day, horizons, all_returns, "bad")
 
     # IC: forecast chg% vs drift return (all events)
     print("\n=== IC (forecast chg% vs drift) ===")

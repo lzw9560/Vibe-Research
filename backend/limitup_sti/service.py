@@ -198,9 +198,7 @@ class STIEngine:
             try:
                 for dim_name in STI_WEIGHTS:
                     col = f"dimension_{dim_name}"
-                    rows = db.execute(
-                        f"SELECT {col} FROM sti_timeline WHERE {col} IS NOT NULL ORDER BY date DESC LIMIT 252"
-                    ).fetchall()
+                    rows = db.execute(f"SELECT {col} FROM sti_timeline WHERE {col} IS NOT NULL ORDER BY date DESC LIMIT 252").fetchall()
                     dim_histories[dim_name] = [float(r[col]) for r in rows if r[col] is not None][::-1]
             finally:
                 db.close()

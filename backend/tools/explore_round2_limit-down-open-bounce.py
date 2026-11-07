@@ -443,14 +443,9 @@ def analyze_subset(
             f"    beta 泄漏 = raw - BHAR = {raw_s['ev'] - bhar_s['ev']:+.3f}% "
             f"({'raw 通胀(beta 泄漏)' if raw_s['ev'] > bhar_s['ev'] else 'raw 通缩'})"
         )
-        print(
-            f"    stop:    gross={stop_s['ev']:+.3f}% net={stop_s['ev'] - COST * 100:+.3f}% "
-            f"WR={stop_s['wr']}% day_t={stop_dt['t']}"
-        )
+        print(f"    stop:    gross={stop_s['ev']:+.3f}% net={stop_s['ev'] - COST * 100:+.3f}% WR={stop_s['wr']}% day_t={stop_dt['t']}")
         tot_r = sum(stop_reasons.values()) or 1
-        stop_pct_str = ", ".join(
-            f"{k}:{v}({v / tot_r * 100:.0f}%)" for k, v in sorted(stop_reasons.items(), key=lambda x: -x[1])
-        )
+        stop_pct_str = ", ".join(f"{k}:{v}({v / tot_r * 100:.0f}%)" for k, v in sorted(stop_reasons.items(), key=lambda x: -x[1]))
         print(f"    exit reasons: {stop_pct_str}")
         if wf_bhar["status"] == "ok":
             tr = wf_bhar["train_ev"]
@@ -754,9 +749,7 @@ def main() -> None:
                         subset_picks = [p for p in subset_picks if not p["t1_yizi_dt"]]
                     if not subset_picks:
                         continue
-                    sc = analyze_subset(
-                        f"23-26 {wname} open={oname} t1={tname}", subset_picks, rf_r, rf_b, rf_s, wname, verbose=False
-                    )
+                    sc = analyze_subset(f"23-26 {wname} open={oname} t1={tname}", subset_picks, rf_r, rf_b, rf_s, wname, verbose=False)
                     sub_conds.append(sc)
                     # bear/crisis splits
                     for crname in ("bear", "crisis"):
@@ -843,17 +836,9 @@ def main() -> None:
     print("诚实总结")
     print("=" * 78)
 
-    print(
-        f"\n[BHAR gate] T+2 raw={sub_t2['raw']['ev']:+.3f}% vs "
-        f"BHAR={sub_t2['bhar']['ev']:+.3f}% → beta 泄漏={sub_t2['beta_leak']:+.3f}%"
-    )
-    print(
-        f"  → {'raw 通胀了 edge（反弹含 market beta 非 stock-specific）' if sub_t2['beta_leak'] > 0 else 'raw 通缩了 edge'}"
-    )
-    print(
-        f"  T+5 raw={sub_t5['raw']['ev']:+.3f}% vs BHAR={sub_t5['bhar']['ev']:+.3f}% "
-        f"→ beta 泄漏={sub_t5['beta_leak']:+.3f}%"
-    )
+    print(f"\n[BHAR gate] T+2 raw={sub_t2['raw']['ev']:+.3f}% vs BHAR={sub_t2['bhar']['ev']:+.3f}% → beta 泄漏={sub_t2['beta_leak']:+.3f}%")
+    print(f"  → {'raw 通胀了 edge（反弹含 market beta 非 stock-specific）' if sub_t2['beta_leak'] > 0 else 'raw 通缩了 edge'}")
+    print(f"  T+5 raw={sub_t5['raw']['ev']:+.3f}% vs BHAR={sub_t5['bhar']['ev']:+.3f}% → beta 泄漏={sub_t5['beta_leak']:+.3f}%")
 
     print(
         f"\n[窗口] T+2 BHAR={sub_t2['bhar']['ev']:+.3f}% net={sub_t2['bhar_net']:+.3f}% | "
@@ -896,24 +881,16 @@ def main() -> None:
     print(f"\n[2023-2026 子条件] {n_sub} 测试，Bonf×{n_bonf_sub}，存活 {len(survivors)} 个")
     if survivors:
         for s in survivors:
-            print(
-                f"    {s['name']}: BHAR={s['bhar']['ev']:+.3f}% n={s['n']} "
-                f"n_days={s['n_days']} p_bonf={s['p_bonf_sub']:.6f}"
-            )
+            print(f"    {s['name']}: BHAR={s['bhar']['ev']:+.3f}% n={s['n']} n_days={s['n_days']} p_bonf={s['p_bonf_sub']:.6f}")
 
-    print(
-        f"\n[DSR] T+2 BHAR DSR≈{dsr['dsr_approx']} "
-        f"(ann Sharpe={dsr['ann_sharpe']} vs expected max={dsr['expected_max_sr']})"
-    )
+    print(f"\n[DSR] T+2 BHAR DSR≈{dsr['dsr_approx']} (ann Sharpe={dsr['ann_sharpe']} vs expected max={dsr['expected_max_sr']})")
 
     print(f"\n[正式 verdict]")
     print(f"  全样本 T+2 BHAR: {v_t2}")
     print(f"  全样本 T+5 BHAR: {v_t5}")
 
     print(f"\n[stop 保护] T+2 stop net={sub_t2['stop_net']:+.3f}% | T+5 stop net={sub_t5['stop_net']:+.3f}%")
-    print(
-        f"  → {'stop 改善 EV（控制尾部风险有效）' if sub_t2['stop_net'] > sub_t2['bhar_net'] else 'stop 恶化 EV（反弹太快 stop 误杀）'}"
-    )
+    print(f"  → {'stop 改善 EV（控制尾部风险有效）' if sub_t2['stop_net'] > sub_t2['bhar_net'] else 'stop 恶化 EV（反弹太快 stop 误杀）'}")
 
     print("\n禁外推声明：本测仅跌停打开承接单策略。ETF折溢价/大股东增持是独立策略，")
     print("不因跌停打开 edge 结果外推'事件驱动有/无 edge'。")

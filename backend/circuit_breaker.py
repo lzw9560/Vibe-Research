@@ -86,8 +86,7 @@ def _load_persisted_state(name: str) -> dict | None:
         _init_db(db_path)
         conn = sqlite3.connect(db_path, timeout=5)
         row = conn.execute(
-            "SELECT state, failure_count, success_count, last_failure_time, half_open_calls "
-            "FROM breaker_state WHERE name=?",
+            "SELECT state, failure_count, success_count, last_failure_time, half_open_calls FROM breaker_state WHERE name=?",
             (name,),
         ).fetchone()
         conn.close()

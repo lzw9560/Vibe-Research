@@ -251,9 +251,7 @@ class NotificationDispatcherMixin:
         for candidate in (
             getattr(self._source_message, "chat_id", ""),
             raw_data.get("chat_id"),
-            raw_data.get("message", {}).get("chat", {}).get("id")
-            if isinstance(raw_data.get("message"), dict)
-            else None,
+            raw_data.get("message", {}).get("chat", {}).get("id") if isinstance(raw_data.get("message"), dict) else None,
         ):
             if isinstance(candidate, str) and candidate.strip():
                 return candidate.strip()
@@ -634,8 +632,7 @@ class NotificationDispatcherMixin:
         channels_needing_image = {
             ch
             for ch in target_channels
-            if ch.value in self._markdown_to_image_channels
-            and ch not in {NotificationChannel.NTFY, NotificationChannel.GOTIFY}
+            if ch.value in self._markdown_to_image_channels and ch not in {NotificationChannel.NTFY, NotificationChannel.GOTIFY}
         }
         if channels_needing_image:
             try:

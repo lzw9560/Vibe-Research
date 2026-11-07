@@ -37,10 +37,7 @@ START = "2025-06-01"
 def main() -> None:
     cache = json.loads(CACHE.read_bytes())
     conn = sqlite3.connect(str(DB))
-    codes = [
-        r[0]
-        for r in conn.execute("SELECT DISTINCT code FROM zt_history WHERE lbc>=2 AND lbc<=3 AND is_final=1").fetchall()
-    ]
+    codes = [r[0] for r in conn.execute("SELECT DISTINCT code FROM zt_history WHERE lbc>=2 AND lbc<=3 AND is_final=1").fetchall()]
     conn.close()
 
     need: list[tuple[str, str | None]] = []

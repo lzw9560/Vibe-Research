@@ -105,14 +105,7 @@ def build_lowvol_series(
         finite_sum = np.where(finite_mask, amt_window, 0.0).sum(axis=1)
         mean_amt = np.where(finite_cnt > 0, finite_sum / np.maximum(finite_cnt, 1), np.nan)
         form_amt = amount[:, ri]
-        elig = (
-            np.isfinite(vol)
-            & (vol > 0)
-            & np.isfinite(mean_amt)
-            & (mean_amt >= LIQ_AMT_FLOOR)
-            & np.isfinite(form_amt)
-            & (form_amt > 0)
-        )
+        elig = np.isfinite(vol) & (vol > 0) & np.isfinite(mean_amt) & (mean_amt >= LIQ_AMT_FLOOR) & np.isfinite(form_amt) & (form_amt > 0)
 
         signal = np.full(close.shape[0], np.nan)
         signal[elig] = vol[elig]
@@ -451,10 +444,7 @@ def main() -> int:
     bh_labels = ["mkt_only", "mkt_smb", "mkt_umd", "mkt_smb_umd"]
     print(f"  BH FDR sensitivity (across {len(p_list)} baseline combos):")
     for i, lab in enumerate(bh_labels):
-        print(
-            f"    {lab}: raw p = {p_list[i]:.6f} -> BH-adj = {bh_adj[i]:.6f} "
-            f"({'PASS' if bh_adj[i] < ALPHA_LEVEL else 'FAIL'} FDR<0.05)"
-        )
+        print(f"    {lab}: raw p = {p_list[i]:.6f} -> BH-adj = {bh_adj[i]:.6f} ({'PASS' if bh_adj[i] < ALPHA_LEVEL else 'FAIL'} FDR<0.05)")
 
     # 11. Verdict
     print(f"\n{'=' * 72}")
@@ -496,10 +486,7 @@ def main() -> int:
     print("3. SMB proxy = log(20d mean amount) is liquidity/turnover proxy, NOT true market cap")
     print("4. HML omitted (3-factor baseline: mkt+SMB+UMD, not 4-factor Carhart)")
     print(f"5. SMB & UMD strongly negatively correlated (-0.71, VIF~2.0 multicollinearity)")
-    print(
-        f"6. corr(SMB, lowvol) = {corr_sl:.4f} -> "
-        f"{'non-independent' if abs(corr_sl) > 0.3 else 'relatively independent'}"
-    )
+    print(f"6. corr(SMB, lowvol) = {corr_sl:.4f} -> {'non-independent' if abs(corr_sl) > 0.3 else 'relatively independent'}")
     print("7. combined alpha != size/low-vol each has edge != selection strategy has edge")
     print("8. close-to-close daily returns (not open_ev, no intraday leakage)")
     print("9. month-end close formation (standard FF convention, mildly unrealistic)")

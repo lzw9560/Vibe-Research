@@ -402,12 +402,7 @@ def _check_content(rows: list[dict], schema: SourceSchema) -> list[str]:
             va, vb = r.get(fa), r.get(fb)
             if not isinstance(va, (int, float)) or not isinstance(vb, (int, float)):
                 continue
-            bad = (
-                (op == ">=" and va < vb)
-                or (op == "<=" and va > vb)
-                or (op == ">" and va <= vb)
-                or (op == "<" and va >= vb)
-            )
+            bad = (op == ">=" and va < vb) or (op == "<=" and va > vb) or (op == ">" and va <= vb) or (op == "<" and va >= vb)
             if bad:
                 errors.append(f"行{i} 完整性违反 {fa}{op}{fb} ({va}, {vb})")
     return errors

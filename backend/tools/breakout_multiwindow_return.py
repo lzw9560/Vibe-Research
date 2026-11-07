@@ -42,8 +42,7 @@ def _load_breakout_trades(limit: int | None = None) -> list[dict]:
     conn.row_factory = sqlite3.Row
     try:
         rows = conn.execute(
-            "SELECT signal_id, stock_code, entry_price, entry_date "
-            "FROM trade_journal WHERE arm='breakout' ORDER BY entry_date",
+            "SELECT signal_id, stock_code, entry_price, entry_date FROM trade_journal WHERE arm='breakout' ORDER BY entry_date",
         ).fetchall()
         if limit:
             rows = rows[:limit]
@@ -151,9 +150,7 @@ async def _run(trades: list[dict], dry_run: bool = False) -> dict:
             "cost_pct": round(_cost_pct(50.0, 100.0, ""), 3),  # 参考成本（entry=50 估算）
             "win_rate": round(win_rate * 100, 2),
             "wilson_lower_bound_winrate": round(wilson_lb * 100, 2),
-            "t_stat": round(
-                mean_net / ((sum((x - mean_net) ** 2 for x in nets) / len(nets)) ** 0.5 / (len(nets) ** 0.5)), 3
-            )
+            "t_stat": round(mean_net / ((sum((x - mean_net) ** 2 for x in nets) / len(nets)) ** 0.5 / (len(nets) ** 0.5)), 3)
             if len(nets) > 1
             else None,
         }

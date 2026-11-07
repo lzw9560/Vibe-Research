@@ -116,9 +116,7 @@ def main(args) -> None:
     spread = sm5 - lg5
 
     print(f"=== A股 regime 监控（as of {modal}）===")
-    print(
-        f"breadth (>60MA): {breadth * 100:.1f}%  {'弱(<30)' if breadth < 0.3 else '中(30-50)' if breadth < 0.5 else '强(>50)'}"
-    )
+    print(f"breadth (>60MA): {breadth * 100:.1f}%  {'弱(<30)' if breadth < 0.3 else '中(30-50)' if breadth < 0.5 else '强(>50)'}")
     print(f"小盘 decile0-1 5d: {sm5 * 100:+.2f}%  20d: {sm20 * 100:+.2f}%  {'熊(负)' if sm5 < 0 else '牛(正)'}")
     print(f"大盘 decile8-9 5d: {lg5 * 100:+.2f}%")
     print(f"小盘-大盘 spread 5d: {spread * 100:+.2f}%  {'小盘领崩' if spread < 0 else '小盘领涨'}")

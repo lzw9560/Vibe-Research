@@ -217,10 +217,7 @@ def main() -> None:
     n_gap_b = sum(1 for d in data if d["gap_b"] > 0)
     n_ret = sum(1 for d in data if d.get("gross_return") is not None)
     n_days = len(set(d["entry_date"] for d in data if d.get("gross_return") is not None))
-    print(
-        f"# S199 §44 验证: n_total={n_total} n_gap_a(方向感知)={n_gap_a} "
-        f"n_gap_b(方向无关)={n_gap_b} n_ret={n_ret} n_days={n_days}"
-    )
+    print(f"# S199 §44 验证: n_total={n_total} n_gap_a(方向感知)={n_gap_a} n_gap_b(方向无关)={n_gap_b} n_ret={n_ret} n_days={n_days}")
 
     # ════════════════════════════════════════════════════════════════════════
     # A. Trade-level: gross_return 作 outcome

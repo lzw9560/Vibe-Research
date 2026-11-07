@@ -33,9 +33,7 @@ feats = json.loads(H2_CACHE.read_text())
 # NOTE: h2_features_cache_full（5min kline 派生，list_of_dicts）无对应 schema — 派生 artifact
 bars_cache = _load_kline_cache()  # S204 T1: enriched（一字板 pctChg=0.0/None 修复）
 # S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
-validate_or_reject(
-    "baostock_kline", [b for bars in bars_cache.values() for b in bars], as_of=datetime.date.today().isoformat()
-)
+validate_or_reject("baostock_kline", [b for bars in bars_cache.values() for b in bars], as_of=datetime.date.today().isoformat())
 print(f"H2 cache: {len(feats)} features across {len(set(f['date'] for f in feats))} 日\n")
 
 obs = []

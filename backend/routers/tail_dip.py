@@ -317,11 +317,7 @@ def scan_tail_dip(
             candidates=candidates[:limit],
             sector_change_pct=round(sector_pct, 2),
             sector_source=sector_src
-            + (
-                f" | 财务过滤: {financial_summary['passed']}/{financial_summary['total_candidates']}通过"
-                if financial_summary
-                else ""
-            ),
+            + (f" | 财务过滤: {financial_summary['passed']}/{financial_summary['total_candidates']}通过" if financial_summary else ""),
             thresholds={k: v for k, v in HARD_THRESHOLDS.items() if isinstance(v, (int, float))},
             total_scanned=len(all_stocks),
         )
@@ -716,7 +712,5 @@ def rsi_macd_signal() -> dict:
         "signals": signals,
         "buy_count": len(buy_signals),
         "wait_count": len(wait_signals),
-        "recommendation": (
-            "买入（RSI+MACD金叉确认）" if buy_signals else "等待MACD金叉确认" if wait_signals else "无信号"
-        ),
+        "recommendation": ("买入（RSI+MACD金叉确认）" if buy_signals else "等待MACD金叉确认" if wait_signals else "无信号"),
     }

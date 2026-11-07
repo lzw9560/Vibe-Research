@@ -168,8 +168,7 @@ def prediction_intraday_framework() -> dict:
 
 @register_tool(
     "query_skyrocket",
-    "查 A 股飙升榜（同花顺口径，hithink 独家）：rank/heat/rank_change/rank_trend。"
-    "东财无此数据源。period=day(日榜,默认) / hour(小时榜)。",
+    "查 A 股飙升榜（同花顺口径，hithink 独家）：rank/heat/rank_change/rank_trend。东财无此数据源。period=day(日榜,默认) / hour(小时榜)。",
     params={"period": {"description": "周期：day(日榜) / hour(小时榜)", "default": "day"}},
 )
 def query_skyrocket(period: str = "day") -> list[dict]:

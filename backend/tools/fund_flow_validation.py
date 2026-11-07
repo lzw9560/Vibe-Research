@@ -73,10 +73,7 @@ def main(sample_per_day: int = 100, sleep_s: float = 2.5) -> int:
     conn = sqlite3.connect(str(DB), timeout=10)
     try:
         dates = [
-            r[0]
-            for r in conn.execute(
-                "SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
-            ).fetchall()
+            r[0] for r in conn.execute("SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date").fetchall()
         ]
         date_set = set(dates)
         all_codes = [r[0] for r in conn.execute("SELECT code FROM code_industry").fetchall()]
@@ -94,9 +91,7 @@ def main(sample_per_day: int = 100, sleep_s: float = 2.5) -> int:
         conn = sqlite3.connect(str(DB), timeout=10)
         zt_T = {
             r[0]
-            for r in conn.execute(
-                "SELECT DISTINCT code FROM gene_scores WHERE date=? AND data_source='eastmoney_live'", (d1,)
-            ).fetchall()
+            for r in conn.execute("SELECT DISTINCT code FROM gene_scores WHERE date=? AND data_source='eastmoney_live'", (d1,)).fetchall()
         }
         conn.close()
         pos = list(zt_T)[:sample_per_day]

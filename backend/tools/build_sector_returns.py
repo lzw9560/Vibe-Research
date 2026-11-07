@@ -336,10 +336,7 @@ def build() -> dict:
                 ),
                 "industries_absent_from_long_core": absent_major,
                 "notable_absent_major_sectors": [i for i in absent_major if i in ("银行Ⅱ", "保险Ⅱ", "证券Ⅱ")]
-                or (
-                    "银行Ⅱ & 保险Ⅱ have ZERO long-history codes — major financial "
-                    "sectors absent from any 2018-2025 rotation analysis"
-                ),
+                or ("银行Ⅱ & 保险Ⅱ have ZERO long-history codes — major financial sectors absent from any 2018-2025 rotation analysis"),
                 "implication": (
                     "A 2-3-week rotation strategy needs years of history. Only the "
                     f"{n_dense_core}-code / {n_ind_ge10_long}-industry long core "

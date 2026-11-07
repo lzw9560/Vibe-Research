@@ -653,9 +653,7 @@ def main() -> None:
     print(f"  p_one_sided = {c_orig['p_one_sided']:.6f}")
 
     print(f"\n原 verdict: edge-falsified (close_ev {c_orig['per_day_mean_ev']:+.4f}% ≤ 0)")
-    print(
-        f"原 Bonf×9 p = {min(s_orig['p_one_sided'] * 9, 1.0):.6f} (pass={'YES' if s_orig['p_one_sided'] * 9 < ALPHA else 'NO'})"
-    )
+    print(f"原 Bonf×9 p = {min(s_orig['p_one_sided'] * 9, 1.0):.6f} (pass={'YES' if s_orig['p_one_sided'] * 9 < ALPHA else 'NO'})")
 
     # ==================================================================
     # SECTION B: NEW METHODOLOGY 1 — BH FDR 5% (replaces Bonferroni×9)
@@ -783,9 +781,7 @@ def main() -> None:
     print(f"\nclose_ev rolling 4-window WF:")
     if rwf_close["status"] == "ok":
         for w in rwf_close["windows"]:
-            print(
-                f"  win{w['window']}: test_ev={w['test_ev']:+.4f}% HAC_t={w['test_hac_t']:+.4f} p={w['test_hac_p']:.6f}"
-            )
+            print(f"  win{w['window']}: test_ev={w['test_ev']:+.4f}% HAC_t={w['test_hac_t']:+.4f} p={w['test_hac_p']:.6f}")
         print(f"  positive: {rwf_close['positive_test_windows']}/{rwf_close['n_test_windows']}")
 
     # ==================================================================
@@ -799,10 +795,7 @@ def main() -> None:
     entry_at_limit = sum(1 for r in capped3 if r["t1_open"] >= r.get("t1_close", 0) * 0.999)
     print(f"\n1. entry 涨停价溢价:")
     print(f"   entry = T+1 open (after gap-DOWN in [-3,-2)), NOT at limit-up")
-    print(
-        f"   trades with t1_open >= t1_close: {entry_at_limit}/{len(capped3)} "
-        f"({entry_at_limit / max(len(capped3), 1) * 100:.1f}%)"
-    )
+    print(f"   trades with t1_open >= t1_close: {entry_at_limit}/{len(capped3)} ({entry_at_limit / max(len(capped3), 1) * 100:.1f}%)")
     print(
         f"   → {'CLEAN' if entry_at_limit < len(capped3) * 0.05 else 'SUSPICIOUS'}: "
         f"gap-down entry is below T close, not at limit-up premium"
@@ -826,9 +819,7 @@ def main() -> None:
     print(f"     T+1 intraday (open→close)  = {sum(t1_intra) / len(t1_intra):+.4f}%")
     print(f"     overnight (T+1 close→T+2 open) = {sum(overnight) / len(overnight):+.4f}%")
     print(f"     T+2 intraday (open→close) = {sum(t2_intra) / len(t2_intra):+.4f}%")
-    print(
-        f"     sum = {sum(t1_intra) / len(t1_intra) + sum(overnight) / len(overnight) + sum(t2_intra) / len(t2_intra):+.4f}%"
-    )
+    print(f"     sum = {sum(t1_intra) / len(t1_intra) + sum(overnight) / len(overnight) + sum(t2_intra) / len(t2_intra):+.4f}%")
     print(f"     open_stop actual = {hac_open['mean']:+.4f}%")
     t1_intra_share = (sum(t1_intra) / len(t1_intra)) / hac_open["mean"] * 100 if hac_open["mean"] != 0 else 0
     print(
@@ -846,10 +837,7 @@ def main() -> None:
         print(f"   train EVs: {['%.4f' % e for e in train_evs]}")
         print(f"   test  EVs: {['%.4f' % e for e in test_evs]}")
         consistent = all(e > 0 for e in test_evs)
-        print(
-            f"   → {'CONSISTENT' if consistent else 'INCONSISTENT'}: "
-            f"{'all' if consistent else 'not all'} test windows positive"
-        )
+        print(f"   → {'CONSISTENT' if consistent else 'INCONSISTENT'}: {'all' if consistent else 'not all'} test windows positive")
         if not consistent:
             neg_windows = [w["window"] for w in rwf["windows"] if w["test_ev"] <= 0]
             print(f"   negative test windows: {neg_windows}")
@@ -979,9 +967,7 @@ def main() -> None:
         print(f"  6b. rolling WF not consistently significant → EXPLORATORY")
     else:
         verdict = "edge-confirmed"
-        reason = (
-            "all checks pass: HAC p<0.05, BH FDR pass, net EV>0, rolling WF majority positive+significant, close_ev>0"
-        )
+        reason = "all checks pass: HAC p<0.05, BH FDR pass, net EV>0, rolling WF majority positive+significant, close_ev>0"
         print(f"  7. all pass + close_ev > 0 → EDGE-CONFIRMED")
 
     flipped = verdict != "edge-falsified"
@@ -1026,9 +1012,7 @@ def main() -> None:
     print(f"2. survivorship         : CLEAN (all watchlist picks counted)")
     print(f"3. T+1 日内泄漏         : {'FAKE EDGE' if close_ev_val < 0 else 'CLEAN'} (close_ev={close_ev_val:+.4f}%)")
     print(f"4. 拥挤倒 U             : see rolling WF above")
-    print(
-        f"5. fill 虚构            : {'SUSPICIOUS' if over_credit > 0.3 else 'CLEAN'} (over-credit={over_credit:+.4f}%)"
-    )
+    print(f"5. fill 虚构            : {'SUSPICIOUS' if over_credit > 0.3 else 'CLEAN'} (over-credit={over_credit:+.4f}%)")
 
 
 if __name__ == "__main__":

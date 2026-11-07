@@ -300,12 +300,7 @@ def _compute_score(zt_count: float, seal_rate: float | None, break_rate: float |
     ad_score = _score_dimension(ad_ratio, (2, 0.7, 0))
 
     weights = {"zt": 0.4, "seal": 0.2, "break": 0.2, "ad": 0.1}
-    total = (
-        zt_score * weights["zt"]
-        + seal_score * weights["seal"]
-        + break_score * weights["break"]
-        + ad_score * weights["ad"]
-    )
+    total = zt_score * weights["zt"] + seal_score * weights["seal"] + break_score * weights["break"] + ad_score * weights["ad"]
     return round(total / sum(weights.values()), 2)
 
 

@@ -251,8 +251,7 @@ def build_insider_picks(
         picks.append(pick)
 
     print(
-        f"[picks] built {len(picks)} picks from {len(events)} events "
-        f"(skipped {len(events) - len(picks)} — no kline / yizi / missing bars)"
+        f"[picks] built {len(picks)} picks from {len(events)} events (skipped {len(events) - len(picks)} — no kline / yizi / missing bars)"
     )
     return picks
 
@@ -406,10 +405,7 @@ def analyze_subset(
     raw_rets = [r for r in raw_rets if r is not None]
     raw_s = ev_stats(raw_rets)
     print(f"\n--- raw EV (reference, NOT primary) ---")
-    print(
-        f"  n={raw_s['n']} gross_EV={raw_s['ev']}% WR={raw_s['wr']}% t={raw_s['t']} "
-        f"CI[{raw_s['ci_lo']},{raw_s['ci_hi']}]"
-    )
+    print(f"  n={raw_s['n']} gross_EV={raw_s['ev']}% WR={raw_s['wr']}% t={raw_s['t']} CI[{raw_s['ci_lo']},{raw_s['ci_hi']}]")
 
     # ---- BHAR (PRIMARY metric) ----
     bhar_rets = [bhar(p, wname, idx_bars) for p in picks]
@@ -430,10 +426,7 @@ def analyze_subset(
         if r is not None:
             bhar_by_date[p["ann_date"]].append(r)
     bhar_dt = day_paired_t(bhar_by_date)
-    print(
-        f"  day-paired: n_days={bhar_dt['n_days']} mean={bhar_dt['mean']}% "
-        f"t={bhar_dt['t']} p_one_sided={bhar_dt['p_one_sided']}"
-    )
+    print(f"  day-paired: n_days={bhar_dt['n_days']} mean={bhar_dt['mean']}% t={bhar_dt['t']} p_one_sided={bhar_dt['p_one_sided']}")
 
     # ---- Bonferroni ----
     # ×3 strategies × 3 windows = ×9 total tests reported
@@ -457,10 +450,7 @@ def analyze_subset(
         tr_dt = wf["train_day_t"]
         te_dt = wf["test_day_t"]
         print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} BHAR={tr['ev']}% t={tr_dt['t']}")
-        print(
-            f"  test:  n={te['n']} n_dates={wf['n_test_dates']} "
-            f"BHAR={te['ev']}% t={te_dt['t']} p={te_dt['p_one_sided']}"
-        )
+        print(f"  test:  n={te['n']} n_dates={wf['n_test_dates']} BHAR={te['ev']}% t={te_dt['t']} p={te_dt['p_one_sided']}")
         decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
         print(f"  decay: {decay:.0f}% (train→test)")
     else:
@@ -533,10 +523,7 @@ def _verdict(
         return "edge-falsified"
     if wf_status == "ok":
         if wf_train_ev <= 0:
-            print(
-                f"    → EXPLORATORY: train BHAR={wf_train_ev}% <= 0 "
-                f"(edge not in train half, test may be regime overfitting)"
-            )
+            print(f"    → EXPLORATORY: train BHAR={wf_train_ev}% <= 0 (edge not in train half, test may be regime overfitting)")
             return "exploratory"
         if wf_test_ev <= 0:
             print(f"    → FALSIFIED: walk-forward test BHAR={wf_test_ev}% <= 0")
@@ -671,9 +658,7 @@ def main() -> None:
     print(f"\n存活子条件: {len(survivors)}/{len(all_results)} (edge-confirmed or exploratory)")
     if survivors:
         for s in survivors:
-            print(
-                f"  → {s['name']} | {s['wname']}: {s['verdict']} BHAR={s['bhar_gross']}% p_bonf={s['p_bonf_verdict']}"
-            )
+            print(f"  → {s['name']} | {s['wname']}: {s['verdict']} BHAR={s['bhar_gross']}% p_bonf={s['p_bonf_verdict']}")
 
 
 if __name__ == "__main__":

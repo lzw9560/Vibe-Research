@@ -409,10 +409,7 @@ for K in WINDOWS:
 print(f"\n--- R12 size-matched benchmark verdict ---")
 if best_K:
     r = summary[best_K]
-    print(
-        f"  best window T+{best_K}: BHAR={r['bhar_ev']:+.3f}% (gross={r['gross_ev']:+.3f}% "
-        f"vs size-decile bench={r['bench_ev']:+.3f}%)"
-    )
+    print(f"  best window T+{best_K}: BHAR={r['bhar_ev']:+.3f}% (gross={r['gross_ev']:+.3f}% vs size-decile bench={r['bench_ev']:+.3f}%)")
     if r["bhar_ev"] < 0 and r["p_bonf"] < ALPHA:
         print(
             f"  → avoided stocks underperform size peers by {abs(r['bhar_ev']):.3f}% "
@@ -424,9 +421,7 @@ if best_K:
         print(f"  → BHAR>=0 → R12 FAIL (no underperformance vs size peers)")
 
 print(f"\n--- R13 survivorship ---")
-print(
-    f"  kline cache: {len(code_map)} codes, bars/code min={min(bar_counts)} med={statistics.median(bar_counts)} max={max(bar_counts)}"
-)
+print(f"  kline cache: {len(code_map)} codes, bars/code min={min(bar_counts)} med={statistics.median(bar_counts)} max={max(bar_counts)}")
 print(f"  calendar: {calendar[0]}~{calendar[-1]} ({len(calendar)} dates)")
 print(f"  block trade dates: {dates[0]}~{dates[-1]} ({len(dates)} dates)")
 print(f"  R13: cache built ~2026-09, block trades 2026-02~09. Signal-period stocks exist")

@@ -59,17 +59,11 @@ def start_feishu_ws() -> None:
     app_id = os.environ.get("FEISHU_BOT_APP_ID", "")
     app_secret = os.environ.get("FEISHU_BOT_APP_SECRET", "")
     if not app_id or not app_secret:
-        logger.warning(
-            "飞书 bot app_id/secret 未配置（FEISHU_BOT_APP_ID/FEISHU_BOT_APP_SECRET），WebSocket 长连接不可用"
-        )
+        logger.warning("飞书 bot app_id/secret 未配置（FEISHU_BOT_APP_ID/FEISHU_BOT_APP_SECRET），WebSocket 长连接不可用")
         return
 
     # 事件分发器：注册 im.message.receive_v1 事件回调
-    event_dispatcher = (
-        lark.EventDispatcherHandler.builder("", "")
-        .register_p2_im_message_receive_v1(do_p2_im_message_receive_v1)
-        .build()
-    )
+    event_dispatcher = lark.EventDispatcherHandler.builder("", "").register_p2_im_message_receive_v1(do_p2_im_message_receive_v1).build()
 
     # WebSocket 长连接客户端
     cli = lark.ws.Client(

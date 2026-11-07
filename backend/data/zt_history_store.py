@@ -187,9 +187,7 @@ def snapshot_zt_pool(
                         pool = ths_pool
                         source = "ths"
                     else:
-                        _logger.info(
-                            "snapshot_zt_pool date=%s ths 全首板（零 lbc>=2，端点缺连板数）→ 降级 hithink", d_iso
-                        )
+                        _logger.info("snapshot_zt_pool date=%s ths 全首板（零 lbc>=2，端点缺连板数）→ 降级 hithink", d_iso)
             except Exception as e:  # noqa: BLE001
                 _logger.warning("snapshot_zt_pool ths 失败 date=%s err=%s，降级 hithink", d_iso, e)
         if not pool:
@@ -297,8 +295,7 @@ def backfill_fund_only(date: str, fund_map: dict[str, dict] | None) -> int:
                 if fund is None and fundamt is None:
                     continue  # 无新值，跳过（不覆盖已有值）
                 cur = conn.execute(
-                    "UPDATE zt_history SET fund = COALESCE(?, fund), "
-                    "fundamt = COALESCE(?, fundamt) WHERE date = ? AND code = ?",
+                    "UPDATE zt_history SET fund = COALESCE(?, fund), fundamt = COALESCE(?, fundamt) WHERE date = ? AND code = ?",
                     (fund, fundamt, d_iso, str(code).strip()),
                 )
                 n += cur.rowcount

@@ -483,9 +483,7 @@ def main() -> None:
     print("\n[4] 构建策略收益序列 (per signal date, 2-day compound factor match) ...")
     dated_rows, pick_rows = build_strategy_series(top5, mkt, smb, umd)
     # only keep picks whose 2-day factor window is fully present
-    pick_rows_full = [
-        r for r in pick_rows if r["mkt_2d"] is not None and r["smb_2d"] is not None and r["umd_2d"] is not None
-    ]
+    pick_rows_full = [r for r in pick_rows if r["mkt_2d"] is not None and r["smb_2d"] is not None and r["umd_2d"] is not None]
     print(f"  dated (per signal date): n={len(dated_rows)} ({dated_rows[0]['date']} ~ {dated_rows[-1]['date']})")
     print(f"  per-pick (full factor): n={len(pick_rows_full)}/{len(pick_rows)}")
 
@@ -493,10 +491,7 @@ def main() -> None:
     raw_rets = [r["r_strat"] for r in dated_rows]
     raw_ev = ev_stats(raw_rets)
     print(f"\n  raw strategy (per signal date, no factor control):")
-    print(
-        f"    n={raw_ev['n']} gross_EV={raw_ev['ev']}%/signal-date std={raw_ev['std']}% "
-        f"WR={raw_ev['wr']}% t_naive={raw_ev['t']}"
-    )
+    print(f"    n={raw_ev['n']} gross_EV={raw_ev['ev']}%/signal-date std={raw_ev['std']}% WR={raw_ev['wr']}% t_naive={raw_ev['t']}")
     net_ev = raw_ev["ev"] - COST * 100
     print(f"    net EV (after {COST * 100:.1f}% cost): {net_ev:.3f}%")
 
@@ -544,10 +539,7 @@ def main() -> None:
     bh_family = sorted([p_raw, 0.10, 0.20, 0.30])  # placeholder siblings (conservative)
     bh_adj = bh_adjusted_p(bh_family)
     bh_adj_self = bh_adj[0] if p_raw == bh_family[0] else min(bh_adj)
-    print(
-        f"    BH FDR 5% (self as rank-1/4, conservative siblings): "
-        f"q_self ≈ {bh_adj_self} → {'PASS' if bh_adj_self < ALPHA else 'FAIL'}"
-    )
+    print(f"    BH FDR 5% (self as rank-1/4, conservative siblings): q_self ≈ {bh_adj_self} → {'PASS' if bh_adj_self < ALPHA else 'FAIL'}")
 
     # ====================================================================
     # [7] per-pick cross-check OLS (richer n, HAC handles overlap)
@@ -580,10 +572,7 @@ def main() -> None:
     roll = rolling_alpha(dated_rows, window=ROLLING_WINDOW)
     if roll["status"] == "ok":
         print(f"  n_windows={roll['n_windows']} (n={roll['n']}, window={roll['window']})")
-        print(
-            f"  alpha: mean={roll['mean_alpha']}% std={roll['std_alpha']}% "
-            f"min={roll['min_alpha']}% max={roll['max_alpha']}%"
-        )
+        print(f"  alpha: mean={roll['mean_alpha']}% std={roll['std_alpha']}% min={roll['min_alpha']}% max={roll['max_alpha']}%")
         print(f"  windows alpha>0: {roll['pct_positive']}% | alpha>0 & p<0.05: {roll['pct_significant_positive']}%")
         print(
             f"  first window [{roll['first_window']['start']}~{roll['first_window']['end']}]: "
@@ -618,10 +607,7 @@ def main() -> None:
             print(f"  {name:<24} {'FAIL':>9}")
             continue
         v = "PASS" if r["alpha_p_one_sided"] < ALPHA else "fail"
-        print(
-            f"  {name:<24} {r['alpha']:>+9.4f} {r['alpha_t']:>+8.2f} "
-            f"{r['alpha_p_one_sided']:>9.5f} {r['r_squared']:>7.4f} {v:<10}"
-        )
+        print(f"  {name:<24} {r['alpha']:>+9.4f} {r['alpha_t']:>+8.2f} {r['alpha_p_one_sided']:>9.5f} {r['r_squared']:>7.4f} {v:<10}")
     # robustness: alpha sign + magnitude stable across baselines?
     alphas_sens = [r["alpha"] for r in sens.values() if r.get("status") == "ok"]
     sign_consistent = all(a > 0 for a in alphas_sens) or all(a < 0 for a in alphas_sens)
@@ -674,9 +660,7 @@ def main() -> None:
 
     print(f"\n  级联判定:")
     print(f"    [1] n_signal_dates = {n} → {'PASS(≥60)' if n >= 60 else 'FAIL(<60 underpowered)'}")
-    print(
-        f"    [2] residual alpha = {a}%/signal-day → {'PASS(>0)' if a > 0 else 'FAIL(<0, edge 是因子暴露非独立 alpha)'}"
-    )
+    print(f"    [2] residual alpha = {a}%/signal-day → {'PASS(>0)' if a > 0 else 'FAIL(<0, edge 是因子暴露非独立 alpha)'}")
     print(f"    [3] alpha t = {t}, p_one_sided = {p}")
     print(f"        Bonferroni ×{N_PARALLEL_STRATS} = {bonf} → {'PASS' if bonf < ALPHA else 'FAIL'} (≥{ALPHA})")
     print(
@@ -725,10 +709,7 @@ def main() -> None:
         )
     else:
         verdict = "edge-confirmed"
-        key = (
-            f"residual alpha positive ({a}%), significant (Bonf×{N_PARALLEL_STRATS}={bonf}), "
-            f"rolling-stable, both-regime positive."
-        )
+        key = f"residual alpha positive ({a}%), significant (Bonf×{N_PARALLEL_STRATS}={bonf}), rolling-stable, both-regime positive."
 
     print(f"\n  {'=' * 60}")
     print(f"  VERDICT (residual alpha, composite-top5): {verdict}")
@@ -744,9 +725,7 @@ def main() -> None:
     print(f"  raw EV (no factor control):   {raw_ev['ev']}%/signal-day (net {net_ev:.3f}%)")
     print(f"  residual alpha (primary):     {a}%/signal-day  t={t}  p={p}")
     print(f"    Bonferroni ×{N_PARALLEL_STRATS}:             {bonf}")
-    print(
-        f"  per-pick alpha (cross-check): {perpick['alpha']}%  t={perpick['alpha_t']}  p={perpick['alpha_p_one_sided']}"
-    )
+    print(f"  per-pick alpha (cross-check): {perpick['alpha']}%  t={perpick['alpha_t']}  p={perpick['alpha_p_one_sided']}")
     print(f"  factor loadings (primary):    {primary['factor_loadings_str']}")
     print(f"  VIF: mkt={vif['mkt']} smb={vif['smb']} umd={vif['umd']}")
     if roll["status"] == "ok":
@@ -754,9 +733,7 @@ def main() -> None:
             f"  rolling 60d alpha:            mean={roll['mean_alpha']}% "
             f"pos%={roll['pct_positive']}% sig%={roll['pct_significant_positive']}%"
         )
-    print(
-        f"  regime:                       bull/bear alpha {[rb.get(k, {}).get('alpha', '?') for k in ['bull', 'bear']]}"
-    )
+    print(f"  regime:                       bull/bear alpha {[rb.get(k, {}).get('alpha', '?') for k in ['bull', 'bear']]}")
     print(f"  baseline sensitivity:         sign consistent={sign_consistent}")
     print(f"  VERDICT:                      {verdict}")
 

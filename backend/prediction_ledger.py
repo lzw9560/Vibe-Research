@@ -53,12 +53,9 @@ def _migrate_schema(db_path: str = WINRATE_DB_PATH) -> None:
     """执行 prediction_ledger 表迁移。"""
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     manager = MigrationManager(db_path=db_path)
-    sql = (
-        Path(__file__).resolve().parent
-        / "migrations"
-        / "prediction_ledger"
-        / "20260812-001_create_prediction_ledger.sql"
-    ).read_text(encoding="utf-8")
+    sql = (Path(__file__).resolve().parent / "migrations" / "prediction_ledger" / "20260812-001_create_prediction_ledger.sql").read_text(
+        encoding="utf-8"
+    )
     manager.upgrade(
         [
             {

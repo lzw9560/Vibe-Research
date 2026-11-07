@@ -596,9 +596,7 @@ def stock_fund_flow_120d(code: str, date: str | None = None) -> list[dict]:
     headers = {"User-Agent": UA, "Referer": "https://quote.eastmoney.com/", "Origin": "https://quote.eastmoney.com"}
     for host in ("push2his.eastmoney.com", "push2delay.eastmoney.com"):
         try:
-            d = em_get(
-                f"https://{host}/api/qt/stock/fflow/daykline/get", params=params, headers=headers, timeout=15
-            ).json()
+            d = em_get(f"https://{host}/api/qt/stock/fflow/daykline/get", params=params, headers=headers, timeout=15).json()
         except Exception:
             continue  # 断连/限流 → 下一 host
         rows = _parse_fflow_klines(d)
@@ -798,9 +796,7 @@ def bids(code: str) -> dict:
     return {"code": code, "name": "", "latest": None, "prev_close": None, "buy": [], "sell": []}
 
 
-def dragon_tiger_board(
-    code: str, trade_date: str | None = None, look_back: int = 30, raise_on_failure: bool = False
-) -> dict:
+def dragon_tiger_board(code: str, trade_date: str | None = None, look_back: int = 30, raise_on_failure: bool = False) -> dict:
     """龙虎榜：该股近期上榜记录 + 最近一次买卖席位 TOP5 + 机构专用席位净买。
 
     raise_on_failure=True 时，底层 eastmoney_datacenter 源断即 raise（非吞 []），让下游
@@ -878,9 +874,7 @@ def dragon_tiger_board(
     return {"records": records, "seats": seats, "institution": institution}
 
 
-def lockup_expiry(
-    code: str, trade_date: str | None = None, forward_days: int = 90, raise_on_failure: bool = False
-) -> dict:
+def lockup_expiry(code: str, trade_date: str | None = None, forward_days: int = 90, raise_on_failure: bool = False) -> dict:
     """限售解禁日历：历史解禁记录 + 未来 N 天待解禁事件。
 
     字段随东财 2026 改列名同步（a-stock-data §3.6）：旧 LIMITED_STOCK_TYPE/FREE_SHARES_NUM
@@ -1020,9 +1014,7 @@ def industry_comparison(top_n: int = 20, raise_on_failure: bool = False) -> dict
         "ut": _PUSH2_UT,
     }
     try:
-        d = em_get(
-            "https://push2.eastmoney.com/api/qt/clist/get", params=params, headers={"User-Agent": UA}, timeout=15
-        ).json()
+        d = em_get("https://push2.eastmoney.com/api/qt/clist/get", params=params, headers={"User-Agent": UA}, timeout=15).json()
     except Exception:
         # S131 R8：raise_on_failure=True 时 re-raise；默认 False 返空 dict +
         # data_status='missing'（/api/industry 透传可见源断，非伪装空排名）。

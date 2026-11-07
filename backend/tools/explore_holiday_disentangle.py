@@ -261,9 +261,7 @@ for htype in ["春节", "国庆", "清明", "元旦"]:
     test = sub[mid:]
     tr_s = stats([p["ret"] for p in train])
     te_s = stats([p["ret"] for p in test])
-    print(
-        f"  {htype}: train n={len(train)} EV={tr_s['mean']:.3f}% | test n={len(test)} EV={te_s['mean']:.3f}% WR={te_s['wr'] * 100:.1f}%"
-    )
+    print(f"  {htype}: train n={len(train)} EV={tr_s['mean']:.3f}% | test n={len(test)} EV={te_s['mean']:.3f}% WR={te_s['wr'] * 100:.1f}%")
 
 # ---------- 6. Non-holiday-specific test: any 4+ day gap ----------
 print(f"\n{'=' * 70}")

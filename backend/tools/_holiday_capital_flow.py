@@ -274,10 +274,7 @@ prem_vals = [p["etf_premium"] for p in prem_picks]
 prem_rets = [p["ret"] for p in prem_picks]
 print(f"  n with ETF premium: {len(prem_picks)} (from {len(etf_50)} + {len(etf_300)} ETF days)")
 if prem_vals:
-    print(
-        f"  ETF premium: mean={sum(prem_vals) / len(prem_vals):.4f}% "
-        f"min={min(prem_vals):.4f}% max={max(prem_vals):.4f}%"
-    )
+    print(f"  ETF premium: mean={sum(prem_vals) / len(prem_vals):.4f}% min={min(prem_vals):.4f}% max={max(prem_vals):.4f}%")
 
     # Correlation: premium → return
     r = pearson_corr(prem_vals, prem_rets)
@@ -292,12 +289,8 @@ if prem_vals:
     low = [p for p in prem_picks if p["etf_premium"] < med_prem]
     high_s = stats([p["ret"] for p in high])
     low_s = stats([p["ret"] for p in low])
-    print(
-        f"  High premium (>=median {med_prem:.4f}%): n={high_s['n']} EV={high_s['mean']:.3f}% WR={high_s['wr'] * 100:.1f}%"
-    )
-    print(
-        f"  Low premium  (< median {med_prem:.4f}%): n={low_s['n']} EV={low_s['mean']:.3f}% WR={low_s['wr'] * 100:.1f}%"
-    )
+    print(f"  High premium (>=median {med_prem:.4f}%): n={high_s['n']} EV={high_s['mean']:.3f}% WR={high_s['wr'] * 100:.1f}%")
+    print(f"  Low premium  (< median {med_prem:.4f}%): n={low_s['n']} EV={low_s['mean']:.3f}% WR={low_s['wr'] * 100:.1f}%")
     print(f"  -> High-Low spread: {high_s['mean'] - low_s['mean']:.3f}%")
 else:
     print("  No ETF premium data available")
@@ -314,8 +307,7 @@ mom_rets = [p["ret"] for p in mom_picks]
 print(f"  n with mom5: {len(mom_picks)}")
 if mom_vals:
     print(
-        f"  mom5 (5-day return before day-3): mean={sum(mom_vals) / len(mom_vals):.3f}% "
-        f"min={min(mom_vals):.3f}% max={max(mom_vals):.3f}%"
+        f"  mom5 (5-day return before day-3): mean={sum(mom_vals) / len(mom_vals):.3f}% min={min(mom_vals):.3f}% max={max(mom_vals):.3f}%"
     )
 
     r_mom = pearson_corr(mom_vals, mom_rets)
@@ -467,9 +459,7 @@ train = sorted_picks[:mid]
 test = sorted_picks[mid:]
 train_s = stats([p["ret"] for p in train])
 test_s = stats([p["ret"] for p in test])
-print(
-    f"  Train (pre-{test[0]['holiday_date'] if test else '?'}): n={train_s['n']} EV={train_s['mean']:.3f}% WR={train_s['wr'] * 100:.1f}%"
-)
+print(f"  Train (pre-{test[0]['holiday_date'] if test else '?'}): n={train_s['n']} EV={train_s['mean']:.3f}% WR={train_s['wr'] * 100:.1f}%")
 print(f"  Test  (post): n={test_s['n']} EV={test_s['mean']:.3f}% WR={test_s['wr'] * 100:.1f}%")
 if train_s["mean"] > 0:
     decay = (train_s["mean"] - test_s["mean"]) / abs(train_s["mean"]) * 100

@@ -39,8 +39,7 @@ def settle_combo_5d() -> int:
     tj = TradeJournal()
     conn = tj._conn()
     pending = conn.execute(
-        "SELECT signal_id, stock_code, entry_date FROM trade_journal "
-        "WHERE arm='combo_5d' AND (is_realized=0 OR is_realized IS NULL)"
+        "SELECT signal_id, stock_code, entry_date FROM trade_journal WHERE arm='combo_5d' AND (is_realized=0 OR is_realized IS NULL)"
     ).fetchall()
     if not pending:
         print("[settle] 无 combo_5d pending 记录")

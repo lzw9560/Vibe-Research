@@ -268,9 +268,7 @@ def fetch_kline_baostock(code: str, start: str, end: str) -> dict[str, dict]:
     return dmap
 
 
-def get_kline_for_removal(
-    rem: dict, code_map: dict, fetch_cache: dict, do_fetch: bool = True
-) -> dict[str, dict] | None:
+def get_kline_for_removal(rem: dict, code_map: dict, fetch_cache: dict, do_fetch: bool = True) -> dict[str, dict] | None:
     """Get kline bars around effective date. Cache first, then baostock fetch if gap.
     Returns {date: bar} covering effective-3 .. effective+15, or None."""
     code6 = rem["code6"]
@@ -331,9 +329,7 @@ def fetch_index_kline(index_code: str) -> tuple[dict[str, dict], list[str]]:
 # ---------- BHAR computation ----------
 
 
-def compute_bhar(
-    rem: dict, bars: dict[str, dict], idx_bars: dict[str, dict], idx_dates: list[str], window_n: int
-) -> dict | None:
+def compute_bhar(rem: dict, bars: dict[str, dict], idx_bars: dict[str, dict], idx_dates: list[str], window_n: int) -> dict | None:
     """BHAR for one removal.
     entry = effective+1 open, exit = effective+N close (N=window_n).
     stock_ret = (close_N - open_1) / open_1
@@ -421,10 +417,7 @@ def build_picks(
             n_fetched += 1
         else:
             n_cached += 1
-    print(
-        f"  kline usable: {len(bars_by_rem)}/{len(removals)} "
-        f"(cached={n_cached} fetched={n_fetched} missing={n_missing})"
-    )
+    print(f"  kline usable: {len(bars_by_rem)}/{len(removals)} (cached={n_cached} fetched={n_fetched} missing={n_missing})")
 
     picks_by_window: dict[str, list[dict]] = {}
     for wname, wn in WINDOWS:
@@ -526,10 +519,7 @@ def analyze_window_bhar(name: str, picks: list[dict]) -> dict:
     ev = ev_stats(bhars)
     net_bhar = ev["ev"] - COST * 100
     print(f"\n  [PRIMARY: BHAR = stock_ret - matched_index_ret]")
-    print(
-        f"    n={ev['n']} BHAR_gross={ev['ev']}% std={ev['std']}% "
-        f"WR={ev['wr']}% t={ev['t']} CI[{ev['ci_lo']},{ev['ci_hi']}]"
-    )
+    print(f"    n={ev['n']} BHAR_gross={ev['ev']}% std={ev['std']}% WR={ev['wr']}% t={ev['t']} CI[{ev['ci_lo']},{ev['ci_hi']}]")
     print(f"    BHAR_net (after {COST * 100:.1f}% cost): {net_bhar:.3f}%")
 
     # per-event t (descriptive)
@@ -584,10 +574,7 @@ def analyze_window_bhar(name: str, picks: list[dict]) -> dict:
         tr_dt = day_paired_t({d: by_date[d] for d in train_dates})
         te_dt = day_paired_t({d: by_date[d] for d in test_dates})
         print(f"    train: n_dates={len(train_dates)} n={tr_ev['n']} BHAR={tr_ev['ev']}% t={tr_dt['t']} (day-paired)")
-        print(
-            f"    test:  n_dates={len(test_dates)} n={te_ev['n']} "
-            f"BHAR={te_ev['ev']}% t={te_dt['t']} p={te_dt['p_one_sided']}"
-        )
+        print(f"    test:  n_dates={len(test_dates)} n={te_ev['n']} BHAR={te_ev['ev']}% t={te_dt['t']} p={te_dt['p_one_sided']}")
         decay = (tr_ev["ev"] - te_ev["ev"]) / abs(tr_ev["ev"]) * 100 if tr_ev["ev"] != 0 else 0
         print(f"    decay: {decay:.0f}% (train→test)")
         wf_status = "ok"
@@ -643,9 +630,7 @@ def verdict_bhar_gated(r: dict) -> str:
     t_day = r["day_t"]
     p_bonf = r["p_bonf"]
     print(f"\n  --- verdict cascade (BHAR-gated, §44 v3) ---")
-    print(
-        f"    bhar_gross={g}% bhar_net={net:.3f}% day_t={t_day} Bonf×{CROSS_STRATEGY_N}={p_bonf:.6f} n_dates={n_dates}"
-    )
+    print(f"    bhar_gross={g}% bhar_net={net:.3f}% day_t={t_day} Bonf×{CROSS_STRATEGY_N}={p_bonf:.6f} n_dates={n_dates}")
     print(
         f"    [descriptive raw stock_ret={r['raw_stock_ret_mean']}% — NOT gated, "
         f"market beta; if raw>0 but BHAR<0 → fake edge = market drift]"
@@ -683,10 +668,7 @@ def verdict_bhar_gated(r: dict) -> str:
         return "edge-falsified"
     if r["wf_status"] == "ok":
         if r["wf_train_bhar"] <= 0:
-            print(
-                f"    → EXPLORATORY: train_BHAR={r['wf_train_bhar']}% <= 0 "
-                f"(edge not in train half, test may be regime overfit)"
-            )
+            print(f"    → EXPLORATORY: train_BHAR={r['wf_train_bhar']}% <= 0 (edge not in train half, test may be regime overfit)")
             return "exploratory"
         if r["wf_test_bhar"] <= 0:
             print(f"    → FALSIFIED: walk-forward test_BHAR={r['wf_test_bhar']}% <= 0")
@@ -738,10 +720,7 @@ def main() -> None:
     eff_dates_all = sorted(set(r["effective_date"] for r in all_removals))
     if eff_dates_all:
         print(f"  distinct effective dates: {len(eff_dates_all)} ({eff_dates_all[0]}~{eff_dates_all[-1]})")
-        print(
-            f"  ⚠ 结构性限制: 半年一次 rebalance → per-day-mean t N_days={len(eff_dates_all)} "
-            f"< 60 → 预期 underpowered (诚实标注)"
-        )
+        print(f"  ⚠ 结构性限制: 半年一次 rebalance → per-day-mean t N_days={len(eff_dates_all)} < 60 → 预期 underpowered (诚实标注)")
     else:
         print("  无 removals 检出 → no-data")
         _final_summary(0, 0, 0.0, 0.0, 0.0, "no-data", "No removals detected from constituent diff")
@@ -836,23 +815,15 @@ def main() -> None:
     bs.logout()
 
 
-def _final_summary(
-    n_events: int, n_dates: int, bhar_gross: float, bhar_net: float, p_bonf: float, verdict: str, key_finding: str
-) -> None:
+def _final_summary(n_events: int, n_dates: int, bhar_gross: float, bhar_net: float, p_bonf: float, verdict: str, key_finding: str) -> None:
     print(f"\n{'=' * 72}")
     print(f"[FINAL SUMMARY]")
     print(f"{'=' * 72}")
     print(f"策略: 指数调出 post-removal bounce (hs300/sz50/zz500 removals)")
-    print(
-        f"数据: baostock 历史成份股 diff (2018-2026, 3 rebalance baostock gap) + "
-        f"kline cache + baostock 补缺 fetch + matched index kline"
-    )
+    print(f"数据: baostock 历史成份股 diff (2018-2026, 3 rebalance baostock gap) + kline cache + baostock 补缺 fetch + matched index kline")
     print(f"  entry=effective+1 open, exit=effective+5/+10 close, BHAR vs 同指数")
     print(f"  verdict cascade GATE BHAR (非 raw EV — 除权除息 cascade flaw 教训)")
-    print(
-        f"  n_events={n_events} n_dates={n_dates} BHAR_gross={bhar_gross}% "
-        f"BHAR_net={bhar_net:.3f}% Bonf×{CROSS_STRATEGY_N}={p_bonf:.4f}"
-    )
+    print(f"  n_events={n_events} n_dates={n_dates} BHAR_gross={bhar_gross}% BHAR_net={bhar_net:.3f}% Bonf×{CROSS_STRATEGY_N}={p_bonf:.4f}")
     print(f"verdict: {verdict}")
     print(f"key: {key_finding}")
     print(f"诚实约束: post-removal 口径 (非 announcement pre-effective); n_dates<60 结构性 underpowered;")

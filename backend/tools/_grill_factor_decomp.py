@@ -62,9 +62,7 @@ def board_of(code: str) -> str:
     return "main"
 
 
-def build_picks(
-    code_cache: dict[str, dict[str, dict]], calendar: list[str], zt_rows, lbc_lo: int, lbc_hi: int = 999
-) -> list[dict]:
+def build_picks(code_cache: dict[str, dict[str, dict]], calendar: list[str], zt_rows, lbc_lo: int, lbc_hi: int = 999) -> list[dict]:
     date_idx = {d: i for i, d in enumerate(calendar)}
     picks = []
     for zt_date, code, lbc in zt_rows:
@@ -255,8 +253,7 @@ def main() -> None:
             else "exploratory"
         )
         print(
-            f"  {lab:<10} gross={r['ev']:>+7.3f}% net={r['net']:>+7.3f}% "
-            f"p={r['p']:.4f} Bonf×10={bonf:.4f} days={r['n_days']} -> {verdict}"
+            f"  {lab:<10} gross={r['ev']:>+7.3f}% net={r['net']:>+7.3f}% p={r['p']:.4f} Bonf×10={bonf:.4f} days={r['n_days']} -> {verdict}"
         )
 
 

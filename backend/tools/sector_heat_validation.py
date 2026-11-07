@@ -64,17 +64,12 @@ def compute() -> dict:
     heat_defs = [("top1", 1, 0), ("top3", 3, 0), ("top5", 5, 0), ("zt>=3", 99, 3), ("zt>=5", 99, 5)]
     try:
         dates = [
-            r[0]
-            for r in conn.execute(
-                "SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
-            ).fetchall()
+            r[0] for r in conn.execute("SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date").fetchall()
         ]
         date_set = set(dates)
         code_ind: dict[str, str] = {
             r[0]: r[1]
-            for r in conn.execute(
-                "SELECT code, industry FROM code_industry WHERE industry IS NOT NULL AND industry != ''"
-            ).fetchall()
+            for r in conn.execute("SELECT code, industry FROM code_industry WHERE industry IS NOT NULL AND industry != ''").fetchall()
         }
 
         # 预取每日 D 的 zt_by_ind + d_zt_codes + D+1 涨停池

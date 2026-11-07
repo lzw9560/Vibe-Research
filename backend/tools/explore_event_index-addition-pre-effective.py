@@ -107,8 +107,7 @@ def probe_akshare_announcement_date() -> dict:
         sample_date = str(df[date_col].iloc[0]) if len(df) else ""
         is_snapshot = sample_date >= "2026-01-01"  # 近期日期=快照非历史公告日
         out["detail"].append(
-            f"index_stock_cons_csindex('000300'): cols={cols}, 首行日期={sample_date}, "
-            f"is_snapshot={is_snapshot} (非公告日)"
+            f"index_stock_cons_csindex('000300'): cols={cols}, 首行日期={sample_date}, is_snapshot={is_snapshot} (非公告日)"
         )
         if not any("announce" in (c or "").lower() or "公告" in (c or "") for c in cols):
             out["available"] = False
@@ -129,11 +128,7 @@ def probe_akshare_announcement_date() -> dict:
         out["detail"].append(f"index_detail_hist_adjust_cni error: {e}")
 
     # 3. 扫描所有 index adjust/cons 函数
-    fns = [
-        n
-        for n in dir(ak)
-        if "index" in n.lower() and ("adjust" in n.lower() or "cons" in n.lower() or "detail" in n.lower())
-    ]
+    fns = [n for n in dir(ak) if "index" in n.lower() and ("adjust" in n.lower() or "cons" in n.lower() or "detail" in n.lower())]
     has_ann_fn = any("announce" in n.lower() for n in fns)
     out["has_announcement_fn"] = has_ann_fn
     out["index_funcs"] = fns
@@ -167,10 +162,7 @@ def main() -> None:
     print("=" * 72)
     print(f"假设: 公告后→生效前被动资金 forced buying → pre-effective run-up")
     print(f"entry=announcement+1 open, exit=effective close, BHAR vs matched index")
-    print(
-        f"过严口径: BHAR 非 raw EV (除权除息教训) | per-day-mean t | Bonf×{CROSS_STRATEGY_N} | "
-        f"walk-forward OOS + train_ev>0"
-    )
+    print(f"过严口径: BHAR 非 raw EV (除权除息教训) | per-day-mean t | Bonf×{CROSS_STRATEGY_N} | walk-forward OOS + train_ev>0")
     print()
 
     # ---- 1. 数据前提探测（独立实测，非引用 probe）----
@@ -185,10 +177,7 @@ def main() -> None:
         f"    全 query_* 方法 ({len(bs_probe.get('methods', []))}): "
         f"{bs_probe.get('methods', [])[:8]}{'...' if len(bs_probe.get('methods', [])) > 8 else ''}"
     )
-    print(
-        f"    has_announcement_fn={bs_probe['has_announcement_fn']} → "
-        f"{'有' if bs_probe['available'] else '无'} announcement 日"
-    )
+    print(f"    has_announcement_fn={bs_probe['has_announcement_fn']} → {'有' if bs_probe['available'] else '无'} announcement 日")
 
     print("\n(b) akshare...")
     ak_probe = probe_akshare_announcement_date()
@@ -196,8 +185,7 @@ def main() -> None:
         print(f"    {d}")
     print(f"    index adjust/cons funcs: {ak_probe.get('index_funcs', [])}")
     print(
-        f"    has_announcement_fn={ak_probe.get('has_announcement_fn', False)} → "
-        f"{'有' if ak_probe['available'] else '无'} announcement 日"
+        f"    has_announcement_fn={ak_probe.get('has_announcement_fn', False)} → {'有' if ak_probe['available'] else '无'} announcement 日"
     )
 
     announcement_available = bs_probe["available"] or ak_probe["available"]

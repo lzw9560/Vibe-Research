@@ -153,9 +153,7 @@ for code, name in [("510300", "沪深300"), ("510050", "上证50"), ("512890", "
     vr = sum((s - mr) ** 2 for _, s in pairs) / len(pairs) or 1
     vm = sum((p - mp) ** 2 for _, p in pairs) / len(pairs) or 1
     corr = cov / (vr**0.5 * vm**0.5) if vr > 0 and vm > 0 else 0
-    print(
-        f"{code} {name}: corr(premT-3,sig)={corr:+.3f} | prem>0 n={len(hi)} sig={st(hi)} | prem<=0 n={len(lo)} sig={st(lo)}"
-    )
+    print(f"{code} {name}: corr(premT-3,sig)={corr:+.3f} | prem>0 n={len(hi)} sig={st(hi)} | prem<=0 n={len(lo)} sig={st(lo)}")
 
 # ---------- 3. broad vs sector premium divergence as risk-appetite regime ----------
 print("\n=== Broad-sector premium divergence (risk appetite proxy) ===")

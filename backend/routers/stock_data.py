@@ -197,9 +197,7 @@ def disclosure(code: str = Query(...)) -> Dict[str, Any]:
 
 
 @router.get("/api/kline")
-async def kline(
-    code: str = Query(...), category: int = Query(4), offset: int = Query(60, ge=1, le=800)
-) -> Dict[str, Any]:
+async def kline(code: str = Query(...), category: int = Query(4), offset: int = Query(60, ge=1, le=800)) -> Dict[str, Any]:
     """K线（需 mootdx）。category 4=日 5=周 6=月 11=60分钟。"""
     from routers.common import _validate
 

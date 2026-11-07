@@ -88,9 +88,7 @@ class ReversePackageStrategy(BaseStrategy):
                 actual_value="命中炸板池" if hit else "不在炸板池",
                 state="hit" if hit else "miss",
                 description=(
-                    "前日反复开板（真炸板 open_count>=2），今日反包概率较高"
-                    if hit
-                    else "前日未在炸板池（open_count<2），非反包候选"
+                    "前日反复开板（真炸板 open_count>=2），今日反包概率较高" if hit else "前日未在炸板池（open_count<2），非反包候选"
                 ),
             )
         ]

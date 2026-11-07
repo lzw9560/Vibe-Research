@@ -217,10 +217,7 @@ def main():
         rets = [fn(p) for p in picks_recent]
         mean_ret = statistics.mean(rets)
         net = mean_ret - ETF_COST
-        print(
-            f"  {label:<22}: per-pick={mean_ret:+.4f}% net={net:+.4f}% "
-            f"n_days={dt['n_days']} day_t={dt['t']} p={dt['p']}"
-        )
+        print(f"  {label:<22}: per-pick={mean_ret:+.4f}% net={net:+.4f}% n_days={dt['n_days']} day_t={dt['t']} p={dt['p']}")
 
     # ================================================================
     # Split by entry discount: converged vs not-converged at T+1 open
@@ -263,15 +260,9 @@ def main():
     stale_day_means = [sum(rs) / len(rs) for rs in stale_by_date.values() if rs]
     fresh_day_means = [sum(rs) / len(rs) for rs in fresh_by_date.values() if rs]
 
-    print(
-        f"  stale day-means: std={statistics.pstdev(stale_day_means):.4f}% mean={statistics.mean(stale_day_means):.4f}%"
-    )
-    print(
-        f"  fresh day-means: std={statistics.pstdev(fresh_day_means):.4f}% mean={statistics.mean(fresh_day_means):.4f}%"
-    )
-    print(
-        f"  -> stale std {'<' if statistics.pstdev(stale_day_means) < statistics.pstdev(fresh_day_means) else '>'} fresh std"
-    )
+    print(f"  stale day-means: std={statistics.pstdev(stale_day_means):.4f}% mean={statistics.mean(stale_day_means):.4f}%")
+    print(f"  fresh day-means: std={statistics.pstdev(fresh_day_means):.4f}% mean={statistics.mean(fresh_day_means):.4f}%")
+    print(f"  -> stale std {'<' if statistics.pstdev(stale_day_means) < statistics.pstdev(fresh_day_means) else '>'} fresh std")
     print(
         f"  -> stale NAV {'reduces' if statistics.pstdev(stale_day_means) < statistics.pstdev(fresh_day_means) else 'increases'} day-mean dispersion -> {'inflates' if statistics.pstdev(stale_day_means) < statistics.pstdev(fresh_day_means) else 'deflates'} day_t"
     )

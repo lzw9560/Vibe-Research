@@ -95,9 +95,7 @@ def rank_scores(lst: list, use_gap: bool, use_tr: bool, use_amt: bool) -> list:
     return sorted(range(n), key=score, reverse=True)
 
 
-def stats_for(
-    dates: list, by_date: dict, use_gap=True, use_tr=True, use_amt=True, top_n: int | None = None
-) -> dict | None:
+def stats_for(dates: list, by_date: dict, use_gap=True, use_tr=True, use_amt=True, top_n: int | None = None) -> dict | None:
     """对给定日期集，取 top（decile 或固定 N），算 5日 fwd 的日均值统计。"""
     daily_mean, daily_median, daily_wr, all_picks = [], [], [], []
     for d in dates:
@@ -225,9 +223,7 @@ def main() -> None:
         huge_win = sum(1 for x in pk if x > 0.10) / n
         big_loss = sum(1 for x in pk if x < -0.05) / n
         huge_loss = sum(1 for x in pk if x < -0.10) / n
-        print(
-            f"  >+5%:{big_win * 100:.1f}%  >+10%:{huge_win * 100:.1f}%  <-5%:{big_loss * 100:.1f}%  <-10%:{huge_loss * 100:.1f}%"
-        )
+        print(f"  >+5%:{big_win * 100:.1f}%  >+10%:{huge_win * 100:.1f}%  <-5%:{big_loss * 100:.1f}%  <-10%:{huge_loss * 100:.1f}%")
         # 去掉 top 5% 暴利票后 mean（看核心是否还正）
         cut = int(n * 0.05)
         trimmed = sorted(pk)[:-cut] if cut else pk

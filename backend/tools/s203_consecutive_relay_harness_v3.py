@@ -114,17 +114,13 @@ def main():
     obs_r3 = [o for o in obs if not o["r3_onesell"]]
     s_r3 = _stats(obs_r3)
     print(f"\n=== +R3 filter（exit 一字跌停）===")
-    print(
-        f"  n={s_r3['n']} net_mean={s_r3['mean']:.2f}% WR={s_r3['wr']:.2f}% (衰减 {s_all['mean'] - s_r3['mean']:.2f}%)"
-    )
+    print(f"  n={s_r3['n']} net_mean={s_r3['mean']:.2f}% WR={s_r3['wr']:.2f}% (衰减 {s_all['mean'] - s_r3['mean']:.2f}%)")
 
     # R1 filter（entry close 涨停价）
     obs_r1r3 = [o for o in obs_r3 if not o["r1_close_limit"]]
     s_r1r3 = _stats(obs_r1r3)
     print(f"\n=== +R1 filter（entry close 涨停价）===")
-    print(
-        f"  n={s_r1r3['n']} net_mean={s_r1r3['mean']:.2f}% WR={s_r1r3['wr']:.2f}% (衰减 {s_r3['mean'] - s_r1r3['mean']:.2f}%)"
-    )
+    print(f"  n={s_r1r3['n']} net_mean={s_r1r3['mean']:.2f}% WR={s_r1r3['wr']:.2f}% (衰减 {s_r3['mean'] - s_r1r3['mean']:.2f}%)")
 
     # R4 涨停 vs 未涨停对比
     obs_zt = [o for o in obs if o["r4_zt"]]
@@ -153,22 +149,16 @@ def main():
     print(f"  R1 filter 掉涨停 entry close 比例: {filter_pct:.1f}%")
     # 验收：R1 filter 掉 >70% picks → V1 假 edge 是涨停封板溢价（99.4% 涨停 entry）
     if filter_pct > 70:
-        print(
-            f"  ✓ A5 验收通过：R1 filter 掉 {filter_pct:.1f}% > 70% picks（V1 假 edge 是涨停封板溢价——99.4% 涨停 entry close）"
-        )
+        print(f"  ✓ A5 验收通过：R1 filter 掉 {filter_pct:.1f}% > 70% picks（V1 假 edge 是涨停封板溢价——99.4% 涨停 entry close）")
     else:
         print(f"  ✗ A5 验收未过：R1 filter 只掉 {filter_pct:.1f}% < 70%（V1 假 edge 非纯涨停封板溢价）")
     # R1 filter 后剩余 n<60 → underpowered（非 definitive edge）
     if n_r1r3 < 60:
-        print(
-            f"  ✓ R1 filter 后 n={n_r1r3}<60 → underpowered（标 V1 假 edge 是涨停封板溢价，filter 后无 picks 可判 edge）"
-        )
+        print(f"  ✓ R1 filter 后 n={n_r1r3}<60 → underpowered（标 V1 假 edge 是涨停封板溢价，filter 后无 picks 可判 edge）")
     # R4 survivorship（涨停 vs 未涨停）——但 consecutive_relay 99.4% 涨停，R4 无意义
     if s_zt and s_nonzt:
         contrib_pct = (s_all["mean"] - s_nonzt["mean"]) / s_all["mean"] * 100 if s_all["mean"] != 0 else 0
-        print(
-            f"  R4 涨停股贡献: {contrib_pct:.1f}%（consecutive_relay 99.4% 涨停——R4 survivorship 对比无意义，须用 OFI 等非 lbc 战法验）"
-        )
+        print(f"  R4 涨停股贡献: {contrib_pct:.1f}%（consecutive_relay 99.4% 涨停——R4 survivorship 对比无意义，须用 OFI 等非 lbc 战法验）")
 
 
 if __name__ == "__main__":

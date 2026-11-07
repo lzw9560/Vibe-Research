@@ -95,9 +95,7 @@ def chat(req: ChatReq) -> StreamingResponse:
 
     def gen():
         try:
-            events = (chat_layer.run_chat_cli_stream if is_cli else chat_layer.run_chat_stream)(
-                cfg, req.messages, req.context
-            )
+            events = (chat_layer.run_chat_cli_stream if is_cli else chat_layer.run_chat_stream)(cfg, req.messages, req.context)
             for ev in events:
                 yield json.dumps(ev, ensure_ascii=False) + "\n"
         except Exception as e:  # noqa: BLE001 — 运行时错误以流内事件上报，不中断连接

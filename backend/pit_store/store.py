@@ -104,11 +104,7 @@ class SnapshotStore:
         elif not isinstance(raw_bytes, (bytes, bytearray)):
             raise TypeError(f"raw_bytes 须为 bytes/str，得到 {type(raw_bytes).__name__}")
         raw_bytes = bytes(raw_bytes)
-        spec_str = (
-            query_spec
-            if isinstance(query_spec, str)
-            else json.dumps(query_spec, ensure_ascii=False, default=str, sort_keys=True)
-        )
+        spec_str = query_spec if isinstance(query_spec, str) else json.dumps(query_spec, ensure_ascii=False, default=str, sort_keys=True)
         content_hash = hashlib.sha256(raw_bytes).hexdigest()
         conn = self._conn()
         try:
@@ -151,9 +147,7 @@ class SnapshotStore:
         conn = self._conn()
         try:
             row = conn.execute(
-                "SELECT snapshot_id FROM snapshots "
-                "WHERE source = ? AND data_date IS ? "
-                "ORDER BY snapshot_id DESC LIMIT 1",
+                "SELECT snapshot_id FROM snapshots WHERE source = ? AND data_date IS ? ORDER BY snapshot_id DESC LIMIT 1",
                 (source, data_date),
             ).fetchone()
             return int(row["snapshot_id"]) if row else None
@@ -176,9 +170,7 @@ class SnapshotStore:
         try:
             if as_of is None:
                 row = conn.execute(
-                    "SELECT raw_blob FROM snapshots "
-                    "WHERE source = ? AND data_date IS ? "
-                    "ORDER BY snapshot_id DESC LIMIT 1",
+                    "SELECT raw_blob FROM snapshots WHERE source = ? AND data_date IS ? ORDER BY snapshot_id DESC LIMIT 1",
                     (source, data_date),
                 ).fetchone()
             else:

@@ -118,10 +118,7 @@ def run_standalone(
     factor_picks = [p for p in blanket if p.get(factor) is not None]
     topk = select_topk_by_factor(factor_picks, factor, k)
 
-    print(
-        f"\n  {name}: universe={len(factor_picks)} picks → top-{k}={len(topk)} "
-        f"({len(set(p['zt_date'] for p in topk))} days)"
-    )
+    print(f"\n  {name}: universe={len(factor_picks)} picks → top-{k}={len(topk)} ({len(set(p['zt_date'] for p in topk))} days)")
 
     if not topk:
         print(f"  → no-data: 无 pick 有 {factor}")

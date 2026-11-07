@@ -63,9 +63,7 @@ class TelegramSender:
             是否发送成功
         """
         target_chat_id = chat_id if chat_id is not None else self._telegram_config.get("chat_id")
-        target_message_thread_id = (
-            message_thread_id if message_thread_id is not None else self._telegram_config.get("message_thread_id")
-        )
+        target_message_thread_id = message_thread_id if message_thread_id is not None else self._telegram_config.get("message_thread_id")
 
         if not (self._telegram_config["bot_token"] and target_chat_id):
             logger.warning("Telegram 配置不完整，跳过推送")
@@ -84,9 +82,7 @@ class TelegramSender:
 
             if len(content) <= max_length:
                 # 单条消息发送
-                return self._send_telegram_message(
-                    api_url, chat_id, content, message_thread_id, timeout_seconds=timeout_seconds
-                )
+                return self._send_telegram_message(api_url, chat_id, content, message_thread_id, timeout_seconds=timeout_seconds)
             else:
                 # 分段发送长消息
                 return self._send_telegram_chunked(
@@ -130,9 +126,7 @@ class TelegramSender:
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
                 if attempt < max_retries:
                     delay = 2**attempt  # 2s, 4s
-                    logger.warning(
-                        f"Telegram request failed (attempt {attempt}/{max_retries}): {e}, retrying in {delay}s..."
-                    )
+                    logger.warning(f"Telegram request failed (attempt {attempt}/{max_retries}): {e}, retrying in {delay}s...")
                     time.sleep(delay)
                     continue
                 else:
@@ -158,9 +152,7 @@ class TelegramSender:
                 # Rate limited — respect Retry-After header
                 retry_after = int(response.headers.get("Retry-After", 2**attempt))
                 if attempt < max_retries:
-                    logger.warning(
-                        f"Telegram rate limited, retrying in {retry_after}s (attempt {attempt}/{max_retries})..."
-                    )
+                    logger.warning(f"Telegram rate limited, retrying in {retry_after}s (attempt {attempt}/{max_retries})...")
                     time.sleep(retry_after)
                     continue
                 else:
@@ -170,8 +162,7 @@ class TelegramSender:
                 if attempt < max_retries and response.status_code >= 500:
                     delay = 2**attempt
                     logger.warning(
-                        f"Telegram server error HTTP {response.status_code} "
-                        f"(attempt {attempt}/{max_retries}), retrying in {delay}s..."
+                        f"Telegram server error HTTP {response.status_code} (attempt {attempt}/{max_retries}), retrying in {delay}s..."
                     )
                     time.sleep(delay)
                     continue
@@ -265,9 +256,7 @@ class TelegramSender:
                 if current_chunk:
                     chunk_content = "\n---\n".join(current_chunk)
                     logger.info(f"发送 Telegram 消息块 {chunk_index}...")
-                    if not self._send_telegram_message(
-                        api_url, chat_id, chunk_content, message_thread_id, timeout_seconds=timeout_seconds
-                    ):
+                    if not self._send_telegram_message(api_url, chat_id, chunk_content, message_thread_id, timeout_seconds=timeout_seconds):
                         all_success = False
                     chunk_index += 1
 
@@ -282,9 +271,7 @@ class TelegramSender:
         if current_chunk:
             chunk_content = "\n---\n".join(current_chunk)
             logger.info(f"发送 Telegram 消息块 {chunk_index}...")
-            if not self._send_telegram_message(
-                api_url, chat_id, chunk_content, message_thread_id, timeout_seconds=timeout_seconds
-            ):
+            if not self._send_telegram_message(api_url, chat_id, chunk_content, message_thread_id, timeout_seconds=timeout_seconds):
                 all_success = False
 
         return all_success

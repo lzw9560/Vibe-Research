@@ -64,9 +64,7 @@ def multi_arm_recommendations() -> Dict[str, Any]:
 
 
 @router.get("/api/recommendation/{code}")
-async def stock_recommendation(
-    code: str, date: str = Query(None, description="日期，格式 YYYY-MM-DD")
-) -> Dict[str, Any]:
+async def stock_recommendation(code: str, date: str = Query(None, description="日期，格式 YYYY-MM-DD")) -> Dict[str, Any]:
     """获取个股推荐详情。"""
     from routers.common import _validate
 

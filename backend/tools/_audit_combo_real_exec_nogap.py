@@ -107,9 +107,7 @@ def main() -> None:
             f"对比含 gap 版(轮11): real-exec net +0.311% / median -0.141% → 去 gap 版 net {re['net'] * 100:+.3f}% / median {re['median'] * 100:+.3f}%"
         )
         delta = re["net"] - 0.00311
-        print(
-            f"  去 gap vs 含 gap: net {'提升' if delta > 0 else '降'} {delta * 100:+.3f}%（去 entry gap 右尾是否提升 edge）"
-        )
+        print(f"  去 gap vs 含 gap: net {'提升' if delta > 0 else '降'} {delta * 100:+.3f}%（去 entry gap 右尾是否提升 edge）")
 
 
 if __name__ == "__main__":

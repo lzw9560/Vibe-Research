@@ -110,9 +110,7 @@ for N in [5, 10, 20]:
     vr = sum((r - mr) ** 2 for r, _ in pairs) / len(pairs) or 1
     vm = sum((m - mm) ** 2 for _, m in pairs) / len(pairs) or 1
     corr = cov / (vr**0.5 * vm**0.5) if vr > 0 and vm > 0 else 0
-    print(
-        f"prior{N}d: corr(signal,prior)={corr:+.3f} | prior_UP n={len(up)} sig={st(up)} | prior_DOWN n={len(dn)} sig={st(dn)}"
-    )
+    print(f"prior{N}d: corr(signal,prior)={corr:+.3f} | prior_UP n={len(up)} sig={st(up)} | prior_DOWN n={len(dn)} sig={st(dn)}")
 
 print("\n=== 4. RANDOM HOLIDAY control: non-holiday 1-day windows matched by era ===")
 import random

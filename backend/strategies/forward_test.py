@@ -405,9 +405,7 @@ def get_forward_test_summary(
         s_settled = conn.execute(
             "SELECT COUNT(*) FROM forward_test_records WHERE return_open2close IS NOT NULL AND is_unbuyable = 0"
         ).fetchone()[0]
-        s_wins = conn.execute(
-            "SELECT COUNT(*) FROM forward_test_records WHERE is_win = 1 AND is_unbuyable = 0"
-        ).fetchone()[0]
+        s_wins = conn.execute("SELECT COUNT(*) FROM forward_test_records WHERE is_win = 1 AND is_unbuyable = 0").fetchone()[0]
         # S144 R5：open2next_close 双报（T+1 可实现口径，与 o2c 诚实基线并列；escape hatch：不改 is_win）
         o2nc_settled = conn.execute(
             "SELECT COUNT(*) FROM forward_test_records WHERE return_open2next_close IS NOT NULL AND is_unbuyable = 0"
@@ -417,8 +415,7 @@ def get_forward_test_summary(
         ).fetchone()[0]
         days = conn.execute("SELECT COUNT(DISTINCT signal_date) FROM forward_test_records").fetchone()[0]
         avg_row = conn.execute(
-            "SELECT AVG(return_open2close) FROM forward_test_records "
-            "WHERE return_open2close IS NOT NULL AND is_unbuyable = 0"
+            "SELECT AVG(return_open2close) FROM forward_test_records WHERE return_open2close IS NOT NULL AND is_unbuyable = 0"
         ).fetchone()
         avg_return = float(avg_row[0]) if avg_row and avg_row[0] is not None else 0.0
         recent = conn.execute(
@@ -438,31 +435,21 @@ def get_forward_test_summary(
         u_settled = conn.execute(
             "SELECT COUNT(*) FROM universe_returns WHERE return_open2close IS NOT NULL AND is_unbuyable = 0"
         ).fetchone()[0]
-        u_wins = conn.execute("SELECT COUNT(*) FROM universe_returns WHERE is_win = 1 AND is_unbuyable = 0").fetchone()[
-            0
-        ]
+        u_wins = conn.execute("SELECT COUNT(*) FROM universe_returns WHERE is_win = 1 AND is_unbuyable = 0").fetchone()[0]
         # S144 A3：原口径（unfiltered，含 unbuyable）lift 双报——量化一字板污染对 lift 的影响
         # is_win=1 自然排除 unbuyable（NULL），故 s_wins/u_wins 同；差异在 settled 分母（含/剔 unbuyable）
-        s_settled_unfilt = conn.execute(
-            "SELECT COUNT(*) FROM forward_test_records WHERE return_open2close IS NOT NULL"
-        ).fetchone()[0]
-        u_settled_unfilt = conn.execute(
-            "SELECT COUNT(*) FROM universe_returns WHERE return_open2close IS NOT NULL"
-        ).fetchone()[0]
+        s_settled_unfilt = conn.execute("SELECT COUNT(*) FROM forward_test_records WHERE return_open2close IS NOT NULL").fetchone()[0]
+        u_settled_unfilt = conn.execute("SELECT COUNT(*) FROM universe_returns WHERE return_open2close IS NOT NULL").fetchone()[0]
         # S145 R3/R4：path-dependent（SL/TP/max_hold 模拟）——picks + universe path-winrate/lift 双报
         # is_win_path=1 自然排除 unbuyable(NULL) + 缺 bars(NULL)；settled 分母 = return_path IS NOT NULL
         path_settled = conn.execute(
             "SELECT COUNT(*) FROM forward_test_records WHERE return_path IS NOT NULL AND is_unbuyable = 0"
         ).fetchone()[0]
-        path_wins = conn.execute(
-            "SELECT COUNT(*) FROM forward_test_records WHERE is_win_path = 1 AND is_unbuyable = 0"
-        ).fetchone()[0]
+        path_wins = conn.execute("SELECT COUNT(*) FROM forward_test_records WHERE is_win_path = 1 AND is_unbuyable = 0").fetchone()[0]
         u_path_settled = conn.execute(
             "SELECT COUNT(*) FROM universe_returns WHERE return_path IS NOT NULL AND is_unbuyable = 0"
         ).fetchone()[0]
-        u_path_wins = conn.execute(
-            "SELECT COUNT(*) FROM universe_returns WHERE is_win_path = 1 AND is_unbuyable = 0"
-        ).fetchone()[0]
+        u_path_wins = conn.execute("SELECT COUNT(*) FROM universe_returns WHERE is_win_path = 1 AND is_unbuyable = 0").fetchone()[0]
     finally:
         conn.close()
 
@@ -500,20 +487,14 @@ def get_forward_test_summary(
         note_parts.append("无已结算 picks（需次日回填收益）")
     elif total > 0 and s_settled < 0.8 * total:
         # 116 诚实层：picks 收益覆盖低（如 live 日 backtest_samples 未含收益）→ verdict 基于部分样本
-        note_parts.append(
-            f"picks 收益覆盖低（{s_settled}/{total} settled）→ verdict 基于部分样本（待 live 日收益回填）"
-        )
+        note_parts.append(f"picks 收益覆盖低（{s_settled}/{total} settled）→ verdict 基于部分样本（待 live 日收益回填）")
     if u_settled == 0:
         note_parts.append("无随机基准（universe_returns 未回填 → 无法 §44 验证 lift）")
     if u_settled > 0 and s_settled > 0:
         if lift < PASS_LIFT_HARD_FLOOR:
-            note_parts.append(
-                f"lift {lift}x < {PASS_LIFT_HARD_FLOOR}x → §44 硬底线（劣于随机，移除/权重0，不保留跑通）"
-            )
+            note_parts.append(f"lift {lift}x < {PASS_LIFT_HARD_FLOOR}x → §44 硬底线（劣于随机，移除/权重0，不保留跑通）")
         elif lift < PASS_LIFT_FLOOR:
-            note_parts.append(
-                f"lift {lift}x < {PASS_LIFT_FLOOR}x → §44 噪声（未 validated，不阻断接入跑通，60日后复验）"
-            )
+            note_parts.append(f"lift {lift}x < {PASS_LIFT_FLOOR}x → §44 噪声（未 validated，不阻断接入跑通，60日后复验）")
         if s_lo <= u_hi:  # 策略 CI 与随机 CI 重叠 = 不显著优于随机
             note_parts.append("策略 CI 与随机 CI 重叠（不显著优于随机）")
     if s_settled > 0 and s_winrate < PASS_WINRATE_FLOOR:
@@ -524,9 +505,7 @@ def get_forward_test_summary(
         note_parts.append(f"连续亏损 {consecutive_loss} 笔（kill criteria 触发）")
     # S144 R2/R3：buyable-only 口径诚实标注——剔了多少一字板（picks 侧）
     if s_unbuyable > 0:
-        note_parts.append(
-            f"buyable-only 口径剔 picks 中 {s_unbuyable} 个一字板（T+1 涨停封死不可买，is_win=NULL 排除）"
-        )
+        note_parts.append(f"buyable-only 口径剔 picks 中 {s_unbuyable} 个一字板（T+1 涨停封死不可买，is_win=NULL 排除）")
     # S144 A3：原口径 lift（含 unbuyable 污染）vs buyable-only lift 双报——量化污染影响（方向非预设）
     # 差异非零 = picks 或 universe 含 unbuyable（任一侧污染）
     if s_settled > 0 and u_settled > 0 and lift_unfiltered != lift:

@@ -94,9 +94,7 @@ def _collect_signal_dates_multi_source() -> list[tuple[str, str]]:
     if ZT_DB.exists():
         try:
             c = sqlite3.connect(str(ZT_DB))
-            rows = c.execute(
-                "SELECT DISTINCT date FROM zt_history WHERE lbc>=1 AND is_final=1 ORDER BY date"
-            ).fetchall()
+            rows = c.execute("SELECT DISTINCT date FROM zt_history WHERE lbc>=1 AND is_final=1 ORDER BY date").fetchall()
             c.close()
             for r in rows:
                 d = (r[0] or "")[:10]

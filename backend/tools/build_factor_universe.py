@@ -308,8 +308,7 @@ def main() -> int:
         flush=True,
     )
     print(
-        f"==> survivorship: balanced={balanced} missing_backfill_oldboard={missing_backfill} "
-        f"newly_listed={newly_listed}",
+        f"==> survivorship: balanced={balanced} missing_backfill_oldboard={missing_backfill} newly_listed={newly_listed}",
         flush=True,
     )
     print(

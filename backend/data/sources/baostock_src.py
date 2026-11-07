@@ -133,9 +133,7 @@ def ensure_login() -> None:
             _mark_call()
             if _rs.error_code != "0":
                 breaker.record_failure()
-                raise DependencyMissing(
-                    f"[CircuitBreaker:baostock] 熔断+直连login失败: {_rs.error_code} {_rs.error_msg}"
-                )
+                raise DependencyMissing(f"[CircuitBreaker:baostock] 熔断+直连login失败: {_rs.error_code} {_rs.error_msg}")
             breaker.reset()
             _BS_READY = True  # 复用直连 login 的 session
             _last_liveness_ts = time.time()

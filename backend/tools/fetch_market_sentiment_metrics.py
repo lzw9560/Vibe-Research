@@ -204,9 +204,7 @@ def diagnose() -> SentimentResult:
     der_s, der_d = compute_deriv(index_bars)
 
     # 加权（文档化）
-    score = int(
-        liq_s * W1_LIQUIDITY / 100 + prof_s * W2_PROFIT_EFFECT / 100 + lad_s * W3_LADDER / 100 + der_s * W4_DERIV / 100
-    )
+    score = int(liq_s * W1_LIQUIDITY / 100 + prof_s * W2_PROFIT_EFFECT / 100 + lad_s * W3_LADDER / 100 + der_s * W4_DERIV / 100)
 
     if score <= 35:
         state = "冰点"

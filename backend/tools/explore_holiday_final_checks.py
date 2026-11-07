@@ -29,9 +29,7 @@ for i in range(1, len(calendar)):
     d1 = datetime.strptime(calendar[i], "%Y-%m-%d")
     gap = (d1 - d0).days
     if gap >= HOLIDAY_GAP:
-        holidays.append(
-            {"last_before": calendar[i - 1], "first_after": calendar[i], "gap": gap, "idx_last": i - 1, "idx_first": i}
-        )
+        holidays.append({"last_before": calendar[i - 1], "first_after": calendar[i], "gap": gap, "idx_last": i - 1, "idx_first": i})
 
 
 def classify_holiday(h):
@@ -152,9 +150,7 @@ for htype in ["春节", "国庆", "清明", "元旦", "端午", "中秋"]:
             continue
         s = stats([p["ret"] for p in sub])
         lift = s["mean"] / base_s["mean"] if base_s["mean"] != 0 else 0
-        print(
-            f"  {htype:<6} {'ToM' if tom_flag else 'mid':<5} {s['n']:>4} {s['mean']:>8.3f} {s['wr'] * 100:>6.1f} {lift:>5.2f}x"
-        )
+        print(f"  {htype:<6} {'ToM' if tom_flag else 'mid':<5} {s['n']:>4} {s['mean']:>8.3f} {s['wr'] * 100:>6.1f} {lift:>5.2f}x")
 
 # ---------- Lag structure: which days carry the edge? ----------
 print(f"\n{'=' * 70}")
@@ -215,7 +211,5 @@ for i in range(len(calendar) - 1):
         if o and c and o > 0:
             qe_rets.append((c - o) / o * 100)
 qe_s = stats(qe_rets)
-print(
-    f"  Quarter-end ToM: n={qe_s['n']} EV={qe_s['mean']:.4f}% WR={qe_s['wr'] * 100:.1f}% lift={qe_s['mean'] / base_s['mean']:.2f}x"
-)
+print(f"  Quarter-end ToM: n={qe_s['n']} EV={qe_s['mean']:.4f}% WR={qe_s['wr'] * 100:.1f}% lift={qe_s['mean'] / base_s['mean']:.2f}x")
 print(f"  -> If Q-end > regular ToM => quarter-end window dressing amplifies")

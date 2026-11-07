@@ -291,10 +291,7 @@ def daily_full_pull(payload: Dict[str, Any]) -> Dict[str, Any]:
             try:
                 _c = _sql.connect(str(zt_db), timeout=5)
                 report_codes = [
-                    r[0]
-                    for r in _c.execute(
-                        "SELECT code FROM zt_history WHERE date=? AND code IS NOT NULL", (date_str,)
-                    ).fetchall()
+                    r[0] for r in _c.execute("SELECT code FROM zt_history WHERE date=? AND code IS NOT NULL", (date_str,)).fetchall()
                 ][:30]  # 限 30 股研报（防 stoke subprocess 长时间）
                 _c.close()
             except Exception as e:  # noqa: BLE001
@@ -356,12 +353,7 @@ def daily_full_pull(payload: Dict[str, Any]) -> Dict[str, Any]:
         zt_db = resolve_data_dir() / "zt_history.db"
         if zt_db.exists():
             conn = sqlite3.connect(str(zt_db), timeout=5)
-            codes = [
-                r[0]
-                for r in conn.execute(
-                    "SELECT code FROM zt_history WHERE date=? AND code IS NOT NULL", (date_str,)
-                ).fetchall()
-            ]
+            codes = [r[0] for r in conn.execute("SELECT code FROM zt_history WHERE date=? AND code IS NOT NULL", (date_str,)).fetchall()]
             conn.close()
         else:
             codes = []
@@ -394,9 +386,7 @@ def daily_full_pull(payload: Dict[str, Any]) -> Dict[str, Any]:
                     saved_codes = out.get("saved_codes_dates", 0)
                 else:
                     failed_codes = len(target_codes)
-                    logger.warning(
-                        "[daily_full_pull] ticks proxy 失败 rc=%s stderr=%s", r.returncode, (r.stderr or "")[:200]
-                    )
+                    logger.warning("[daily_full_pull] ticks proxy 失败 rc=%s stderr=%s", r.returncode, (r.stderr or "")[:200])
             except (subprocess.TimeoutExpired, _json.JSONDecodeError, OSError) as e:
                 failed_codes = len(target_codes)
                 logger.warning("[daily_full_pull] ticks subprocess 异常: %s", e)
@@ -405,9 +395,7 @@ def daily_full_pull(payload: Dict[str, Any]) -> Dict[str, Any]:
             "pulled_codes": len(target_codes),
             "saved_codes_dates": saved_codes,
             "failed_codes": failed_codes,
-            "note": "mootdx raw ticks 经 stoke venv subprocess --save-datalake 落 datalake"
-            if stoke_py.exists()
-            else "stoke venv 缺",
+            "note": "mootdx raw ticks 经 stoke venv subprocess --save-datalake 落 datalake" if stoke_py.exists() else "stoke venv 缺",
         }
     except Exception as e:  # noqa: BLE001
         logger.warning("[daily_full_pull] ticks 沉淀失败: %s", e)

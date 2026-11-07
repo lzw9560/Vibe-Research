@@ -144,10 +144,7 @@ def main() -> dict[str, Any]:
     wr_all = all_wins / n_obs
     net_mean = statistics.mean(o["net"] for o in obs)
     mean_cost = sum(o["cost"] for o in obs) / n_obs if obs else 0.0
-    print(
-        f"\nobs={n_obs} days={days} | all net-WR(首板 D+1): {wr_all * 100:.2f}% net_mean={net_mean:.2f}% "
-        f"(扣 cost ~{mean_cost:.2f}%)"
-    )
+    print(f"\nobs={n_obs} days={days} | all net-WR(首板 D+1): {wr_all * 100:.2f}% net_mean={net_mean:.2f}% (扣 cost ~{mean_cost:.2f}%)")
 
     # day_paired: picks = all lbc==1（post_first_board 是 binary arm，无 score-ranked quintile split）。
     # 同日 picks == universe（all first-board）→ selection lift≈1.0 by design；
@@ -200,10 +197,7 @@ def main() -> dict[str, Any]:
             "lbc": 1,
         },
     )
-    print(
-        f"\n[verdict] selection: status={v_sel.status} lift={v_sel.selection_lift} "
-        f"n={v_sel.n} days_robust={v_sel.days_robust}"
-    )
+    print(f"\n[verdict] selection: status={v_sel.status} lift={v_sel.selection_lift} n={v_sel.n} days_robust={v_sel.days_robust}")
     print(f"[verdict] event:     status={v_evt.status} n={v_evt.n} days_robust={v_evt.days_robust}")
     return {
         "selection": _verdict_summary(v_sel),

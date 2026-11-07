@@ -464,9 +464,7 @@ def main():
         return
 
     # 2. compute gap series (same as s44_gap_run_60d)
-    returns, dates, costs, n_unbuyable, n_no_code, n_bad_close, n_suspended, n_adj_mm = compute_gap_series(
-        fbs, cache, idx_maps, calendar
-    )
+    returns, dates, costs, n_unbuyable, n_no_code, n_bad_close, n_suspended, n_adj_mm = compute_gap_series(fbs, cache, idx_maps, calendar)
     arr = np.asarray(returns, dtype=float)
     n = arr.size
     overall_net = float(arr.mean()) * 100 if n else 0.0

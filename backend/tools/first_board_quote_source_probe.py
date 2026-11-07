@@ -206,9 +206,7 @@ def _probe_mootdx(codes: list[str]) -> dict:
             per["bids"] = {"error": f"bids 失败: {e!r}", "latency_ms": round((time.monotonic() - t1) * 1000, 1)}
         out["per_code"][code] = per
 
-    out["ok"] = any(
-        p.get("quotes", {}).get("non_empty") or p.get("bids", {}).get("non_empty") for p in out["per_code"].values()
-    )
+    out["ok"] = any(p.get("quotes", {}).get("non_empty") or p.get("bids", {}).get("non_empty") for p in out["per_code"].values())
     return out
 
 

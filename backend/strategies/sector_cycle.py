@@ -272,8 +272,7 @@ def aggregate_sectors(date: str) -> list[dict]:
         # 2. 当日各板块涨停数（单条 GROUP BY，替代 per-industry COUNT）
         today_counts = dict(
             conn.execute(
-                "SELECT industry, COUNT(DISTINCT code) FROM gene_scores "
-                "WHERE date = ? AND industry IS NOT NULL GROUP BY industry",
+                "SELECT industry, COUNT(DISTINCT code) FROM gene_scores WHERE date = ? AND industry IS NOT NULL GROUP BY industry",
                 (date,),
             ).fetchall()
         )

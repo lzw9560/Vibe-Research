@@ -225,8 +225,7 @@ def _build_condition_matches(
                 condition="高封板率",
                 value=f"封板率 {seal_rate:.1f}%",
                 description=(
-                    f"策略逻辑上，{name} 的封板率为 {seal_rate:.1f}%，"
-                    f"属于较高封板率水平。策略逻辑上，高封板率意味着该股的涨停较为稳固。"
+                    f"策略逻辑上，{name} 的封板率为 {seal_rate:.1f}%，属于较高封板率水平。策略逻辑上，高封板率意味着该股的涨停较为稳固。"
                 ),
             )
         )
@@ -287,8 +286,7 @@ def _build_condition_matches(
                 condition="低封板率",
                 value=f"封板率 {seal_rate:.1f}%",
                 description=(
-                    f"策略逻辑上，{name} 的封板率为 {seal_rate:.1f}%，"
-                    f"属于较低封板率水平。策略逻辑上，低封板率意味着涨停的稳固性可能不足。"
+                    f"策略逻辑上，{name} 的封板率为 {seal_rate:.1f}%，属于较低封板率水平。策略逻辑上，低封板率意味着涨停的稳固性可能不足。"
                 ),
             )
         )
@@ -327,8 +325,7 @@ def _build_condition_matches(
         logic_desc = "；".join(logic_parts) + "。"
     else:
         logic_desc = (
-            f"策略逻辑上，{name} 在当前条件下未匹配到明显的策略信号。"
-            f"这不代表没有机会，只是基于历史统计特征，该股的因子表现较为中性。"
+            f"策略逻辑上，{name} 在当前条件下未匹配到明显的策略信号。这不代表没有机会，只是基于历史统计特征，该股的因子表现较为中性。"
         )
 
     return StrategyLogicMatch(

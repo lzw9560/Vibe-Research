@@ -586,9 +586,7 @@ class TradeJournal:
             "cum_pnl": round(cum, 2),
             "peak_pnl": round(peak_pnl, 2),
             "drawdown_cny": round(drawdown_cny, 2),
-            "drawdown_pct": round(drawdown_cny / DEFAULT_INITIAL_CAPITAL * 100, 2)
-            if DEFAULT_INITIAL_CAPITAL > 0
-            else 0.0,
+            "drawdown_pct": round(drawdown_cny / DEFAULT_INITIAL_CAPITAL * 100, 2) if DEFAULT_INITIAL_CAPITAL > 0 else 0.0,
             "days_tracked": len(dates),
             "n_records": len(records),
         }

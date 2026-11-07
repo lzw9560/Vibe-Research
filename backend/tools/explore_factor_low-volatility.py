@@ -178,9 +178,7 @@ def cross_sectional_deciles_lowvol(snaps: dict, factor_idx: int) -> tuple[list[s
     return long_codes, short_codes
 
 
-def ew_close_return(
-    codes: list[str], entry_date: str, exit_date: str, closes: dict[str, dict[str, float]]
-) -> tuple[float | None, int]:
+def ew_close_return(codes: list[str], entry_date: str, exit_date: str, closes: dict[str, dict[str, float]]) -> tuple[float | None, int]:
     """Equal-weight close-to-close holding return for a code list.
 
     If exit_date close missing (suspended), uses nearest available close before
@@ -203,9 +201,7 @@ def ew_close_return(
     return sum(rets) / len(rets), len(rets)
 
 
-def market_period_return(
-    mkt_daily: dict[str, float], entry_date: str, exit_date: str, calendar: list[str]
-) -> float | None:
+def market_period_return(mkt_daily: dict[str, float], entry_date: str, exit_date: str, calendar: list[str]) -> float | None:
     """Cumulative market return over [entry, exit] from daily pctChg (percent → decimal)."""
     try:
         ei = calendar.index(entry_date)
@@ -226,9 +222,7 @@ def market_period_return(
 # ---------- Newey-West HAC (statsmodels unavailable; self-contained) ----------
 
 
-def newey_west(
-    y: np.ndarray, x: np.ndarray, max_lag: int | None = None
-) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+def newey_west(y: np.ndarray, x: np.ndarray, max_lag: int | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
     """OLS with Newey-West HAC SE (Bartlett kernel).
 
     Returns (beta, se, t) — arrays of length k.
@@ -388,28 +382,20 @@ def analyze_frequency(zoo: dict, closes: dict, step: int, label: str) -> dict:
     print(f"  factor_return mean = {mean * 100:.4f}%/period  std = {std * 100:.4f}%  WR(>0) = {wr:.1f}%")
     print(f"  net (after {COST_LONG_SHORT * 100:.1f}% long-short cost) = {net_mean * 100:.4f}%/period")
     print(f"  NW HAC t = {t:.3f}  one-sided p(>0) = {p_one:.6f}  (n={n}, maxlag auto)")
-    print(
-        f"  per-period Sharpe = {sharpe:.4f}  long_avg={n_long_total / max(n, 1):.1f} "
-        f"short_avg={n_short_total / max(n, 1):.1f}"
-    )
+    print(f"  per-period Sharpe = {sharpe:.4f}  long_avg={n_long_total / max(n, 1):.1f} short_avg={n_short_total / max(n, 1):.1f}")
 
     # CAPM alpha (risk-adjusted factor alpha)
     capm = capm_nw(factor_rets, mkt_rets)
     if capm is not None:
         alpha, a_se, a_t, beta_mkt = capm
-        print(
-            f"  CAPM: alpha = {alpha * 100:.4f}%  (se {a_se * 100:.4f}%, NW t = {a_t:.3f})  beta_mkt = {beta_mkt:.4f}"
-        )
+        print(f"  CAPM: alpha = {alpha * 100:.4f}%  (se {a_se * 100:.4f}%, NW t = {a_t:.3f})  beta_mkt = {beta_mkt:.4f}")
     else:
         alpha, a_t, beta_mkt = 0.0, 0.0, 0.0
 
     # Bonferroni: within-vol (×N_FREQS) AND cross-factor (×N_CROSS_FACTOR)
     n_tests = len(FREQS) * N_CROSS_FACTOR
     p_bonf = bonferroni_p(p_one, n_tests)
-    print(
-        f"  Bonferroni: raw p={p_one:.6f} × {len(FREQS)}(freqs)×{N_CROSS_FACTOR}"
-        f"(factors) = ×{n_tests} → p_bonf = {p_bonf:.6f}"
-    )
+    print(f"  Bonferroni: raw p={p_one:.6f} × {len(FREQS)}(freqs)×{N_CROSS_FACTOR}(factors) = ×{n_tests} → p_bonf = {p_bonf:.6f}")
 
     # walk-forward: chronological split
     mid = n // 2
@@ -425,18 +411,11 @@ def analyze_frequency(zoo: dict, closes: dict, step: int, label: str) -> dict:
     te_capm = capm_nw(test, mkt_rets[mid:]) if len(test) >= 10 else None
     tr_alpha = tr_capm[0] if tr_capm else 0.0
     te_alpha = te_capm[0] if te_capm else 0.0
-    print(
-        f"  walk-forward: train n={len(train)} mean={train_m * 100:.4f}% NWt={train_t:.3f} alpha={tr_alpha * 100:.4f}%"
-    )
-    print(
-        f"               test  n={len(test)} mean={test_mean * 100:.4f}% NWt={test_t:.3f} "
-        f"alpha={te_alpha * 100:.4f}% p_one={test_p:.6f}"
-    )
+    print(f"  walk-forward: train n={len(train)} mean={train_m * 100:.4f}% NWt={train_t:.3f} alpha={tr_alpha * 100:.4f}%")
+    print(f"               test  n={len(test)} mean={test_mean * 100:.4f}% NWt={test_t:.3f} alpha={te_alpha * 100:.4f}% p_one={test_p:.6f}")
 
     # ---- honest verdict ----
-    verdict = verdict_factor(
-        mean, net_mean, t, p_bonf, alpha, a_t, len(test) >= 60, train_m, test_m, test_t, test_p, n, label
-    )
+    verdict = verdict_factor(mean, net_mean, t, p_bonf, alpha, a_t, len(test) >= 60, train_m, test_m, test_t, test_p, n, label)
     print(f"  >>> VERDICT: {verdict}")
 
     return {
@@ -527,9 +506,7 @@ def main() -> int:
         f"n_rebal={len(rd)}  cross-sec avg={meta['cross_section_size']['avg_codes_per_rebalance']}",
         flush=True,
     )
-    print(
-        f"    [target] factor: {FACTOR_NAME} (idx={FACTOR_IDX}) — LONG low-vol (D1) + SHORT high-vol (D10)", flush=True
-    )
+    print(f"    [target] factor: {FACTOR_NAME} (idx={FACTOR_IDX}) — LONG low-vol (D1) + SHORT high-vol (D10)", flush=True)
 
     print("==> collecting needed dates + loading closes ...", flush=True)
     needed = collect_needed_dates(rd, cal)
@@ -548,10 +525,7 @@ def main() -> int:
         bh_adj = bh_fdr_p(raw_ps)
         print(f"\n--- BH FDR sensitivity (less conservative than Bonferroni) ---")
         for r, p_raw, p_bh in zip([r for r in results if r.get("n", 0) >= 10], raw_ps, bh_adj):
-            print(
-                f"  {r['label']}: raw p={p_raw:.6f} → BH-adj p={p_bh:.6f} "
-                f"({'PASS' if p_bh < ALPHA else 'FAIL'} FDR<0.05)"
-            )
+            print(f"  {r['label']}: raw p={p_raw:.6f} → BH-adj p={p_bh:.6f} ({'PASS' if p_bh < ALPHA else 'FAIL'} FDR<0.05)")
 
     # ---- summary: pick best (lowest p) for primary report ----
     valid = [r for r in results if r.get("n", 0) >= 10]
@@ -583,27 +557,16 @@ def main() -> int:
 
     # ---- honest caveats ----
     print("\n--- 诚实标注 (禁止外推) ---")
-    print(
-        "1. 本脚本测的是横截面 volatility_20d 因子 (long-short decile, "
-        "long 低波动 + short 高波动), 非 long-only EV, 非其他因子."
-    )
+    print("1. 本脚本测的是横截面 volatility_20d 因子 (long-short decile, long 低波动 + short 高波动), 非 long-only EV, 非其他因子.")
     print(
         "2. long-short 需做空高波动股 — A股散户融券极度受限, "
         "统计 alpha ≠ 可交易 (仅机构/融券标的可用). "
         "low-vol long leg 单独可买但 short leg 多为融券受限标的."
     )
-    print(
-        "3. survivorship: 早期 (2018-2020) 横截面 ~264-766 来自非随机 backfill 子集, 晚期 (2025-2026) 横截面大但天数少."
-    )
-    print(
-        "4. 交易成本: long-short 2 round-trip/rebalance, 周度年成本 ~30% "
-        "(0.6%×50周) — 即使 gross edge 存在, net 多为负."
-    )
+    print("3. survivorship: 早期 (2018-2020) 横截面 ~264-766 来自非随机 backfill 子集, 晚期 (2025-2026) 横截面大但天数少.")
+    print("4. 交易成本: long-short 2 round-trip/rebalance, 周度年成本 ~30% (0.6%×50周) — 即使 gross edge 存在, net 多为负.")
     print("5. 4 因子 (本脚本仅低波动) ≠ 横截面有/无 edge ≠ 选股战法有/无 edge.")
-    print(
-        "6. 市场基准 sh.000001 (上证综指, price index excl. dividends) "
-        "非 sh.000300 (沪深300 unavailable) — CAPM beta 估计有基准误差."
-    )
+    print("6. 市场基准 sh.000001 (上证综指, price index excl. dividends) 非 sh.000300 (沪深300 unavailable) — CAPM beta 估计有基准误差.")
 
     # dump machine-readable
     out_path = Path(__file__).parent / "_low_volatility_result.json"

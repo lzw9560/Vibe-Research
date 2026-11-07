@@ -66,9 +66,7 @@ def compute_breadth_series() -> dict:
     print(f"universe: {len(code_bars)} stocks, smallcap(bottom-500 amount): {len(smallcap_codes)}")
 
     # 每日聚合
-    daily: dict[str, dict] = defaultdict(
-        lambda: {"adv": 0, "dec": 0, "flat": 0, "limit_up": 0, "limit_down": 0, "total": 0, "sc_rets": []}
-    )
+    daily: dict[str, dict] = defaultdict(lambda: {"adv": 0, "dec": 0, "flat": 0, "limit_up": 0, "limit_down": 0, "total": 0, "sc_rets": []})
     for code, bars in code_bars.items():
         bl = board_limit(code)
         prev_close = None
@@ -126,10 +124,7 @@ def save_breadth(series: dict) -> None:
     conn.execute("""CREATE TABLE IF NOT EXISTS daily_breadth (
         date TEXT PRIMARY KEY, breadth REAL, adv INTEGER, dec INTEGER, total INTEGER,
         limit_up INTEGER, limit_down INTEGER, smallcap_ret REAL)""")
-    rows = [
-        (d, v["breadth"], v["adv"], v["dec"], v["total"], v["limit_up"], v["limit_down"], v["smallcap_ret"])
-        for d, v in series.items()
-    ]
+    rows = [(d, v["breadth"], v["adv"], v["dec"], v["total"], v["limit_up"], v["limit_down"], v["smallcap_ret"]) for d, v in series.items()]
     conn.executemany(
         """INSERT OR REPLACE INTO daily_breadth
         (date, breadth, adv, dec, total, limit_up, limit_down, smallcap_ret)
@@ -248,14 +243,8 @@ def backtest_capitulation(breadth_thresh: float, ld_thresh: int, hold: int, mode
     print(f"  benchmark(random-day hold={hold}): {bench_mean:.3f}% → excess={excess:.3f}%")
     if train and test:
         tr_m, te_m = statistics.mean(train), statistics.mean(test)
-        tr_t = (
-            tr_m / (statistics.pstdev(train) / sqrt(len(train)))
-            if len(train) > 1 and statistics.pstdev(train) > 0
-            else 0
-        )
-        te_t = (
-            te_m / (statistics.pstdev(test) / sqrt(len(test))) if len(test) > 1 and statistics.pstdev(test) > 0 else 0
-        )
+        tr_t = tr_m / (statistics.pstdev(train) / sqrt(len(train))) if len(train) > 1 and statistics.pstdev(train) > 0 else 0
+        te_t = te_m / (statistics.pstdev(test) / sqrt(len(test))) if len(test) > 1 and statistics.pstdev(test) > 0 else 0
         te_p = norm_sf_positive(te_t)
         decay = (tr_m - te_m) / abs(tr_m) * 100 if tr_m != 0 else 0
         print(
@@ -321,9 +310,7 @@ def main() -> None:
         cap_days = [(d, v) for d, v in series.items() if v["breadth"] < 0.05 or v["limit_down"] > 50]
         print(f"\ncapitulation 候选日（breadth<5% 或 跌停>50）: {len(cap_days)}")
         for d, v in sorted(cap_days)[-15:]:
-            print(
-                f"  {d}: breadth={v['breadth']:.2%} 跌停={v['limit_down']} 涨停={v['limit_up']} 小盘ret={v['smallcap_ret']:.4%}"
-            )
+            print(f"  {d}: breadth={v['breadth']:.2%} 跌停={v['limit_down']} 涨停={v['limit_up']} 小盘ret={v['smallcap_ret']:.4%}")
     elif args.backtest:
         backtest_capitulation(args.breadth_thresh, args.ld_thresh, args.hold, args.mode)
     else:

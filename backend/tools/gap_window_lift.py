@@ -51,9 +51,7 @@ prem = json.loads(PREMIUM.read_text())
 samples = prem["samples"]
 cache = _load_kline_cache()  # S204 T1: enriched（一字板 pctChg=0.0 修复）
 # S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
-validate_or_reject(
-    "baostock_kline", [b for bars in cache.values() for b in bars], as_of=datetime.date.today().isoformat()
-)
+validate_or_reject("baostock_kline", [b for bars in cache.values() for b in bars], as_of=datetime.date.today().isoformat())
 conn = sqlite3.connect(str(DB), timeout=10)
 # gene_scores total_score per (date, code)
 gs = {}
@@ -103,9 +101,7 @@ if len(obs) < 30:
 all_wins = sum(o["win"] for o in obs)
 wr_all = all_wins / len(obs)
 all_net_mean = statistics.mean(o["net_gap"] for o in obs)
-print(
-    f"obs={len(obs)} days={len(set(o['D'] for o in obs))} | no_score={n_no_score} no_bar={n_no_bar} one_word_D_excluded={n_one_word}"
-)
+print(f"obs={len(obs)} days={len(set(o['D'] for o in obs))} | no_score={n_no_score} no_bar={n_no_bar} one_word_D_excluded={n_one_word}")
 print(
     f"gap (D收→D+1开) all: mean={statistics.mean(o['premium'] for o in obs):.2f}% net_gap(mean,扣real_cost~{sum(o['real_cost'] for o in obs) / len(obs):.2f}%)={all_net_mean:.2f}% net_WR={wr_all * 100:.1f}%\n"
 )

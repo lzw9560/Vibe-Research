@@ -108,9 +108,7 @@ def get_backtest_snapshots(days: int = 90) -> List[Dict[str, Any]]:
         for r in rows:
             d = dict(r)
             d["percentile_json"] = json.loads(d["percentile_json"]) if d.get("percentile_json") else None
-            d["strategy_breakdown_json"] = (
-                json.loads(d["strategy_breakdown_json"]) if d.get("strategy_breakdown_json") else None
-            )
+            d["strategy_breakdown_json"] = json.loads(d["strategy_breakdown_json"]) if d.get("strategy_breakdown_json") else None
             out.append(d)
         return out
     finally:

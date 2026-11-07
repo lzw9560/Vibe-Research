@@ -72,8 +72,7 @@ def load_inst_dominant_today(mode: str = "basic") -> list[dict]:
         conn.close()
         return []
     rows = conn.execute(
-        "SELECT security_code, dept_name, buy, change_rate, close_price "
-        "FROM dragon_tiger_rows WHERE trade_date=? AND side='buy' AND buy>0",
+        "SELECT security_code, dept_name, buy, change_rate, close_price FROM dragon_tiger_rows WHERE trade_date=? AND side='buy' AND buy>0",
         (latest,),
     ).fetchall()
     conn.close()

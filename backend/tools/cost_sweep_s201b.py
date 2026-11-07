@@ -168,9 +168,7 @@ def main() -> None:
         f"# S201b cost-sweep（RTC=0.15 + stage2 stop fix）：{len(gross_returns)} 条 event，{len(set(dates))} 唯一日",
         file=sys.stderr,
     )
-    print(
-        f"# 逐笔 _cost_pct mean={sum(per_trade_costs) / len(per_trade_costs):.3f}% (S201b RTC=0.15 后)", file=sys.stderr
-    )
+    print(f"# 逐笔 _cost_pct mean={sum(per_trade_costs) / len(per_trade_costs):.3f}% (S201b RTC=0.15 后)", file=sys.stderr)
     print(f"{'cost 口径':<35} {'day_mean':>10} {'status':>18} {'days_robust':>12} {'p_raw':>8} {'p_bh':>8}")
     print("-" * 100)
 
@@ -198,15 +196,11 @@ def main() -> None:
         v = verdicts[i]
         em = getattr(v, "event_metrics", None)
         day_mean = getattr(em, "day_mean", None) if em else None
-        print(
-            f"{s['label']:<35} {str(day_mean):>10} {v.status:>18} {v.days_robust:>12} {raw_p_values[i]:>8.4f} {bh_adjusted[i]:>8.4f}"
-        )
+        print(f"{s['label']:<35} {str(day_mean):>10} {v.status:>18} {v.days_robust:>12} {raw_p_values[i]:>8.4f} {bh_adjusted[i]:>8.4f}")
     print()
     print("# S201b stage2 结论（stop gap-through-aware fix 后）：", file=sys.stderr)
     print("# - 全口径 falsified（含 flat 0.10%，stage1 raw p<0.05 robust_edge artifact 消失）", file=sys.stderr)
-    print(
-        "# - stop 出场乐观修复使 gross 更差（gap-through fill=open > 硬编码 stop_pct），day_mean 更负", file=sys.stderr
-    )
+    print("# - stop 出场乐观修复使 gross 更差（gap-through fill=open > 硬编码 stop_pct），day_mean 更负", file=sys.stderr)
     print("# - 佣金门是结构性杀手（逐笔 mean=0.914% > gross day_mean），降 spread 不 unfalsify", file=sys.stderr)
 
 

@@ -206,12 +206,7 @@ def _prepend_kill_switch_warning(content: str, ks: dict) -> str:
     if ks.get("gem_change_pct") is not None:
         pct += f"{' / ' if pct else ''}创业板 {ks['gem_change_pct']:.2f}%"
     pct_str = f"（{pct}）" if pct else ""
-    return (
-        f"⚠️ 市场熔断：{ks.get('reason', '')}{pct_str}\n"
-        f"不开新仓。premarket 候选风控价仅供参考，熔断中不入场。\n"
-        f"---\n"
-        f"{content}"
-    )
+    return f"⚠️ 市场熔断：{ks.get('reason', '')}{pct_str}\n不开新仓。premarket 候选风控价仅供参考，熔断中不入场。\n---\n{content}"
 
 
 def _build_auction_notify_content(

@@ -268,13 +268,10 @@ def _load_universe(max_per_day: int | None = None) -> dict[str, list[str]]:
     try:
         if max_per_day:
             rows = conn.execute(
-                "SELECT date, code, total_score FROM gene_scores "
-                "WHERE data_source='eastmoney_live' ORDER BY date, total_score DESC"
+                "SELECT date, code, total_score FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date, total_score DESC"
             ).fetchall()
         else:
-            rows = conn.execute(
-                "SELECT date, code FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
-            ).fetchall()
+            rows = conn.execute("SELECT date, code FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date").fetchall()
     finally:
         conn.close()
     by_day: dict[str, list] = defaultdict(list)
@@ -292,9 +289,7 @@ def main() -> int:
     import argparse
 
     ap = argparse.ArgumentParser(description="S152 盘中 H2 harness（baostock 5min 封板时间×开板次数 lift）")
-    ap.add_argument(
-        "--max-per-day", type=int, default=15, help="每日取 top N 涨停股（preliminary；None=全量，default 15）"
-    )
+    ap.add_argument("--max-per-day", type=int, default=15, help="每日取 top N 涨停股（preliminary；None=全量，default 15）")
     ap.add_argument("--full", action="store_true", help="全量跑（忽略 max-per-day）")
     ap.add_argument("--no-cache", action="store_true", help="强制 re-fetch（忽略 features cache）")
     args = ap.parse_args()
@@ -438,15 +433,8 @@ def main() -> int:
     print(f"universe: {len(features)} features across {len(raw_by_day)} 日")
     print(f"Bonferroni K=6 α_adj={ALPHA_ADJ}（早封板/一字板/开板/晚封板/大回撤/晚封×竞价高开）")
     for name, r in results.items():
-        print(
-            f"  {name}: n={r['n']} lift={r['lift']} state={r['state']} "
-            f"null_p95={r['null_p95']} pass_filter_edge={r['pass_filter_edge']}"
-        )
-    overall = (
-        "validated"
-        if any(r["state"] == "validated" and r["pass_filter_edge"] for r in results.values())
-        else "未validated/劣于随机"
-    )
+        print(f"  {name}: n={r['n']} lift={r['lift']} state={r['state']} null_p95={r['null_p95']} pass_filter_edge={r['pass_filter_edge']}")
+    overall = "validated" if any(r["state"] == "validated" and r["pass_filter_edge"] for r in results.values()) else "未validated/劣于随机"
     print(f"overall: {overall}")
     print("caveat: next_day_return=T+0 intraday o2c（未剔 unbuyable 一字板，S144 口径 follow-up）")
     print("caveat: 5min 粒度（60s 封单 60s→5min coarser，broken_duration<5min 漏标）")

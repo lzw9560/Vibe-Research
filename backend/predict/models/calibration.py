@@ -24,9 +24,7 @@ class ConformalCalibrator:
     ) -> None:
         self.confidence_level = confidence_level
         self.random_state = random_state
-        self.base_estimator = base_estimator or RandomForestClassifier(
-            n_estimators=50, random_state=random_state, n_jobs=1
-        )
+        self.base_estimator = base_estimator or RandomForestClassifier(n_estimators=50, random_state=random_state, n_jobs=1)
         self.conformalizer_: SplitConformalClassifier | None = None
 
     def fit(self, X: np.ndarray, y: np.ndarray, *, calib_size: float = 0.3) -> "ConformalCalibrator":

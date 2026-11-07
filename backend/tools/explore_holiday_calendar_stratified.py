@@ -163,9 +163,7 @@ for i in range(len(calendar) - 1):
     if o and c and o > 0 and c > 0:
         base_returns.append((c - o) / o * 100)
 base_s = stats(base_returns)
-print(
-    f"{'BASE':<8} {base_s['n']:>4} {base_s['mean']:>10.4f} {'':>9} {base_s['wr'] * 100:>6.1f} {'':>6} {'':>10} {'1.00x':>6}"
-)
+print(f"{'BASE':<8} {base_s['n']:>4} {base_s['mean']:>10.4f} {'':>9} {base_s['wr'] * 100:>6.1f} {'':>6} {'':>10} {'1.00x':>6}")
 
 type_results = {}
 for htype in ["春节", "国庆", "中秋", "端午", "劳动节", "清明", "元旦", "其他"]:
@@ -292,9 +290,7 @@ for i in range(len(calendar) - 1):
         if o and c and o > 0:
             jan_rets.append((c - o) / o * 100)
 jan_s = stats(jan_rets)
-print(
-    f"  January effect: n={jan_s['n']} EV={jan_s['mean']:.4f}% WR={jan_s['wr'] * 100:.1f}% lift={jan_s['mean'] / base_s['mean']:.2f}x"
-)
+print(f"  January effect: n={jan_s['n']} EV={jan_s['mean']:.4f}% WR={jan_s['wr'] * 100:.1f}% lift={jan_s['mean'] / base_s['mean']:.2f}x")
 
 # Factor 3: Day of week
 print(f"\n  Day-of-week effect (non-holiday 2-day windows):")
@@ -311,9 +307,7 @@ for dow_name, dow_num in [("Mon", 0), ("Tue", 1), ("Wed", 2), ("Thu", 3), ("Fri"
             if o and c and o > 0:
                 dow_rets.append((c - o) / o * 100)
     s = stats(dow_rets)
-    print(
-        f"    {dow_name}: n={s['n']} EV={s['mean']:.4f}% WR={s['wr'] * 100:.1f}% lift={s['mean'] / base_s['mean']:.2f}x"
-    )
+    print(f"    {dow_name}: n={s['n']} EV={s['mean']:.4f}% WR={s['wr'] * 100:.1f}% lift={s['mean'] / base_s['mean']:.2f}x")
 
 # Factor 4: Pre-holiday overlap with turn-of-month
 print(f"\n  Pre-holiday overlap with turn-of-month:")
@@ -321,9 +315,7 @@ tom_overlap = 0
 for p in pre_picks_all:
     if is_turn_of_month(p["buy_date"]) or is_turn_of_month(p["sell_date"]):
         tom_overlap += 1
-print(
-    f"    {tom_overlap}/{len(pre_picks_all)} pre-holiday picks overlap turn-of-month ({tom_overlap / len(pre_picks_all) * 100:.0f}%)"
-)
+print(f"    {tom_overlap}/{len(pre_picks_all)} pre-holiday picks overlap turn-of-month ({tom_overlap / len(pre_picks_all) * 100:.0f}%)")
 
 # Factor 5: Pre-holiday overlap with end-of-month (payday effect)
 print(f"\n  Pre-holiday overlap with end-of-month (last 3 days):")
@@ -333,9 +325,7 @@ for p in pre_picks_all:
     month_days = [d for d in calendar if d[:7] == ym]
     if month_days and (p["buy_date"] in month_days[-3:] or p["sell_date"] in month_days[-3:]):
         eom_overlap += 1
-print(
-    f"    {eom_overlap}/{len(pre_picks_all)} pre-holiday picks overlap end-of-month ({eom_overlap / len(pre_picks_all) * 100:.0f}%)"
-)
+print(f"    {eom_overlap}/{len(pre_picks_all)} pre-holiday picks overlap end-of-month ({eom_overlap / len(pre_picks_all) * 100:.0f}%)")
 
 # ---------- Spring Festival specific deep dive ----------
 print(f"\n{'=' * 70}")

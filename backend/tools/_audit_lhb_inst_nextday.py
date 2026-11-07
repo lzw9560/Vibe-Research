@@ -158,8 +158,7 @@ def audit_nextday(sample_n: int = 5000) -> dict:
             "t": t,
         }
         print(
-            f"  {layer_name}: n={n_picks} days={n_days} "
-            f"mean={mean:.3f}% median={median:.3f}% WR={wr:.1f}% day_t={t:.2f}"
+            f"  {layer_name}: n={n_picks} days={n_days} mean={mean:.3f}% median={median:.3f}% WR={wr:.1f}% day_t={t:.2f}"
             if mean is not None
             else f"  {layer_name}: n={n_picks} 数据不足"
         )

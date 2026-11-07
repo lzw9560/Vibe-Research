@@ -55,11 +55,7 @@ class NotificationBuilder:
         """
         report_language = normalize_report_language(
             next(
-                (
-                    getattr(result, "report_language", None)
-                    for result in results
-                    if getattr(result, "report_language", None)
-                ),
+                (getattr(result, "report_language", None) for result in results if getattr(result, "report_language", None)),
                 None,
             )
         )

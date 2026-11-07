@@ -99,10 +99,7 @@ def run_standalone(name: str, factor: str, blanket: list[dict], k: int = 5) -> d
     factor_picks = [p for p in blanket if p.get(factor) is not None]
     topk = select_topk_by_factor(factor_picks, factor, k)
 
-    print(
-        f"\n  {name}: universe={len(factor_picks)} picks → top-{k}={len(topk)} "
-        f"({len(set(p['zt_date'] for p in topk))} days)"
-    )
+    print(f"\n  {name}: universe={len(factor_picks)} picks → top-{k}={len(topk)} ({len(set(p['zt_date'] for p in topk))} days)")
 
     if not topk:
         print(f"  → no-data: 无 pick 有 {factor}")
@@ -124,9 +121,7 @@ def run_standalone(name: str, factor: str, blanket: list[dict], k: int = 5) -> d
             "stop_p_raw": 1.0,
         }
 
-    r = analyze_subset(
-        f"{name} (top-{k})", topk, ret_fn_basic=close_ev_basic, ret_fn_stop=close_ev_stop, ret_fn_label="close_ev"
-    )
+    r = analyze_subset(f"{name} (top-{k})", topk, ret_fn_basic=close_ev_basic, ret_fn_stop=close_ev_stop, ret_fn_label="close_ev")
     wf_stop = walk_forward(topk, _stop_ret_fn)
 
     stop_s = r.get("stop_ev", {})

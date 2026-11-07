@@ -41,9 +41,7 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        rows = conn.execute(
-            "SELECT date FROM sti_timeline WHERE raw_break_rate IS NULL AND score IS NOT NULL ORDER BY date ASC"
-        ).fetchall()
+        rows = conn.execute("SELECT date FROM sti_timeline WHERE raw_break_rate IS NULL AND score IS NOT NULL ORDER BY date ASC").fetchall()
     except Exception as exc:
         print(f"[FATAL] 查询 raw_break_rate 缺失行失败：{exc}")
         conn.close()

@@ -389,10 +389,7 @@ def analyze_subset(
         if r is not None:
             basic_by_date[p["zt_date"]].append(r)
     basic_dt = day_paired_t(basic_by_date)
-    print(
-        f"  day-paired: n_days={basic_dt['n_days']} mean={basic_dt['mean']}% "
-        f"t={basic_dt['t']} p_one_sided={basic_dt['p_one_sided']}"
-    )
+    print(f"  day-paired: n_days={basic_dt['n_days']} mean={basic_dt['mean']}% t={basic_dt['t']} p_one_sided={basic_dt['p_one_sided']}")
 
     # ---- stop variant ----
     stop_s = {"n": 0, "ev": 0.0, "std": 0.0, "t": 0.0, "ci_lo": 0.0, "ci_hi": 0.0, "wr": 0.0}
@@ -418,10 +415,7 @@ def analyze_subset(
             if r is not None:
                 stop_by_date[p["zt_date"]].append(r[0])
         stop_dt = day_paired_t(stop_by_date)
-        print(
-            f"  day-paired: n_days={stop_dt['n_days']} mean={stop_dt['mean']}% "
-            f"t={stop_dt['t']} p_one_sided={stop_dt['p_one_sided']}"
-        )
+        print(f"  day-paired: n_days={stop_dt['n_days']} mean={stop_dt['mean']}% t={stop_dt['t']} p_one_sided={stop_dt['p_one_sided']}")
 
         for p in picks:
             r = ret_fn_stop(p)
@@ -539,8 +533,7 @@ def verdict_for(
         # Fix 2026-10-06: train_ev>0 检查——train 半无 edge 而 test 半有 = regime 过拟合
         if wf_train_ev <= 0:
             print(
-                f"    → EXPLORATORY: train_EV={wf_train_ev}% <= 0 (edge not in train half, "
-                f"test_EV={wf_test_ev}% may be regime overfitting)"
+                f"    → EXPLORATORY: train_EV={wf_train_ev}% <= 0 (edge not in train half, test_EV={wf_test_ev}% may be regime overfitting)"
             )
             return "exploratory"
         if wf_test_ev <= 0:

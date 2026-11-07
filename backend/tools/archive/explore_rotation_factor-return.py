@@ -351,8 +351,7 @@ def verdict_for_factor(
     if wf["status"] == "ok":
         if wf["train"]["mean_pct"] <= 0:
             print(
-                f"    -> EXPLORATORY: train mean={wf['train']['mean_pct']}% <= 0 "
-                f"(alpha absent in train half — test may be regime overfit)"
+                f"    -> EXPLORATORY: train mean={wf['train']['mean_pct']}% <= 0 (alpha absent in train half — test may be regime overfit)"
             )
             return "exploratory"
         if wf["test"]["mean_pct"] <= 0:
@@ -365,10 +364,7 @@ def verdict_for_factor(
                 f"test p={wf['test']['p_one_sided']} Bonf={wf_test_bonf} >= {ALPHA_LEVEL}"
             )
             return "exploratory"
-        print(
-            f"    -> EDGE-CONFIRMED: gross+net alpha > 0, Bonferroni PASS, "
-            f"OOS test mean={wf['test']['mean_pct']}% significant"
-        )
+        print(f"    -> EDGE-CONFIRMED: gross+net alpha > 0, Bonferroni PASS, OOS test mean={wf['test']['mean_pct']}% significant")
         return "edge-confirmed"
     print("    -> EXPLORATORY: walk-forward unavailable")
     return "exploratory"
@@ -440,9 +436,7 @@ def run_one_formation(data: dict, universe: list[str], fw: int) -> dict:
     wf = walk_forward_blocks(fb["block_factor"], fb["block_dates"])
     sharpe = bs["mean_pct"] / bs["std_pct"] * math.sqrt(26) if bs["std_pct"] > 0 else 0.0
 
-    vd = verdict_for_factor(
-        fw, gross_mean_pct, net_mean_pct, bs["t"], bs["p_one_sided"], bs["n"], bonf_p, wf, iso["beta"]
-    )
+    vd = verdict_for_factor(fw, gross_mean_pct, net_mean_pct, bs["t"], bs["p_one_sided"], bs["n"], bonf_p, wf, iso["beta"])
     return {
         "formation_weeks": fw,
         "n_rebalances": bs["n"],
@@ -483,9 +477,7 @@ def main() -> None:
     bench = [x for x in data["bench"] if x is not None]
     print(f"window: {dates[0]} .. {dates[-1]} ({len(dates)} days)")
     print(f"universe: {len(universe)} industries (median membership >= {MIN_MEDIAN_MEMBERSHIP})")
-    print(
-        f"benchmark: 上证指数 mean daily = {mean(bench) * 100:.4f}% -> annualized ~{(1 + mean(bench)) ** 250 - 1:.1%}"
-    )
+    print(f"benchmark: 上证指数 mean daily = {mean(bench) * 100:.4f}% -> annualized ~{(1 + mean(bench)) ** 250 - 1:.1%}")
     print(f"K (long/short): {K_LONG_SHORT} each ({K_LONG_SHORT / len(universe) * 100:.0f}% tail)")
     print(f"holding: {HOLDING_WEEKS}w ({HOLDING_WEEKS * 5}d non-overlapping blocks)")
     print(
@@ -502,10 +494,7 @@ def main() -> None:
 
     # summary table
     print(f"\n\n{'=' * 74}\nSUMMARY (factor-return, alpha-isolated)\n{'=' * 74}")
-    print(
-        f"{'form':>5} {'n':>5} {'gross%':>8} {'net%':>8} {'t':>7} "
-        f"{'p':>9} {'Bonf×12':>9} {'Sharpe':>7} {'isoβ':>6} {'verdict':>14}"
-    )
+    print(f"{'form':>5} {'n':>5} {'gross%':>8} {'net%':>8} {'t':>7} {'p':>9} {'Bonf×12':>9} {'Sharpe':>7} {'isoβ':>6} {'verdict':>14}")
     best = None
     for r in results:
         print(
@@ -523,10 +512,7 @@ def main() -> None:
     b = best
     print(f"  formation={b['formation_weeks']}w  n_rebalances={b['n_rebalances']}")
     print(f"  gross factor alpha = {b['gross_alpha_pct']}% per 2-week block")
-    print(
-        f"  net factor alpha   = {b['net_alpha_pct']}% (after est. cost "
-        f"{b['cost_per_block_pct']}%/block, turnover {b['turnover']})"
-    )
+    print(f"  net factor alpha   = {b['net_alpha_pct']}% (after est. cost {b['cost_per_block_pct']}%/block, turnover {b['turnover']})")
     print(f"  t={b['t']}  p_one_sided={b['p_one_sided']}  Bonf×12={b['bonf_p_x12']}  Bonf×4={b['bonf_p_x4']}")
     print(f"  annualized Sharpe={b['sharpe_annualized']}  win_rate={b['wr_pct']}%")
     print(
@@ -553,10 +539,7 @@ def main() -> None:
     print(f"  方法: factor-return (cross-sectional 动量因子, alpha-isolated via long-short)")
     print(f"  alpha 是否从 beta 隔离: ", end="")
     if abs(b["isolation_beta"]) < 0.20:
-        print(
-            f"是 — LS-benchmark beta={b['isolation_beta']} (|β|<0.20), "
-            f"市场 beta 在多空对冲中抵消, 因子收益是纯 cross-sectional alpha"
-        )
+        print(f"是 — LS-benchmark beta={b['isolation_beta']} (|β|<0.20), 市场 beta 在多空对冲中抵消, 因子收益是纯 cross-sectional alpha")
     else:
         print(f"否/部分 — LS-benchmark beta={b['isolation_beta']} (|β|>=0.20), alpha 含残留市场 beta, 隔离不彻底")
     print(

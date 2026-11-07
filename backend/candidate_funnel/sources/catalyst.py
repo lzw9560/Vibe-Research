@@ -41,9 +41,7 @@ def _fetch_single(c: str, as_of: str) -> tuple[str, dict]:
     try:
         anns = astock.announcements(c, limit=10) or []
         models = [announcement_from_dict(a) for a in anns]
-        entry["announcements"] = [
-            {"title": m.title, "date": m.date, "type": classify_announcement({"title": m.title})} for m in models
-        ]
+        entry["announcements"] = [{"title": m.title, "date": m.date, "type": classify_announcement({"title": m.title})} for m in models]
         if not entry["announcements"]:
             entry["missing"]["announcements"] = "近期无公告"
     except Exception:

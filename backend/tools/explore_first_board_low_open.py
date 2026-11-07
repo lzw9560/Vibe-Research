@@ -407,9 +407,7 @@ for code, ds in code_dates.items():
             continue
         gap = (d1_open - d_close) / d_close * 100
         d1_locked = d1_open >= d_close * 0.995 and d1_low >= d_close * 0.995
-        d2_locked_up = (
-            d2_open >= bar_d1.get("close", d1_open) * 1.095 and d2_low >= bar_d1.get("close", d1_open) * 1.095
-        )
+        d2_locked_up = d2_open >= bar_d1.get("close", d1_open) * 1.095 and d2_low >= bar_d1.get("close", d1_open) * 1.095
         if d1_locked or d2_locked_up:
             continue
         nzt_records.append(

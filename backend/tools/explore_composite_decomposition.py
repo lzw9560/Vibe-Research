@@ -108,10 +108,7 @@ def main() -> None:
     calendar = sorted(all_dates)
     print(f"  kline codes={len(code_map)} calendar days={len(calendar)} zt_rows={len(zt_rows)}")
     print(f"  zt date range: {min(d for d, _, _ in zt_rows)} ~ {max(d for d, _, _ in zt_rows)}")
-    print(
-        f"  gene_scores: {n_gene} rows, {len(gene)} dates "
-        f"({min(gene) if gene else 'N/A'} ~ {max(gene) if gene else 'N/A'})"
-    )
+    print(f"  gene_scores: {n_gene} rows, {len(gene)} dates ({min(gene) if gene else 'N/A'} ~ {max(gene) if gene else 'N/A'})")
 
     # ---- build blanket picks ----
     print("\n[2] 构建 blanket picks (entry=T+1 open, exit=T+2 close, 一字涨停跳过)…")
@@ -121,9 +118,7 @@ def main() -> None:
     # ---- attach 5 factors ----
     print("\n[3] 附 5 因子 (turn/vr5/gap/lbc/gene_score) ...")
     blanket, n_complete, counts = attach_factors(blanket, code_map, gene)
-    print(
-        f"  5 因子全有 (composite universe): {n_complete} ({n_complete / max(len(blanket), 1) * 100:.1f}% of blanket)"
-    )
+    print(f"  5 因子全有 (composite universe): {n_complete} ({n_complete / max(len(blanket), 1) * 100:.1f}% of blanket)")
     print(f"  各因子覆盖:")
     for f in FACTORS:
         c = counts[f]
@@ -255,10 +250,7 @@ def main() -> None:
     print(f"\n  alone top-5 EV ranking (高→低):")
     for f in alone_ranked:
         r = alone_results[f]
-        print(
-            f"    {_short(f):<6}: EV={r['ev']:+.3f}%  t={r['t_day']:.2f}  "
-            f"Bonf×10={r['bonf']:.6f}  verdict={r['verdict']}"
-        )
+        print(f"    {_short(f):<6}: EV={r['ev']:+.3f}%  t={r['t_day']:.2f}  Bonf×10={r['bonf']:.6f}  verdict={r['verdict']}")
 
     loo_ranked = sorted(FACTORS, key=lambda f: loo_results[f]["delta"], reverse=True)
     print(f"\n  leave-one-out delta ranking (大正向贡献→负):")
@@ -394,10 +386,7 @@ def _print_honest_notes(
     print("   用 ×10 (n_cross_factor=5); loo 不出 verdict 只报 EV+delta")
     print("   (loo 是辅助诊断非独立假说)。")
     agree_str = "一致" if agree else "不一致 (以 alone standalone EV 为主)"
-    print(
-        f"8. driver={_short(driver)} ({implication}); alone best={_short(best_alone)} "
-        f"loo best={_short(best_loo)} → {agree_str}"
-    )
+    print(f"8. driver={_short(driver)} ({implication}); alone best={_short(best_alone)} loo best={_short(best_loo)} → {agree_str}")
     print(f"\nOVERALL driver: {_short(driver)} ({implication})")
 
 

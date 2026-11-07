@@ -141,9 +141,7 @@ def combo_analysis(end_date: str = "2026-09-17", days: int = 180) -> dict:
             # open_ret: T+1 open → T+2（含 T+1 日内涨幅，对 T+1-close 信号有 look-ahead 泄漏）
             open_ret = ((zt_price_t2 - t1_open) / t1_open * 100) if was_zt_t2 else ((t2_open - t1_open) / t1_open * 100)
             # close_ret: T+1 close → T+2（post-confirmation，隔离 pctChg 信号真 edge）
-            close_ret = (
-                ((zt_price_t2 - t1_close) / t1_close * 100) if was_zt_t2 else ((t2_open - t1_close) / t1_close * 100)
-            )
+            close_ret = ((zt_price_t2 - t1_close) / t1_close * 100) if was_zt_t2 else ((t2_open - t1_close) / t1_close * 100)
             records.append(
                 {
                     "code": code,
@@ -179,9 +177,7 @@ def combo_analysis(end_date: str = "2026-09-17", days: int = 180) -> dict:
         n = len(sub)
         hit = sum(1 for r in sub if r["was_zt_t2"])
         ev = sum(r["open_ret"] for r in sub) / n if n else 0.0
-        gap_buckets.append(
-            {"bucket": name, "n": n, "hit": hit, "rate": round(hit / n, 4) if n else 0, "ev": round(ev, 2)}
-        )
+        gap_buckets.append({"bucket": name, "n": n, "hit": hit, "rate": round(hit / n, 4) if n else 0, "ev": round(ev, 2)})
 
     # pctChg-only buckets (both open-anchored and close-anchored/post-confirmation)
     pct_buckets = []
@@ -258,19 +254,13 @@ if __name__ == "__main__":
         print(f"  {x['bucket']}: n={x['n']} hit={x['hit']} rate={x['rate'] * 100:.2f}% ev={x['ev']}%")
     print("\n=== pctChg buckets (封板强度代理) — open_ev 含 T+1 日内泄漏, close_ev 隔离真 edge ===")
     for x in r["pct_buckets"]:
-        print(
-            f"  {x['bucket']}: n={x['n']} hit={x['hit']} rate={x['rate'] * 100:.2f}% "
-            f"open_ev={x['open_ev']}% close_ev={x['close_ev']}%"
-        )
+        print(f"  {x['bucket']}: n={x['n']} hit={x['hit']} rate={x['rate'] * 100:.2f}% open_ev={x['open_ev']}% close_ev={x['close_ev']}%")
     print("\n=== gap × pctChg combos (n>=30) by close_ev (post-confirmation 真实 edge) ===")
     for x in sorted([c for c in r["combo_buckets"] if c["n"] >= 30], key=lambda c: -c["close_ev"]):
         flag = " ★" if x["close_ev"] > 0.7 else ""
         print(
-            f"  {x['combo']}: n={x['n']} hit={x['hit']} rate={x['rate'] * 100:.2f}% "
-            f"open_ev={x['open_ev']}% close_ev={x['close_ev']}%{flag}"
+            f"  {x['combo']}: n={x['n']} hit={x['hit']} rate={x['rate'] * 100:.2f}% open_ev={x['open_ev']}% close_ev={x['close_ev']}%{flag}"
         )
     print("\n=== 同 combo open_ev vs close_ev 对比（看 T+1 日内泄漏大小）===")
     for x in sorted([c for c in r["combo_buckets"] if c["n"] >= 30], key=lambda c: -(c["open_ev"] - c["close_ev"])):
-        print(
-            f"  {x['combo']}: open_ev={x['open_ev']}% close_ev={x['close_ev']}% 泄漏={round(x['open_ev'] - x['close_ev'], 2)}%"
-        )
+        print(f"  {x['combo']}: open_ev={x['open_ev']}% close_ev={x['close_ev']}% 泄漏={round(x['open_ev'] - x['close_ev'], 2)}%")

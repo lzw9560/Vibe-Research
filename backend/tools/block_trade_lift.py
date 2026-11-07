@@ -60,9 +60,7 @@ print("Loading kline cache...", end=" ", flush=True)
 cache = json.loads(KLINE.read_bytes())
 print(f"{len(cache)} stocks ({time.time() - t0:.1f}s)")
 # S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
-validate_or_reject(
-    "baostock_kline", [b for bars in cache.values() for b in bars], as_of=datetime.date.today().isoformat()
-)
+validate_or_reject("baostock_kline", [b for bars in cache.values() for b in bars], as_of=datetime.date.today().isoformat())
 
 # ── 2. Aggregate by (date, code) — most discounted ─────────────────────────
 print("\nAggregating block trades by (date, code)...")
@@ -390,7 +388,4 @@ for _sname in STRATA:
             "days_robust": _v.days_robust,
             "note": _v.note,
         }
-print(
-    f"\n[S168] wired {len(_s168_verdicts)} verdicts: "
-    + ", ".join(f"{k}={v['status']}" for k, v in _s168_verdicts.items())
-)
+print(f"\n[S168] wired {len(_s168_verdicts)} verdicts: " + ", ".join(f"{k}={v['status']}" for k, v in _s168_verdicts.items()))

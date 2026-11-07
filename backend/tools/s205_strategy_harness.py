@@ -62,9 +62,7 @@ def _zt_picks() -> list[tuple[str, str, int]]:
         return []
     conn = sqlite3.connect(str(ZT_DB))
     try:
-        rows = conn.execute(
-            "SELECT date, code, lbc FROM zt_history WHERE lbc>=1 AND is_final=1 ORDER BY date"
-        ).fetchall()
+        rows = conn.execute("SELECT date, code, lbc FROM zt_history WHERE lbc>=1 AND is_final=1 ORDER BY date").fetchall()
     finally:
         conn.close()
     return [(r[0], r[1], int(r[2]) if r[2] is not None else 0) for r in rows if r[0] and r[1]]
@@ -173,10 +171,7 @@ def main(战法: str = "ruozhuanqiang") -> dict:
     print(f"\n[{战法}] verdict:")
     for tag, r in results.items():
         st = r.get("verdict_status", "?")
-        print(
-            f"  {tag}: n={r.get('n_picks')} days={r.get('n_days')} "
-            f"net_mean={r.get('net_mean_pct')} wr={r.get('win_rate')} verdict={st}"
-        )
+        print(f"  {tag}: n={r.get('n_picks')} days={r.get('n_days')} net_mean={r.get('net_mean_pct')} wr={r.get('win_rate')} verdict={st}")
     return {
         "results": results,
         "n_obs": n_obs,

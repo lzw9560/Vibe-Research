@@ -114,9 +114,7 @@ def cmd_cross_validate(args):
     for src, val in items[1:]:
         dev = pct_deviation(base_val, val)
         deviations.append({"vs": src, "value": fmt(val, 6), "deviation_pct": fmt(dev, 4)})
-    max_dev = max(
-        (Decimal(d["deviation_pct"]) for d in deviations if d["deviation_pct"] is not None), default=Decimal(0)
-    )
+    max_dev = max((Decimal(d["deviation_pct"]) for d in deviations if d["deviation_pct"] is not None), default=Decimal(0))
     if max_dev <= Decimal(1):
         verdict = "✅ 一致（≤1%）"
     elif max_dev <= Decimal(5):

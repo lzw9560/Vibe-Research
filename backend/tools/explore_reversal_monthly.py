@@ -197,9 +197,7 @@ def main() -> None:
     universe = select_universe(args.size)
     print(f"universe: top-{args.size} liquidity, {len(universe)} stocks")
     code_monthly_ret, all_months = load_monthly_returns_by_month(universe)
-    print(
-        f"monthly returns: {len(code_monthly_ret)} stocks, {len(all_months)} months ({all_months[0]}~{all_months[-1]})"
-    )
+    print(f"monthly returns: {len(code_monthly_ret)} stocks, {len(all_months)} months ({all_months[0]}~{all_months[-1]})")
     for lb in (1, 3):
         print(f"\n{'=' * 60}\n=== 中频反转 lookback={lb}月 bottom-decile long ===\n{'=' * 60}")
         r = backtest_reversal(lb, code_monthly_ret, all_months, universe)
@@ -210,13 +208,9 @@ def main() -> None:
             nw = nw_t(rets)
             wr = sum(1 for x in rets if x > 0) / len(rets) * 100 if rets else 0
             pb = bonferroni_p(nw["p"], N_BONF)
-            print(
-                f"  {label}: n={nw['n']} mean={nw['mean']:.4f}%/月 WR={wr:.1f}% t_nw={nw['t']} p={nw['p']} Bonf×{N_BONF}={pb:.4f}"
-            )
+            print(f"  {label}: n={nw['n']} mean={nw['mean']:.4f}%/月 WR={wr:.1f}% t_nw={nw['t']} p={nw['p']} Bonf×{N_BONF}={pb:.4f}")
         if r["benchmark"]:
-            print(
-                f"  benchmark等权 mean: {statistics.mean(r['benchmark']):.4f}%/月 | strategy: {statistics.mean(r['strategy']):.4f}%/月"
-            )
+            print(f"  benchmark等权 mean: {statistics.mean(r['benchmark']):.4f}%/月 | strategy: {statistics.mean(r['strategy']):.4f}%/月")
         te = nw_t(r["test"])
         tm = statistics.mean(r["test"])
         print(

@@ -442,9 +442,7 @@ def _with_gene_freshness(
     return new_extra, new_notes
 
 
-def _lookup_strategy(
-    code: str, gene: Any, wr_map: dict[str, tuple[float, int, str]]
-) -> tuple[str | None, str, float | None, int, str]:
+def _lookup_strategy(code: str, gene: Any, wr_map: dict[str, tuple[float, int, str]]) -> tuple[str | None, str, float | None, int, str]:
     """match_strategies → 选 sample_size 最大（最可信）战法。
 
     返回 ``(strategy_code, strategy_name, win_rate, sample_size, win_rate_source)``。
@@ -496,9 +494,7 @@ def _suggested_pct(win_rate: float | None) -> float:
     return 0.05
 
 
-def _atr_trailing_stop(
-    code: str, cost: float, stop_floor_pct: float | None = None
-) -> tuple[float | None, float | None, bool]:
+def _atr_trailing_stop(code: str, cost: float, stop_floor_pct: float | None = None) -> tuple[float | None, float | None, bool]:
     """算 ATR trailing stop 价 + 持仓期最高价。
 
     返回 (trailing_stop_price, high_water_mark, atr_ok)。
@@ -555,9 +551,7 @@ def _atr_trailing_stop(
     return trailing, round(high_water, 2), True
 
 
-def _holding_action_layer1(
-    pnl_pct: float, win_rate: float | None, stop_pct: float, take_profit_pct: float
-) -> tuple[str, str]:
+def _holding_action_layer1(pnl_pct: float, win_rate: float | None, stop_pct: float, take_profit_pct: float) -> tuple[str, str]:
     """层 1：当日战法，窗口内——战法固定参数驱动。"""
     if pnl_pct <= stop_pct:
         if win_rate is not None and win_rate >= 0.5:
@@ -581,11 +575,7 @@ def _holding_action_layer2(
         return "reduce", f"ATR trailing 触发（止盈线 {trailing}），锁利"
     if pnl_pct > _TIGHT_PROFIT_PCT and atr_ok and trailing is not None:
         # 浮盈>15%，收紧 trailing
-        tight_trailing = (
-            round(high_water - _ATR_MULT_TIGHT * (high_water - trailing) / _ATR_MULT, 2)
-            if trailing and high_water
-            else None
-        )
+        tight_trailing = round(high_water - _ATR_MULT_TIGHT * (high_water - trailing) / _ATR_MULT, 2) if trailing and high_water else None
         # 直接重算收紧版
         bars = _kline_cache.get(code, [])
         if len(bars) >= _ATR_PERIOD + 1:
@@ -658,8 +648,7 @@ def _lookup_holding_strategy(
         conn = get_db()
         try:
             row = conn.execute(
-                "SELECT date FROM gene_scores WHERE code = ? AND date < ? "
-                "AND date >= date(?, '-30 days') ORDER BY date DESC LIMIT 1",
+                "SELECT date FROM gene_scores WHERE code = ? AND date < ? AND date >= date(?, '-30 days') ORDER BY date DESC LIMIT 1",
                 (code, today, today),
             ).fetchone()
         finally:

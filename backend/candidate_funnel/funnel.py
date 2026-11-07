@@ -277,9 +277,7 @@ def run_funnel(stage: str, date: str, cfg: ThresholdConfig, ctx: "SentimentConte
     return result
 
 
-def run_funnel_force(
-    stage: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext | None" = None
-) -> FunnelResult:
+def run_funnel_force(stage: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext | None" = None) -> FunnelResult:
     """rerun 显式清缓存路径（不受 TTL 缓存影响）。"""
     import time
 
@@ -301,9 +299,7 @@ def clear_funnel_cache(date: str | None = None) -> None:
             _FUNNEL_CACHE.pop(k, None)
 
 
-def _run_funnel_impl(
-    stage: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext | None" = None
-) -> FunnelResult:
+def _run_funnel_impl(stage: str, date: str, cfg: ThresholdConfig, ctx: "SentimentContext | None" = None) -> FunnelResult:
     """R1→R2→R3 + 自选并行实现（无缓存，由 run_funnel 包裹缓存）。
 
     S063 T5：ctx 优先——管线头部 SentimentContext 下传 weather_state + source_date。
@@ -488,12 +484,7 @@ def _run_funnel_impl(
     from candidate_funnel.sources import derived_source
 
     for code in final_codes:
-        name = (
-            genes.get(code, {}).get("name")
-            or activity.get(code, {}).get("name")
-            or auction.get(code, {}).get("name")
-            or code
-        )
+        name = genes.get(code, {}).get("name") or activity.get(code, {}).get("name") or auction.get(code, {}).get("name") or code
         ind = build_indicator_set(code, name, genes, activity, fund, auction, catalyst, board)
         # S084 Q6=B：透传 3 子对象（gene_obj/pool_item/derived）
         gene_obj = genes.get(code, {}).get("gene_obj")

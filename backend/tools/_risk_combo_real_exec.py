@@ -40,11 +40,7 @@ for code, bj in rows:
     if nb < 70:
         continue
     c0 = code.replace("sz.", "").replace("sh.", "").replace("bj.", "")
-    bl = (
-        0.20
-        if (c0.startswith("30") or c0.startswith("68"))
-        else (0.30 if (c0.startswith("8") or c0.startswith("4")) else 0.10)
-    )
+    bl = 0.20 if (c0.startswith("30") or c0.startswith("68")) else (0.30 if (c0.startswith("8") or c0.startswith("4")) else 0.10)
     for i in range(60, nb - 5):
         prev_c = float(bars[i - 1].get("close", 0) or 0)
         o = float(bars[i].get("open", 0) or 0)
@@ -288,15 +284,9 @@ if full:
             print(f"  {k}: {v:.6f}" if abs(v) < 1 else f"  {k}: {v:.4f}")
         else:
             print(f"  {k}: {v}")
-    print(
-        f"\n  Quarter Kelly (cont): {full['kelly_cont'] * 0.25:.4f} = {full['kelly_cont'] * 0.25 * 100:.2f}% of capital"
-    )
-    print(
-        f"  Quarter Kelly (disc): {full['kelly_disc'] * 0.25:.4f} = {full['kelly_disc'] * 0.25 * 100:.2f}% of capital"
-    )
-    print(
-        f"  Eighth Kelly (disc):  {full['kelly_disc'] * 0.125:.4f} = {full['kelly_disc'] * 0.125 * 100:.2f}% of capital"
-    )
+    print(f"\n  Quarter Kelly (cont): {full['kelly_cont'] * 0.25:.4f} = {full['kelly_cont'] * 0.25 * 100:.2f}% of capital")
+    print(f"  Quarter Kelly (disc): {full['kelly_disc'] * 0.25:.4f} = {full['kelly_disc'] * 0.25 * 100:.2f}% of capital")
+    print(f"  Eighth Kelly (disc):  {full['kelly_disc'] * 0.125:.4f} = {full['kelly_disc'] * 0.125 * 100:.2f}% of capital")
 
 print("\n" + "=" * 70)
 print("CLOSE-TO-CLOSE EDGE (T close -> T+5 close, IDEALIZED)")

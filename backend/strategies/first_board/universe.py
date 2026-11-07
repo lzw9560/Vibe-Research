@@ -183,8 +183,7 @@ def fetch_zt_pool(date: str) -> list[dict]:
             conn = sqlite3.connect(str(zt_db))
             try:
                 rows = conn.execute(
-                    "SELECT code,name,lbc,zbc,fbt,fund,zje,p,ltsz,fundamt,hybk "
-                    "FROM zt_history WHERE date=? AND is_final=1",
+                    "SELECT code,name,lbc,zbc,fbt,fund,zje,p,ltsz,fundamt,hybk FROM zt_history WHERE date=? AND is_final=1",
                     (date,),
                 ).fetchall()
                 if rows:

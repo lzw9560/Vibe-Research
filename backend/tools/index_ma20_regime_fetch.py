@@ -77,6 +77,4 @@ print(f"date range: {closes[0][0]} -> {closes[-1][0]}")
 # quick distribution
 strong = sum(1 for v in regime.values() if v["regime"] == "strong")
 weak = sum(1 for v in regime.values() if v["regime"] == "weak")
-print(
-    f"strong(bull): {strong} ({strong * 100 / len(regime):.1f}%)  weak(bear): {weak} ({weak * 100 / len(regime):.1f}%)"
-)
+print(f"strong(bull): {strong} ({strong * 100 / len(regime):.1f}%)  weak(bear): {weak} ({weak * 100 / len(regime):.1f}%)")

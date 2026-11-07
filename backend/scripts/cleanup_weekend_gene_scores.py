@@ -114,9 +114,7 @@ def main() -> None:
     # 验证
     print()
     print("=== 验证：近 8 日分组 ===")
-    for r in conn.execute(
-        "SELECT date, COUNT(*) AS cnt FROM gene_scores GROUP BY date ORDER BY date DESC LIMIT 8"
-    ).fetchall():
+    for r in conn.execute("SELECT date, COUNT(*) AS cnt FROM gene_scores GROUP BY date ORDER BY date DESC LIMIT 8").fetchall():
         d = r["date"]
         try:
             wd = date.fromisoformat(d).weekday()

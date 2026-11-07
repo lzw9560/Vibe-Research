@@ -348,10 +348,7 @@ def main():
         raw_neg_dt = day_paired_t(
             defaultdict(
                 list,
-                {
-                    d: [p["raw"] for p in nav_neg if p["signal_date"] == d]
-                    for d in set(p["signal_date"] for p in nav_neg)
-                },
+                {d: [p["raw"] for p in nav_neg if p["signal_date"] == d] for d in set(p["signal_date"] for p in nav_neg)},
             )
         )
         # rebuild properly
@@ -381,13 +378,9 @@ def main():
     print(f"  Raw EV mean:   {rw_s['ev']:+.3f}%")
     print(f"  Inflation:     {inflation:+.3f}% (BHAR - Raw)")
     if inflation > 0:
-        print(
-            f"  → BHAR INFLATES edge by {inflation:.3f}% ({abs(inflation) / max(abs(bh_s['ev']), 0.001) * 100:.1f}% of BHAR)"
-        )
+        print(f"  → BHAR INFLATES edge by {inflation:.3f}% ({abs(inflation) / max(abs(bh_s['ev']), 0.001) * 100:.1f}% of BHAR)")
         print(f"    This means BHAR OVERSTATES the capturable alpha")
-        print(
-            f"    Corrected edge (retail-capturable) = raw_ev = {rw_s['ev']:+.3f}% gross, {rw_s['ev'] - ETF_COST:+.3f}% net"
-        )
+        print(f"    Corrected edge (retail-capturable) = raw_ev = {rw_s['ev']:+.3f}% gross, {rw_s['ev'] - ETF_COST:+.3f}% net")
     elif inflation < 0:
         print(f"  → BHAR DEFLATES edge by {abs(inflation):.3f}% (BHAR is more conservative)")
         print(f"    Retail captures MORE than BHAR due to positive market beta")

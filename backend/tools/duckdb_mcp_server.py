@@ -84,9 +84,7 @@ def query_sql(sql: str, db_path: str = None, limit: int = 100) -> str:
             columns = [d[0] for d in cursor.description]
             rows = [dict(row) for row in cursor.fetchall()]
             con.close()
-            return json.dumps(
-                {"columns": columns, "row_count": len(rows), "rows": rows[:limit]}, ensure_ascii=False, default=str
-            )
+            return json.dumps({"columns": columns, "row_count": len(rows), "rows": rows[:limit]}, ensure_ascii=False, default=str)
         except Exception as e:
             return json.dumps({"error": str(e), "sql": sql})
 
@@ -204,9 +202,7 @@ def _run_mcp_server():
         args = params.arguments or {}
         if name == "list_databases":
             r = list_databases()
-            return CallToolResult(
-                content=[mt.TextContent(type="text", text=json.dumps(r, ensure_ascii=False, indent=2))]
-            )
+            return CallToolResult(content=[mt.TextContent(type="text", text=json.dumps(r, ensure_ascii=False, indent=2))])
         elif name == "list_tables":
             r = list_tables(args.get("db_path", ""))
             return CallToolResult(content=[mt.TextContent(type="text", text=json.dumps(r, ensure_ascii=False))])

@@ -247,9 +247,7 @@ def compute_returns_for_codes(
             c2c = round((next_close - sig_close) / sig_close * 100, 4) if sig_close else None
             # S144 R5：return_open2next_close = (T+2 close - T+1 open)/T+1 open*100（可实现 T+1 口径）
             nnb_close = nnb["close"] if nnb and nnb.get("close") else None
-            o2nc = (
-                round((nnb_close - next_open) / next_open * 100, 4) if (nnb_close is not None and next_open) else None
-            )
+            o2nc = round((nnb_close - next_open) / next_open * 100, 4) if (nnb_close is not None and next_open) else None
             # S144 R1：一字板涨停封死（T+1=买入日 不可买）检测。传 code 启用 board-aware 阈值。
             is_unbuyable = _is_unbuyable_next_bar(nb, code=code)
             # S145 R2：path-dependent 收益（SL/TP/max_hold 模拟）。unbuyable → path=NULL（不可买无意义）。

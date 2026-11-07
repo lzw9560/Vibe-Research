@@ -53,10 +53,7 @@ def run_migrations() -> None:
     Path(_DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     manager = MigrationManager(db_path=_DB_PATH)
     migration_v1 = (
-        Path(__file__).resolve().parent.parent
-        / "migrations"
-        / "verification_card"
-        / "20260812-001_create_verification_conditions.sql"
+        Path(__file__).resolve().parent.parent / "migrations" / "verification_card" / "20260812-001_create_verification_conditions.sql"
     ).read_text(encoding="utf-8")
     manager.upgrade(
         [
@@ -238,13 +235,9 @@ def verify_conditions(
         if up is not None and actual >= up:
             verified.append(_replace(cond, actual=actual, status="met_up", note=cond.note + f"；实际 {actual} ≥ {up}"))
         elif down is not None and actual <= down:
-            verified.append(
-                _replace(cond, actual=actual, status="met_down", note=cond.note + f"；实际 {actual} ≤ {down}")
-            )
+            verified.append(_replace(cond, actual=actual, status="met_down", note=cond.note + f"；实际 {actual} ≤ {down}"))
         else:
-            verified.append(
-                _replace(cond, actual=actual, status="within", note=cond.note + f"；实际 {actual} 在区间内")
-            )
+            verified.append(_replace(cond, actual=actual, status="within", note=cond.note + f"；实际 {actual} 在区间内"))
 
     return verified
 
@@ -338,9 +331,7 @@ def get_pending_conditions() -> list[dict[str, Any]]:
     """查所有 pending 条件（T+1 对账用）。"""
     conn = _get_conn()
     try:
-        rows = conn.execute(
-            "SELECT * FROM verification_conditions WHERE status = 'pending' ORDER BY date, id"
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM verification_conditions WHERE status = 'pending' ORDER BY date, id").fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()
@@ -353,9 +344,7 @@ def generate_and_save(emotion_data: dict, date_str: str | None = None) -> list[V
     """盘后生成条件并落库。返回生成的条件列表。"""
     conditions = generate_conditions(emotion_data, date_str)
     save_conditions(conditions)
-    _logger.info(
-        "[verification_card] 生成 %d 条条件（date=%s）", len(conditions), conditions[0].date if conditions else "?"
-    )
+    _logger.info("[verification_card] 生成 %d 条条件（date=%s）", len(conditions), conditions[0].date if conditions else "?")
     return conditions
 
 
@@ -403,9 +392,7 @@ def verify_and_update() -> list[VerificationCondition]:
         if not next_emotion:
             # 数据缺失 → 全标 data_missing
             for c in conds:
-                all_verified.append(
-                    _replace(c, actual=None, status="data_missing", note=c.note + "；T+1 情绪数据未取得")
-                )
+                all_verified.append(_replace(c, actual=None, status="data_missing", note=c.note + "；T+1 情绪数据未取得"))
         else:
             verified = verify_conditions(conds, next_emotion)
             all_verified.extend(verified)

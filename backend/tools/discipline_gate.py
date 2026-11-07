@@ -42,9 +42,7 @@ def _load_sti_row(db_path: Path, target_date: str | None = None) -> dict[str, An
                 (target_date,),
             ).fetchone()
         else:
-            row = conn.execute(
-                "SELECT * FROM sti_timeline WHERE score IS NOT NULL ORDER BY date DESC LIMIT 1"
-            ).fetchone()
+            row = conn.execute("SELECT * FROM sti_timeline WHERE score IS NOT NULL ORDER BY date DESC LIMIT 1").fetchone()
         conn.close()
         if row is None:
             return None
@@ -169,9 +167,7 @@ def evaluate_discipline_gate(target_date: str) -> dict[str, Any]:
 
     # C2: STI 连续 3 天>50
     c2_pass, c2_scores = _sti_consecutive_above(db_path, 50.0, 3)
-    conditions.append(
-        {"id": "C2", "name": "STI 连续 3 天>50", "value": c2_scores, "threshold": 50, "pass": c2_pass, "red_line": True}
-    )
+    conditions.append({"id": "C2", "name": "STI 连续 3 天>50", "value": c2_scores, "threshold": 50, "pass": c2_pass, "red_line": True})
     if not c2_pass:
         reasons.append(f"C2 fail: STI 连续 3 天>50 未达（scores={c2_scores}）")
 
@@ -310,9 +306,7 @@ def render_discipline_report(verdict: dict[str, Any]) -> str:
     lines.append(f"📊 打板纪律门禁报告 | {verdict['date']}")
     lines.append("")
     status_emoji = {"BLOCK": "🔴", "CAUTION": "🟡", "PASS": "🟢"}
-    lines.append(
-        f"{status_emoji.get(verdict['status'], '⚪')} 当前判定：{verdict['status']}（cap={verdict.get('cap', '?')}）"
-    )
+    lines.append(f"{status_emoji.get(verdict['status'], '⚪')} 当前判定：{verdict['status']}（cap={verdict.get('cap', '?')}）")
 
     if verdict.get("terminal"):
         lines.append("")

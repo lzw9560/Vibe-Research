@@ -56,13 +56,7 @@ def _calculate_weather_state(
         }
 
     # Weighted composite score
-    composite = (
-        sti_score * 0.40
-        + risk_score * 0.20
-        + sector_continuity * 0.25
-        + capital_momentum * 0.10
-        + public_sentiment * 0.05
-    )
+    composite = sti_score * 0.40 + risk_score * 0.20 + sector_continuity * 0.25 + capital_momentum * 0.10 + public_sentiment * 0.05
 
     # Determine weather state
     if composite >= 75:
@@ -662,9 +656,7 @@ def get_weather_timeline(days: int = Query(30, ge=1, le=365)) -> Dict[str, Any]:
             capital_momentum = _calculate_capital_momentum_for_date(r["date"])
             public_sentiment = _calculate_public_sentiment_for_date(r["date"])
 
-            weather = _calculate_weather_state(
-                sti_score, risk_score, sector_continuity, capital_momentum, public_sentiment
-            )
+            weather = _calculate_weather_state(sti_score, risk_score, sector_continuity, capital_momentum, public_sentiment)
 
             timeline.append(
                 {
@@ -673,9 +665,7 @@ def get_weather_timeline(days: int = Query(30, ge=1, le=365)) -> Dict[str, Any]:
                     "weather_state": weather["weather_state"],
                     "composite_score": weather["composite_score"],
                     "phase": r["phase"],
-                    "change_from_yesterday": round(float(r["change_from_yesterday"]), 2)
-                    if r["change_from_yesterday"]
-                    else None,
+                    "change_from_yesterday": round(float(r["change_from_yesterday"]), 2) if r["change_from_yesterday"] else None,
                 }
             )
 

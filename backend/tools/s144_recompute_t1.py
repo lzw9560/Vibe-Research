@@ -72,16 +72,10 @@ def main(limit: int | None = None) -> int:
         conn = sqlite3.connect(GENE_SCORES_DB_PATH)
         try:
             pick_codes = [
-                r[0]
-                for r in conn.execute(
-                    "SELECT DISTINCT code FROM forward_test_records WHERE signal_date=?", (signal_date,)
-                ).fetchall()
+                r[0] for r in conn.execute("SELECT DISTINCT code FROM forward_test_records WHERE signal_date=?", (signal_date,)).fetchall()
             ]
             uni_codes = [
-                r[0]
-                for r in conn.execute(
-                    "SELECT DISTINCT code FROM universe_returns WHERE signal_date=?", (signal_date,)
-                ).fetchall()
+                r[0] for r in conn.execute("SELECT DISTINCT code FROM universe_returns WHERE signal_date=?", (signal_date,)).fetchall()
             ]
         finally:
             conn.close()
@@ -92,14 +86,8 @@ def main(limit: int | None = None) -> int:
         if not returns_map:
             logger.warning("[%d/%d] %s baostock 不可用，中断", i, len(dates), signal_date)
             break
-        picks_returns = {
-            c: returns_map[c]
-            for c in pick_codes
-            if c in returns_map and returns_map[c]["return_open2close"] is not None
-        }
-        uni_returns = {
-            c: returns_map[c] for c in uni_codes if c in returns_map and returns_map[c]["return_open2close"] is not None
-        }
+        picks_returns = {c: returns_map[c] for c in pick_codes if c in returns_map and returns_map[c]["return_open2close"] is not None}
+        uni_returns = {c: returns_map[c] for c in uni_codes if c in returns_map and returns_map[c]["return_open2close"] is not None}
         n_picks = record_actual_returns(signal_date, picks_returns)
         n_uni = record_universe_returns(signal_date, uni_returns)
         n_unbuyable_pick = sum(1 for c in pick_codes if c in returns_map and returns_map[c].get("is_unbuyable"))
@@ -126,9 +114,7 @@ def main(limit: int | None = None) -> int:
     print(f"win_rate(o2c 基线)={result.win_rate}% avg_return={result.avg_return}%")
     print(f"random_baseline={result.random_baseline_win_rate}% (settled={result.random_settled})")
     print(f"lift(buyable-only o2c)={result.lift}x | lift_unfiltered(原口径含污染)={result.lift_unfiltered}x")
-    print(
-        f"win_rate_open2next_close(T+1 可实现)={result.win_rate_open2next_close}% (o2nc_settled={result.o2nc_settled})"
-    )
+    print(f"win_rate_open2next_close(T+1 可实现)={result.win_rate_open2next_close}% (o2nc_settled={result.o2nc_settled})")
     print(f"unbuyable_count(一字板排除)={result.unbuyable_count}")
     print(f"validation_status={result.validation_status} passed={result.passed}")
     print(f"consecutive_loss={result.consecutive_loss}")

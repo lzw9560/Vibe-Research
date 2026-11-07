@@ -146,10 +146,7 @@ def main() -> None:
     print("\n\n" + "=" * 70)
     print("[5] 汇总")
     print("=" * 70)
-    print(
-        f"\n{'tier':<20} {'n_picks':>8} {'n_days':>7} {'gross_ev%':>10} "
-        f"{'net_ev%':>9} {'day_t':>7} {'p_raw':>9} {'verdict':<16}"
-    )
+    print(f"\n{'tier':<20} {'n_picks':>8} {'n_days':>7} {'gross_ev%':>10} {'net_ev%':>9} {'day_t':>7} {'p_raw':>9} {'verdict':<16}")
     print("-" * 90)
 
     # baseline row

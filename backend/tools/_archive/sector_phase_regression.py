@@ -118,9 +118,7 @@ def main() -> int:
                 "winrate": round(wins / n, 4) if n else None,
                 "winrate_ci": [round(lo, 4), round(hi, 4)] if n else None,
                 "avg_return_pct": round(sum(rets) / n * 100, 2) if n else None,
-                "within_day_avg_return_pct": round(sum(per_date_avg) / len(per_date_avg) * 100, 2)
-                if per_date_avg
-                else None,
+                "within_day_avg_return_pct": round(sum(per_date_avg) / len(per_date_avg) * 100, 2) if per_date_avg else None,
                 "within_day_n_dates": len(per_date_avg),
             }
         )

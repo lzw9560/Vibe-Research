@@ -322,9 +322,7 @@ def walk_forward_blocks(blocks: list[dict]) -> dict:
     }
 
 
-def verdict(
-    gross_alpha_ann_pct: float, net_alpha_ann_pct: float, block_t: float, p_raw: float, n_blocks: int, wf: dict
-) -> tuple[str, str]:
+def verdict(gross_alpha_ann_pct: float, net_alpha_ann_pct: float, block_t: float, p_raw: float, n_blocks: int, wf: dict) -> tuple[str, str]:
     """诚实判定级联。返回 (verdict, reason)。"""
     p_bonf = H.bonferroni_p(p_raw, BONF_TOTAL)
     if gross_alpha_ann_pct < 0:
@@ -372,10 +370,7 @@ def main() -> None:
     print("=" * 74)
     print(f"窗口: {meta['window']}  ({meta['n_days']} 交易日)")
     print(f"Universe: {meta['n_industries']} 个 long-core 行业（>=5 股覆盖 >=90% 交易日）")
-    print(
-        f"基准: 上证指数  mean_daily={meta['benchmark_mean_daily_pct']:.4f}%  "
-        f"年化={meta['benchmark_annualized_pct']:.2f}%"
-    )
+    print(f"基准: 上证指数  mean_daily={meta['benchmark_mean_daily_pct']:.4f}%  年化={meta['benchmark_annualized_pct']:.2f}%")
     print(f"再平衡: 每 {HOLD_DAYS} 交易日（2 周），多 top-{TOP_K} + 空 bottom-{TOP_K} 等权")
     print(f"Bonferroni: ×{BONF_METHODS}（4 方法）×{BONF_FORMATION}（formation 搜索）= ×{BONF_TOTAL}")
     print(
@@ -398,10 +393,7 @@ def main() -> None:
         p_bonf = H.bonferroni_p(bs["p_one_sided"], BONF_TOTAL)
         v, reason = verdict(gross_ann_pct, net_ann_pct, bs["t"], bs["p_one_sided"], bs["n_blocks"], wf)
         print(f"  blocks: n={bs['n_blocks']} (signal={ls['n_signal']})")
-        print(
-            f"  block-mean: {bs['block_mean_pct']:.4f}%/day  std={bs['block_std_pct']:.4f}%  "
-            f"WR(blocks>0)={bs['wr_blocks']}%"
-        )
+        print(f"  block-mean: {bs['block_mean_pct']:.4f}%/day  std={bs['block_std_pct']:.4f}%  WR(blocks>0)={bs['wr_blocks']}%")
         print(f"  per-rebalance-block t={bs['t']}  p_one_sided={bs['p_one_sided']}  Bonf×{BONF_TOTAL}={p_bonf:.4f}")
         print(f"  daily Sharpe: ann={sh['sharpe_ann']}  mean={sh['mean_daily_pct']}%/day  std={sh['std_daily_pct']}%")
         print(
@@ -455,10 +447,7 @@ def main() -> None:
     print(f"  gross alpha = {best['gross_ann_pct']:.2f}%/yr  net = {best['net_ann_pct']:.2f}%/yr")
     print(f"  Sharpe(ann) = {best['sharpe_ann']}  CAPM beta = {best['beta']}  CAPM alpha t = {best['capm_alpha_t']}")
     if best["wf_status"] == "ok":
-        print(
-            f"  walk-forward: train={best['wf_train']:.4f}%/day → test={best['wf_test']:.4f}%/day "
-            f"(p={best['wf_test_p']})"
-        )
+        print(f"  walk-forward: train={best['wf_train']:.4f}%/day → test={best['wf_test']:.4f}%/day (p={best['wf_test_p']})")
     print(f"  VERDICT: {best['verdict'].upper()}")
 
     # 散户可行性审计

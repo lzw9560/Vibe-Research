@@ -210,9 +210,7 @@ def form_decile_legs(signal: np.ndarray, long_is_top: bool) -> tuple[np.ndarray,
 # ---------- factor series construction ----------
 
 
-def build_smb_series(
-    close: np.ndarray, amount: np.ndarray, ret: np.ndarray, calendar: list[str], rebal_idx: list[int]
-) -> dict[str, float]:
+def build_smb_series(close: np.ndarray, amount: np.ndarray, ret: np.ndarray, calendar: list[str], rebal_idx: list[int]) -> dict[str, float]:
     """SMB daily returns: month-end rebalance, log(20d mean amount) signal.
     long = small (bottom decile), short = big (top decile)."""
     series: dict[str, float] = {}
@@ -339,8 +337,7 @@ def main() -> int:
 
     rebal_idx = month_end_dates(calendar)
     print(
-        f"==> month-end rebalance dates: {len(rebal_idx)} "
-        f"first={calendar[rebal_idx[0]]} last={calendar[rebal_idx[-1]]}",
+        f"==> month-end rebalance dates: {len(rebal_idx)} first={calendar[rebal_idx[0]]} last={calendar[rebal_idx[-1]]}",
         flush=True,
     )
 
@@ -357,8 +354,7 @@ def main() -> int:
     out = {
         "metadata": {
             "built_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "methodology": "Fama-French/Carhart cross-sectional decile long-short, "
-            "monthly rebalance, daily holding returns (decimal)",
+            "methodology": "Fama-French/Carhart cross-sectional decile long-short, monthly rebalance, daily holding returns (decimal)",
             "market_benchmark": "sh.000001 (上证综指, price index excl. dividends)",
             "rebalance_freq": "monthly (last trading day of month)",
             "holding": "T+1 close to next rebalance close; constituents fixed during holding",
@@ -378,10 +374,8 @@ def main() -> int:
                 "HML skipped (no historical PB/book-value data locally; valuation skill gives only "
                 "current-snapshot PB, not monthly series needed for decile formation). 3-factor baseline.",
                 "long-short needs shorting (A股散户融券受限); statistical baseline != tradeable.",
-                "月末 close formation assumes tradeable at close (standard FF convention, "
-                "mildly unrealistic for A-shares).",
-                "Output is for downstream residual-alpha OLS regression only; NOT a claim that "
-                "size/momentum factors have edge.",
+                "月末 close formation assumes tradeable at close (standard FF convention, mildly unrealistic for A-shares).",
+                "Output is for downstream residual-alpha OLS regression only; NOT a claim that size/momentum factors have edge.",
             ],
         },
         "factors_built": ["mkt", "smb", "umd"],

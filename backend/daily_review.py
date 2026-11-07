@@ -157,22 +157,17 @@ class DailyReviewer:
         yzt_pool: list = []
         try:
             zt_pool = [
-                zt_pool_item_from_dict(it)
-                for it in astock.em_zt_topic_pool("getTopicZTPool", date_fmt, "fbt:asc", raise_on_failure=True)
+                zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicZTPool", date_fmt, "fbt:asc", raise_on_failure=True)
             ]
         except Exception as e:
             logging.getLogger("vibe-research").warning("daily_review 涨停池取数失败 date=%s err=%s", date_fmt, e)
         try:
-            dt_pool = [
-                zt_pool_item_from_dict(it)
-                for it in astock.em_zt_topic_pool("getTopicDTPool", date_fmt, raise_on_failure=True)
-            ]
+            dt_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicDTPool", date_fmt, raise_on_failure=True)]
         except Exception as e:
             logging.getLogger("vibe-research").warning("daily_review 跌停池取数失败 date=%s err=%s", date_fmt, e)
         try:
             zb_pool = [
-                zt_pool_item_from_dict(it)
-                for it in astock.em_zt_topic_pool("getTopicZBPool", date_fmt, "fbt:asc", raise_on_failure=True)
+                zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicZBPool", date_fmt, "fbt:asc", raise_on_failure=True)
             ]
         except Exception as e:
             logging.getLogger("vibe-research").warning("daily_review 炸板池取数失败 date=%s err=%s", date_fmt, e)
@@ -242,9 +237,7 @@ class DailyReviewer:
                 try:
                     prev_result = engine.get_latest(yesterday)
                     change = (
-                        (result.score - prev_result.score)
-                        if prev_result and prev_result.source_ok and result.score is not None
-                        else None
+                        (result.score - prev_result.score) if prev_result and prev_result.source_ok and result.score is not None else None
                     )
                 except Exception:
                     change = None
@@ -381,9 +374,7 @@ class DailyReviewer:
             me = _emotion_ext.money_effect(date)
             result.money_effect_median = me.get("median") if me.get("available") else None
         except Exception as e:  # noqa: BLE001
-            logging.getLogger("vibe-research").warning(
-                "[daily_review %s] money_effect 中位数取失败，盖章 median=None: %s", date, e
-            )
+            logging.getLogger("vibe-research").warning("[daily_review %s] money_effect 中位数取失败，盖章 median=None: %s", date, e)
 
         # 写入内存缓存 + 磁盘持久化层（journal 盖章零网络读这里）
         cache_key = f"daily_review_{date}"

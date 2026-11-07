@@ -114,9 +114,7 @@ def _load_gene(code: str) -> dict:
     """从 gene_scores 取股性活跃度+行业（复用现有）。"""
     code6 = _normalize_code(code)
     conn = sqlite3.connect(str(GENE_DB))
-    row = conn.execute(
-        "SELECT name, zt_count_250d, industry FROM gene_scores WHERE code=? ORDER BY date DESC LIMIT 1", (code6,)
-    ).fetchone()
+    row = conn.execute("SELECT name, zt_count_250d, industry FROM gene_scores WHERE code=? ORDER BY date DESC LIMIT 1", (code6,)).fetchone()
     conn.close()
     if not row:
         return {}
@@ -198,9 +196,7 @@ def first_layer_filter(code: str, name: str, bars: list[dict]) -> tuple[bool, li
     return len(hits) == 0, hits
 
 
-def second_layer_match(
-    code: str, tactic: str, bars: list[dict], zt: dict | None, gene: dict
-) -> tuple[bool, list[str], dict]:
+def second_layer_match(code: str, tactic: str, bars: list[dict], zt: dict | None, gene: dict) -> tuple[bool, list[str], dict]:
     """第二层情绪因子匹配（标 falsified verdict，不假装 alpha）。
 
     返回 (匹配, 命中因子, meta)。
@@ -299,11 +295,7 @@ def filter_stock(code: str, tactic: str = "战法1_弱转强", zt: dict | None =
 
     risk = "Low" if pass2 else "High"
     action = "Pass" if pass2 else "Block"
-    reason = (
-        f"第一层财务过滤通过. "
-        f"第二层{'匹配因子: ' + str(hits2) if hits2 else '未匹配因子'}. "
-        f"verdict: {meta.get('verdict', '无')}"
-    )
+    reason = f"第一层财务过滤通过. 第二层{'匹配因子: ' + str(hits2) if hits2 else '未匹配因子'}. verdict: {meta.get('verdict', '无')}"
 
     return FilterResult(
         code=code,

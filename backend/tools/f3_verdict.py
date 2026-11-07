@@ -48,9 +48,7 @@ def interpret_f3_verdict(
         )
     elif status == "underpowered":
         fusion_conclusion = "fusion_underpowered"
-        null_engagement = (
-            "consistent with multifactor null —— days_robust<60 不判，无 validated 融合 edge（诚实降级，spec §6）"
-        )
+        null_engagement = "consistent with multifactor null —— days_robust<60 不判，无 validated 融合 edge（诚实降级，spec §6）"
     elif status == "falsified":
         fusion_conclusion = "fusion_falsified"
         null_engagement = "consistent with multifactor null —— 融合 event 群体均收益≤0，重发现 null（spec §6 预期路径）"

@@ -48,9 +48,7 @@ def fusion_layer(
     # confidence：FS2 加权信号置信度（信号不在 fs2_weights → 权重 0 排除）
     total_w = sum(fs2_weights.get(s["signal_name"], 0.0) for s in signals_aligned)
     if total_w > 0:
-        confidence = (
-            sum(float(s["confidence"]) * fs2_weights.get(s["signal_name"], 0.0) for s in signals_aligned) / total_w
-        )
+        confidence = sum(float(s["confidence"]) * fs2_weights.get(s["signal_name"], 0.0) for s in signals_aligned) / total_w
     else:
         confidence = 0.0
 

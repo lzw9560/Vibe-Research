@@ -90,9 +90,7 @@ class PushoverSender:
 
         if len(plain_content) <= max_length:
             # 单条消息发送
-            return self._send_pushover_message(
-                api_url, user_key, api_token, plain_content, title, timeout_seconds=timeout_seconds
-            )
+            return self._send_pushover_message(api_url, user_key, api_token, plain_content, title, timeout_seconds=timeout_seconds)
         else:
             # 分段发送长消息
             return self._send_pushover_chunked(

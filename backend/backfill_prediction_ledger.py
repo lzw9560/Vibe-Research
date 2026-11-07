@@ -57,15 +57,11 @@ def _candidates_for_dates(dates: list[str]) -> list[dict]:
 
     conn = get_db()
     rows = conn.execute(
-        f"SELECT date, code, name, total_score FROM gene_scores "
-        f"WHERE total_score >= ? AND date IN ({ph}) ORDER BY date, total_score DESC",
+        f"SELECT date, code, name, total_score FROM gene_scores WHERE total_score >= ? AND date IN ({ph}) ORDER BY date, total_score DESC",
         [QUALIFY_THRESHOLD, *dates],
     ).fetchall()
     conn.close()
-    return [
-        {"date": r["date"], "code": r["code"], "name": r["name"] or r["code"], "score": r["total_score"] or 0.0}
-        for r in rows
-    ]
+    return [{"date": r["date"], "code": r["code"], "name": r["name"] or r["code"], "score": r["total_score"] or 0.0} for r in rows]
 
 
 def _fetch_bars(code: str) -> list:
@@ -122,9 +118,7 @@ def backfill(days: int = 30, dry_run: bool = False) -> dict:
                 due = (next_bar.date or "")[:10]
                 actual = round((next_close - target_close) / target_close, 6) if target_close else None
                 status = "hit" if (actual is not None and actual > 0) else "miss"
-                rows_out.append(
-                    {**c, "status": status, "attribution": None, "baseline": target_close, "actual": actual, "due": due}
-                )
+                rows_out.append({**c, "status": status, "attribution": None, "baseline": target_close, "actual": actual, "due": due})
             else:
                 rows_out.append(
                     {

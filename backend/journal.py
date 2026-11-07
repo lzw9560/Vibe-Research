@@ -411,9 +411,7 @@ def _settle(fills: list[dict], fees_cfg: Optional[dict] = None) -> dict:
             peak_capital = max(peak_capital, pos_cost)
         else:
             if f["shares"] > pos_shares + 1e-6:
-                raise ValueError(
-                    f"第 {n} 笔卖出 {f['shares']:g} 股，超过当时持有的 {pos_shares:g} 股 —— 请检查成交明细的顺序与数量"
-                )
+                raise ValueError(f"第 {n} 笔卖出 {f['shares']:g} 股，超过当时持有的 {pos_shares:g} 股 —— 请检查成交明细的顺序与数量")
             unit = pos_cost / pos_shares  # 卖出那一刻的持仓均价
             ratio = f["shares"] / pos_shares  # 这次卖掉了当前持仓的几成
             realized_pnl += (f["price"] - unit) * f["shares"]
@@ -556,9 +554,7 @@ def add_trade(
     return {"ok": True, "trade": trade}
 
 
-def update_trade(
-    trade_id: str, *, fills=None, note=None, as_planned=_UNSET, planned_stop=_UNSET, planned_target=_UNSET
-) -> dict:
+def update_trade(trade_id: str, *, fills=None, note=None, as_planned=_UNSET, planned_stop=_UNSET, planned_target=_UNSET) -> dict:
     """更新一笔已有交易——主要用途是给持仓中的记录补上后来的成交。
 
     只能改传进来的字段，其余原样保留。传了 fills 就按新的明细整份重算。
@@ -594,9 +590,7 @@ def update_trade(
             if first_buy and first_buy != old_first_buy:
                 t["market"] = _market_context(first_buy)
                 t["stock"] = _stock_context(first_buy, t.get("code") or "")
-            t["exit_market"] = (
-                _market_context(last_sell) if last_sell and last_sell != (first_buy or t.get("date")) else None
-            )
+            t["exit_market"] = _market_context(last_sell) if last_sell and last_sell != (first_buy or t.get("date")) else None
         if note is not None:
             t["note"] = str(note).strip()[:500]
         if as_planned is not _UNSET:
@@ -650,9 +644,7 @@ def _bucket_stats(rows: list[dict]) -> dict:
     """
     vals = [t["pnl_pct"] for t in rows if t.get("pnl_pct") is not None]
     money = [
-        t["settled"]["realized_pnl"]
-        for t in rows
-        if isinstance(t.get("settled"), dict) and t["settled"].get("realized_pnl") is not None
+        t["settled"]["realized_pnl"] for t in rows if isinstance(t.get("settled"), dict) and t["settled"].get("realized_pnl") is not None
     ]
     base = {
         "count": len(rows),
@@ -695,9 +687,7 @@ def stats() -> dict:
         by_phase.setdefault(ph, []).append(t)
         by_playbook.setdefault(t.get("playbook") or "其它", []).append(t)
         planned = t.get("as_planned")
-        by_planned.setdefault("按计划" if planned is True else ("计划外" if planned is False else "未标注"), []).append(
-            t
-        )
+        by_planned.setdefault("按计划" if planned is True else ("计划外" if planned is False else "未标注"), []).append(t)
         st = t.get("stock") or {}
         if st.get("in_limit_up"):
             b = int(st.get("boards") or 1)

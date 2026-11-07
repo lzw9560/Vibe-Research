@@ -393,10 +393,7 @@ def main():
     print("=" * 78)
     print(f"{'entry→exit':<24} {'BHAR_gross':>10} {'BHAR_net':>9} {'day_t':>7} {'p_bonf':>9} {'verdict'}")
     for r in results:
-        print(
-            f"{r['label']:<24} {r['bhar_ev']:>+10.4f} {r['bhar_net']:>+9.4f} "
-            f"{r['bhar_t']:>7} {r['p_bonf']:>9.6f} {r['verdict']}"
-        )
+        print(f"{r['label']:<24} {r['bhar_ev']:>+10.4f} {r['bhar_net']:>+9.4f} {r['bhar_t']:>7} {r['p_bonf']:>9.6f} {r['verdict']}")
 
     # ================================================================
     # KEY DIAGNOSTIC: T close → T+1 open overnight gap

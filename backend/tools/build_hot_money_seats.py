@@ -60,9 +60,7 @@ def main() -> None:
     for p in merged:
         by_type[p.seat_type] = by_type.get(p.seat_type, 0) + 1
     print(f"分类：{by_type}")
-    print(
-        f"source 分布：data={sum(1 for p in merged if p.source == 'data')}, preset={sum(1 for p in merged if p.source == 'preset')}"
-    )
+    print(f"source 分布：data={sum(1 for p in merged if p.source == 'data')}, preset={sum(1 for p in merged if p.source == 'preset')}")
 
 
 if __name__ == "__main__":

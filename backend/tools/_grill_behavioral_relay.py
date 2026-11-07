@@ -54,8 +54,7 @@ def load_zt_with_meta() -> list[dict]:
     conn = sqlite3.connect(str(ZT_DB))
     rows = []
     for r in conn.execute(
-        "SELECT date, code, name, lbc, zbc, fund, zje, p, ltsz, fundamt, hybk, source "
-        "FROM zt_history WHERE is_final=1 ORDER BY date"
+        "SELECT date, code, name, lbc, zbc, fund, zje, p, ltsz, fundamt, hybk, source FROM zt_history WHERE is_final=1 ORDER BY date"
     ):
         rows.append(
             {
@@ -223,9 +222,7 @@ def main():
     bull = [p for p in picks if regime.get(p["zt_date"]) == "bull"]
     bear = [p for p in picks if regime.get(p["zt_date"]) == "bear"]
     rng = [p for p in picks if regime.get(p["zt_date"]) == "range"]
-    print(
-        f"  bull={len(bull)} bear={len(bear)} range={len(rng)} no_regime={len(picks) - len(bull) - len(bear) - len(rng)}"
-    )
+    print(f"  bull={len(bull)} bear={len(bear)} range={len(rng)} no_regime={len(picks) - len(bull) - len(bear) - len(rng)}")
 
     # ---- 1. 复现证否 (V2 close_ev basic) ----
     print("\n" + "=" * 72)
@@ -343,15 +340,11 @@ def main():
     print("7. 组合行为过滤（低追 gap<1% + 中大盘>=50亿 + lbc<=3）")
     print("   测试：排除 behavioral-extreme tail 后核心是否中性")
     print("=" * 72)
-    core = [
-        p for p in picks if p["gap_pct"] < 1.0 and p["lbc"] <= 3 and p["ltsz_yi"] is not None and p["ltsz_yi"] >= 50
-    ]
+    core = [p for p in picks if p["gap_pct"] < 1.0 and p["lbc"] <= 3 and p["ltsz_yi"] is not None and p["ltsz_yi"] >= 50]
     print(f"  ALL core (low-chase+midcap+lbc<=3): {ps(subset_stats(core))}")
     print(f"  BULL core: {ps(subset_stats([p for p in core if regime.get(p['zt_date']) == 'bull']))}")
     # even tighter: gap<=0 (no chase at all)
-    ncore = [
-        p for p in picks if p["gap_pct"] <= 0.0 and p["lbc"] <= 3 and p["ltsz_yi"] is not None and p["ltsz_yi"] >= 50
-    ]
+    ncore = [p for p in picks if p["gap_pct"] <= 0.0 and p["lbc"] <= 3 and p["ltsz_yi"] is not None and p["ltsz_yi"] >= 50]
     print(f"  ALL no-chase core (gap<=0+midcap+lbc<=3): {ps(subset_stats(ncore))}")
     print(f"  BULL no-chase core: {ps(subset_stats([p for p in ncore if regime.get(p['zt_date']) == 'bull']))}")
 

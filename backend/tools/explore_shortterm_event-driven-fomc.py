@@ -190,9 +190,7 @@ def map_to_trading_day(fomc: str, days: list[str], direction: str = "on_or_befor
     return None
 
 
-def window_return(
-    bars: dict[str, dict], days: list[str], fomc_idx: int, entry_off: int, exit_off: int
-) -> tuple[float, str, str] | None:
+def window_return(bars: dict[str, dict], days: list[str], fomc_idx: int, entry_off: int, exit_off: int) -> tuple[float, str, str] | None:
     """算窗口 close-to-close 收益. fomc_idx = 公告日映射后的 trading-day index.
     entry_off/exit_off 相对 fomc_idx. 返回 (return%, entry_date, exit_date) or None."""
     e_idx = fomc_idx + entry_off
@@ -414,10 +412,7 @@ def main() -> None:
         )
 
     # ---- Bonferroni + verdict (cross-window) ----
-    print(
-        f"\n{'=' * 70}\n[verdict] cross-window Bonferroni ×{n_windows} "
-        f"(跨策略 ×5 由 sweep synthesis 加; 本脚本 ×{n_windows} windows)"
-    )
+    print(f"\n{'=' * 70}\n[verdict] cross-window Bonferroni ×{n_windows} (跨策略 ×5 由 sweep synthesis 加; 本脚本 ×{n_windows} windows)")
     print(f"{'=' * 70}")
     # 找最强窗口 (max AR mean)
     best = max(results, key=lambda r: r["ar_mean"])
@@ -448,8 +443,7 @@ def main() -> None:
     tr = per_event_t(train_ar)
     te = per_event_t(test_ar)
     print(
-        f"    walk-forward: train_AR={tr['mean']}% (n={tr['n']}) | "
-        f"test_AR={te['mean']}% (n={te['n']}, t={te['t']}, p={te['p_one_sided']})"
+        f"    walk-forward: train_AR={tr['mean']}% (n={tr['n']}) | test_AR={te['mean']}% (n={te['n']}, t={te['t']}, p={te['p_one_sided']})"
     )
 
     # verdict cascade (§44 v3 adapted for event study)
@@ -476,10 +470,7 @@ def main() -> None:
     else:
         te_p_bonf = bonferroni_p(te["p_one_sided"], n_tests)
         if te_p_bonf >= ALPHA:
-            print(
-                f"    OOS AR>0 but test p={te['p_one_sided']} Bonf×{n_tests}={te_p_bonf} "
-                f">= {ALPHA} → not significant OOS (exploratory)"
-            )
+            print(f"    OOS AR>0 but test p={te['p_one_sided']} Bonf×{n_tests}={te_p_bonf} >= {ALPHA} → not significant OOS (exploratory)")
             verdict = "exploratory"
         else:
             print(f"    → EDGE-CONFIRMED (but see tradeability caveat)")
@@ -525,9 +516,7 @@ def main() -> None:
     print(f"策略: FOMC 事件驱动 (pre-FOMC 漂移 / 公告日反应 / post-FOMC)")
     print(f"数据: 上证综指 close (regime file) 作市场代理 + {len(fomc_indices)} FOMC events")
     print(f"诚实约束: 指数级事件研究非可交易 ETF 回测 (无 ETF fills 数据)")
-    print(
-        f"best window: [{best['window']}] AR={best['ar_mean']}% t={best['ar_t']} Bonf×{n_tests}={p_bonf:.4f} n={n_ev}"
-    )
+    print(f"best window: [{best['window']}] AR={best['ar_mean']}% t={best['ar_t']} Bonf×{n_tests}={p_bonf:.4f} n={n_ev}")
     print(f"walk-forward: train_AR={tr['mean']}% test_AR={te['mean']}% test_p={te['p_one_sided']}")
     print(f"verdict: {verdict} (统计层) + no-data (可交易层: 无 ETF fills)")
 

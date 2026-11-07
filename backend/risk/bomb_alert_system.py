@@ -33,9 +33,7 @@ class BombAlertSystem:
     """炸板预警系统"""
 
     def __init__(self) -> None:
-        self.rules: list[BombAlertRule] = [
-            BombAlertRule(name="default", seal_drop_ratio=0.5, min_seal_amount=1000000.0)
-        ]
+        self.rules: list[BombAlertRule] = [BombAlertRule(name="default", seal_drop_ratio=0.5, min_seal_amount=1000000.0)]
         self.history: list[BombAlertResult] = []
 
     def check(

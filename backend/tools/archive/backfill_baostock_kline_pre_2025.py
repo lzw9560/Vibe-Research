@@ -136,8 +136,7 @@ def main() -> None:
             rate = (i + 1) / elapsed
             eta = (len(need) - i - 1) / rate if rate > 0 else 0
             print(
-                f"  {i + 1}/{len(need)}: filled={n_filled} +{n_bars_added} bars "
-                f"failed={n_failed} | {elapsed:.0f}s elapsed ETA {eta:.0f}s",
+                f"  {i + 1}/{len(need)}: filled={n_filled} +{n_bars_added} bars failed={n_failed} | {elapsed:.0f}s elapsed ETA {eta:.0f}s",
                 flush=True,
             )
             _save(cache)  # 周期存盘防 crash 丢 25min 工作

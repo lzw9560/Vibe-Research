@@ -181,9 +181,7 @@ def deep_ai(code: str, llm: LLMConfig):
         if not cfg.get("apiKey") or not cfg.get("baseURL"):
             raise HTTPException(400, "缺少 Base URL 或 API Key，请先在「接入 AI」配置，或用订阅接入(cli-claude)")
 
-    master_block = "\n".join(
-        f"【{p.master}】框架:{p.framework}；引导问题:{'；'.join(p.key_questions)}" for p in skeleton.perspectives
-    )
+    master_block = "\n".join(f"【{p.master}】框架:{p.framework}；引导问题:{'；'.join(p.key_questions)}" for p in skeleton.perspectives)
     user_msg = (
         f"对股票 {code}（{name}）按四大师视角各写一段深度分析（每段约 200-300 字），"
         f"严格分块，每段以【巴菲特】【芒格】【段永平】【李录】开头。只陈述客观事实与相对位置，"

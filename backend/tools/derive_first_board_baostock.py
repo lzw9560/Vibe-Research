@@ -244,9 +244,7 @@ def cross_validate_em_history(zt_by_date, fb_by_date, window) -> dict:
     em_fb_by_date: dict[str, set[str]] = {}
     for dt in em_dates:
         em_zt_by_date[dt] = {_norm(r[0]) for r in conn.execute("SELECT code FROM zt_history WHERE date=?", (dt,))}
-        em_fb_by_date[dt] = {
-            _norm(r[0]) for r in conn.execute("SELECT code FROM zt_history WHERE date=? AND lbc=1", (dt,))
-        }
+        em_fb_by_date[dt] = {_norm(r[0]) for r in conn.execute("SELECT code FROM zt_history WHERE date=? AND lbc=1", (dt,))}
     conn.close()
     overlap = [d for d in window if d in em_zt_by_date]
     # stale-phantom：东财某日 >90% 重复 prior overlap 日 codes
@@ -389,9 +387,7 @@ def cross_validate_ths(zt_by_date, fb_by_date, dates) -> dict:
             result[dt] = {"status": "request_failed", "error": str(e)}
             continue
         ths_zt = {_norm(it["code"]) for it in items if it.get("code")}
-        ths_fb = {
-            _norm(it["code"]) for it in items if it.get("high_days") == "首板"
-        }  # ths 用"首板"标记首板（非"1天1板"）
+        ths_fb = {_norm(it["code"]) for it in items if it.get("high_days") == "首板"}  # ths 用"首板"标记首板（非"1天1板"）
         bs_zt = zt_by_date.get(dt, set())
         bs_fb = fb_by_date.get(dt, set())
         result[dt] = {
@@ -556,27 +552,19 @@ def main() -> None:
             f"| 首板 {em_hist.get('clean_recall_fb_pct')}%"
         )
     if em_pool:
-        log.info(
-            f"东财 zt_pool: 涨停 recall {em_pool['recall_zt_pct']}% ({em_pool['non_empty_dates']} non-empty dates)"
-        )
+        log.info(f"东财 zt_pool: 涨停 recall {em_pool['recall_zt_pct']}% ({em_pool['non_empty_dates']} non-empty dates)")
         if em_pool.get("aug26_stale_note"):
             log.info(f"  {em_pool['aug26_stale_note']}")
     if ths:
         for dt, r in ths.items():
             if isinstance(r, dict) and "zt_match" in r:
-                log.info(
-                    f"ths {dt}: 涨停 recall {r['recall_zt_pct']}% "
-                    f"(ths={r['ths_zt']} bs={r['bs_zt']} match={r['zt_match']})"
-                )
+                log.info(f"ths {dt}: 涨停 recall {r['recall_zt_pct']}% (ths={r['ths_zt']} bs={r['bs_zt']} match={r['zt_match']})")
             elif isinstance(r, dict):
                 log.info(f"ths {dt}: {r.get('status', r)}")
     if hithink:
         for dt, r in hithink.items():
             if isinstance(r, dict) and "zt_match" in r:
-                log.info(
-                    f"hithink {dt}: 涨停 recall {r['recall_zt_pct']}% "
-                    f"(hi={r['hi_zt']} bs={r['bs_zt']} match={r['zt_match']})"
-                )
+                log.info(f"hithink {dt}: 涨停 recall {r['recall_zt_pct']}% (hi={r['hi_zt']} bs={r['bs_zt']} match={r['zt_match']})")
             elif isinstance(r, dict):
                 log.info(f"hithink {dt}: {r.get('status', r)}")
     log.info("\n已知口径分歧（诚实标注）：")

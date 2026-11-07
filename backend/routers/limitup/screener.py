@@ -31,20 +31,14 @@ def _check_threshold_sanity(params: LimitUpParamsBody) -> List[str]:
         from limitup_screener.data import get_db
 
         conn = get_db()
-        row = conn.execute(
-            "SELECT MAX(total_score) as mx FROM gene_scores WHERE date >= date('now', '-30 days')"
-        ).fetchone()
+        row = conn.execute("SELECT MAX(total_score) as mx FROM gene_scores WHERE date >= date('now', '-30 days')").fetchone()
         conn.close()
         max_score = row["mx"] if row and row["mx"] is not None else None
         if max_score is not None:
             if params.gene_high_threshold > max_score:
-                warnings.append(
-                    f"高基因阈值 {params.gene_high_threshold} 高于近 30 日最高分 {max_score}，high_gene 将恒为空"
-                )
+                warnings.append(f"高基因阈值 {params.gene_high_threshold} 高于近 30 日最高分 {max_score}，high_gene 将恒为空")
             if params.gene_qualify_threshold > max_score:
-                warnings.append(
-                    f"合格阈值 {params.gene_qualify_threshold} 高于近 30 日最高分 {max_score}，qualify 将恒为空"
-                )
+                warnings.append(f"合格阈值 {params.gene_qualify_threshold} 高于近 30 日最高分 {max_score}，qualify 将恒为空")
     except Exception as e:  # noqa: BLE001
         import logging
 

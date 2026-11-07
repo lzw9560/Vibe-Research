@@ -541,10 +541,7 @@ def analyze_variant(
             if r is not None:
                 basic_by_date[p["zt_date"]].append(r)
     basic_dt = day_paired_t(basic_by_date)
-    print(
-        f"  day-paired: n_days={basic_dt['n_days']} mean={basic_dt['mean']}% "
-        f"t={basic_dt['t']} p_one_sided={basic_dt['p_one_sided']}"
-    )
+    print(f"  day-paired: n_days={basic_dt['n_days']} mean={basic_dt['mean']}% t={basic_dt['t']} p_one_sided={basic_dt['p_one_sided']}")
 
     # ---- stop variant (only for close_ev口径, not overnight gap) ----
     stop_s = {"n": 0, "ev": 0.0, "std": 0.0, "t": 0.0, "ci_lo": 0.0, "ci_hi": 0.0, "wr": 0.0}
@@ -579,10 +576,7 @@ def analyze_variant(
             if r is not None:
                 stop_by_date[p["zt_date"]].append(r[0])
         stop_dt = day_paired_t(stop_by_date)
-        print(
-            f"  day-paired: n_days={stop_dt['n_days']} mean={stop_dt['mean']}% "
-            f"t={stop_dt['t']} p_one_sided={stop_dt['p_one_sided']}"
-        )
+        print(f"  day-paired: n_days={stop_dt['n_days']} mean={stop_dt['mean']}% t={stop_dt['t']} p_one_sided={stop_dt['p_one_sided']}")
 
     # ---- walk-forward OOS ----
     print(f"\n--- walk-forward OOS (basic, 前半 train → 后半 test) ---")
@@ -611,11 +605,7 @@ def analyze_variant(
         wf_test_ev = te["ev"]
         wf_test_p = te_dt["p_one_sided"]
         print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} EV={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
-        print(
-            f"  test:  n={te['n']} n_dates={wf['n_test_dates']} "
-            f"EV={te['ev']}% t={te['t']} day_t={te_dt['t']} "
-            f"p={te_dt['p_one_sided']}"
-        )
+        print(f"  test:  n={te['n']} n_dates={wf['n_test_dates']} EV={te['ev']}% t={te['t']} day_t={te_dt['t']} p={te_dt['p_one_sided']}")
         decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
         print(f"  decay: {decay:.0f}% (train→test)")
     else:
@@ -762,9 +752,7 @@ def main() -> None:
     print(f"\n\n{'=' * 70}")
     print(f"[4] 主 sweep 汇总表 (overnight gap, vol<{VOL_RATIO_THRESH})")
     print(f"{'=' * 70}")
-    print(
-        f"{'variant':<45} {'n_picks':>8} {'n_days':>7} {'gross%':>8} {'net%':>8} {'day_t':>7} {'p_raw':>9} {'Bonf':>9}"
-    )
+    print(f"{'variant':<45} {'n_picks':>8} {'n_days':>7} {'gross%':>8} {'net%':>8} {'day_t':>7} {'p_raw':>9} {'Bonf':>9}")
     print("-" * 110)
     for r in results:
         if r["n_picks"] == 0:
@@ -1007,10 +995,7 @@ def main() -> None:
         t2_rets = [r for r in t2_rets if r is not None]
         if t2_rets:
             dsr_t2 = compute_dsr(t2_rets, n_trials=N_CROSS_FACTOR)
-            print(
-                f"  close_ev T+2 (N={best_n}): DSR={dsr_t2.get('dsr', 0)} "
-                f"SR_obs={dsr_t2.get('sr_obs', 0)} n={dsr_t2.get('n', 0)}"
-            )
+            print(f"  close_ev T+2 (N={best_n}): DSR={dsr_t2.get('dsr', 0)} SR_obs={dsr_t2.get('sr_obs', 0)} n={dsr_t2.get('n', 0)}")
 
     # ---- final summary ----
     print(f"\n\n{'=' * 70}")
@@ -1034,10 +1019,7 @@ def main() -> None:
         print(f"    day_t={primary['basic_day_t']} p_raw={primary['basic_p_raw']}")
         p_bonf = bonferroni_p(primary["basic_p_raw"], N_CROSS_FACTOR * 2)
         print(f"    Bonferroni p(×{N_CROSS_FACTOR * 2})={p_bonf}")
-        print(
-            f"    walk-forward: train={primary['wf_train_ev']}% "
-            f"test={primary['wf_test_ev']}% test_p={primary['wf_test_p']}"
-        )
+        print(f"    walk-forward: train={primary['wf_train_ev']}% test={primary['wf_test_ev']}% test_p={primary['wf_test_p']}")
 
     n_neg = sum(1 for r in results if r["n_picks"] > 0 and r["basic_ev_gross"] < 0)
     n_pos = sum(1 for r in results if r["n_picks"] > 0 and r["basic_ev_gross"] > 0)

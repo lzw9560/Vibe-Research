@@ -92,9 +92,7 @@ def load_industry_map() -> dict[str, str]:
     """code -> industry from gene_scores.code_industry (covers 99.9% of zt_history codes)."""
     conn = sqlite3.connect(str(GSDB), timeout=10)
     try:
-        rows = conn.execute(
-            "SELECT code, industry FROM code_industry WHERE industry IS NOT NULL AND industry != ''"
-        ).fetchall()
+        rows = conn.execute("SELECT code, industry FROM code_industry WHERE industry IS NOT NULL AND industry != ''").fetchall()
     finally:
         conn.close()
     return {str(r[0]).zfill(6): r[1] for r in rows}
@@ -158,18 +156,14 @@ def is_one_word_d(bar: dict) -> bool:
     return abs(h - l) <= TOL and abs(o - c) <= TOL and abs(h - o) <= TOL
 
 
-def _members(
-    industry: dict[str, str], hot_inds: set[str], all_inds: set[str], d_zt_codes: set[str]
-) -> tuple[list[str], list[str]]:
+def _members(industry: dict[str, str], hot_inds: set[str], all_inds: set[str], d_zt_codes: set[str]) -> tuple[list[str], list[str]]:
     """Hot/cold member codes (exclude D-ZT stocks = new-ZT framing). IDENTICAL to existing harness."""
     hot_mem = [c for c, ind in industry.items() if ind in hot_inds and c not in d_zt_codes]
     cold_mem = [c for c, ind in industry.items() if ind not in all_inds and c not in d_zt_codes]
     return hot_mem, cold_mem
 
 
-def binary_framing(
-    zt: dict[str, set[str]], industry: dict[str, str], calendar: list[str], cal_idx: dict[str, int]
-) -> None:
+def binary_framing(zt: dict[str, set[str]], industry: dict[str, str], calendar: list[str], cal_idx: dict[str, int]) -> None:
     """(A) Binary next-day-new-ZT rate lift, 318-day backfill (was 49d in existing harness)."""
     defs = [("top1", 1, 0), ("top3", 3, 0), ("top5", 5, 0), ("zt>=3", 99, 3), ("zt>=5", 99, 5)]
     zt_dates = sorted(d for d in zt if d in cal_idx)
@@ -195,9 +189,7 @@ def binary_framing(
         hm = hn = cm = cn = 0
         for idx, (_, zt_by_ind, d_zt, d1_zt) in enumerate(daily):
             ranked = sorted(zt_by_ind.items(), key=lambda x: -x[1])
-            hot_inds = (
-                {ind for ind, _ in ranked[:topn]} if topn < 99 else {ind for ind, c in zt_by_ind.items() if c >= thresh}
-            )
+            hot_inds = {ind for ind, _ in ranked[:topn]} if topn < 99 else {ind for ind, c in zt_by_ind.items() if c >= thresh}
             all_inds = all_inds_per_day[idx]
             hot_mem, cold_mem = _members(industry, hot_inds, all_inds, d_zt)
             if not hot_mem or not cold_mem:
@@ -229,9 +221,7 @@ def gap_framing(
     cal_idx: dict[str, int],
 ) -> None:
     """(B) Gap-window RETURN lift (gap_net_return, D收->D+1开) for hot/cold members."""
-    validate_or_reject(
-        "baostock_kline", [b for bars in kline.values() for b in bars], as_of=datetime.date.today().isoformat()
-    )
+    validate_or_reject("baostock_kline", [b for bars in kline.values() for b in bars], as_of=datetime.date.today().isoformat())
     zt_dates = sorted(d for d in zt if d in cal_idx)
     hot_rets: list[float] = []
     cold_rets: list[float] = []
@@ -303,9 +293,7 @@ def _gap_for(
     return net_ratio * 100.0, cost_pct, gross_ratio * 100.0
 
 
-def _print_gap_results(
-    hot: list[float], cold: list[float], hw: int, cw: int, ndh: int, ndc: int, skips: Counter
-) -> None:
+def _print_gap_results(hot: list[float], cold: list[float], hw: int, cw: int, ndh: int, ndc: int, skips: Counter) -> None:
     print(f"\n=== (B) GAP-window RETURN (D收->D+1开, gap_net_return) zt>=3 hot / 0-zt cold ===")
     print(f"  hot: n={len(hot)} days={ndh} | cold: n={len(cold)} days={ndc}")
     print(f"  excluded: {dict(skips)}")
@@ -322,9 +310,7 @@ def _print_gap_results(
     mean_lift = mean_h / mean_c if mean_c else 0.0
     sig = "CI不重叠" if hlo > chi else "CI重叠"
     wr_v = ">=2.0 robust_edge" if wr_lift >= 2.0 else ("<2 unvalidated" if wr_lift >= 1.0 else "falsified(劣于随机)")
-    mean_v = (
-        ">=2.0 robust_edge" if mean_lift >= 2.0 else ("<2 unvalidated" if mean_lift >= 1.0 else "falsified(劣于随机)")
-    )
+    mean_v = ">=2.0 robust_edge" if mean_lift >= 2.0 else ("<2 unvalidated" if mean_lift >= 1.0 else "falsified(劣于随机)")
     print(f"  hot:  net_mean={mean_h:.3f}% net_WR={wr_h * 100:.2f}%[{hlo * 100:.2f},{hhi * 100:.2f}]")
     print(f"  cold: net_mean={mean_c:.3f}% net_WR={wr_c * 100:.2f}%[{clo * 100:.2f},{chi * 100:.2f}]")
     print(f"  winrate-lift(hot/cold) = {wr_lift:.3f}x -> {wr_v}({sig})")

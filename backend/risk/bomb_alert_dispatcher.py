@@ -86,9 +86,7 @@ def save_alert(
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     now.isoformat(),
-                    last_trading_date_str(
-                        now.date()
-                    ),  # task 120：按交易日历落 date（非 now.strftime 日历今日，否则非交易日存写/查询错位）
+                    last_trading_date_str(now.date()),  # task 120：按交易日历落 date（非 now.strftime 日历今日，否则非交易日存写/查询错位）
                     code,
                     name,
                     result.rule_id,

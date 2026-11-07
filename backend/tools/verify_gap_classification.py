@@ -196,9 +196,7 @@ def main() -> None:
         "> z(bino)=binomial（case 不独立夸大）；t/p(cluster)=day_clustered_t_test（per-date cluster, s44_verifier）；Bonf=Bonferroni-BH K≤8。"
     )
     R.append("")
-    R.append(
-        "| 类型 | 窗口 | cont 命中/总 | cont rate | 普通基线 | delta | z(bino) | t(cluster) | p(cluster) | n_days | Bonf | 定性 |"
-    )
+    R.append("| 类型 | 窗口 | cont 命中/总 | cont rate | 普通基线 | delta | z(bino) | t(cluster) | p(cluster) | n_days | Bonf | 定性 |")
     R.append("|---|---|---|---|---|---|---|---|---|---|---|---|")
     for gtype in TYPES:
         for n in WINDOWS:

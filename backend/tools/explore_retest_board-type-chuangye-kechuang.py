@@ -293,8 +293,7 @@ def fake_edge_audit(picks: list[dict], code_map: dict, zt_rows: list, wf: dict) 
         "avg_t1_open_vs_t_close_pct": round(avg_gap, 3),
         "verdict": (
             "WARN" if avg_gap > 1.0 else "ok",
-            f"T+1 open {avg_gap:+.3f}% vs T close — "
-            f"{'gap-up premium at entry (momentum)' if avg_gap > 1.0 else 'minimal entry premium'}",
+            f"T+1 open {avg_gap:+.3f}% vs T close — {'gap-up premium at entry (momentum)' if avg_gap > 1.0 else 'minimal entry premium'}",
         ),
     }
 
@@ -307,9 +306,7 @@ def fake_edge_audit(picks: list[dict], code_map: dict, zt_rows: list, wf: dict) 
     n_main_zt = sum(1 for _, c, _ in zt_rows if board_of(c) == "main")
     # limit-up rate per stock-day (approximate: zt count / universe * n_days)
     # just compare relative representation
-    pct_20_in_universe = (
-        n_20pct_universe / (n_20pct_universe + n_main_universe) * 100 if (n_20pct_universe + n_main_universe) else 0
-    )
+    pct_20_in_universe = n_20pct_universe / (n_20pct_universe + n_main_universe) * 100 if (n_20pct_universe + n_main_universe) else 0
     pct_20_in_zt = n_20pct_zt / (n_20pct_zt + n_main_zt) * 100 if (n_20pct_zt + n_main_zt) else 0
     results["survivorship"] = {
         "n_20pct_universe": n_20pct_universe,
@@ -386,8 +383,7 @@ def fake_edge_audit(picks: list[dict], code_map: dict, zt_rows: list, wf: dict) 
     results["fill_fiction"] = {
         "verdict": (
             "ok",
-            "basic close_ev has no stop (no fill assumption). "
-            "Stop variant uses R6 gap-through fill (T+2 open + slippage)",
+            "basic close_ev has no stop (no fill assumption). Stop variant uses R6 gap-through fill (T+2 open + slippage)",
         ),
     }
 
@@ -439,9 +435,7 @@ def new_verdict_for(
         reasons.append(f"FALSIFIED: net EV={net_ev}% <= 0 (cost eats edge)")
         return "edge-falsified", "; ".join(reasons)
     if bh_insample["verdict"] == "FAIL":
-        reasons.append(
-            f"FALSIFIED: in-sample HAC p fails BH (q={min(bh_insample['q_values']) if bh_insample['q_values'] else 1})"
-        )
+        reasons.append(f"FALSIFIED: in-sample HAC p fails BH (q={min(bh_insample['q_values']) if bh_insample['q_values'] else 1})")
         return "edge-falsified", "; ".join(reasons)
 
     if wf["status"] == "ok":
@@ -460,14 +454,10 @@ def new_verdict_for(
     # fake-edge audit
     n_warns = audit["overall"]["n_warns"]
     if n_warns > 0:
-        reasons.append(
-            f"EXPLORATORY: {audit['overall']['verdict']} (statistical edge but confounds prevent confirmation)"
-        )
+        reasons.append(f"EXPLORATORY: {audit['overall']['verdict']} (statistical edge but confounds prevent confirmation)")
         return "exploratory", "; ".join(reasons)
 
-    reasons.append(
-        "EDGE-CONFIRMED: gross+net EV > 0, in-sample BH pass, OOS rolling WF positive + BH significant, audit clean"
-    )
+    reasons.append("EDGE-CONFIRMED: gross+net EV > 0, in-sample BH pass, OOS rolling WF positive + BH significant, audit clean")
     return "edge-confirmed", "; ".join(reasons)
 
 
@@ -541,9 +531,7 @@ def main():
         f"p={basic_hac['p_one_sided']}"
     )
     print(f"    max_lag={basic_hac['max_lag']} (Newey-West rule floor(n^(1/3)))")
-    print(
-        f"    max_trades/day={basic_hac['max_trades_per_day']} median_trades/day={basic_hac['median_trades_per_day']}"
-    )
+    print(f"    max_trades/day={basic_hac['max_trades_per_day']} median_trades/day={basic_hac['median_trades_per_day']}")
     print(
         f"    NOTE: if max_trades/day > max_lag, same-day clustering may be "
         f"under-captured → HAC t may be inflated. per-day-mean (above) is "
@@ -633,10 +621,7 @@ def main():
         print(f"    q-values: {bh_oos_day['q_values']}")
         # also BH on pooled + 3 windows (m=4)
         bh_oos_pooled = bh_fdr([pooled["p_one_sided"]] + oos_hac_ps, alpha=ALPHA)
-        print(
-            f"\n  BH on [pooled OOS HAC + 3 window HAC] (m=4): "
-            f"{bh_oos_pooled['verdict']} ({bh_oos_pooled['n_passed']}/4 passed)"
-        )
+        print(f"\n  BH on [pooled OOS HAC + 3 window HAC] (m=4): {bh_oos_pooled['verdict']} ({bh_oos_pooled['n_passed']}/4 passed)")
         print(f"    q-values: {bh_oos_pooled['q_values']}")
     else:
         print(f"  {wf['status']}")
@@ -654,10 +639,7 @@ def main():
         tr_dt = wf_orig["train_day_t"]
         te_dt = wf_orig["test_day_t"]
         print(f"  train: n={tr['n']} n_dates={wf_orig['n_train_dates']} EV={tr['ev']}% day_t={tr_dt['t']}")
-        print(
-            f"  test:  n={te['n']} n_dates={wf_orig['n_test_dates']} "
-            f"EV={te['ev']}% day_t={te_dt['t']} p={te_dt['p_one_sided']}"
-        )
+        print(f"  test:  n={te['n']} n_dates={wf_orig['n_test_dates']} EV={te['ev']}% day_t={te_dt['t']} p={te_dt['p_one_sided']}")
         bonf_test = min(1.0, te_dt["p_one_sided"] * 12)
         print(f"  [original] test_p={te_dt['p_one_sided']} Bonf×12={bonf_test:.6f}")
     else:

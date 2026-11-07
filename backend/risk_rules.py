@@ -178,9 +178,7 @@ def discipline(trades: list[dict]) -> dict:
 
     这一张账最狠也最有用：它把"纪律"从一句口号变成一个可比的数字。
     """
-    scored = [
-        t for t in trades if t.get("pnl_pct") is not None or (t.get("settled") or {}).get("realized_pnl") is not None
-    ]
+    scored = [t for t in trades if t.get("pnl_pct") is not None or (t.get("settled") or {}).get("realized_pnl") is not None]
     if not scored:
         return {"available": False, "reason": "还没有可统计的交易"}
 
@@ -209,20 +207,14 @@ def discipline(trades: list[dict]) -> dict:
         "planned": bucket(planned),
         "unplanned": bucket(unplanned),
         "untagged": bucket(untagged),
-        "execution_rate": (
-            round(len(planned) / (len(planned) + len(unplanned)), 3) if (planned or unplanned) else None
-        ),
+        "execution_rate": (round(len(planned) / (len(planned) + len(unplanned)), 3) if (planned or unplanned) else None),
         # ⭐ 最狠的一行：只做按计划的交易，账户会是什么样
         "what_if_only_planned": {
             "actual_net": round(sum(all_money), 2) if all_money else None,
             "planned_only_net": round(sum(planned_money), 2) if planned_money else None,
-            "cost_of_indiscipline": (
-                round(sum(all_money) - sum(planned_money), 2) if all_money and planned_money else None
-            ),
+            "cost_of_indiscipline": (round(sum(all_money) - sum(planned_money), 2) if all_money and planned_money else None),
         },
-        "note": (
-            "「计划外」的交易需要你自己在录入时标注——没标注的归到未标注，不猜。这不是市场分析，是你自己的行为统计。"
-        ),
+        "note": ("「计划外」的交易需要你自己在录入时标注——没标注的归到未标注，不猜。这不是市场分析，是你自己的行为统计。"),
     }
 
 
@@ -308,9 +300,7 @@ def violations(trades: list[dict], rules: Optional[dict] = None) -> dict:
     if not spans:
         checked["max_positions"] = "unavailable：没有可用的建仓/平仓日期"
     else:
-        checked["max_positions"] = (
-            "checked" if approx == 0 else f"checked（其中 {approx} 条没有成交明细，按记录日期近似）"
-        )
+        checked["max_positions"] = "checked" if approx == 0 else f"checked（其中 {approx} 条没有成交明细，按记录日期近似）"
         cap_n = int(rules["max_positions"])
         days = sorted({d for _, s0, e0 in spans for d in (s0, e0) if d})
         for day in days:
@@ -385,9 +375,7 @@ def violations(trades: list[dict], rules: Optional[dict] = None) -> dict:
     checked["max_trades_per_day"] = "checked"
     checked["max_loss_per_trade_pct"] = "checked"
     checked["max_unplanned_ratio"] = (
-        "checked"
-        if any(t.get("as_planned") is not None for t in trades)
-        else "unavailable：还没有标注过「按计划 / 计划外」的交易"
+        "checked" if any(t.get("as_planned") is not None for t in trades) else "unavailable：还没有标注过「按计划 / 计划外」的交易"
     )
     checked["pause_after_losses"] = "checked"
 
@@ -442,9 +430,7 @@ def _window_stats(closed: list[dict]) -> dict:
         "avg_loss": round(-gross_loss / len(losses), 2) if losses else None,
         "payoff_ratio": (round((gross_win / len(wins)) / (gross_loss / len(losses)), 2) if wins and losses else None),
         "profit_factor": round(gross_win / gross_loss, 2) if gross_loss > 0 else None,
-        "execution_rate": (
-            round(len(planned) / (len(planned) + len(unplanned)), 3) if (planned or unplanned) else None
-        ),
+        "execution_rate": (round(len(planned) / (len(planned) + len(unplanned)), 3) if (planned or unplanned) else None),
         "date_from": (closed[0]["settled"].get("last_sell") or closed[0]["date"]),
         "date_to": (closed[-1]["settled"].get("last_sell") or closed[-1]["date"]),
     }
@@ -471,8 +457,7 @@ def rolling(trades: list[dict]) -> dict:
     if w10.get("enough") and w10.get("profit_factor") is not None and life.get("profit_factor") is not None:
         out["profit_factor_drift"] = round(w10["profit_factor"] - life["profit_factor"], 2)
     out["note"] = (
-        "10 笔看状态、20 笔看节奏、50 笔看打法是否还成立。"
-        "终身统计会把最近的退化藏起来——前面赚够了，最近一直亏，终身数字照样漂亮。"
+        "10 笔看状态、20 笔看节奏、50 笔看打法是否还成立。终身统计会把最近的退化藏起来——前面赚够了，最近一直亏，终身数字照样漂亮。"
     )
     return out
 
@@ -524,10 +509,7 @@ def render(rep: dict) -> str:
         wi = dp["what_if_only_planned"]
         seg = f"· 纪律：执行率 {dp['execution_rate']:.0%}"
         if wi.get("cost_of_indiscipline") is not None:
-            seg += (
-                f"；只做按计划的交易，净盈亏会是 {wi['planned_only_net']}"
-                f"（实际 {wi['actual_net']}，差 {wi['cost_of_indiscipline']}）"
-            )
+            seg += f"；只做按计划的交易，净盈亏会是 {wi['planned_only_net']}（实际 {wi['actual_net']}，差 {wi['cost_of_indiscipline']}）"
         lines.append(seg)
     if vi.get("available") and vi.get("violation_count"):
         lines.append(
@@ -654,9 +636,7 @@ def loss_breaker_enforce(journal=None, initial_capital=None) -> dict:
     }
 
     # 合计 > 8% → block_new；任一 code block_new 也触发
-    is_blocked_new = (
-        any(s.is_blocked_new for s in states.values()) or abs(total_account_loss_pct) > TOTAL_ACCOUNT_BLOCK_PCT
-    )
+    is_blocked_new = any(s.is_blocked_new for s in states.values()) or abs(total_account_loss_pct) > TOTAL_ACCOUNT_BLOCK_PCT
     # 冷却 enforce：冷却期内 → 强制 block_new（不重置，防振荡）
     if cooldown_until:
         is_blocked_new = True

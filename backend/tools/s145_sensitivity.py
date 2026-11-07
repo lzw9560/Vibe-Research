@@ -53,8 +53,7 @@ def main(sample: int = 12) -> int:
         dates = [
             r[0]
             for r in conn.execute(
-                "SELECT DISTINCT signal_date FROM forward_test_records "
-                "WHERE return_path IS NOT NULL ORDER BY signal_date DESC LIMIT ?",
+                "SELECT DISTINCT signal_date FROM forward_test_records WHERE return_path IS NOT NULL ORDER BY signal_date DESC LIMIT ?",
                 (sample,),
             ).fetchall()
         ]

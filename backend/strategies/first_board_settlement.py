@@ -637,8 +637,7 @@ def build_review_report(t1_review: dict) -> str:
                 ret = c.get("t1_return_pct")
                 ret_str = f"{ret:+.2f}%" if ret is not None else "—"
                 lines.append(
-                    f"| {c.get('rank', '')} | {c.get('code', '')} | "
-                    f"{c.get('name', '')} | {c.get('total_score', 0):.1f} | {ret_str} |"
+                    f"| {c.get('rank', '')} | {c.get('code', '')} | {c.get('name', '')} | {c.get('total_score', 0):.1f} | {ret_str} |"
                 )
         lines.append("⚠ §44 未 validated 仅参考；阈值/权重待回测校准")
         lines.append("⚠ 历史统计特征，不构成投资建议")
@@ -660,10 +659,7 @@ def build_review_report(t1_review: dict) -> str:
     for c in candidates:
         ret = c.get("t1_return_pct")
         ret_str = f"{ret:+.2f}%" if ret is not None else "—"
-        lines.append(
-            f"| {c.get('rank', '')} | {c.get('code', '')} | "
-            f"{c.get('name', '')} | {c.get('total_score', 0):.1f} | {ret_str} |"
-        )
+        lines.append(f"| {c.get('rank', '')} | {c.get('code', '')} | {c.get('name', '')} | {c.get('total_score', 0):.1f} | {ret_str} |")
     lines.append("")
     lines.append("⚠ §44 未 validated 仅参考；阈值/权重待回测校准")
     lines.append("⚠ 历史统计特征，不构成投资建议")

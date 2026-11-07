@@ -150,9 +150,7 @@ def build_daily_review_card(review: dict[str, Any]) -> dict[str, Any]:
             }
         )
 
-    elements.append(
-        {"tag": "note", "content": "⚠️ 以上内容为历史统计特征分析，不代表未来行为。仅作研究参考，不构成投资建议。"}
-    )
+    elements.append({"tag": "note", "content": "⚠️ 以上内容为历史统计特征分析，不代表未来行为。仅作研究参考，不构成投资建议。"})
 
     return {
         "header": {"title": {"tag": "plain_text", "content": f"📊 {review.get('date')} 投研复盘"}, "template": "blue"},

@@ -29,9 +29,7 @@ for i in range(1, len(dates)):
     d1 = datetime.strptime(dates[i], "%Y-%m-%d")
     gap = (d1 - d0).days
     if gap >= 7:
-        holiday_gaps.append(
-            {"last_pre": dates[i - 1], "first_post": dates[i], "gap_days": gap, "i_last": i - 1, "i_post": i}
-        )
+        holiday_gaps.append({"last_pre": dates[i - 1], "first_post": dates[i], "gap_days": gap, "i_last": i - 1, "i_post": i})
 
 print(f"Long holidays (gap>=7): {len(holiday_gaps)}\n")
 

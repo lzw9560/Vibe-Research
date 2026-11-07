@@ -151,8 +151,6 @@ def escalate(
         if _should_decay(t, snaps):
             # T12 decay: WATCHING→FILTERED reason='decayed'（非→CANDIDATE 防振荡 loop）
             workflow_repo.transition(t.code, run_date, "filtered", reason="decayed")
-            tracking_repo.update_tracking_status(
-                t.code, t.first_admit_date, "decayed", tracking_age_days=t.tracking_age_days
-            )
+            tracking_repo.update_tracking_status(t.code, t.first_admit_date, "decayed", tracking_age_days=t.tracking_age_days)
 
     return promoted

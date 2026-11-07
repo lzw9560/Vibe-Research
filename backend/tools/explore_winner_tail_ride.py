@@ -476,19 +476,14 @@ def main():
         if r is not None:
             base_by_date[w["t1_date"]].append(r)
     base_dt = day_paired_t(base_by_date)
-    print(
-        f"  day-paired: n_days={base_dt['n_days']} mean={base_dt['mean']}% t={base_dt['t']} p={base_dt['p_one_sided']}"
-    )
+    print(f"  day-paired: n_days={base_dt['n_days']} mean={base_dt['mean']}% t={base_dt['t']} p={base_dt['p_one_sided']}")
 
     # ---- T+3 trailing stop ----
     print("\n=== T+3 trailing stop exit (realistic R6 fill) ===")
     t3_rets = [close_ev(w, "T+3") for w in winners]
     t3_rets = [r for r in t3_rets if r is not None]
     t3_s = ev_stats(t3_rets)
-    print(
-        f"  n={t3_s['n']} EV={t3_s['ev']}% std={t3_s['std']}% "
-        f"WR={t3_s['wr']}% t={t3_s['t']} CI[{t3_s['ci_lo']},{t3_s['ci_hi']}]"
-    )
+    print(f"  n={t3_s['n']} EV={t3_s['ev']}% std={t3_s['std']}% WR={t3_s['wr']}% t={t3_s['t']} CI[{t3_s['ci_lo']},{t3_s['ci_hi']}]")
     net_t3 = t3_s["ev"] - COST * 100
     print(f"  net EV (after cost): {net_t3:.3f}%")
 
@@ -505,10 +500,7 @@ def main():
     t4_rets = [close_ev(w, "T+4") for w in winners]
     t4_rets = [r for r in t4_rets if r is not None]
     t4_s = ev_stats(t4_rets)
-    print(
-        f"  n={t4_s['n']} EV={t4_s['ev']}% std={t4_s['std']}% "
-        f"WR={t4_s['wr']}% t={t4_s['t']} CI[{t4_s['ci_lo']},{t4_s['ci_hi']}]"
-    )
+    print(f"  n={t4_s['n']} EV={t4_s['ev']}% std={t4_s['std']}% WR={t4_s['wr']}% t={t4_s['t']} CI[{t4_s['ci_lo']},{t4_s['ci_hi']}]")
     net_t4 = t4_s["ev"] - COST * 100
     print(f"  net EV (after cost): {net_t4:.3f}%")
 
@@ -591,20 +583,14 @@ def main():
         if r is not None:
             rbase_by_date[w["t1_date"]].append(r)
     rbase_dt = day_paired_t(rbase_by_date)
-    print(
-        f"  day-paired: n_days={rbase_dt['n_days']} mean={rbase_dt['mean']}% "
-        f"t={rbase_dt['t']} p={rbase_dt['p_one_sided']}"
-    )
+    print(f"  day-paired: n_days={rbase_dt['n_days']} mean={rbase_dt['mean']}% t={rbase_dt['t']} p={rbase_dt['p_one_sided']}")
 
     # Realistic T+3 trailing
     print("\n=== realistic T+3 trailing (entry=T+2 open, R6 fill) ===")
     rt3_rets = [realistic_entry_exit(w, "T+3") for w in winners]
     rt3_rets = [r[0] for r in rt3_rets if r is not None]
     rt3_s = ev_stats(rt3_rets)
-    print(
-        f"  n={rt3_s['n']} EV={rt3_s['ev']}% std={rt3_s['std']}% "
-        f"WR={rt3_s['wr']}% t={rt3_s['t']} CI[{rt3_s['ci_lo']},{rt3_s['ci_hi']}]"
-    )
+    print(f"  n={rt3_s['n']} EV={rt3_s['ev']}% std={rt3_s['std']}% WR={rt3_s['wr']}% t={rt3_s['t']} CI[{rt3_s['ci_lo']},{rt3_s['ci_hi']}]")
     net_rt3 = rt3_s["ev"] - COST * 100
     print(f"  net EV (after cost): {net_rt3:.3f}%")
 
@@ -621,10 +607,7 @@ def main():
     rt4_rets = [realistic_entry_exit(w, "T+4") for w in winners]
     rt4_rets = [r[0] for r in rt4_rets if r is not None]
     rt4_s = ev_stats(rt4_rets)
-    print(
-        f"  n={rt4_s['n']} EV={rt4_s['ev']}% std={rt4_s['std']}% "
-        f"WR={rt4_s['wr']}% t={rt4_s['t']} CI[{rt4_s['ci_lo']},{rt4_s['ci_hi']}]"
-    )
+    print(f"  n={rt4_s['n']} EV={rt4_s['ev']}% std={rt4_s['std']}% WR={rt4_s['wr']}% t={rt4_s['t']} CI[{rt4_s['ci_lo']},{rt4_s['ci_hi']}]")
     net_rt4 = rt4_s["ev"] - COST * 100
     print(f"  net EV (after cost): {net_rt4:.3f}%")
 
@@ -648,18 +631,14 @@ def main():
     # ---- walk-forward OOS ----
     print("\n=== walk-forward OOS (前半 train 选参数 → 后半 test 验证) ===")
     wf = walk_forward(winners, "T+3")  # exit_day param unused inside, we test both
-    print(
-        f"  n_train={wf['n_train']} n_test={wf['n_test']} "
-        f"train_dates={wf['n_train_dates']} test_dates={wf['n_test_dates']}"
-    )
+    print(f"  n_train={wf['n_train']} n_test={wf['n_test']} train_dates={wf['n_train_dates']} test_dates={wf['n_test_dates']}")
     for ed in ("T+3", "T+4"):
         tr = wf["train_ev"][ed]
         print(f"  train {ed}: EV={tr['ev']}% t={tr['t']} n={tr['n']}")
     print(f"  best exit day (train): {wf['best_exit_day_train']}")
     tb = wf["test_ev_best"]
     print(
-        f"  test (best={wf['best_exit_day_train']}): EV={tb['ev']}% t={tb['t']} "
-        f"WR={tb['wr']}% n={tb['n']} CI[{tb['ci_lo']},{tb['ci_hi']}]"
+        f"  test (best={wf['best_exit_day_train']}): EV={tb['ev']}% t={tb['t']} WR={tb['wr']}% n={tb['n']} CI[{tb['ci_lo']},{tb['ci_hi']}]"
     )
     for ed in ("T+3", "T+4"):
         ts = wf["test_ev_both"][ed]
@@ -686,24 +665,17 @@ def main():
     print(f"T+3 trailing: EV={t3_s['ev']}% t={t3_dt['t']} (day-paired p={t3_dt['p_one_sided']})")
     print(f"T+4 trailing: EV={t4_s['ev']}% t={t4_dt['t']} (day-paired p={t4_dt['p_one_sided']})")
     print(f"\n[realistic entry=T+2 open — T+1 sealed, buy next morning]")
-    print(
-        f"baseline (T+2open→T+3close): EV={rbase_s['ev']}% t={rbase_dt['t']} (day-paired p={rbase_dt['p_one_sided']})"
-    )
+    print(f"baseline (T+2open→T+3close): EV={rbase_s['ev']}% t={rbase_dt['t']} (day-paired p={rbase_dt['p_one_sided']})")
     print(f"T+3 trailing: EV={rt3_s['ev']}% t={rt3_dt['t']} (day-paired p={rt3_dt['p_one_sided']})")
     print(f"T+4 trailing: EV={rt4_s['ev']}% t={rt4_dt['t']} (day-paired p={rt4_dt['p_one_sided']})")
-    print(
-        f"\nBonferroni p (2 tests, realistic): {bonf_p:.6f} → {'significant' if bonf_p < ALPHA else 'NOT significant'}"
-    )
+    print(f"\nBonferroni p (2 tests, realistic): {bonf_p:.6f} → {'significant' if bonf_p < ALPHA else 'NOT significant'}")
     wf_train = wf["train_ev"][wf["best_exit_day_train"]]["ev"]
     wf_test = wf["test_ev_best"]["ev"]
     decay = (wf_train - wf_test) / abs(wf_train) * 100 if wf_train != 0 else 0
     print(f"walk-forward (realistic): train EV={wf_train}% test EV={wf_test}% (decay={decay:.0f}%)")
     print(f"R6 fill impact: ideal vs realistic diff 见上表")
     print(f"\n注: 本实验只测 winner tail ride 维度，禁止外推成'打板有 edge'。")
-    print(
-        f"\n核心发现: entry=T+1 close 口径下 baseline/trailing 全正 EV 是假象——"
-        f"100% winners T+1 sealed (close==high)，T+1 close 不可买。"
-    )
+    print(f"\n核心发现: entry=T+1 close 口径下 baseline/trailing 全正 EV 是假象——100% winners T+1 sealed (close==high)，T+1 close 不可买。")
     print(f"realistic entry=T+2 open 后，baseline/trailing 全负 EV，无 edge。")
 
 

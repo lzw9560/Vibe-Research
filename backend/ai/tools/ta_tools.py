@@ -31,8 +31,7 @@ def query_gap_regime(code: str, date: str) -> dict:
 
 @register_tool(
     "query_macd_divergence",
-    "查个股 MACD 背离 regime（顶背离/底背离/无背离 + 方向 + 置信度）。"
-    "S196：作 regime 信号不买卖，与缺口互补（趋势启动/反转确认）。",
+    "查个股 MACD 背离 regime（顶背离/底背离/无背离 + 方向 + 置信度）。S196：作 regime 信号不买卖，与缺口互补（趋势启动/反转确认）。",
     params={
         "code": {"description": "6 位股票代码"},
         "date": {"description": "YYYY-MM-DD 目标日"},
@@ -44,8 +43,7 @@ def query_macd_divergence(code: str, date: str) -> dict:
 
 @register_tool(
     "query_rsi",
-    "查个股 RSI 超买超卖 regime（超买/超卖/中性 + RSI 值 + 置信度）。"
-    "S196：作 regime 信号不买卖，超买警惕回调/超卖警惕反弹。",
+    "查个股 RSI 超买超卖 regime（超买/超卖/中性 + RSI 值 + 置信度）。S196：作 regime 信号不买卖，超买警惕回调/超卖警惕反弹。",
     params={
         "code": {"description": "6 位股票代码"},
         "date": {"description": "YYYY-MM-DD 目标日"},

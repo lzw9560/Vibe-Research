@@ -67,10 +67,7 @@ def main() -> None:
         }
         for d in data
     ]
-    cases_b = [
-        {"breakout": d["breakout_score"] or 0.0, "gap": encode_gap_direction_agnostic(d.get("gap_regime", "无"))}
-        for d in data
-    ]
+    cases_b = [{"breakout": d["breakout_score"] or 0.0, "gap": encode_gap_direction_agnostic(d.get("gap_regime", "无"))} for d in data]
     outcomes = [d["gross_return"] for d in data]
     dates = [d["entry_date"] for d in data]
     K = len(fs2_weights)  # 跨信号 Bonferroni
@@ -80,8 +77,7 @@ def main() -> None:
     n_gap_b = sum(1 for c in cases_b if c["gap"] > 0)
     n_down_zeroed = n_gap_b - n_gap_a
     print(
-        f"\n# 编码差异: version_A gap>0={n_gap_a} | version_B gap>0={n_gap_b} "
-        f"| 向下 zeroed={n_down_zeroed} (A 股 long-only)",
+        f"\n# 编码差异: version_A gap>0={n_gap_a} | version_B gap>0={n_gap_b} | 向下 zeroed={n_down_zeroed} (A 股 long-only)",
         file=sys.stderr,
     )
 
@@ -95,10 +91,7 @@ def main() -> None:
         K=K,
     )
     print(f"\n=== breakout 消融（基线参照）===")
-    print(
-        f"  full_ic_mean={r_bk['full_ic_mean']:+.4f}  ablated_ic_mean={r_bk['ablated_ic_mean']:+.4f}  "
-        f"delta_ic={r_bk['delta_ic']:+.4f}"
-    )
+    print(f"  full_ic_mean={r_bk['full_ic_mean']:+.4f}  ablated_ic_mean={r_bk['ablated_ic_mean']:+.4f}  delta_ic={r_bk['delta_ic']:+.4f}")
     print(f"  delta_pval={r_bk['delta_pval']:.4f}  n_folds={r_bk['n_folds']}")
     print(f"  verdict: {v_bk['verdict']} (tier={v_bk['tier']})")
 
@@ -142,12 +135,8 @@ def main() -> None:
     delta_diff = r_gap_a["delta_ic"] - r_gap_b["delta_ic"]
     print(f"\n{'=' * 60}")
     print(f"=== A vs B delta_ic 对照 ===")
-    print(
-        f"  A (方向感知)  delta_ic={r_gap_a['delta_ic']:+.4f}  p={r_gap_a['delta_pval']:.4f}  verdict={v_gap_a['verdict']}"
-    )
-    print(
-        f"  B (方向无关)  delta_ic={r_gap_b['delta_ic']:+.4f}  p={r_gap_b['delta_pval']:.4f}  verdict={v_gap_b['verdict']}"
-    )
+    print(f"  A (方向感知)  delta_ic={r_gap_a['delta_ic']:+.4f}  p={r_gap_a['delta_pval']:.4f}  verdict={v_gap_a['verdict']}")
+    print(f"  B (方向无关)  delta_ic={r_gap_b['delta_ic']:+.4f}  p={r_gap_b['delta_pval']:.4f}  verdict={v_gap_b['verdict']}")
     print(f"  A - B         delta_ic={delta_diff:+.4f}")
     if delta_diff > 0 and r_gap_a["delta_ic"] > r_gap_b["delta_ic"]:
         print(f"  → 方向感知编码 delta_ic 提升（+{delta_diff:.4f}），edge 可能来自方向感知")

@@ -65,9 +65,7 @@ def sector_heat_reverify(payload: Dict[str, Any]) -> Dict[str, Any]:
     defs = {d["name"]: d for d in data.get("heat_defs", [])}
     arm = defs.get(canonical_arm)
     if arm is None:
-        logger.warning(
-            "[sector_heat_reverify] heat_def %s 未在 compute() 结果中（可用: %s）", canonical_arm, list(defs.keys())
-        )
+        logger.warning("[sector_heat_reverify] heat_def %s 未在 compute() 结果中（可用: %s）", canonical_arm, list(defs.keys()))
         return {
             "status": "error",
             "days_robust": days,
@@ -82,9 +80,7 @@ def sector_heat_reverify(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     # §44v2 规约④：days<60 标 underpowered 不判（保持 ×0.5 skip，不臆造 enforce）
     if days < threshold_days:
-        logger.info(
-            "[sector_heat_reverify] days=%d<%d underpowered，skip（保持 ×0.5）lift=%.3f", days, threshold_days, lift
-        )
+        logger.info("[sector_heat_reverify] days=%d<%d underpowered，skip（保持 ×0.5）lift=%.3f", days, threshold_days, lift)
         return {
             "status": "skip_underpowered",
             "days_robust": days,
@@ -100,9 +96,7 @@ def sector_heat_reverify(payload: Dict[str, Any]) -> Dict[str, Any]:
     if lift >= 2.0:
         # 升 ×1.0（lift_to_multiplier: lift≥2+CI不重叠+robust→validated ×1.0 /
         # CI重叠→待复验 ×1.0，均 ×1.0；write_override 内部算 status/mult）
-        wb = write_override(
-            "sector_heat", lift, n, days, phase="r3_reverify", source_script=src, ci_overlap=ci_overlap, robust=True
-        )
+        wb = write_override("sector_heat", lift, n, days, phase="r3_reverify", source_script=src, ci_overlap=ci_overlap, robust=True)
         logger.warning(
             "[sector_heat_reverify] 升级 days=%d lift=%.3f≥2.0 → ×%.2f (phase=r3_reverify)",
             days,
@@ -121,9 +115,7 @@ def sector_heat_reverify(payload: Dict[str, Any]) -> Dict[str, Any]:
         }
     if lift < 1.0:
         # 降 ×0.1（劣于随机 robust；write_override 内 lift_to_multiplier: lift<1+robust→×0.1）
-        wb = write_override(
-            "sector_heat", lift, n, days, phase="r3_reverify", source_script=src, ci_overlap=ci_overlap, robust=True
-        )
+        wb = write_override("sector_heat", lift, n, days, phase="r3_reverify", source_script=src, ci_overlap=ci_overlap, robust=True)
         logger.warning(
             "[sector_heat_reverify] 降级 days=%d lift=%.3f<1.0 → ×%.2f (phase=r3_reverify)",
             days,

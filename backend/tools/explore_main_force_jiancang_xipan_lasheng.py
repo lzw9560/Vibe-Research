@@ -263,9 +263,7 @@ def main():
         print(f"  n={s['n']} n_days={dt['n_days']}")
         print(f"  raw_ev: mean={s['ev']:+.4f}% net={net:+.4f}% median={med:+.4f}% stdev={s['std']:.2f}%")
         print(f"  WR={s['wr']}% p75={p75:+.2f}% p95={p95:+.2f}%")
-        print(
-            f"  day_t={dt['t']} p_raw={dt['p_one_sided']} Bonf×{n_bonf}={bonferroni_p(dt['p_one_sided'], n_bonf):.6f}"
-        )
+        print(f"  day_t={dt['t']} p_raw={dt['p_one_sided']} Bonf×{n_bonf}={bonferroni_p(dt['p_one_sided'], n_bonf):.6f}")
 
         # verdict (high-risk lens: mean 真为正 + tail 可捕获)
         print(f"  [high-risk lens verdict]")
@@ -280,9 +278,7 @@ def main():
             if p_bonf < ALPHA:
                 print(f"    → HIGH-RISK EDGE-CONFIRMED: mean+net 正 + Bonf PASS (纵 median/WR 低也接受 high-risk)")
             else:
-                print(
-                    f"    → EXPLORATORY: mean+net 正但 Bonf={p_bonf}≥{ALPHA} (high-risk 下仍值得看，tail p95={p95:+.2f}%)"
-                )
+                print(f"    → EXPLORATORY: mean+net 正但 Bonf={p_bonf}≥{ALPHA} (high-risk 下仍值得看，tail p95={p95:+.2f}%)")
 
         # flaw 检查
         print(f"  [flaw 检查]")

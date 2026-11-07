@@ -142,9 +142,7 @@ class AntiQuantEngine:
         # 回退 calc（inline 测试）。2026-10-08 实测发现：calc 口径错
         # （竞价量/前5日开盘量单位不匹配返0），hithink 直接值才对。
         gap_pct = float(auction_final.get("auction_pct") or gap_pct_calc or 0)
-        vol_ratio = float(
-            auction_final.get("auction_volume_ratio") or calc_vol_ratio(auction_final, prev_5d_open_vols) or 0
-        )
+        vol_ratio = float(auction_final.get("auction_volume_ratio") or calc_vol_ratio(auction_final, prev_5d_open_vols) or 0)
         # auction_yesterday_ratio_pct 是百分点（2.66=2.66%），amount_ratio 需比率（0.0266）→ /100
         amt_hithink = float(auction_final.get("auction_yesterday_ratio_pct", 0) or 0) / 100
         amount_ratio = amt_hithink if amt_hithink > 0 else calc_amount_ratio(auction_final, prev_day_turnover)
@@ -153,9 +151,7 @@ class AntiQuantEngine:
             "gap_pct": gap_pct,
             "vol_ratio": vol_ratio,
             "amount_ratio": amount_ratio,
-            "bid_increasing": bool(
-                float(auction_live_2.get("volume", 0) or 0) >= float(auction_live_1.get("volume", 0) or 0)
-            ),
+            "bid_increasing": bool(float(auction_live_2.get("volume", 0) or 0) >= float(auction_live_1.get("volume", 0) or 0)),
         }
         result = score_tactic("reversal", factors)
         result["code"] = code

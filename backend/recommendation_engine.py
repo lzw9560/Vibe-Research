@@ -141,9 +141,7 @@ async def get_recommendation(code: str, date: str | None = None) -> StockRecomme
     except Exception as e:  # noqa: BLE001
         import logging
 
-        logging.getLogger(__name__).warning(
-            "recommendation STI phase DB 查询失败（降级 sti_phase=None，影响 AVOID 判定）: %s", e
-        )
+        logging.getLogger(__name__).warning("recommendation STI phase DB 查询失败（降级 sti_phase=None，影响 AVOID 判定）: %s", e)
 
     # 检查 AVOID 条件
     avoid, reason = _check_avoid_conditions(gene, sti_phase)
@@ -378,8 +376,7 @@ def get_multi_arm_recommendations(
             honest_label=ArmHonestLabel.DEAD_ARM,
             action_type="none",
             validated=False,
-            note="gap §44 falsified（成本假象 net -0.48% t=-3.79），is_dead_arm=1 不推荐；"
-            "审计走 tools/s44_gap_run_60d.py",
+            note="gap §44 falsified（成本假象 net -0.48% t=-3.79），is_dead_arm=1 不推荐；审计走 tools/s44_gap_run_60d.py",
         )
     )
 

@@ -239,9 +239,7 @@ def notify_sell_reminder(holdings: list[dict]) -> bool:
         return False
 
     codes = ", ".join(f"{h.get('code', '')}" for h in holdings)
-    content = (
-        f"【首板流卖出提醒】今日 T+1 必卖 {len(holdings)} 只持仓\nT+1 必卖不破例（即使涨停也不持有）\n持仓：{codes}"
-    )
+    content = f"【首板流卖出提醒】今日 T+1 必卖 {len(holdings)} 只持仓\nT+1 必卖不破例（即使涨停也不持有）\n持仓：{codes}"
 
     try:
         from notification.notification_service import NotificationService
@@ -446,9 +444,7 @@ if __name__ == "__main__":
     print(f"建仓: {len(r['entered'])}")
     for e in r["entered"]:
         print(
-            f"  {e['code']} entry={e['entry_price_actual']} "
-            f"stop={e['stop_loss']} tp={e['take_profit']} "
-            f"pct={e['position_pct'] * 100:.0f}%"
+            f"  {e['code']} entry={e['entry_price_actual']} stop={e['stop_loss']} tp={e['take_profit']} pct={e['position_pct'] * 100:.0f}%"
         )
     print(f"持仓: {len(r['holdings'])}")
 

@@ -49,16 +49,12 @@ def _ensure_seed_tasks() -> None:
             old_cron = t.cron_expr
             t.cron_expr = "15 17 * * 0-4"
             _manager.update_task(t)
-            logger.info(
-                "[scheduler] kline_refresh cron 迁移 %s → 15 17 * * 0-4（S184: baostock 17:00+ 更新后）", old_cron
-            )
+            logger.info("[scheduler] kline_refresh cron 迁移 %s → 15 17 * * 0-4（S184: baostock 17:00+ 更新后）", old_cron)
         elif t.name == "trade_journal_daily" and t.cron_expr == "45 16 * * 0-4":
             old_cron = t.cron_expr
             t.cron_expr = "30 17 * * 0-4"
             _manager.update_task(t)
-            logger.info(
-                "[scheduler] trade_journal_daily cron 迁移 %s → 30 17 * * 0-4（S184: 晚 kline_refresh 17:15）", old_cron
-            )
+            logger.info("[scheduler] trade_journal_daily cron 迁移 %s → 30 17 * * 0-4（S184: 晚 kline_refresh 17:15）", old_cron)
 
     # S190 R5：盘后链 depends_on 硬门控（上游今日未 success/degraded 则跳过，防下游吃陈旧数据）
     # 当前靠 cron 时序错开（17:15→17:25→17:30）脆，加硬门控兜底
@@ -70,9 +66,7 @@ def _ensure_seed_tasks() -> None:
         elif t.name == "trade_journal_daily" and not t.depends_on:
             t.depends_on = "candidate_funnel_precompute,kline_refresh"
             _manager.update_task(t)
-            logger.info(
-                "[scheduler] trade_journal_daily 声明 depends_on=candidate_funnel_precompute,kline_refresh（S190 R5）"
-            )
+            logger.info("[scheduler] trade_journal_daily 声明 depends_on=candidate_funnel_precompute,kline_refresh（S190 R5）")
     if "limitup_precompute" not in existing:
         _manager.create_task(
             ScheduledTask(
@@ -419,9 +413,7 @@ def _ensure_seed_tasks() -> None:
                 enabled=False,
             )
         )
-        logger.info(
-            "[scheduler] seed 默认任务 early_admission_scan 已创建（enabled=False，S204 T10，auto-source 须 pre-涨停 scanner）"
-        )
+        logger.info("[scheduler] seed 默认任务 early_admission_scan 已创建（enabled=False，S204 T10，auto-source 须 pre-涨停 scanner）")
 
     # S204 T11: escalation run（tracking→watching auto-promote + promoted→decayed）。
     # enabled=False：maturity 阈值（min_age=3/gene+20%/sector_rank≤5）社区参数未验证→auto-escalate 会让 watching 噪声大。
@@ -715,9 +707,7 @@ def _ensure_seed_tasks() -> None:
                 enabled=True,
             )
         )
-        logger.info(
-            "[scheduler] seed 默认任务 regime_gate_combo_log 已创建（cron 55 18 * * 0-4, depends_on kline_refresh）"
-        )
+        logger.info("[scheduler] seed 默认任务 regime_gate_combo_log 已创建（cron 55 18 * * 0-4, depends_on kline_refresh）")
 
     # 2026-10-29 用户"每日提醒我 combo"：17:22 干净推送 combo top-20 + gate 状态到飞书。
     # 不混 inst/A组（已证伪投毒），只推 combo + gate，教用户执行。
@@ -735,9 +725,7 @@ def _ensure_seed_tasks() -> None:
                 enabled=True,
             )
         )
-        logger.info(
-            "[scheduler] seed 默认任务 combo_daily_notify 已创建（cron 50 18 * * 0-4, depends_on kline_refresh）"
-        )
+        logger.info("[scheduler] seed 默认任务 combo_daily_notify 已创建（cron 50 18 * * 0-4, depends_on kline_refresh）")
 
     # S211 通电收尾（2026-09-17）：regime_cache_fetch——17:20（kline_refresh 17:15 后、
     # trade_journal_daily 17:30 前）。刷 index_ma20_regime.json 防 consecutive_relay
@@ -756,9 +744,7 @@ def _ensure_seed_tasks() -> None:
                 depends_on="kline_refresh",  # S190 R5：晚 kline_refresh 后跑
             )
         )
-        logger.info(
-            "[scheduler] seed 默认任务 regime_cache_fetch 已创建（cron 20 17 * * 0-4，depends_on=kline_refresh）"
-        )
+        logger.info("[scheduler] seed 默认任务 regime_cache_fetch 已创建（cron 20 17 * * 0-4，depends_on=kline_refresh）")
 
     # S216 macro_fetch——06:35 盘前（FRED T+1 数据更新后 + A 股盘前 09:30 前）。
     # 调 macro.py fetch_fred_series 取 8 因子最新值写 .vibe-research/macro_snapshot.json。
@@ -801,9 +787,7 @@ def _ensure_seed_tasks() -> None:
                 # 独立不依赖 kline_refresh（em 自取数非本地 cache）
             )
         )
-        logger.info(
-            "[scheduler] seed 默认任务 fund_accumulation 已创建（cron 30 16 * * 0-4，dispatch 注册须等 #8 done）"
-        )
+        logger.info("[scheduler] seed 默认任务 fund_accumulation 已创建（cron 30 16 * * 0-4，dispatch 注册须等 #8 done）")
 
     # S066 §9 通电（#13 follow-up research note lhb-axis-a-research-2026-09-19，数据 prep 非 spec S220
     # ——freeze 维持）：hot_money_seats_update——每周一 06:00 周更聚合 60 日龙虎榜画像 → seat_profiles.db
@@ -888,8 +872,7 @@ def _ensure_seed_tasks() -> None:
         if t.name == "n8n-trigger":
             _manager.delete_task(t.id)
             logger.info(
-                "[scheduler] 删除重复任务 n8n-trigger（type=limitup_precompute，"
-                "cron 1-5 错误，limitup_precompute 0-4 已正确 seed）"
+                "[scheduler] 删除重复任务 n8n-trigger（type=limitup_precompute，cron 1-5 错误，limitup_precompute 0-4 已正确 seed）"
             )
             break
 
@@ -900,8 +883,7 @@ def _ensure_seed_tasks() -> None:
             t.cron_expr = t.cron_expr.replace("1-5", "0-4")
             _manager.update_task(t)
             logger.info(
-                "[scheduler] 每日回测快照 cron 迁移 %s → %s"
-                "（1-5=周二至周六，修正为 0-4=周一至周五，周日不跑 backtest）",
+                "[scheduler] 每日回测快照 cron 迁移 %s → %s（1-5=周二至周六，修正为 0-4=周一至周五，周日不跑 backtest）",
                 old_cron,
                 t.cron_expr,
             )
@@ -987,9 +969,7 @@ def _ensure_seed_tasks() -> None:
                 depends_on="trade_journal_daily",  # S190 R5 硬门控
             )
         )
-        logger.info(
-            "[scheduler] seed 默认任务 daily_full_pull 已创建（cron 35 17 * * 0-4，depends_on=trade_journal_daily）"
-        )
+        logger.info("[scheduler] seed 默认任务 daily_full_pull 已创建（cron 35 17 * * 0-4，depends_on=trade_journal_daily）")
 
     # S218 C5: 周度汇总复盘——每周日 18:00 盘后（weekly_review）
     if "weekly_review" not in existing:
@@ -999,9 +979,7 @@ def _ensure_seed_tasks() -> None:
                 description="S218 C5 周度汇总复盘（consecutive_relay paper P&L + cap gate + process-theater 自检）",
                 task_type="weekly_review",
                 cron_expr="0 18 * * 0",  # 每周日 18:00
-                payload={
-                    "notify": True
-                },  # S218 #5（deep-review 2026-09-18）：notify:False→True 让 weekly_review 推 Feishu
+                payload={"notify": True},  # S218 #5（deep-review 2026-09-18）：notify:False→True 让 weekly_review 推 Feishu
                 enabled=True,
             )
         )

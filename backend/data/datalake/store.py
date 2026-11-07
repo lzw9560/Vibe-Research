@@ -99,8 +99,7 @@ def save_stoke_data(date_str: str, items: dict[str, list[dict]]) -> dict:
             saved += 1
         for n in items.get("news", []):
             conn.execute(
-                "INSERT OR REPLACE INTO news (date, code, title, content, time, source, snapshot_at) "
-                "VALUES (?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO news (date, code, title, content, time, source, snapshot_at) VALUES (?,?,?,?,?,?,?)",
                 (
                     date_str,
                     n.get("code", ""),
@@ -114,8 +113,7 @@ def save_stoke_data(date_str: str, items: dict[str, list[dict]]) -> dict:
             saved += 1
         for s in items.get("strong", []):
             conn.execute(
-                "INSERT OR REPLACE INTO strong_stocks "
-                "(date, code, name, pct, reason, industry, snapshot_at) VALUES (?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO strong_stocks (date, code, name, pct, reason, industry, snapshot_at) VALUES (?,?,?,?,?,?,?)",
                 (
                     date_str,
                     s.get("代码", s.get("code", "")),
@@ -174,8 +172,7 @@ def save_ticks(date_str: str, code: str, ticks: list[dict]) -> dict:
     try:
         now = datetime.now().isoformat()
         conn.executemany(
-            "INSERT OR REPLACE INTO ticks (date, code, time, price, vol, buyorsell, volume, snapshot_at) "
-            "VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT OR REPLACE INTO ticks (date, code, time, price, vol, buyorsell, volume, snapshot_at) VALUES (?,?,?,?,?,?,?,?)",
             [
                 (
                     date_str,

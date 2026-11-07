@@ -234,9 +234,7 @@ def fetch_kline_baostock(code: str, start: str, end: str) -> dict[str, dict]:
     return dmap
 
 
-def get_kline_for_addition(
-    add: dict, code_map: dict, fetch_cache: dict, do_fetch: bool = True
-) -> dict[str, dict] | None:
+def get_kline_for_addition(add: dict, code_map: dict, fetch_cache: dict, do_fetch: bool = True) -> dict[str, dict] | None:
     """Get kline bars around effective date. Cache first, then baostock fetch if gap.
     Returns {date: bar} covering effective-3 .. effective+15, or None."""
     code6 = add["code6"]
@@ -307,9 +305,7 @@ def trading_day_index(dates: list[str]) -> dict[str, int]:
     return {d: i for i, d in enumerate(dates)}
 
 
-def compute_bhar(
-    add: dict, bars: dict[str, dict], idx_bars: dict[str, dict], idx_dates: list[str], window_n: int
-) -> dict | None:
+def compute_bhar(add: dict, bars: dict[str, dict], idx_bars: dict[str, dict], idx_dates: list[str], window_n: int) -> dict | None:
     """BHAR for one addition.
     entry = effective+1 open, exit = effective+N close (N=window_n).
     stock_ret = (close_N - open_1) / open_1
@@ -439,10 +435,7 @@ def main() -> None:
         f"  distinct effective dates: {len(eff_dates_all)} "
         f"({eff_dates_all[0] if eff_dates_all else '-'}~{eff_dates_all[-1] if eff_dates_all else '-'})"
     )
-    print(
-        f"  ⚠ 结构性限制: 半年一次 rebalance → per-day-mean t N_days={len(eff_dates_all)} "
-        f"< 60 → 预期 underpowered (诚实标注)"
-    )
+    print(f"  ⚠ 结构性限制: 半年一次 rebalance → per-day-mean t N_days={len(eff_dates_all)} < 60 → 预期 underpowered (诚实标注)")
 
     # ---- 3. kline for additions (cache + fetch) ----
     print("\n[3/5] loading kline cache + fetching missing bars (effective-3..effective+15)...")
@@ -462,10 +455,7 @@ def main() -> None:
         else:
             n_cached += 1
     save_fetch_cache(fetch_cache)
-    print(
-        f"  usable additions: {len(addition_bars)}/{len(all_additions)} "
-        f"(cached={n_cached} fetched={n_fetched} missing={n_missing})"
-    )
+    print(f"  usable additions: {len(addition_bars)}/{len(all_additions)} (cached={n_cached} fetched={n_fetched} missing={n_missing})")
 
     # ---- 4. BHAR per window ----
     print("\n[4/5] computing BHAR (T+5 / T+10)...")
@@ -500,8 +490,7 @@ def main() -> None:
         pet = per_event_t(bhars)
         net_ev = ev["ev"] - COST * 100
         print(
-            f"\n  per-event: n={ev['n']} BHAR_mean={ev['ev']}% std={ev['std']}% "
-            f"WR={ev['wr']}% t={ev['t']} CI[{ev['ci_lo']},{ev['ci_hi']}]"
+            f"\n  per-event: n={ev['n']} BHAR_mean={ev['ev']}% std={ev['std']}% WR={ev['wr']}% t={ev['t']} CI[{ev['ci_lo']},{ev['ci_hi']}]"
         )
         print(f"  per-event t: mean={pet['mean']}% t={pet['t']} p_one_sided={pet['p_one_sided']}")
         print(f"  net BHAR (after {COST * 100:.1f}% cost): {net_ev:.3f}%")
@@ -509,14 +498,10 @@ def main() -> None:
         # per-day-mean t (PRIMARY inferential, clustered by effective date)
         dt = day_paired_t(by_date)
         print(f"\n  per-day-mean t (PRIMARY, cluster by effective date):")
-        print(
-            f"    n_days={dt['n_days']} mean={dt['mean']}% std={dt['std']}% t={dt['t']} p_one_sided={dt['p_one_sided']}"
-        )
+        print(f"    n_days={dt['n_days']} mean={dt['mean']}% std={dt['std']}% t={dt['t']} p_one_sided={dt['p_one_sided']}")
         p_raw = dt["p_one_sided"]
         p_bonf = bonferroni_p(p_raw, CROSS_STRATEGY_N)
-        print(
-            f"    Bonferroni ×{CROSS_STRATEGY_N}: p={p_bonf:.6f} ({'PASS' if p_bonf < ALPHA else 'FAIL'} @ α={ALPHA})"
-        )
+        print(f"    Bonferroni ×{CROSS_STRATEGY_N}: p={p_bonf:.6f} ({'PASS' if p_bonf < ALPHA else 'FAIL'} @ α={ALPHA})")
 
         # per-index breakdown
         print(f"\n  per-index BHAR:")
@@ -549,13 +534,8 @@ def main() -> None:
             te_ev = ev_stats(test_rets)
             tr_dt = day_paired_t(tr_by_d)
             te_dt = day_paired_t(te_by_d)
-            print(
-                f"    train: n_dates={len(train_dates)} n={tr_ev['n']} BHAR={tr_ev['ev']}% t={tr_dt['t']} (day-paired)"
-            )
-            print(
-                f"    test:  n_dates={len(test_dates)} n={te_ev['n']} "
-                f"BHAR={te_ev['ev']}% t={te_dt['t']} p={te_dt['p_one_sided']}"
-            )
+            print(f"    train: n_dates={len(train_dates)} n={tr_ev['n']} BHAR={tr_ev['ev']}% t={tr_dt['t']} (day-paired)")
+            print(f"    test:  n_dates={len(test_dates)} n={te_ev['n']} BHAR={te_ev['ev']}% t={te_dt['t']} p={te_dt['p_one_sided']}")
             decay = (tr_ev["ev"] - te_ev["ev"]) / abs(tr_ev["ev"]) * 100 if tr_ev["ev"] != 0 else 0
             print(f"    decay: {decay:.0f}% (train→test)")
             wf_status = "ok"
@@ -594,10 +574,7 @@ def main() -> None:
             else:
                 wf_p_bonf = bonferroni_p(wf_test_p, CROSS_STRATEGY_N)
                 if wf_p_bonf >= ALPHA:
-                    print(
-                        f"    OOS BHAR>0 but test p={wf_test_p} Bonf×{CROSS_STRATEGY_N}"
-                        f"={wf_p_bonf} >= {ALPHA} → not significant OOS"
-                    )
+                    print(f"    OOS BHAR>0 but test p={wf_test_p} Bonf×{CROSS_STRATEGY_N}={wf_p_bonf} >= {ALPHA} → not significant OOS")
                     verdict = "exploratory"
                 else:
                     print(f"    → EDGE-CONFIRMED: BHAR>0, Bonf PASS, OOS significant")
@@ -631,10 +608,7 @@ def main() -> None:
     primary = globals().get("_last_T5")
     if primary:
         print(f"\n  primary window: T5")
-        print(
-            f"    n_events={primary['n_events']} n_dates={primary['n_dates']} "
-            f"BHAR={primary['bhar']}% net={primary['net_ev']}%"
-        )
+        print(f"    n_events={primary['n_events']} n_dates={primary['n_dates']} BHAR={primary['bhar']}% net={primary['net_ev']}%")
         print(f"    day_t={primary['day_t']} p_raw={primary['p_raw']} Bonf×{CROSS_STRATEGY_N}={primary['p_bonf']}")
         if primary["wf_status"] == "ok":
             print(

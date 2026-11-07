@@ -46,25 +46,19 @@ def get_sti_latest(date: str = Query(None, description="日期，格式 YYYY-MM-
                         phase=ls_sti.STIPhase(row["phase"]) if row["phase"] else None,
                         dimensions=ls_sti.STIDimension(
                             limit_up_count=default_dims[0],
-                            limit_down_count=float(row["dimension_limit_down_count"])
-                            if row["dimension_limit_down_count"]
-                            else 0,
+                            limit_down_count=float(row["dimension_limit_down_count"]) if row["dimension_limit_down_count"] else 0,
                             seal_rate=default_dims[1],
                             advance_decline_ratio=float(row["dimension_advance_decline_ratio"])
                             if row["dimension_advance_decline_ratio"]
                             else 0,
                             promotion_rate=default_dims[2],
-                            prev_zt_performance=float(row["dimension_prev_zt_performance"])
-                            if row["dimension_prev_zt_performance"]
-                            else 0,
+                            prev_zt_performance=float(row["dimension_prev_zt_performance"]) if row["dimension_prev_zt_performance"] else 0,
                             max_boards=float(row["dimension_max_boards"]) if row["dimension_max_boards"] else 0,
                             market_factor=float(row["market_factor"]) if row["market_factor"] else 1.0,
                         ),
                         source_ok=bool(row["source_ok"]) if row["source_ok"] is not None else True,
                         confidence=row["confidence"] or "high",
-                        change_from_yesterday=float(row["change_from_yesterday"])
-                        if row["change_from_yesterday"]
-                        else 0.0,
+                        change_from_yesterday=float(row["change_from_yesterday"]) if row["change_from_yesterday"] else 0.0,
                         data_updated=row["data_updated"],
                     )
         return {"data": result.model_dump()}
@@ -78,8 +72,7 @@ def get_sti_timeline(days: int = Query(30, ge=1, le=365)) -> Dict[str, Any]:
     try:
         db = ls_sti.get_sti_engine()._get_db()
         rows = db.execute(
-            "SELECT date, score, phase, change_from_yesterday FROM sti_timeline "
-            "WHERE score IS NOT NULL ORDER BY date DESC LIMIT ?",
+            "SELECT date, score, phase, change_from_yesterday FROM sti_timeline WHERE score IS NOT NULL ORDER BY date DESC LIMIT ?",
             (days,),
         ).fetchall()
         # 过滤掉 scheduler 写入的默认值 50.0（维度全是固定默认值）
@@ -97,9 +90,7 @@ def get_sti_timeline(days: int = Query(30, ge=1, le=365)) -> Dict[str, Any]:
                 "date": r["date"],
                 "score": round(float(r["score"]), 2) if r["score"] else None,
                 "phase": r["phase"],
-                "change_from_yesterday": round(float(r["change_from_yesterday"]), 2)
-                if r["change_from_yesterday"]
-                else None,
+                "change_from_yesterday": round(float(r["change_from_yesterday"]), 2) if r["change_from_yesterday"] else None,
             }
             for r in rows[::-1]  # 升序
         ]

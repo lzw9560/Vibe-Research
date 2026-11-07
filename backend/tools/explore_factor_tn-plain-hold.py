@@ -244,10 +244,7 @@ def main() -> None:
     )
     for s in summary_rows:
         if s.get("verdict") == "no-data":
-            print(
-                f"  {s['name']:<16} {'-':>6} {'-':>5} {'-':>8} {'-':>7} "
-                f"{'-':>6} {'-':>8} {'-':>8} {'-':>7} {'-':>7} no-data"
-            )
+            print(f"  {s['name']:<16} {'-':>6} {'-':>5} {'-':>8} {'-':>7} {'-':>6} {'-':>8} {'-':>8} {'-':>7} {'-':>7} no-data")
             continue
         print(
             f"  {s['name']:<16} {s['n_picks']:>6} {s['n_days']:>5} "
@@ -290,10 +287,7 @@ def main() -> None:
     print(f"\n注: 本实验只测 plain hold holding-period 维度 (N=2/3/4), 禁止外推成'打板有/无 edge'。")
     print(f"R6: plain hold 无 stop → R6 gap-through fill N/A (r6_fill_applied=False)。")
     print(f"realistic entry: T+1 open (非 T+1 close), 一字涨停跳过 (limit_for_code FIXED 2026-10-06)。")
-    print(
-        f"Bonferroni: cross-factor ×12 (6 factors × 2 subsets); "
-        f"本因子 3 子集 full correction 应 ×18, 按跨因子标准 ×12 报告。"
-    )
+    print(f"Bonferroni: cross-factor ×12 (6 factors × 2 subsets); 本因子 3 子集 full correction 应 ×18, 按跨因子标准 ×12 报告。")
     print(f"同一 pick 集跑 N=2/3/4 (apples-to-apples, 不因缺 T+3/T+4 偏差).")
 
 

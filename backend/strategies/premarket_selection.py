@@ -58,9 +58,7 @@ def _load_code_name_map() -> dict[str, str]:
 
         conn = get_healthy_conn(GENE_SCORES_DB_PATH, check_same_thread=False)
         try:
-            rows = conn.execute(
-                "SELECT code, name FROM gene_scores WHERE name IS NOT NULL AND name != '' ORDER BY date DESC"
-            ).fetchall()
+            rows = conn.execute("SELECT code, name FROM gene_scores WHERE name IS NOT NULL AND name != '' ORDER BY date DESC").fetchall()
         finally:
             conn.close()
         # ORDER BY date DESC → 首次出现 = 最新日期的 name

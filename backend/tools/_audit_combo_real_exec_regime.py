@@ -180,9 +180,7 @@ def main() -> None:
             windows.append(r["net"])
     if windows:
         print(f"【3】60 天滚动前向模拟（{len(windows)} 个 60 天窗口）")
-        print(
-            f"  net 分布: mean={statistics.mean(windows) * 100:+.3f}% median={statistics.median(windows) * 100:+.3f}%"
-        )
+        print(f"  net 分布: mean={statistics.mean(windows) * 100:+.3f}% median={statistics.median(windows) * 100:+.3f}%")
         pos = sum(1 for w in windows if w > 0)
         print(f"  正窗口: {pos}/{len(windows)} ({pos / len(windows) * 100:.1f}%)")
         print(f"  最差: {min(windows) * 100:+.3f}% / 最好: {max(windows) * 100:+.3f}%")

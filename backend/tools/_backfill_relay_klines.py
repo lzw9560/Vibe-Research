@@ -35,9 +35,7 @@ def _ms(d: str) -> int:
 
 def main(max_codes: int = 3000) -> None:
     conn = sqlite3.connect(str(ZT_DB))
-    rows = conn.execute(
-        "SELECT code, COUNT(*) c FROM zt_history WHERE COALESCE(lbc,0)>=2 GROUP BY code ORDER BY c DESC"
-    ).fetchall()
+    rows = conn.execute("SELECT code, COUNT(*) c FROM zt_history WHERE COALESCE(lbc,0)>=2 GROUP BY code ORDER BY c DESC").fetchall()
     conn.close()
     print(f"relay codes by event count: {len(rows)} total", flush=True)
 

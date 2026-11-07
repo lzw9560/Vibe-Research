@@ -100,9 +100,7 @@ def audit_inst_gradient() -> dict:
         if inst_buy / total_buy > 0.5:
             year_inst[date[:4]] += 1
     for year in sorted(year_total):
-        print(
-            f"  {year}: inst_dominant {year_inst[year]}/{year_total[year]} = {year_inst[year] / year_total[year] * 100:.1f}%"
-        )
+        print(f"  {year}: inst_dominant {year_inst[year]}/{year_total[year]} = {year_inst[year] / year_total[year] * 100:.1f}%")
 
     return {"layers": layers, "n_picks": len(picks)}
 

@@ -14,6 +14,7 @@ Score 0-5，long top decile（高分=质量改善）。
 
 设计同 value/quality：月频 long-only top-decile, PIT 对齐, filtered benchmark, walk-forward, Bonf×2, NW t。
 """
+
 from __future__ import annotations
 import json
 import sqlite3
@@ -24,6 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _factor_helpers import bonferroni_p, norm_sf_positive  # noqa: E402
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vr_paths import resolve_data_dir  # noqa: E402
 
@@ -36,10 +38,14 @@ N_BONF = 2  # 1 factor × 2 subsets
 
 def pit_pubdate(stat_date: str) -> str:
     y, m = int(stat_date[:4]), int(stat_date[5:7])
-    if m == 3: return f"{y}-04-30"
-    if m == 6: return f"{y}-08-31"
-    if m == 9: return f"{y}-10-31"
-    if m == 12: return f"{y+1}-04-30"
+    if m == 3:
+        return f"{y}-04-30"
+    if m == 6:
+        return f"{y}-08-31"
+    if m == 9:
+        return f"{y}-10-31"
+    if m == 12:
+        return f"{y + 1}-04-30"
     return stat_date
 
 
@@ -178,8 +184,8 @@ def main() -> None:
         sd = sorted(md.keys())
         r = {}
         for i in range(1, len(sd)):
-            if md[sd[i-1]] > 0:
-                r[sd[i]] = (md[sd[i]] - md[sd[i-1]]) / md[sd[i-1]]
+            if md[sd[i - 1]] > 0:
+                r[sd[i]] = (md[sd[i]] - md[sd[i - 1]]) / md[sd[i - 1]]
         code_ret[code] = r
 
     rebal_dates = [d for d in month_dates if d >= "2018-06-01"]
@@ -203,8 +209,8 @@ def main() -> None:
         cand.sort(key=lambda x: -x[1])
         n_top = max(5, len(cand) // 10)
         top = [c for c, _ in cand[:n_top]]
-        s_r = statistics.mean(code_ret[c][rd] for c in top)
-        b_r = statistics.mean(code_ret[c][rd] for c in cand)  # filtered benchmark（有 score 的股）
+        s_r = statistics.mean(code_ret[c][rd] for c, _ in top)
+        b_r = statistics.mean(code_ret[c][rd] for c, _ in cand)  # filtered benchmark（有 score 的股）
         strat_net = s_r - COST
         excess = strat_net - b_r
         excess_rets.append(excess * 100)

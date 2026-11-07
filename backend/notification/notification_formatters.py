@@ -367,11 +367,7 @@ class NotificationFormatterMixin:
                     )
                     # 趋势状态
                     if trend_data:
-                        is_bullish = (
-                            f"✅ {labels['yes_label']}"
-                            if trend_data.get("is_bullish", False)
-                            else f"❌ {labels['no_label']}"
-                        )
+                        is_bullish = f"✅ {labels['yes_label']}" if trend_data.get("is_bullish", False) else f"❌ {labels['no_label']}"
                         report_lines.extend(
                             [
                                 f"**{labels['ma_alignment_label']}**: {trend_data.get('ma_alignment', 'N/A')} | "
@@ -664,9 +660,7 @@ class NotificationFormatterMixin:
 
         earnings_block = ctx.get("earnings") if isinstance(ctx.get("earnings"), dict) else {}
         earnings_data = earnings_block.get("data") if isinstance(earnings_block.get("data"), dict) else {}
-        financial_report = (
-            earnings_data.get("financial_report") if isinstance(earnings_data.get("financial_report"), dict) else {}
-        )
+        financial_report = earnings_data.get("financial_report") if isinstance(earnings_data.get("financial_report"), dict) else {}
         dividend = earnings_data.get("dividend") if isinstance(earnings_data.get("dividend"), dict) else {}
 
         growth_block = ctx.get("growth") if isinstance(ctx.get("growth"), dict) else {}
@@ -896,11 +890,7 @@ class NotificationFormatterMixin:
             text_method, img_method = self._IMAGE_SENDERS[channel]
             if use_image:
                 sender = getattr(self, img_method)
-                kwargs = (
-                    {"fallback_content": content}
-                    if channel in (NotificationChannel.CUSTOM, NotificationChannel.SLACK)
-                    else {}
-                )
+                kwargs = {"fallback_content": content} if channel in (NotificationChannel.CUSTOM, NotificationChannel.SLACK) else {}
                 return sender(image_bytes, **kwargs)
             return getattr(self, text_method)(content)
 

@@ -43,9 +43,7 @@ def _trading_days(start: str, end: str) -> list[str]:
     return out
 
 
-def fetch_tick_ofi(
-    code: str, date: str, page_size: int = 2000, max_pages: int = 20, return_raw: bool = False
-) -> dict | None:
+def fetch_tick_ofi(code: str, date: str, page_size: int = 2000, max_pages: int = 20, return_raw: bool = False) -> dict | None:
     """拉某 code 某 date 全日分笔 → 算主动买卖 OFI proxy。
 
     mootdx transactions 分页：start=0,offset=2000 → 下一页 start+=offset。

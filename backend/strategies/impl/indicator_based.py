@@ -288,9 +288,7 @@ class PatternReversalStrategy(BaseStrategy):
         else:
             c1_hit = shadow_length_pct >= TH_SHADOW
             c1_state = "hit" if c1_hit else "miss"
-            c1_desc = (
-                f"上影线 {shadow_length_pct:.2f}%（阈值≥{TH_SHADOW}%，{'长上影洗盘修复' if c1_hit else '上影不足'}）"
-            )
+            c1_desc = f"上影线 {shadow_length_pct:.2f}%（阈值≥{TH_SHADOW}%，{'长上影洗盘修复' if c1_hit else '上影不足'}）"
             c1_val = f"{shadow_length_pct:.2f}%"
         # C2 放量
         if volume_breakout_ratio is None:

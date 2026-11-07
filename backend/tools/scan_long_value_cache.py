@@ -191,10 +191,7 @@ def scan_stock_basic() -> dict:
         }
 
     _atomic_write_json(cache_path, a_shares)
-    print(
-        f"[S171 Layer0.5] {len(all_securities)} 证券 → {len(a_shares)} A 股 "
-        f"（{n_delisted} 退市 outDate!=''）→ {cache_path}"
-    )
+    print(f"[S171 Layer0.5] {len(all_securities)} 证券 → {len(a_shares)} A 股 （{n_delisted} 退市 outDate!=''）→ {cache_path}")
     print(f"[S171 Layer0.5] 退市股数 {n_delisted} vs 已知~300+（bug 3 漏标率交叉验）")
     return a_shares
 
@@ -315,8 +312,7 @@ def scan_profit_multiyear(limit: int | None = None) -> dict:
                     break
                 el = time.time() - t0
                 print(
-                    f"[S171 Layer2] re-login @ {i}/{len(todo)} done={len(cache)} "
-                    f"elapsed={el:.0f}s eta={el / i * (len(todo) - i):.0f}s",
+                    f"[S171 Layer2] re-login @ {i}/{len(todo)} done={len(cache)} elapsed={el:.0f}s eta={el / i * (len(todo) - i):.0f}s",
                     flush=True,
                 )
 
@@ -460,9 +456,7 @@ if __name__ == "__main__":
     import argparse
 
     p = argparse.ArgumentParser()
-    p.add_argument(
-        "--layer", default="0.5", help="0.5 stock_basic / 1 kline / 2 profit / 3 universe / 4 benchmark / all"
-    )
+    p.add_argument("--layer", default="0.5", help="0.5 stock_basic / 1 kline / 2 profit / 3 universe / 4 benchmark / all")
     p.add_argument("--limit", type=int, default=None, help="限制股数（timing 测试用）")
     p.add_argument("--adjustflag", default="both", help="Layer1: both / 2 (qfq) / 3 (raw)")
     args = p.parse_args()

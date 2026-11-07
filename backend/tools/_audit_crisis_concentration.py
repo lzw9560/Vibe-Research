@@ -288,10 +288,7 @@ def main():
     print("=" * 78)
     non_crisis = [p for p in picks if p["regime"] != "crisis"]
     crisis = by_regime["crisis"]
-    print(
-        f"  非危机 picks n={len(non_crisis)}  危机 picks n={len(crisis)} "
-        f"(危机占比 {len(crisis) / len(picks) * 100:.1f}%)"
-    )
+    print(f"  非危机 picks n={len(non_crisis)}  危机 picks n={len(crisis)} (危机占比 {len(crisis) / len(picks) * 100:.1f}%)")
 
     res_full = verdict_subset("全样本(含危机)", picks)
     res_noncrisis = verdict_subset("非危机期(bull+bear+range)", non_crisis)
@@ -309,9 +306,7 @@ def main():
     full_days = len(set(p["signal_date"] for p in picks))
     print(f"  总 alpha (sum BHAR): {full_alpha:+.2f}%")
     print(f"    危机贡献: {crisis_alpha:+.2f}% ({crisis_alpha / full_alpha * 100 if full_alpha else 0:.1f}% of total)")
-    print(
-        f"    非危机贡献: {noncrisis_alpha:+.2f}% ({noncrisis_alpha / full_alpha * 100 if full_alpha else 0:.1f}% of total)"
-    )
+    print(f"    非危机贡献: {noncrisis_alpha:+.2f}% ({noncrisis_alpha / full_alpha * 100 if full_alpha else 0:.1f}% of total)")
     print(
         f"  n_picks: 危机 {len(crisis)} ({len(crisis) / len(picks) * 100:.1f}%) / "
         f"非危机 {len(non_crisis)} ({len(non_crisis) / len(picks) * 100:.1f}%)"
@@ -320,10 +315,7 @@ def main():
         f"  n_days: 危机 {crisis_days} ({crisis_days / full_days * 100:.1f}%) / "
         f"非危机 {noncrisis_days} ({noncrisis_days / full_days * 100:.1f}%)"
     )
-    print(
-        f"  per-pick alpha: 危机 {crisis_alpha / max(len(crisis), 1):+.4f}% / "
-        f"非危机 {noncrisis_alpha / max(len(non_crisis), 1):+.4f}%"
-    )
+    print(f"  per-pick alpha: 危机 {crisis_alpha / max(len(crisis), 1):+.4f}% / 非危机 {noncrisis_alpha / max(len(non_crisis), 1):+.4f}%")
 
     # ============ 4. 危机是均值回归 vs ETF 收敛 alpha ============
     print("\n" + "=" * 78)
@@ -387,10 +379,7 @@ def main():
         nv = [(p["nav_exit"] - p["nav_t1"]) / p["nav_t1"] * 100 for p in cwp]
         s = ev_stats(bh)
         nd = len(set(p["signal_date"] for p in cwp))
-        print(
-            f"{cw:<16} {len(cwp):>6} {nd:>7} {s['ev']:>+9} "
-            f"{s['ev'] - ETF_COST:>+8} {statistics.mean(rv):>+8} {statistics.mean(nv):>+8}"
-        )
+        print(f"{cw:<16} {len(cwp):>6} {nd:>7} {s['ev']:>+9} {s['ev'] - ETF_COST:>+8} {statistics.mean(rv):>+8} {statistics.mean(nv):>+8}")
 
     # ============ 7. 非危机按 era 再拆（看非危机是否只是早期年代撑） ============
     print("\n" + "=" * 78)

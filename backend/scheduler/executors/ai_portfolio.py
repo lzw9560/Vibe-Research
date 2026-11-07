@@ -114,8 +114,7 @@ def candidate_funnel_precompute(payload: Dict[str, Any]) -> Dict[str, Any]:
                 logger.warning("[candidate_funnel_precompute] 飞书通知发送失败: %s", exc)
         else:
             logger.warning(
-                "[candidate_funnel_precompute] final_candidates=0，跳过飞书通知"
-                "（数据未就绪或漏斗空；cron 17:15 应在 gene_scores 写入后）"
+                "[candidate_funnel_precompute] final_candidates=0，跳过飞书通知（数据未就绪或漏斗空；cron 17:15 应在 gene_scores 写入后）"
             )
 
         logger.info("[candidate_funnel_precompute] %s 漏斗预计算完成（缓存已预热+落库）", target)

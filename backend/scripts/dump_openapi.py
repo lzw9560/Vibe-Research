@@ -34,8 +34,7 @@ def main() -> int:
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(schema, f, ensure_ascii=False, indent=2)
     print(
-        f"[dump_openapi] wrote {OUT} ({len(schema.get('paths', {}))} paths, "
-        f"{len(schema.get('components', {}).get('schemas', {}))} schemas)"
+        f"[dump_openapi] wrote {OUT} ({len(schema.get('paths', {}))} paths, {len(schema.get('components', {}).get('schemas', {}))} schemas)"
     )
     return 0
 

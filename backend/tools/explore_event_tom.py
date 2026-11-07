@@ -457,10 +457,7 @@ def main():
     te = wf["test_ev"]
     print(f"\n50/50 split:")
     print(f"  train: n={wf['n_train']} EV={tr['ev']}% t={tr['t']} day_t={wf['train_day_t']['t']}")
-    print(
-        f"  test:  n={wf['n_test']} EV={te['ev']}% t={te['t']} day_t={wf['test_day_t']['t']} "
-        f"p={wf['test_day_t']['p_one_sided']}"
-    )
+    print(f"  test:  n={wf['n_test']} EV={te['ev']}% t={te['t']} day_t={wf['test_day_t']['t']} p={wf['test_day_t']['p_one_sided']}")
     decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
     print(f"  decay: {decay:.0f}% (train→test)")
 
@@ -482,10 +479,7 @@ def main():
         flaws.append("5")
     else:
         print(f"     [PASS] 无显著衰减")
-    print(
-        f"  6. R6 gap-through fill — entry gap: mean={eg['mean_gap']}% "
-        f"max={eg['max_gap']:.2f}% pct>1%={eg.get('pct_gap_gt_1pct', 0)}%"
-    )
+    print(f"  6. R6 gap-through fill — entry gap: mean={eg['mean_gap']}% max={eg['max_gap']:.2f}% pct>1%={eg.get('pct_gap_gt_1pct', 0)}%")
     if abs(eg.get("mean_gap", 0)) > 0.5:
         print(f"     ⚠️ 触发: T+1 open 有系统性 gap, 需加滑点")
         flaws.append("6")
@@ -567,10 +561,7 @@ def main():
         wf_test_p_bonf = bonferroni_p(wf_test_p, n_tests)
         if wf_test_p_bonf >= ALPHA:
             verdict = "exploratory"
-            reason = (
-                f"OOS test EV={wf_test}% > 0 but test_p={wf_test_p} "
-                f"Bonf={wf_test_p_bonf} >= {ALPHA} (not significant OOS)"
-            )
+            reason = f"OOS test EV={wf_test}% > 0 but test_p={wf_test_p} Bonf={wf_test_p_bonf} >= {ALPHA} (not significant OOS)"
         else:
             verdict = "edge-confirmed"
             reason = f"gross+net>0, Bonf PASS, lift={lift:.3f}x>2, OOS test_EV={wf_test}% significant"

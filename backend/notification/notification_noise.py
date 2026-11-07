@@ -166,15 +166,11 @@ def _cleanup_expired(now_ts: float) -> None:
     for key in expired_cooldown:
         _cooldown_expires_at.pop(key, None)
 
-    expired_dedup_inflight = [
-        key for key, (expires_at, _token) in _dedup_inflight_until.items() if expires_at <= now_ts
-    ]
+    expired_dedup_inflight = [key for key, (expires_at, _token) in _dedup_inflight_until.items() if expires_at <= now_ts]
     for key in expired_dedup_inflight:
         _dedup_inflight_until.pop(key, None)
 
-    expired_cooldown_inflight = [
-        key for key, (expires_at, _token) in _cooldown_inflight_until.items() if expires_at <= now_ts
-    ]
+    expired_cooldown_inflight = [key for key, (expires_at, _token) in _cooldown_inflight_until.items() if expires_at <= now_ts]
     for key in expired_cooldown_inflight:
         _cooldown_inflight_until.pop(key, None)
 

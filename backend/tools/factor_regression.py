@@ -331,9 +331,7 @@ def is_garbage_sample(s: dict, group: str) -> bool:
     return all(s.get(f, 0) == 0 for f in avail)
 
 
-def filter_for_factor(
-    samples: list[dict], factor: str, return_metric: str, group: str
-) -> tuple[np.ndarray, np.ndarray]:
+def filter_for_factor(samples: list[dict], factor: str, return_metric: str, group: str) -> tuple[np.ndarray, np.ndarray]:
     """返回 (x, y)：
     - 排除 missing_next_bar=True
     - 排除该组可用因子全为 0 的废样本（缺失填充）
@@ -469,8 +467,7 @@ def compute_verdict(groups: dict[str, dict]) -> dict:
             # 方向一致但显著性不足 —— 按距离 A 更近，仍记 A 但标注显著性不足
             grade = "A"
             rationale = (
-                f"所有核心因子方向不变，但仅 {sig_count} 个因子 CI 排除 0（<3，显著性不足；"
-                "方向未反转，仍归 A 但提示需扩大样本或优化因子）"
+                f"所有核心因子方向不变，但仅 {sig_count} 个因子 CI 排除 0（<3，显著性不足；方向未反转，仍归 A 但提示需扩大样本或优化因子）"
             )
 
     return {
@@ -600,11 +597,7 @@ def main(return_metric: str, bootstrap_iters: int = 2000) -> int:
             if math.isnan(r):
                 print(f"  {f:28s}  n={n:<5d}  r=NaN")
             else:
-                print(
-                    f"  {f:28s}  n={n:<5d}  r={r:+.4f}  "
-                    f"CI=[{ci[0]:+.4f}, {ci[1]:+.4f}]  p={p:.4g}  "
-                    f"{base_str}  {ci_excl}"
-                )
+                print(f"  {f:28s}  n={n:<5d}  r={r:+.4f}  CI=[{ci[0]:+.4f}, {ci[1]:+.4f}]  p={p:.4g}  {base_str}  {ci_excl}")
         print()
 
     print("--- eastmoney_live 日内/日间分解（2026-08-16 续 grill）---")
@@ -638,11 +631,7 @@ def main(return_metric: str, bootstrap_iters: int = 2000) -> int:
     if verdict["direction_changes"]:
         print(f"  direction_changes ({len(verdict['direction_changes'])}):")
         for dc in verdict["direction_changes"]:
-            print(
-                f"    - {dc['factor']} ({dc['group']}): "
-                f"{dc['baseline_r']:+.2f} -> {dc['observed_r']:+.4f} "
-                f"CI={dc['ci']} p={dc['p']:.4g}"
-            )
+            print(f"    - {dc['factor']} ({dc['group']}): {dc['baseline_r']:+.2f} -> {dc['observed_r']:+.4f} CI={dc['ci']} p={dc['p']:.4g}")
             print(f"      {dc['note']}")
     else:
         print("  direction_changes: []")

@@ -114,10 +114,7 @@ def main() -> None:
         print(f"  split picks BHAR 合计={sp_bhar:+.2f}% mean={sp_bhar / len(split_picks):+.4f}%")
     cl_bhar = sum(p["bhar"] for p in clean_picks)
     print(f"  clean picks BHAR 合计={cl_bhar:+.2f}% mean={cl_bhar / len(clean_picks):+.4f}%")
-    print(
-        f"  → 剔除 NAV-split artifact 后 mean BHAR: "
-        f"{cl_bhar / len(clean_picks):+.4f}% (原 {total_bhar / len(picks):+.4f}%)"
-    )
+    print(f"  → 剔除 NAV-split artifact 后 mean BHAR: {cl_bhar / len(clean_picks):+.4f}% (原 {total_bhar / len(picks):+.4f}%)")
 
     # ============================================================
     # B. 2015-07-08 单日贡献（8 ETF 同日深折价）
@@ -174,9 +171,7 @@ def main() -> None:
     ultra_clean = [p for p in picks if not p["is_split"] and p["d"] not in crisis_days]
     uc_bhar = sum(p["bhar"] for p in ultra_clean)
     print(f"  ultra_clean picks: {len(ultra_clean)} (剔 {len(picks) - len(ultra_clean)})")
-    print(
-        f"  BHAR 合计={uc_bhar:+.2f}% mean={uc_bhar / len(ultra_clean):+.4f}% (原 mean={total_bhar / len(picks):+.4f}%)"
-    )
+    print(f"  BHAR 合计={uc_bhar:+.2f}% mean={uc_bhar / len(ultra_clean):+.4f}% (原 mean={total_bhar / len(picks):+.4f}%)")
     print(f"  net@0.15%={uc_bhar / len(ultra_clean) - 0.15:+.4f}%  net@0.30%={uc_bhar / len(ultra_clean) - 0.30:+.4f}%")
 
     # ============================================================
@@ -201,10 +196,7 @@ def main() -> None:
         mb = sum(p["bhar"] for p in tp) / len(tp)
         discs = sorted(abs(p["disc"]) for p in tp)
         p50 = discs[len(discs) // 2]
-        print(
-            f"{label:<26} {len(tp):>6} {mb:>+9.4f} {p50:>10.3f} "
-            f"{mb - 0.15:>+9.4f} {mb - 0.30:>+9.4f} {mb - 0.50:>+9.4f}"
-        )
+        print(f"{label:<26} {len(tp):>6} {mb:>+9.4f} {p50:>10.3f} {mb - 0.15:>+9.4f} {mb - 0.30:>+9.4f} {mb - 0.50:>+9.4f}")
     print("\n  推论：极深折价（<-2%）BHAR 高但 spread 必然极宽（disc 本身证明 illiquid）")
     print("  浅折价（-0.3%~-0.5%）n 最多但 BHAR 低，0.15% cost 后 net 接近 0")
 
@@ -226,17 +218,11 @@ def main() -> None:
     # 验证：split picks 的 BHAR 是否接近 0
     if split_picks:
         sp_bhar_vals = [p["bhar"] for p in split_picks]
-        print(
-            f"  split picks BHAR: n={len(split_picks)} mean={mean(sp_bhar_vals):+.4f}% "
-            f"median={median(sp_bhar_vals):+.4f}%"
-        )
+        print(f"  split picks BHAR: n={len(split_picks)} mean={mean(sp_bhar_vals):+.4f}% median={median(sp_bhar_vals):+.4f}%")
         print("  → 若 mean≈0：split artifact 不直接 inflate BHAR（d_entry/d_exit 都在 split 后）")
         print("  → 但 raw EV 巨大（price 跳空追赶 NAV）→ raw EV 被污染")
         sp_raw = [p["raw"] for p in split_picks]
-        print(
-            f"  split picks raw EV: mean={mean(sp_raw):+.4f}% (vs 全体 raw mean="
-            f"{sum(p['raw'] for p in picks) / len(picks):+.4f}%)"
-        )
+        print(f"  split picks raw EV: mean={mean(sp_raw):+.4f}% (vs 全体 raw mean={sum(p['raw'] for p in picks) / len(picks):+.4f}%)")
         print("  → raw EV 被严重污染（price 跳空是 split 调整非 alpha）")
 
     # ============================================================
@@ -264,10 +250,7 @@ def main() -> None:
     psp_picks = [p for p in picks if (p["code"], p["d"]) in psp_days]
     if psp_picks:
         psp_bhar = sum(p["bhar"] for p in psp_picks)
-        print(
-            f"\n  落在这些日子的 picks: {len(psp_picks)} 个, BHAR 合计={psp_bhar:+.2f}% "
-            f"mean={psp_bhar / len(psp_picks):+.4f}%"
-        )
+        print(f"\n  落在这些日子的 picks: {len(psp_picks)} 个, BHAR 合计={psp_bhar:+.2f}% mean={psp_bhar / len(psp_picks):+.4f}%")
 
     # ============================================================
     # G. 2024-09-30 / 10-08 暴涨簇（ETF 涨停日，多 ETF 同日 +10~20%）
@@ -279,8 +262,7 @@ def main() -> None:
     surge_picks = [p for p in picks if p["d"] in surge_days]
     surge_bhar = sum(p["bhar"] for p in surge_picks)
     print(
-        f"  暴涨簇 picks: {len(surge_picks)}, BHAR 合计={surge_bhar:+.2f}% "
-        f"mean={surge_bhar / len(surge_picks) if surge_picks else 0:+.4f}%"
+        f"  暴涨簇 picks: {len(surge_picks)}, BHAR 合计={surge_bhar:+.2f}% mean={surge_bhar / len(surge_picks) if surge_picks else 0:+.4f}%"
     )
     print("  机制质疑：ETF 连续涨停时，NAV (T 日收盘后公告) vs price (T 日收盘实时)")
     print("  → price 涨停封板 close = 涨停价，NAV 当晚公告可能未反映涨停全部预期")

@@ -250,12 +250,8 @@ def main() -> None:
         off_y = [r[4] for r in yr_rows if not r[3]]
         rs_on = group_stats(on_y)
         rs_off = group_stats(off_y)
-        print(
-            f"{yr:<6}{'ON':<8}{rs_on['mean'] * 100:>+9.4f}%{rs_on['t_nw']:>7.2f}{rs_on['wr'] * 100:>6.1f}%{rs_on['n']:>6}"
-        )
-        print(
-            f"{'':<6}{'OFF':<8}{rs_off['mean'] * 100:>+9.4f}%{rs_off['t_nw']:>7.2f}{rs_off['wr'] * 100:>6.1f}%{rs_off['n']:>6}"
-        )
+        print(f"{yr:<6}{'ON':<8}{rs_on['mean'] * 100:>+9.4f}%{rs_on['t_nw']:>7.2f}{rs_on['wr'] * 100:>6.1f}%{rs_on['n']:>6}")
+        print(f"{'':<6}{'OFF':<8}{rs_off['mean'] * 100:>+9.4f}%{rs_off['t_nw']:>7.2f}{rs_off['wr'] * 100:>6.1f}%{rs_off['n']:>6}")
     print()
 
     # 3. cap-decile 对照（2024+，看 amount-decile 代理是否扭曲）
@@ -267,24 +263,16 @@ def main() -> None:
         print("-" * 46)
         rc_on = group_stats(on_c)
         rc_off = group_stats(off_c)
-        print(
-            f"{'cap-ON':<10}{rc_on['mean'] * 100:>+9.4f}%{rc_on['t_nw']:>7.2f}{rc_on['wr'] * 100:>6.1f}%{rc_on['n']:>6}"
-        )
-        print(
-            f"{'cap-OFF':<10}{rc_off['mean'] * 100:>+9.4f}%{rc_off['t_nw']:>7.2f}{rc_off['wr'] * 100:>6.1f}%{rc_off['n']:>6}"
-        )
+        print(f"{'cap-ON':<10}{rc_on['mean'] * 100:>+9.4f}%{rc_on['t_nw']:>7.2f}{rc_on['wr'] * 100:>6.1f}%{rc_on['n']:>6}")
+        print(f"{'cap-OFF':<10}{rc_off['mean'] * 100:>+9.4f}%{rc_off['t_nw']:>7.2f}{rc_off['wr'] * 100:>6.1f}%{rc_off['n']:>6}")
         # 同日期 amount-decile 对照
         cap_dates = {r[0] for r in rows_cap}
         on_a_match = [r[4] for r in rows_amt if r[0] in cap_dates and r[3]]
         off_a_match = [r[4] for r in rows_amt if r[0] in cap_dates and not r[3]]
         ra_on = group_stats(on_a_match)
         ra_off = group_stats(off_a_match)
-        print(
-            f"{'amt-ON*':<10}{ra_on['mean'] * 100:>+9.4f}%{ra_on['t_nw']:>7.2f}{ra_on['wr'] * 100:>6.1f}%{ra_on['n']:>6}"
-        )
-        print(
-            f"{'amt-OFF*':<10}{ra_off['mean'] * 100:>+9.4f}%{ra_off['t_nw']:>7.2f}{ra_off['wr'] * 100:>6.1f}%{ra_off['n']:>6}"
-        )
+        print(f"{'amt-ON*':<10}{ra_on['mean'] * 100:>+9.4f}%{ra_on['t_nw']:>7.2f}{ra_on['wr'] * 100:>6.1f}%{ra_on['n']:>6}")
+        print(f"{'amt-OFF*':<10}{ra_off['mean'] * 100:>+9.4f}%{ra_off['t_nw']:>7.2f}{ra_off['wr'] * 100:>6.1f}%{ra_off['n']:>6}")
         print("  *amt 同日期子集对照 cap（看两口径在相同日判 gate 是否一致）")
         # gate 判定一致性
         amt_map = {r[0]: r[3] for r in rows_amt}

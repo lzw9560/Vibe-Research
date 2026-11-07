@@ -485,10 +485,7 @@ def _build_disclaimers(regime: str, cap_mult: float) -> list[str]:
     if regime == "bull":
         disclaimers.append(f"bull 已 validated（×{cap_mult}），但 within-regime only，别跨 regime 推广")
     else:
-        disclaimers.append(
-            f"当前 {regime} regime：edge underpowered（<60 test 天没法定），"
-            f"×{cap_mult} 是保守标注非 edge 证否，谨慎参考"
-        )
+        disclaimers.append(f"当前 {regime} regime：edge underpowered（<60 test 天没法定），×{cap_mult} 是保守标注非 edge 证否，谨慎参考")
     return disclaimers
 
 
@@ -531,9 +528,7 @@ def render_daily_report(signals: dict[str, Any]) -> str:
     else:
         lines.append("【验证情况】")
         lines.append(f"  回测训练期收益：{verified.get('chrono_train', 'N/A')}%（train）")
-        lines.append(
-            f"  回测测试期收益：{verified.get('chrono_test', 'N/A')}%（test，衰减 {verified.get('chrono_decay_pct', 'N/A')}%）"
-        )
+        lines.append(f"  回测测试期收益：{verified.get('chrono_test', 'N/A')}%（test，衰减 {verified.get('chrono_decay_pct', 'N/A')}%）")
         lines.append(f"  统计显著性：p={verified.get('chrono_p', 'N/A')}（oos_supporting）")
         lines.append(f"  胜率：{verified.get('chrono_wr', 'N/A')}%")
         lines.append("")

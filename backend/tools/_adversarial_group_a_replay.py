@@ -263,9 +263,7 @@ def main():
     kl = load_klinebars()
     print(f"[kline] codes={len(kl)}")
     rows = aggregate_lhb()
-    print(
-        f"[lhb] aggregated code-days={len(rows)} dates={min(r['date'] for r in rows)}..{max(r['date'] for r in rows)}"
-    )
+    print(f"[lhb] aggregated code-days={len(rows)} dates={min(r['date'] for r in rows)}..{max(r['date'] for r in rows)}")
     # classify
     groups = defaultdict(list)
     for r in rows:

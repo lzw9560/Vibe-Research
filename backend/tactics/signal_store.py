@@ -134,11 +134,7 @@ class SignalStore:
             pool = [s for s in all_stocks if s.get("thscode") != signal_code]
         else:
             mc = float(signal.get("float_mv", 0) or 0)
-            pool = [
-                s
-                for s in all_stocks
-                if s.get("thscode") != signal_code and _same_mc_bucket(float(s.get("float_mv", 0) or 0), mc)
-            ]
+            pool = [s for s in all_stocks if s.get("thscode") != signal_code and _same_mc_bucket(float(s.get("float_mv", 0) or 0), mc)]
             if not pool:  # 同市值段空，退到全量
                 pool = [s for s in all_stocks if s.get("thscode") != signal_code]
         picks = rng.sample(pool, min(n, len(pool))) if pool else []

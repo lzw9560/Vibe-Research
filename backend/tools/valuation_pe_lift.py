@@ -31,19 +31,13 @@ PCACHE = resolve_data_dir() / "profit_data_cache.json"
 PARAMS = (-3.0, 8.0, 3)
 cache = _load_kline_cache()  # S204 T1: enriched（一字板 pctChg=0.0/None 修复）
 # S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
-validate_or_reject(
-    "baostock_kline", [b for bars in cache.values() for b in bars], as_of=datetime.date.today().isoformat()
-)
+validate_or_reject("baostock_kline", [b for bars in cache.values() for b in bars], as_of=datetime.date.today().isoformat())
 pcache = json.loads(PCACHE.read_text())
 # S163 R1: bad data gate — baostock profit_data (3 级 dict → flatten 2 级 for field 校验)
-_flat_pcache = {
-    f"{c}_{q}": v for c, qs in pcache.items() if isinstance(qs, dict) for q, v in qs.items() if isinstance(v, dict)
-}
+_flat_pcache = {f"{c}_{q}": v for c, qs in pcache.items() if isinstance(qs, dict) for q, v in qs.items() if isinstance(v, dict)}
 validate_or_reject("baostock_profit_data", _flat_pcache)
 conn = sqlite3.connect(str(DB), timeout=10)
-pairs = conn.execute(
-    "SELECT DISTINCT date, code FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
-).fetchall()
+pairs = conn.execute("SELECT DISTINCT date, code FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date").fetchall()
 conn.close()
 obs = []
 n_no_eps = n_not_in_cache = 0

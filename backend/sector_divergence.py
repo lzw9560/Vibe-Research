@@ -243,9 +243,7 @@ async def calculate_sector_rotation(date: str | None = None) -> SectorRotation |
             ttl=600,  # 10 分钟缓存
             fallback_value={"top": [], "bottom": []},
         )
-        today_sectors = [
-            industry_sector_from_dict(s) for s in (today_data.get("top", []) + today_data.get("bottom", []))
-        ]
+        today_sectors = [industry_sector_from_dict(s) for s in (today_data.get("top", []) + today_data.get("bottom", []))]
 
         # 数据诚实性：源断不戳 now，空板块标 missing（对齐 S111 R4）
         data_status, last_updated = _resolve_sector_provenance(meta, not today_sectors)

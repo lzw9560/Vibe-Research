@@ -88,9 +88,7 @@ def main():
             ).fetchall()
             quote_cache[(date, code)] = any(p >= lu for p, lu in q if lu and lu > 0)
         is_zt = quote_cache[(date, code)]
-        obs.append(
-            {"date": date, "code": code, "edge": edge, "win": 1 if edge > 0 else 0, "rank": rank, "is_zt": is_zt}
-        )
+        obs.append({"date": date, "code": code, "edge": edge, "win": 1 if edge > 0 else 0, "rank": rank, "is_zt": is_zt})
 
     n = len(obs)
     days = len(set(o["date"] for o in obs))
@@ -101,9 +99,7 @@ def main():
 
     rets = [o["edge"] for o in obs]
     print(f"\n=== anomaly 异动 T+1 edge（全样本）===")
-    print(
-        f"n={n} days={days} net_mean={statistics.mean(rets) * 100:.2f}% WR={sum(o['win'] for o in obs) / n * 100:.2f}%"
-    )
+    print(f"n={n} days={days} net_mean={statistics.mean(rets) * 100:.2f}% WR={sum(o['win'] for o in obs) / n * 100:.2f}%")
 
     # 按 rank 分位（rank 小=异动大）
     groups = {
@@ -116,9 +112,7 @@ def main():
         if not g:
             continue
         gr = [o["edge"] for o in g]
-        print(
-            f"  {name}: n={len(g)} net_mean={statistics.mean(gr) * 100:.2f}% WR={sum(o['win'] for o in g) / len(g) * 100:.2f}%"
-        )
+        print(f"  {name}: n={len(g)} net_mean={statistics.mean(gr) * 100:.2f}% WR={sum(o['win'] for o in g) / len(g) * 100:.2f}%")
 
     # §44 v3 R4: 涨停 vs 未涨停对比
     obs_zt = [o for o in obs if o["is_zt"]]

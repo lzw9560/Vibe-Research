@@ -54,11 +54,7 @@ BEHAVIOR_SPECS: tuple[FeatureSpec, ...] = (
         availability_offset=1,
         stage="s1",
         compliance_flag="ok",
-        description=(
-            "昨涨停今表现：前日涨停股票次日开盘/收盘表现及打板盈亏比。"
-            "市场情绪温度计。"
-            "TODO: 昨涨停池取数走 limitup_sti，S008接。"
-        ),
+        description=("昨涨停今表现：前日涨停股票次日开盘/收盘表现及打板盈亏比。市场情绪温度计。TODO: 昨涨停池取数走 limitup_sti，S008接。"),
     ),
     FeatureSpec(
         name="day_trip_risk",
@@ -68,9 +64,7 @@ BEHAVIOR_SPECS: tuple[FeatureSpec, ...] = (
         stage="s1",
         compliance_flag="aggregate_only",
         description=(
-            "游资一日游风险评分：基于龙虎榜席位聚合持仓周期画像。"
-            "不依赖个体席位标签，只用聚合持仓天数。"
-            "一日游参与过高=负向风险特征。"
+            "游资一日游风险评分：基于龙虎榜席位聚合持仓周期画像。不依赖个体席位标签，只用聚合持仓天数。一日游参与过高=负向风险特征。"
         ),
     ),
 )

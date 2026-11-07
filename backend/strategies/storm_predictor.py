@@ -273,9 +273,7 @@ def _load_sti_internal_signals(t1: str) -> tuple[float, float] | None:
         finally:
             _sti.close()
     except Exception as e:  # noqa: BLE001 — sti 缺失/异常 → 诚实降级 missing（不臆造 0.0）
-        logging.getLogger("storm_predictor").warning(
-            "_load_sti_internal_signals(t1=%s) STI 取数失败，降级 missing: %s", t1, e
-        )
+        logging.getLogger("storm_predictor").warning("_load_sti_internal_signals(t1=%s) STI 取数失败，降级 missing: %s", t1, e)
         return None
 
 
@@ -303,9 +301,7 @@ def _collect_internal_factor(date: str) -> StormFactor:
         # 炸板后溢价/封板率 NULL→0（data.py load 时 or 0），原代码或 0 致
         # rebound_score=50 中性 fabricated + data_status 默认 ok 当权威。
         gene_degraded = any(
-            g.data_source == "kline_rebuild"
-            or "炸板后溢价" in (g.missing_factors or [])
-            or "封板率" in (g.missing_factors or [])
+            g.data_source == "kline_rebuild" or "炸板后溢价" in (g.missing_factors or []) or "封板率" in (g.missing_factors or [])
             for g in genes
         )
 
@@ -344,9 +340,7 @@ def _collect_internal_factor(date: str) -> StormFactor:
         rebound_score = max(0.0, min(100.0, 50 - avg_rebound * 2))  # 溢价<0 → 高分
         score = (height_score + break_score + rebound_score) / 3
 
-        detail = (
-            f"连板 {max_boards:.0f}板 / 炸板率 {break_rate:.0%} / 炸板后溢价 {avg_rebound:.1f} / 封板率 {avg_seal:.0f}%"
-        )
+        detail = f"连板 {max_boards:.0f}板 / 炸板率 {break_rate:.0%} / 炸板后溢价 {avg_rebound:.1f} / 封板率 {avg_seal:.0f}%"
         return StormFactor("前日内部先行", round(score, 1), detail, data_status)
     except Exception as exc:  # noqa: BLE001
         return StormFactor("前日内部先行", 50.0, f"采集失败: {exc}", "missing")

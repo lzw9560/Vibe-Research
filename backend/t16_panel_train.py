@@ -214,9 +214,7 @@ def panel_walk_forward(dates, X, y, train_days=TRAIN_DAYS, test_days=TEST_DAYS, 
 
 def main():
     print(f"akshare {ak.__version__}; benchmark {SYMBOL_INDEX}; universe {len(UNIVERSE)} stocks")
-    print(
-        f"  fetch window {START}..{END}; H={H} train_days={TRAIN_DAYS} test_days={TEST_DAYS} step={STEP_DAYS} gap={GAP}"
-    )
+    print(f"  fetch window {START}..{END}; H={H} train_days={TRAIN_DAYS} test_days={TEST_DAYS} step={STEP_DAYS} gap={GAP}")
     print("  fetching index + stocks (qfq, unified caliber)...")
     index = fetch_index()
     stocks = {}

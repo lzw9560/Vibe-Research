@@ -285,8 +285,7 @@ def _compute_path_lift_from_forward_test(
     try:
         survivors_by_day: dict[str, list[float]] = {}
         for date, rp in conn.execute(
-            "SELECT signal_date, return_path FROM forward_test_records "
-            "WHERE return_path IS NOT NULL AND is_unbuyable = 0"
+            "SELECT signal_date, return_path FROM forward_test_records WHERE return_path IS NOT NULL AND is_unbuyable = 0"
         ).fetchall():
             survivors_by_day.setdefault(date, []).append(float(rp))
         universe_by_day: dict[str, list[float]] = {}
@@ -344,11 +343,7 @@ def apply_revalidation(
                 if compute is None:
                     skipped.append(dim_id)
                     continue  # 该维度无 default compute 接线（待 follow-up）
-                result = (
-                    _compute_path_lift_from_forward_test(dim_id, gene_scores_db_path)
-                    if dim_id == "path_lift"
-                    else compute(dim_id)
-                )
+                result = _compute_path_lift_from_forward_test(dim_id, gene_scores_db_path) if dim_id == "path_lift" else compute(dim_id)
             if result is None:
                 skipped.append(dim_id)
                 continue

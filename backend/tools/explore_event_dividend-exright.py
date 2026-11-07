@@ -524,11 +524,7 @@ def analyze_window(
         tr_dt = wf["train_day_t"]
         te_dt = wf["test_day_t"]
         print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} EV={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
-        print(
-            f"  test:  n={te['n']} n_dates={wf['n_test_dates']} "
-            f"EV={te['ev']}% t={te['t']} day_t={te_dt['t']} "
-            f"p={te_dt['p_one_sided']}"
-        )
+        print(f"  test:  n={te['n']} n_dates={wf['n_test_dates']} EV={te['ev']}% t={te['t']} day_t={te_dt['t']} p={te_dt['p_one_sided']}")
         decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
         print(f"  decay: {decay:.0f}% (train→test)")
     else:
@@ -566,9 +562,7 @@ def main() -> None:
     print(f"[build] picks: {len(picks)} events across {n_ex_dates} ex-dates")
     if not picks:
         print("[verdict] no picks → no-data")
-        _print_summary(
-            "dividend-exright", "no-data", 0, 0, 0, 0, "No valid picks after matching dividends to kline cache"
-        )
+        _print_summary("dividend-exright", "no-data", 0, 0, 0, 0, "No valid picks after matching dividends to kline cache")
         return
 
     # dividend type breakdown

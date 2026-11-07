@@ -107,9 +107,7 @@ def load_gene_scores() -> tuple[dict[str, dict[str, float]], int]:
 # ---------- factor attachment ----------
 
 
-def _vr5(
-    code_map: dict[str, dict[str, dict]], code: str, zt_date: str, sorted_dates_cache: dict[str, list[str]]
-) -> float | None:
+def _vr5(code_map: dict[str, dict[str, dict]], code: str, zt_date: str, sorted_dates_cache: dict[str, list[str]]) -> float | None:
     """vr5 = (t_close / close[-5] - 1) * 100, 5 交易日收益 (code 自身历史).
 
     用 code 的 sorted date list 找 zt_date 位置, 回看 5 个 bar.
@@ -317,9 +315,7 @@ def main() -> None:
     # ---- attach 5 factors ----
     print("\n[3] 附 5 因子 (turn/vr5/gap/lbc/gene_score) ...")
     blanket, n_complete, counts = attach_factors(blanket, code_map, gene)
-    print(
-        f"  5 因子全有 (composite universe): {n_complete} ({n_complete / max(len(blanket), 1) * 100:.1f}% of blanket)"
-    )
+    print(f"  5 因子全有 (composite universe): {n_complete} ({n_complete / max(len(blanket), 1) * 100:.1f}% of blanket)")
     print(f"  各因子覆盖:")
     for f in FACTORS:
         c = counts[f]
@@ -359,9 +355,7 @@ def main() -> None:
         cs_all = [p["composite"] for p in all_composite]
         print(f"\n  composite score 诊断 (equal-weight, [0,1]):")
         print(f"    all_composite: mean={sum(cs_all) / len(cs_all):.3f} min={min(cs_all):.3f} max={max(cs_all):.3f}")
-        print(
-            f"    top-1:         mean={sum(cs_top1) / len(cs_top1):.3f} min={min(cs_top1):.3f} max={max(cs_top1):.3f}"
-        )
+        print(f"    top-1:         mean={sum(cs_top1) / len(cs_top1):.3f} min={min(cs_top1):.3f} max={max(cs_top1):.3f}")
 
     # ---- analyze subsets ----
     subsets = [
@@ -468,10 +462,7 @@ def main() -> None:
 
     # ---- weight-search robustness (4 schemes, ×4 correction → ×48 total) ----
     print(f"\n{'=' * 70}")
-    print(
-        f"[6] 权重搜索 robustness ({N_WEIGHT_SCHEMES} 预设方案, "
-        f"Bonferroni ×{N_WEIGHT_SCHEMES} → 总 ×{12 * N_WEIGHT_SCHEMES})"
-    )
+    print(f"[6] 权重搜索 robustness ({N_WEIGHT_SCHEMES} 预设方案, Bonferroni ×{N_WEIGHT_SCHEMES} → 总 ×{12 * N_WEIGHT_SCHEMES})")
     print(f"  方案是 hypothesis-driven 预设 (非 data-fit), 仍校正搜索次数.")
     print(f"  用 top-3 子集 (中等集中度) 跑每方案, 取 best EV, 报 ×48 校正.")
     print(f"{'=' * 70}")
@@ -533,11 +524,7 @@ def main() -> None:
     )
     for s in summary_rows:
         if s.get("verdict") == "no-data":
-            print(
-                f"  {s['name']:<24} {'-':>6} {'-':>5} {'-':>8} "
-                f"{'-':>7} {'-':>6} {'-':>8} {'-':>6} {'-':>7} {'-':>7} "
-                f"{'-':>7} no-data"
-            )
+            print(f"  {s['name']:<24} {'-':>6} {'-':>5} {'-':>8} {'-':>7} {'-':>6} {'-':>8} {'-':>6} {'-':>7} {'-':>7} {'-':>7} no-data")
             continue
         v = s.get("verdict", "")
         bonf = s.get("bonf_x12", "-")
@@ -560,10 +547,7 @@ def main() -> None:
     for s in summary_rows:
         if s["name"] in ("top-1", "top-3", "top-5"):
             delta = s.get("ev_gross", 0.0) - base_ev
-            print(
-                f"  {s['name']:<10}: EV={s.get('ev_gross', 0.0):+.3f}%  "
-                f"Δ vs all_composite({base_ev:+.3f}%) = {delta:+.3f}%"
-            )
+            print(f"  {s['name']:<10}: EV={s.get('ev_gross', 0.0):+.3f}%  Δ vs all_composite({base_ev:+.3f}%) = {delta:+.3f}%")
 
     # ---- overall ----
     if "edge-confirmed" in verdicts:
@@ -614,10 +598,7 @@ def _print_honest_notes(overall: str, summary_rows: list[dict], scheme_results: 
     print("   basic 无 stop R6 N/A。realistic entry: T+1 open, 一字涨停跳过")
     print("   (limit_for_code FIXED 2026-10-06, 禁 sz30/sh68 旧 bug)。")
     print("8. Bonferroni: primary cross-factor ×12 (6 factors × 2 subsets);")
-    print(
-        f"   weight-search robustness ×{12 * N_WEIGHT_SCHEMES} "
-        f"(×12 × {N_WEIGHT_SCHEMES} 方案). best 方案={b_name}, verdict={v_ws}."
-    )
+    print(f"   weight-search robustness ×{12 * N_WEIGHT_SCHEMES} (×12 × {N_WEIGHT_SCHEMES} 方案). best 方案={b_name}, verdict={v_ws}.")
     print("9. 权重方案 hypothesis-driven 预设 (equal/gene_heavy/turn_lbc/momentum),")
     print("   非 data-fit; 仍校正搜索次数 (诚实: 预设也占搜索自由度)。")
     print(f"\nOVERALL: {overall}")

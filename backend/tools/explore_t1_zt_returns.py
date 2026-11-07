@@ -236,14 +236,10 @@ zt_picks = [r for r in picks_top if r["t1_zt"]]
 nzt_picks = [r for r in picks_top if not r["t1_zt"]]
 if zt_picks:
     rz = [ret_real(r) for r in zt_picks]
-    print(
-        f"T+1涨停子组: n={len(rz)} mean={statistics.mean(rz) * 100:.2f}% WR={sum(1 for x in rz if x > 0) / len(rz) * 100:.1f}%"
-    )
+    print(f"T+1涨停子组: n={len(rz)} mean={statistics.mean(rz) * 100:.2f}% WR={sum(1 for x in rz if x > 0) / len(rz) * 100:.1f}%")
 if nzt_picks:
     rn = [ret_real(r) for r in nzt_picks]
-    print(
-        f"T+1非涨停子组: n={len(rn)} mean={statistics.mean(rn) * 100:.2f}% WR={sum(1 for x in rn if x > 0) / len(rn) * 100:.1f}%"
-    )
+    print(f"T+1非涨停子组: n={len(rn)} mean={statistics.mean(rn) * 100:.2f}% WR={sum(1 for x in rn if x > 0) / len(rn) * 100:.1f}%")
 
 print("\n===== regime check: TOP picks 月度分布 =====")
 from collections import Counter

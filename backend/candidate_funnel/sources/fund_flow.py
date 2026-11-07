@@ -9,9 +9,7 @@ from predict.features.fund_flow import fetch_dt_hot_money_relay, fetch_northboun
 from concurrent.futures import ThreadPoolExecutor
 
 
-def _fetch_single(
-    c: str, as_of: str, sectors: list[dict] | None, industry_map: dict[str, str] | None
-) -> tuple[str, dict]:
+def _fetch_single(c: str, as_of: str, sectors: list[dict] | None, industry_map: dict[str, str] | None) -> tuple[str, dict]:
     """单只股票的资金流采集（线程安全，无共享状态）。"""
     entry: dict = {
         "main_net_inflow": None,

@@ -247,10 +247,7 @@ def _print_summary(stats: dict[str, int], db_path: str | None) -> None:
     total, earliest, latest = db_stats(db_path)
     print()
     print("=" * 60)
-    print(
-        f"回填完成：成功 {stats['success']} | 已有跳过 {stats['skipped_existing']}"
-        f" | 空池 {stats['empty_pool']} | 失败 {stats['failed']}"
-    )
+    print(f"回填完成：成功 {stats['success']} | 已有跳过 {stats['skipped_existing']} | 空池 {stats['empty_pool']} | 失败 {stats['failed']}")
     print(f"DB 覆盖：{earliest or '?'} ~ {latest or '?'} · 共 {total} 行 · {len(existing_dates(db_path))} 个交易日")
     print("=" * 60)
 
@@ -259,9 +256,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="S040 基因得分历史回填")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--days", type=int, help="从 DB 最早日期往前补 N 个交易日")
-    group.add_argument(
-        "--range", nargs=2, metavar=("START", "END"), help="显式日期范围 YYYY-MM-DD YYYY-MM-DD（含端点）"
-    )
+    group.add_argument("--range", nargs=2, metavar=("START", "END"), help="显式日期范围 YYYY-MM-DD YYYY-MM-DD（含端点）")
     parser.add_argument("--dry-run", action="store_true", help="只探测涨停池，不写 DB")
     parser.add_argument("--force", action="store_true", help="强制重算已有日期")
     parser.add_argument("--batch-size", type=int, default=10, help="批大小（连续失败达此数中止，默认 10）")

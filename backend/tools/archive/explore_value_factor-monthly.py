@@ -64,9 +64,7 @@ def backfill_raw_close_one(code_bare: str) -> int:
     import akshare as ak  # noqa: PLC0415
 
     try:
-        df = ak.stock_zh_a_hist(
-            symbol=code_bare, period="monthly", start_date="20180101", end_date="20261101", adjust=""
-        )
+        df = ak.stock_zh_a_hist(symbol=code_bare, period="monthly", start_date="20180101", end_date="20261101", adjust="")
     except Exception:
         return 0
     if df is None or len(df) == 0:
@@ -694,18 +692,14 @@ def main() -> None:
     if len(raw_close) < 50:
         print(f"\n⚠️ raw_close 不足 50（{len(raw_close)}），E/P 跳过。请先 --backfill-raw")
     else:
-        print(
-            f"\n{'=' * 70}\n=== E/P 月频 long-only top-decile（TTM EPS 重建 + 不复权 close, filtered benchmark）===\n{'=' * 70}"
-        )
+        print(f"\n{'=' * 70}\n=== E/P 月频 long-only top-decile（TTM EPS 重建 + 不复权 close, filtered benchmark）===\n{'=' * 70}")
         # E/P 用 raw_close 的 month_dates（不复权月线日期可能与 qfq 不同，用 raw_close 的 keys）
         raw_dates = sorted({d for md in raw_close.values() for d in md.keys()})
         # month_rets 用 qfq 算（return 含 split+dividend 经济回报），但日期须对齐 raw_close
         # 复用 qfq month_rets（日期基本对齐月末）
         re = backtest_ep(funds, raw_close, month_rets, month_dates)
         if re["status"] == "ok":
-            print(
-                f"  负 TTM EPS 排除: {re['n_excluded_neg']}（排除率 {re['excl_rate']}%，价值陷阱+亏损，方向 inflate value premium）"
-            )
+            print(f"  负 TTM EPS 排除: {re['n_excluded_neg']}（排除率 {re['excl_rate']}%，价值陷阱+亏损，方向 inflate value premium）")
             stats_block(re["excess"], "full", N_BONF)
             stats_block(re["train"], "train(2018-2022)", N_BONF)
             stats_block(re["test"], "test(2022-2026)", N_BONF)
@@ -723,9 +717,7 @@ def main() -> None:
     elif len(raw_close) < 50:
         print(f"\n⚠️ raw_close 不足 50，D/P 跳过")
     else:
-        print(
-            f"\n{'=' * 70}\n=== D/P 月频 long-only top-decile（trailing 12月 ex-date cash / 不复权 close）===\n{'=' * 70}"
-        )
+        print(f"\n{'=' * 70}\n=== D/P 月频 long-only top-decile（trailing 12月 ex-date cash / 不复权 close）===\n{'=' * 70}")
         rd = backtest_dp(dividends, raw_close, month_rets, month_dates)
         if rd["status"] == "ok":
             stats_block(rd["excess"], "full", N_BONF)

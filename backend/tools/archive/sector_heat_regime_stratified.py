@@ -197,10 +197,7 @@ def main() -> None:
     print("bull also >2.0  -> REAL signal (un-freeze condition 3: 2nd edge)")
     print("only bear >2.0  -> bear artifact (archive, same as late_lock)")
     print("both <2.0       -> unvalidated, keep weight_multiplier=0.5, R3 monitor")
-    print(
-        "\ncaveat: <60 day-pairs in a regime = underpowered (§44 v2). "
-        "Bonferroni K=2 (bull,bear) mild; range is secondary."
-    )
+    print("\ncaveat: <60 day-pairs in a regime = underpowered (§44 v2). Bonferroni K=2 (bull,bear) mild; range is secondary.")
 
 
 if __name__ == "__main__":

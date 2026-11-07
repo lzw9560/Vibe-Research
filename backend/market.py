@@ -383,8 +383,7 @@ def _emotion_uncached(date: str | None = None) -> dict:
                 "price": round((astock._numf(p.get("p")) or 0) / 1000, 2)
                 or None,  # S130: 0→None（对齐 S121，0 永不合法防 LLM 见 0 当真价）
                 "pct": round(astock._numf(p.get("zdp")) or 0, 2) or None,  # S130: 同上（涨停股 pct=0 异常→None）
-                "amount": astock._numf(p.get("amount"))
-                or None,  # 成交额,元（'-' 占位归一 None；S130: 0→None 防排序对 str 取负崩溃）
+                "amount": astock._numf(p.get("amount")) or None,  # 成交额,元（'-' 占位归一 None；S130: 0→None 防排序对 str 取负崩溃）
                 "float_cap": astock._numf(p.get("ltsz")),  # 流通市值,元
                 "industry": p.get("hybk", ""),  # 概念/行业
             }

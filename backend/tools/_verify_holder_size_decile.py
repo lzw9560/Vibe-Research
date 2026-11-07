@@ -93,10 +93,7 @@ def main():
         lo_yi = lo / 1e8
         hi_yi = hi / 1e8
         decile_stats.append((d + 1, lo_yi, hi_yi, len(sub), mean, net, med, wr))
-        print(
-            f"{d + 1:>6} {f'{lo_yi:.3f}~{hi_yi:.3f}':>22} {len(sub):>7} "
-            f"{mean:>+8.4f} {net:>+8.4f} {med:>+8.4f} {wr:>5.1f}"
-        )
+        print(f"{d + 1:>6} {f'{lo_yi:.3f}~{hi_yi:.3f}':>22} {len(sub):>7} {mean:>+8.4f} {net:>+8.4f} {med:>+8.4f} {wr:>5.1f}")
 
     # 判定
     print("\n" + "=" * 70)

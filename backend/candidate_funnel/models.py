@@ -164,9 +164,7 @@ class DiagnosisCard(BaseModel):
     # 用 Optional[dict] 而非 GeneScore 模型：避免跨模块 import 耦合 + model_dump(mode='json') 序列化安全
     gene_score: Optional[dict] = None  # 涨停基因完整对象 dump（total_score/factors/zt_count_250d/...）
     pool_item: Optional[dict] = None  # 涨停池原始 dict（lbc/zbc/fbt/zdp/zje/hybk，走 em_get 限流）
-    derived: Optional[dict] = (
-        None  # S070 R7 分时派生（broken_duration_min/max_drop_pct/last_lock_time），盘前未采集时 None 降级
-    )
+    derived: Optional[dict] = None  # S070 R7 分时派生（broken_duration_min/max_drop_pct/last_lock_time），盘前未采集时 None 降级
     # S085 B2：游资席位聚合子对象（聚合 only，守 S018 R11 不放个体席位名/花名）。
     # {buy_one_ratio, buy_seat_types, sell_seat_types, score_modifier, risk_label, data_status}
     # 无龙虎榜/取数失败 → None 降级（不臆造）。不参与 capped/胜率/结算，仅选股池呈现。

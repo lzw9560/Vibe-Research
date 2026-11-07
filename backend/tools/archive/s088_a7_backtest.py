@@ -86,9 +86,7 @@ def fetch_sox_0818() -> dict | None:
         for r in rows:
             if str(r.get("REPORT_DATE", ""))[:10] == "2026-08-18":
                 cr = r.get("CHANGE_RATE")
-                return (
-                    {"name": "费城半导体", "change_pct": round(float(cr), 2)} if isinstance(cr, (int, float)) else None
-                )
+                return {"name": "费城半导体", "change_pct": round(float(cr), 2)} if isinstance(cr, (int, float)) else None
         return None
     except Exception:  # noqa: BLE001
         return None

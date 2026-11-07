@@ -201,9 +201,7 @@ def main():
 
     # Case B 进一步: 散户收益 < 0 (真亏) 占比
     case_b_loss = [d for d in case_b if d["retail_ret_pct"] < 0]
-    print(
-        f"  Case B 中散户真亏 (retail<0): {len(case_b_loss)} ({len(case_b_loss) / max(len(case_b), 1) * 100:.1f}% of Case B)"
-    )
+    print(f"  Case B 中散户真亏 (retail<0): {len(case_b_loss)} ({len(case_b_loss) / max(len(case_b), 1) * 100:.1f}% of Case B)")
 
     # 危机 vs 非危机
     print("\n" + "=" * 70)
@@ -247,9 +245,7 @@ def main():
     print(f"  隔夜收敛: {mean(narrowing):+.4f}% (正=折价隔夜缩小, 散户买在更小折价)")
     # T+1 open 折价还 < -0.3% 的占比
     still_discounted = [d for d in disc_t1_open if d < -0.3]
-    print(
-        f"  T+1 open 折价仍 <-0.3%: {len(still_discounted)}/{len(picks)} ({len(still_discounted) / len(picks) * 100:.1f}%)"
-    )
+    print(f"  T+1 open 折价仍 <-0.3%: {len(still_discounted)}/{len(picks)} ({len(still_discounted) / len(picks) * 100:.1f}%)")
     # 隔夜收敛 > 0 的占比（散户买前已收敛）
     narrowed_overnight = [n for n in narrowing if n > 0]
     print(f"  隔夜已收敛的: {len(narrowed_overnight)}/{len(picks)} ({len(narrowed_overnight) / len(picks) * 100:.1f}%)")

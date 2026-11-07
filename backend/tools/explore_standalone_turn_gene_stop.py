@@ -113,10 +113,7 @@ def run_standalone(
     factor_picks = [p for p in blanket if p.get(factor) is not None]
     topk = select_topk_by_factor(factor_picks, factor, k)
 
-    print(
-        f"\n  {name}: universe={len(factor_picks)} picks → top-{k}={len(topk)} "
-        f"({len(set(p['zt_date'] for p in topk))} days)"
-    )
+    print(f"\n  {name}: universe={len(factor_picks)} picks → top-{k}={len(topk)} ({len(set(p['zt_date'] for p in topk))} days)")
 
     if not topk:
         print(f"  → no-data: 无 pick 有 {factor}")
@@ -220,10 +217,7 @@ def main() -> None:
     calendar = sorted(all_dates)
     print(f"  kline codes={len(code_map)} calendar days={len(calendar)} zt_rows={len(zt_rows)}")
     print(f"  zt date range: {min(d for d, _, _ in zt_rows)} ~ {max(d for d, _, _ in zt_rows)}")
-    print(
-        f"  gene_scores: {n_gene} rows, {len(gene)} dates "
-        f"({min(gene) if gene else 'N/A'} ~ {max(gene) if gene else 'N/A'})"
-    )
+    print(f"  gene_scores: {n_gene} rows, {len(gene)} dates ({min(gene) if gene else 'N/A'} ~ {max(gene) if gene else 'N/A'})")
 
     # ---- build blanket picks ----
     print("\n[2] 构建 blanket picks (entry=T+1 open, exit=T+2 close, 一字涨停跳过)…")

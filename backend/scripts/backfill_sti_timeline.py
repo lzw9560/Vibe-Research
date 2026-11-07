@@ -94,9 +94,7 @@ def main() -> None:
             time.sleep(1.2)
             continue
 
-        print(
-            f"  {d}: score={result.score} phase={result.phase.value if result.phase else None} zt_real={result.zt_real}"
-        )
+        print(f"  {d}: score={result.score} phase={result.phase.value if result.phase else None} zt_real={result.zt_real}")
         written += 1
 
         if i % 10 == 0:

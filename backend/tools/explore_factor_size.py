@@ -163,9 +163,7 @@ def cross_sectional_deciles_smb(snaps: dict, factor_idx: int) -> tuple[list[str]
     return small_codes, large_codes
 
 
-def ew_close_return(
-    codes: list[str], entry_date: str, exit_date: str, closes: dict[str, dict[str, float]]
-) -> tuple[float | None, int]:
+def ew_close_return(codes: list[str], entry_date: str, exit_date: str, closes: dict[str, dict[str, float]]) -> tuple[float | None, int]:
     """Equal-weight close-to-close holding return for a code list."""
     rets: list[float] = []
     for c in codes:
@@ -182,9 +180,7 @@ def ew_close_return(
     return sum(rets) / len(rets), len(rets)
 
 
-def market_period_return(
-    mkt_daily: dict[str, float], entry_date: str, exit_date: str, calendar: list[str]
-) -> float | None:
+def market_period_return(mkt_daily: dict[str, float], entry_date: str, exit_date: str, calendar: list[str]) -> float | None:
     """Cumulative market return over [entry, exit] from daily pctChg (percent → decimal)."""
     try:
         ei = calendar.index(entry_date)
@@ -205,9 +201,7 @@ def market_period_return(
 # ---------- Newey-West HAC (statsmodels unavailable) ----------
 
 
-def newey_west(
-    y: np.ndarray, x: np.ndarray, max_lag: int | None = None
-) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+def newey_west(y: np.ndarray, x: np.ndarray, max_lag: int | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
     """OLS with Newey-West HAC SE (Bartlett kernel).
 
     Returns (beta, se, t) — arrays of length k.
@@ -352,9 +346,7 @@ def analyze_frequency(zoo: dict, closes: dict, step: int, label: str) -> dict:
     capm = capm_nw(factor_rets, mkt_rets)
     if capm is not None:
         alpha, a_se, a_t, beta_mkt = capm
-        print(
-            f"  CAPM: alpha = {alpha * 100:.4f}%  (se {a_se * 100:.4f}%, NW t = {a_t:.3f})  beta_mkt = {beta_mkt:.4f}"
-        )
+        print(f"  CAPM: alpha = {alpha * 100:.4f}%  (se {a_se * 100:.4f}%, NW t = {a_t:.3f})  beta_mkt = {beta_mkt:.4f}")
         # 抵消审: SMB 零投资组合 beta_mkt 应 ~0; 显著≠0 = 短腿没完全对冲市场
         if abs(beta_mkt) > 0.3:
             print(f"  ⚠ 抵消审: beta_mkt={beta_mkt:.3f} 偏离0, 多空未完全市场中性 (alpha 仍掺 beta)")
@@ -386,18 +378,11 @@ def analyze_frequency(zoo: dict, closes: dict, step: int, label: str) -> dict:
     te_capm = capm_nw(test, mkt_rets[mid:]) if len(test) >= 10 else None
     tr_alpha = tr_capm[0] if tr_capm else 0.0
     te_alpha = te_capm[0] if te_capm else 0.0
-    print(
-        f"  walk-forward: train n={len(train)} mean={train_m * 100:.4f}% NWt={train_t:.3f} alpha={tr_alpha * 100:.4f}%"
-    )
-    print(
-        f"               test  n={len(test)} mean={test_m * 100:.4f}% NWt={test_t:.3f} "
-        f"alpha={te_alpha * 100:.4f}% p_one={test_p:.6f}"
-    )
+    print(f"  walk-forward: train n={len(train)} mean={train_m * 100:.4f}% NWt={train_t:.3f} alpha={tr_alpha * 100:.4f}%")
+    print(f"               test  n={len(test)} mean={test_m * 100:.4f}% NWt={test_t:.3f} alpha={te_alpha * 100:.4f}% p_one={test_p:.6f}")
 
     # ---- honest verdict ----
-    verdict = verdict_smb(
-        mean, t, p_bonf_two, p_bonf_one, alpha, a_t, len(test) >= 60, train_m, test_m, test_t, test_p, n, label
-    )
+    verdict = verdict_smb(mean, t, p_bonf_two, p_bonf_one, alpha, a_t, len(test) >= 60, train_m, test_m, test_t, test_p, n, label)
     print(f"  >>> VERDICT: {verdict}")
 
     return {
@@ -524,11 +509,7 @@ def main() -> int:
         print(f"\n{'#' * 72}")
         print(f"PRIMARY (best two-sided p across {len(FREQS)} freqs, search-corrected): freq={best['label']}")
         print(f"  SMB mean = {best['factor_return_mean_pct']}%/period  方向={best['direction']}")
-        print(
-            f"  NW t = {best['factor_return_t']}  "
-            f"p_one={best['factor_return_p_one_sided']}  "
-            f"p_two={best['factor_return_p_two_sided']}"
-        )
+        print(f"  NW t = {best['factor_return_t']}  p_one={best['factor_return_p_one_sided']}  p_two={best['factor_return_p_two_sided']}")
         print(f"  Bonferroni two-sided p (×{len(FREQS) * N_CROSS_FACTOR}) = {best['bonferroni_p_two']}")
         print(f"  CAPM alpha = {best['capm_alpha_pct']}%  (NW t = {best['capm_alpha_t']}, beta = {best['capm_beta']})")
         print(
@@ -567,8 +548,7 @@ def main() -> int:
             {
                 "factor": FACTOR_NAME,
                 "factor_definition": meta["factors"]["size_logamt20"],
-                "methodology": "Fama-French cross-sectional long-short decile SMB "
-                "(Small Minus Big, zero-investment, market-neutral)",
+                "methodology": "Fama-French cross-sectional long-short decile SMB (Small Minus Big, zero-investment, market-neutral)",
                 "n_cross_factor_bonferroni": N_CROSS_FACTOR,
                 "n_freqs_searched": len(FREQS),
                 "market_benchmark": "sh.000001 (上证综指, price index excl. dividends)",

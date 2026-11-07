@@ -507,9 +507,7 @@ def _permutation_pval(ics: np.ndarray, n_perm: int = 10000) -> float:
     return (count + 1) / (n_perm + 1)
 
 
-def feature_importance_lgb(
-    X: np.ndarray, y: np.ndarray, dates: list[str], feature_names: list[str], target_name: str
-) -> None:
+def feature_importance_lgb(X: np.ndarray, y: np.ndarray, dates: list[str], feature_names: list[str], target_name: str) -> None:
     """LightGBM feature importance (per-fold averaged, no full-sample fit)."""
     import lightgbm as lgb
     from sklearn.preprocessing import StandardScaler
@@ -596,9 +594,7 @@ def main() -> int:
     if best_pval < BONF_ALPHA:
         print(f"  MULTI-FACTOR EDGE FOUND: best IC={best_ic:+.4f}, p={best_pval:.4f} < {BONF_ALPHA:.4f}")
     elif best_pval < ALPHA:
-        print(
-            f"  SUGGESTIVE (pre-Bonferroni): best IC={best_ic:+.4f}, p={best_pval:.4f} < {ALPHA} but >= {BONF_ALPHA:.4f}"
-        )
+        print(f"  SUGGESTIVE (pre-Bonferroni): best IC={best_ic:+.4f}, p={best_pval:.4f} < {ALPHA} but >= {BONF_ALPHA:.4f}")
     else:
         print(f"  NO COMBO EDGE: best IC={best_ic:+.4f}, p={best_pval:.4f} >= {ALPHA}")
         print(f"  Multi-factor combination does not find selection power beyond single factors.")

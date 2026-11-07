@@ -58,8 +58,7 @@ def scan():
         if (i + 1) % 200 == 0:
             el = time.time() - t0
             print(
-                f"  {i + 1}/{len(codes)} events={len(events)} "
-                f"elapsed={el:.0f}s eta={el / (i + 1) * (len(codes) - i - 1):.0f}s",
+                f"  {i + 1}/{len(codes)} events={len(events)} elapsed={el:.0f}s eta={el / (i + 1) * (len(codes) - i - 1):.0f}s",
                 flush=True,
             )
     CACHE.parent.mkdir(parents=True, exist_ok=True)

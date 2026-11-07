@@ -51,9 +51,7 @@ def main() -> None:
     conn = sqlite3.connect(str(DB))
 
     # 1. pre-2025-06-03 picks（backfill 前基线 28.4%）
-    pre = conn.execute(
-        "SELECT date, code FROM zt_history WHERE date<'2025-06-03' AND lbc>=2 AND is_final=1 ORDER BY date"
-    ).fetchall()
+    pre = conn.execute("SELECT date, code FROM zt_history WHERE date<'2025-06-03' AND lbc>=2 AND is_final=1 ORDER BY date").fetchall()
     hd, hd1, tot = _coverage([(r[0], r[1]) for r in pre], cache)
     print(
         f"\n1) pre-2025-06-03 picks: {hd}/{tot}={hd / tot * 100:.1f}% have D bar "
@@ -63,8 +61,7 @@ def main() -> None:
 
     # 2. train third 范围（2024-06..2025-12）picks——backfill 前基线 ~38%
     train = conn.execute(
-        "SELECT date, code FROM zt_history WHERE date>='2024-06-01' "
-        "AND date<='2025-12-31' AND lbc>=2 AND is_final=1 ORDER BY date"
+        "SELECT date, code FROM zt_history WHERE date>='2024-06-01' AND date<='2025-12-31' AND lbc>=2 AND is_final=1 ORDER BY date"
     ).fetchall()
     hd, hd1, tot = _coverage([(r[0], r[1]) for r in train], cache)
     print(

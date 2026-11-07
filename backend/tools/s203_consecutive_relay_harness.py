@@ -53,9 +53,7 @@ def _zt_history_picks_lbc2() -> list[tuple[str, str]]:
         return []
     conn = sqlite3.connect(str(ZT_DB))
     try:
-        rows = conn.execute(
-            "SELECT date, code FROM zt_history WHERE lbc>=2 AND is_final=1 ORDER BY date, code"
-        ).fetchall()
+        rows = conn.execute("SELECT date, code FROM zt_history WHERE lbc>=2 AND is_final=1 ORDER BY date, code").fetchall()
     finally:
         conn.close()
     return [(r[0], r[1]) for r in rows if r[0] and r[1]]
@@ -143,8 +141,7 @@ def main() -> dict:
     wr = sum(o["win"] for o in obs) / n_obs
     net_mean = statistics.mean(rets)
     print(
-        f"all net-WR(连板接力 隔夜gap): {wr * 100:.2f}% net_mean={net_mean * 100:.2f}% "
-        f"(扣 cost ~{mean_cost_dec * 100:.2f}%)",
+        f"all net-WR(连板接力 隔夜gap): {wr * 100:.2f}% net_mean={net_mean * 100:.2f}% (扣 cost ~{mean_cost_dec * 100:.2f}%)",
         flush=True,
     )
 
@@ -193,10 +190,7 @@ def main() -> dict:
         # §44 v2: <30 test days = underpowered; adequate-power bar is >=60.
         chrono["underpowered"] = n_test < 30
         print(f"\n[S217 chrono-OOS] {tag} regime 2/3-1/3 chronological holdout:")
-        print(
-            f"  n_train_days={chrono['n_train_days']} n_test_days={chrono['n_test_days']} "
-            f"train_day_mean={chrono['train_day_mean']}"
-        )
+        print(f"  n_train_days={chrono['n_train_days']} n_test_days={chrono['n_test_days']} train_day_mean={chrono['train_day_mean']}")
         print(
             f"  test_day_mean={chrono['test_day_mean']} test_p_one_sided={chrono['test_p_one_sided']} "
             f"test_win_rate={chrono['test_win_rate']} test_day_std={chrono['test_day_std']}"

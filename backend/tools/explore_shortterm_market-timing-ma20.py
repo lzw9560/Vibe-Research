@@ -399,13 +399,8 @@ def analyze_timing(
     n_out = n_days - n_in
     n_switches = ret["n_switches"]
 
-    print(
-        f"\n  仓位统计: in-market={n_in}d ({n_in / n_days * 100:.1f}%), "
-        f"out-market={n_out}d ({n_out / n_days * 100:.1f}%)"
-    )
-    print(
-        f"  交易次数: {n_switches} switches (~{n_switches // 2} round-trips), total cost={ret['total_cost'] * 100:.2f}%"
-    )
+    print(f"\n  仓位统计: in-market={n_in}d ({n_in / n_days * 100:.1f}%), out-market={n_out}d ({n_out / n_days * 100:.1f}%)")
+    print(f"  交易次数: {n_switches} switches (~{n_switches // 2} round-trips), total cost={ret['total_cost'] * 100:.2f}%")
     if n_switches > 0:
         avg_hold = n_in / max(n_switches // 2, 1)
         print(f"  平均持仓: {avg_hold:.1f} 天/trade")
@@ -413,10 +408,7 @@ def analyze_timing(
     # ---- Gross excess (before cost) ----
     gross_s = ev_stats(gross)
     print(f"\n--- gross excess (before cost) ---")
-    print(
-        f"  n={gross_s['n']} mean_daily={gross_s['ev']}% std={gross_s['std']}% "
-        f"WR={gross_s['wr']}% simple_t={gross_s['t']}"
-    )
+    print(f"  n={gross_s['n']} mean_daily={gross_s['ev']}% std={gross_s['std']}% WR={gross_s['wr']}% simple_t={gross_s['t']}")
 
     # ---- Net excess (after cost) ----
     net_s = ev_stats(net)
@@ -426,20 +418,14 @@ def analyze_timing(
     # ---- Per-day t (simple, from helper) ----
     net_by_date = {d: [r] for d, r in zip(ret_dates, net)}
     net_dt = day_paired_t(net_by_date)
-    print(
-        f"  day-paired (simple): n_days={net_dt['n_days']} mean={net_dt['mean']}% "
-        f"t={net_dt['t']} p_one_sided={net_dt['p_one_sided']}"
-    )
+    print(f"  day-paired (simple): n_days={net_dt['n_days']} mean={net_dt['mean']}% t={net_dt['t']} p_one_sided={net_dt['p_one_sided']}")
 
     # ---- Newey-West HAC t (autocorrelation-adjusted, more honest) ----
     nw_t_net, nw_se_net = newey_west_t([r / 100 for r in net], max_lag=20)
     nw_p_net = norm_sf_positive(nw_t_net)
     nw_t_gross, _ = newey_west_t([r / 100 for r in gross], max_lag=20)
     nw_p_gross = norm_sf_positive(nw_t_gross)
-    print(
-        f"  Newey-West HAC t (lag=20): gross_t={nw_t_gross:.3f} (p={nw_p_gross:.6f}), "
-        f"net_t={nw_t_net:.3f} (p={nw_p_net:.6f})"
-    )
+    print(f"  Newey-West HAC t (lag=20): gross_t={nw_t_gross:.3f} (p={nw_p_gross:.6f}), net_t={nw_t_net:.3f} (p={nw_p_net:.6f})")
 
     # ---- Walk-forward OOS ----
     print(f"\n--- walk-forward OOS (temporal split, net excess) ---")
@@ -473,9 +459,7 @@ def analyze_timing(
 
     print(f"\n--- cumulative performance (BHAR) ---")
     print(f"  buy-and-hold: total={total_idx:.2f}% annual={ann_idx:.2f}% Sharpe={sr_idx:.3f} maxDD={mdd_idx:.1f}%")
-    print(
-        f"  MA timing:    total={total_strat:.2f}% annual={ann_strat:.2f}% Sharpe={sr_strat:.3f} maxDD={mdd_strat:.1f}%"
-    )
+    print(f"  MA timing:    total={total_strat:.2f}% annual={ann_strat:.2f}% Sharpe={sr_strat:.3f} maxDD={mdd_strat:.1f}%")
     print(f"  BHAR (excess): {bhar:.2f}% (annualized excess: {ann_excess:.2f}%)")
     print(f"  maxDD reduction: {mdd_idx - mdd_strat:.1f}% ({mdd_strat / mdd_idx * 100:.1f}% of B&H)")
 
@@ -679,22 +663,14 @@ def main() -> None:
         wf = r["wf"]
         print(f"\n  {r['name']}:")
         print(
-            f"    gross_daily_ev={r['gross_ev']}% net_daily_ev={r['net_ev']}% "
-            f"(after {r['n_switches']}×{ETF_ONE_WAY_COST * 100:.1f}% cost)"
+            f"    gross_daily_ev={r['gross_ev']}% net_daily_ev={r['net_ev']}% (after {r['n_switches']}×{ETF_ONE_WAY_COST * 100:.1f}% cost)"
         )
         print(f"    NW_t={r['nw_t']} NW_p={r['nw_p']} Bonf_p(×{N_CROSS_FACTOR * 2})={bonf_p:.6f}")
-        print(
-            f"    simple_t={r['simple_t']} simple_p={r['simple_p']} (simple t OVERSTATES — daily excess autocorrelated)"
-        )
+        print(f"    simple_t={r['simple_t']} simple_p={r['simple_p']} (simple t OVERSTATES — daily excess autocorrelated)")
         if wf["status"] == "ok":
-            print(
-                f"    walk-forward: train_ev={wf['train_ev']}% test_ev={wf['test_ev']}% "
-                f"test_NW_t={wf['test_t']} test_p={wf['test_p']}"
-            )
+            print(f"    walk-forward: train_ev={wf['train_ev']}% test_ev={wf['test_ev']}% test_NW_t={wf['test_t']} test_p={wf['test_p']}")
         print(f"    BHAR={r['bhar']}% (ann_excess={r['ann_excess']}%) Sharpe: idx={r['sr_idx']} strat={r['sr_strat']}")
-        print(
-            f"    maxDD: B&H={r['mdd_idx']}% timing={r['mdd_strat']}% (reduced by {r['mdd_idx'] - r['mdd_strat']:.1f}%)"
-        )
+        print(f"    maxDD: B&H={r['mdd_idx']}% timing={r['mdd_strat']}% (reduced by {r['mdd_idx'] - r['mdd_strat']:.1f}%)")
         print(f"    → VERDICT (NW-t): {r['verdict_nw']}")
         print(f"    → VERDICT (simple-t): {r['verdict_simple']}")
 

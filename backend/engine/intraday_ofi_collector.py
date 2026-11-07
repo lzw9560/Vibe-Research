@@ -66,9 +66,7 @@ def collect_ofi_for_codes(
         # tencent 无 seal_amount（东财 zt_pool 有），暂 None；涨停退化是未来 refinement
         seal_amount = item.get("seal_amount")
         try:
-            save_ofi(
-                date, ts, code, ofi, ofi_abs, pressure, json.dumps(buy_vols), json.dumps(sell_vols), seal_amount, regime
-            )
+            save_ofi(date, ts, code, ofi, ofi_abs, pressure, json.dumps(buy_vols), json.dumps(sell_vols), seal_amount, regime)
             n_collected += 1
         except Exception as e:  # noqa: BLE001
             _logger.warning("collect_ofi: save_ofi %s 失败: %s", code, e)

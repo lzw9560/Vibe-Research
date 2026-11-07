@@ -281,9 +281,7 @@ def _sector_zt_count_from_pool(pool: list[dict], hybk) -> int:
     return sum(1 for it in pool if (it.get("hybk") or "") == hybk)
 
 
-def _normalize_fb(
-    item: dict, pool: list[dict], bars: list[dict], d_date: str, concept_tags: list[str] | None = None
-) -> dict:
+def _normalize_fb(item: dict, pool: list[dict], bars: list[dict], d_date: str, concept_tags: list[str] | None = None) -> dict:
     """normalize 首板 raw pool item → 剔除所需 dict。
 
     纯函数（bars/pool/concept_tags 已取好传入）。concept_tags 默认空（live 简化：
@@ -445,9 +443,7 @@ def run_layer_lift(days_back: int = 120, fetch_miss: bool = True) -> dict:
                             except Exception as e:  # noqa: BLE001
                                 import logging
 
-                                logging.getLogger(__name__).warning(
-                                    "first_board_layer_lift 失败（降级，不阻塞）: %s", e
-                                )
+                                logging.getLogger(__name__).warning("first_board_layer_lift 失败（降级，不阻塞）: %s", e)
                             bs.login()
                         start = (datetime.strptime(d_date, "%Y-%m-%d") - timedelta(days=5)).strftime("%Y-%m-%d")
                         end = (datetime.strptime(d_date, "%Y-%m-%d") + timedelta(days=10)).strftime("%Y-%m-%d")
@@ -620,9 +616,7 @@ def _compute_zt_history(cache: dict[str, list[dict]], pct_threshold: float = 9.9
     return events
 
 
-def _compute_movers(
-    cache: dict[str, list[dict]], pct_lo: float, pct_hi: float, turn_min: float | None = None
-) -> tuple[dict, dict]:
+def _compute_movers(cache: dict[str, list[dict]], pct_lo: float, pct_hi: float, turn_min: float | None = None) -> tuple[dict, dict]:
     """扫 cache：movers = D pctChg in [lo, hi) 的 target_return by day；
     non_movers = 其余（pctChg 不在该档但有 D+1/D+2）by day。disjoint，within-subset baseline。
     """
@@ -769,10 +763,7 @@ def run_layer_lift_baostock() -> dict:
     out_path = out_dir / "matrix_baostock.json"
     out_path.write_text(json.dumps(matrix, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[B1-baostock] 矩阵已存：{out_path}")
-    print(
-        f"  raw_first_board: n={raw_stats['n']} winrate={raw_stats['winrate']} "
-        f"mean={raw_stats['mean_pct']} dates={raw_stats['n_dates']}"
-    )
+    print(f"  raw_first_board: n={raw_stats['n']} winrate={raw_stats['winrate']} mean={raw_stats['mean_pct']} dates={raw_stats['n_dates']}")
     print(f"  layer2_turnover: n={n} lift={lift} status={l2_stats['validation_status']}")
     return matrix
 
@@ -827,10 +818,7 @@ def run_momentum_scan() -> dict:
     print(f"[momentum-scan] 表已存：{out_path}")
     print(f"  {'range':<16} {'vol':<12} {'n':<7} {'winrate':<8} {'lift':<8} status")
     for r in results:
-        print(
-            f"  {r['range']:<16} {r['vol']:<12} {r['n']:<7} "
-            f"{str(r.get('movers_winrate', '-')):<8} {str(r['lift']):<8} {r['status']}"
-        )
+        print(f"  {r['range']:<16} {r['vol']:<12} {r['n']:<7} {str(r.get('movers_winrate', '-')):<8} {str(r['lift']):<8} {r['status']}")
     return matrix
 
 

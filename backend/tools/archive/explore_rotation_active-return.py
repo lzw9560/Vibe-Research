@@ -316,10 +316,7 @@ def analyze(results: list[dict], formation_label: str) -> dict:
     p_net = ndt["p_one_sided"]
 
     print(f"\n--- active gross (strategy - equal-weight benchmark, pre-cost) ---")
-    print(
-        f"  n_rebalances={n} mean={gs['ev']:.4f}% std={gs['std']:.4f}% "
-        f"WR={gs['wr']:.1f}% t={t_gross:.2f} p_one_sided={p_gross:.6f}"
-    )
+    print(f"  n_rebalances={n} mean={gs['ev']:.4f}% std={gs['std']:.4f}% WR={gs['wr']:.1f}% t={t_gross:.2f} p_one_sided={p_gross:.6f}")
     print(f"  CI[{gs['ci_lo']:.4f}, {gs['ci_hi']:.4f}]")
     print(f"  strategy avg={strat_s['ev']:.4f}%  benchmark avg={bench_s['ev']:.4f}%")
 
@@ -453,19 +450,14 @@ def verdict_for(a: dict, n_bonf: int) -> str:
         print(f"    -> UNDERPOWERED: n_rebalances={a['n_rebalances']} < 60")
         return "underpowered"
     if p_bonf >= ALPHA:
-        print(
-            f"    -> FALSIFIED: Bonferroni p={p_bonf:.6f} >= {ALPHA} (alpha not significant after ×{n_bonf} correction)"
-        )
+        print(f"    -> FALSIFIED: Bonferroni p={p_bonf:.6f} >= {ALPHA} (alpha not significant after ×{n_bonf} correction)")
         return "falsified"
     if a["active_net_ev"] <= 0:
         print(f"    -> FALSIFIED: active_net={a['active_net_ev']}% <= 0 (alpha eaten by turnover cost, not tradeable)")
         return "falsified"
     if a["wf_status"] == "ok":
         if a["wf_train_ev"] <= 0:
-            print(
-                f"    -> EXPLORATORY: train_EV={a['wf_train_ev']}% <= 0 "
-                f"(no alpha in train half; test alpha may be regime overfit)"
-            )
+            print(f"    -> EXPLORATORY: train_EV={a['wf_train_ev']}% <= 0 (no alpha in train half; test alpha may be regime overfit)")
             return "exploratory"
         if a["wf_test_ev"] <= 0:
             print(f"    -> FALSIFIED: walk-forward test_EV={a['wf_test_ev']}% <= 0 (no alpha OOS)")
@@ -529,16 +521,9 @@ def main():
     print(f"\n{'=' * 70}")
     print(f"[4] Best formation (by active_gross_EV)")
     print(f"{'=' * 70}")
-    print(
-        f"  best: {best['label']}  active_gross_EV={best['active_gross_ev']}% "
-        f"t={best['active_gross_t']} p={best['active_gross_p']}"
-    )
+    print(f"  best: {best['label']}  active_gross_EV={best['active_gross_ev']}% t={best['active_gross_t']} p={best['active_gross_p']}")
     print(f"  Bonferroni p (×{N_BONF}) = {bonferroni_p(best['active_gross_p'], N_BONF):.6f}")
-    print(
-        f"  active_net_EV={best['active_net_ev']}%  "
-        f"beta_active={best['beta_active']}  "
-        f"sharpe_active_ann={best['sharpe_active_ann']}"
-    )
+    print(f"  active_net_EV={best['active_net_ev']}%  beta_active={best['beta_active']}  sharpe_active_ann={best['sharpe_active_ann']}")
     print(f"  walk-forward: train={best['wf_train_ev']}% test={best['wf_test_ev']}% test_p={best['wf_test_p']}")
     print(f"  verdict: {verdicts[best['label']]}")
 
@@ -573,8 +558,7 @@ def main():
     output = {
         "strategy": "sector-rotation-active-return",
         "method": "active-return (strategy - equal-weight benchmark)",
-        "alpha_isolation": "active return removes market beta by construction "
-        "(both long market); beta_active reported (~0 = isolated)",
+        "alpha_isolation": "active return removes market beta by construction (both long market); beta_active reported (~0 = isolated)",
         "window": f"{win_dates[0]} ~ {win_dates[-1]} ({len(win_dates)} days)",
         "n_candidate_industries": len(candidates),
         "top_k": TOP_K,

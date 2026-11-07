@@ -26,9 +26,7 @@ async def premarket_selection(
 
     sel = select_premarket_with_risk(date, top_n=top_n, min_score=min_score)
     return {
-        "disclaimer": (
-            "弱信号（§44 naive lift=1.36x<2x 非 validated edge）。前向测试期间不投真金。历史统计特征，市场有风险。"
-        ),
+        "disclaimer": ("弱信号（§44 naive lift=1.36x<2x 非 validated edge）。前向测试期间不投真金。历史统计特征，市场有风险。"),
         "data": {
             "target_date": sel.target_date,
             "honest_label": sel.honest_label,

@@ -366,15 +366,12 @@ def run_analysis():
                 "abn_median": round(statistics.median(abn), 3) if abn else None,
                 "p_perm": round(p, 4),
                 "gross_mean": round(
-                    statistics.mean(
-                        [r["horizons"][N]["gross"] for r in results if r["horizons"].get(N) and r["horizons"][N]]
-                    ),
+                    statistics.mean([r["horizons"][N]["gross"] for r in results if r["horizons"].get(N) and r["horizons"][N]]),
                     3,
                 ),
             }
             print(
-                f"  T+{N}: n={len(rets)} mean={mean:.3f}% med={med:.3f}% WR={wr:.1%} "
-                f"abn_med={out['horizons'][N]['abn_median']} p={p:.4f}",
+                f"  T+{N}: n={len(rets)} mean={mean:.3f}% med={med:.3f}% WR={wr:.1%} abn_med={out['horizons'][N]['abn_median']} p={p:.4f}",
                 flush=True,
             )
         return out
@@ -436,9 +433,7 @@ def run_analysis():
         h = r["horizons"].get(45)
         if h and h is not None:
             by_ind[r.get("industry") or "unknown"].append(h["net"])
-    ind_breakdown = {
-        ind: {"n": len(rs), "mean": round(statistics.mean(rs), 3)} for ind, rs in by_ind.items() if len(rs) >= 2
-    }
+    ind_breakdown = {ind: {"n": len(rs), "mean": round(statistics.mean(rs), 3)} for ind, rs in by_ind.items() if len(rs) >= 2}
 
     # Bonferroni: K = number of tested subsets × horizons
     n_tests = 4  # subsets tested × primary horizon

@@ -204,9 +204,7 @@ def generate_t1_watchlist(target_date: str) -> dict[str, Any]:
     all_bars = _load_kline_bars()
     _logger.info("[S232] 加载 %d codes kline，T 日涨停池 %d codes", len(all_bars), len(zt_codes_t))
     watchlist = _generate_from_preloaded(target_date, all_bars, zt_codes_t)
-    _logger.info(
-        "[S232] T+1 watchlist %s: %d 只（turn>20% & vr5>2，观察池非买入信号）", target_date, watchlist["count"]
-    )
+    _logger.info("[S232] T+1 watchlist %s: %d 只（turn>20% & vr5>2，观察池非买入信号）", target_date, watchlist["count"])
     return watchlist
 
 
@@ -425,8 +423,7 @@ def render_hit_report(hit_result: dict[str, Any]) -> str:
     elif total < 30:
         # 样本不足：13×4.34%=0.56 预期命中，Poisson P(0;0.56)=57% 合理，单日命中率波动大不可信
         lines.append(
-            f"⚠️ 样本不足（{total} < 30）——单日命中率波动大不可信"
-            f"（13 只预期 0.56 涨停，0 命中 Poisson 概率 57% 合理），累积 60 天后验证"
+            f"⚠️ 样本不足（{total} < 30）——单日命中率波动大不可信（13 只预期 0.56 涨停，0 命中 Poisson 概率 57% 合理），累积 60 天后验证"
         )
     elif dev is not None and dev < -30:
         lines.append(f"⚠️ 命中率显著低于预期（{dev:+.1f}%）——当前 regime 信号可能失效")

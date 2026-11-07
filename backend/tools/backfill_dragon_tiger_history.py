@@ -154,9 +154,7 @@ def backfill(start: str = "2018-01-01", end: str = "2026-10-07") -> None:
 
     conn.close()
     elapsed = time.time() - t0
-    log.info(
-        f"\n[done] total={len(days)} ok={ok} fail={fail} skip={skip} elapsed={elapsed:.0f}s ({elapsed / 60:.1f}min)"
-    )
+    log.info(f"\n[done] total={len(days)} ok={ok} fail={fail} skip={skip} elapsed={elapsed:.0f}s ({elapsed / 60:.1f}min)")
     log.info(f"[saved] {DB_PATH} ({DB_PATH.stat().st_size / 1024:.0f}KB)")
 
 

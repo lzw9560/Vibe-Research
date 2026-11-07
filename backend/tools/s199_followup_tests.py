@@ -208,10 +208,7 @@ def test1_breakout_stratified(data: list[dict]) -> None:
     surv_fl, raw_fl, all_fl = _split_trade_level(data, "gap_a", arm_filter="floor")
     n_fl_surv = sum(len(v) for v in surv_fl.values())
     n_fl_raw = sum(len(v) for v in raw_fl.values())
-    print(
-        f"\n  floor arm (WITHOUT-breakout): surv_n={n_fl_surv} raw_n={n_fl_raw} "
-        f"(too small for robust §44, underpowered)"
-    )
+    print(f"\n  floor arm (WITHOUT-breakout): surv_n={n_fl_surv} raw_n={n_fl_raw} (too small for robust §44, underpowered)")
 
     # --- B. Market-level 3/5/10d (pre-window sanity, §44v2 ①) ---
     print("\n--- B. Market-level (bars forward 3/5/10d, pre-window sanity) ---")
@@ -270,10 +267,7 @@ def test1_breakout_stratified(data: list[dict]) -> None:
         f"  floor arm realized=0 → stratification is no-op (all gap-present ARE "
         f"breakout). Deconfound = within-breakout comparison (breakout held constant)."
     )
-    print(
-        "  → lift persists within breakout arm (NOT breakout-driven), BUT pooled "
-        "winrate<1 → not a robust per-trade selection edge"
-    )
+    print("  → lift persists within breakout arm (NOT breakout-driven), BUT pooled winrate<1 → not a robust per-trade selection edge")
 
 
 # ── Test 2: binary gate ablation ────────────────────────────────────────────

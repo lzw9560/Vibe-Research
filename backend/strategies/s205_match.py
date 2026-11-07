@@ -32,9 +32,7 @@ def _score(战法: str, indicators: dict[str, float]) -> float | None:
 
 
 # ── T4a: 一字竞价（BLOCKER: auction_signal 无免费源→返 None）──────────
-def match_yizi_jingjia(
-    code: str, date: str, bars: list[dict] | None = None, msc: dict | None = None, **kwargs: Any
-) -> float | None:
+def match_yizi_jingjia(code: str, date: str, bars: list[dict] | None = None, msc: dict | None = None, **kwargs: Any) -> float | None:
     """一字竞价 match（BLOCKER：auction_signal 无免费源→返 None）。
 
     auction_signal 维度 data_source 是 BLOCKER（Tushare/hithink 付费，无免费历史竞价）。
@@ -46,9 +44,7 @@ def match_yizi_jingjia(
 
 
 # ── T4b: 弱转强 ────────────────────────────────────────────────────
-def match_ruozhuanqiang(
-    code: str, date: str, bars: list[dict] | None = None, msc: dict | None = None, **kwargs: Any
-) -> float | None:
+def match_ruozhuanqiang(code: str, date: str, bars: list[dict] | None = None, msc: dict | None = None, **kwargs: Any) -> float | None:
     """弱转强 match：预期差反包 + 量能 + 情绪 + 技术 + 板块。"""
     indicators = {
         "expectation_gap_reversal": ps.compute_expectation_gap_reversal(code, date, bars=bars),
@@ -61,9 +57,7 @@ def match_ruozhuanqiang(
 
 
 # ── T4c: N字反击 ──────────────────────────────────────────────────
-def match_nzi_fanji(
-    code: str, date: str, bars: list[dict] | None = None, msc: dict | None = None, **kwargs: Any
-) -> float | None:
+def match_nzi_fanji(code: str, date: str, bars: list[dict] | None = None, msc: dict | None = None, **kwargs: Any) -> float | None:
     """N字反击 match：量能节奏 + 回调结构 + 技术 + 情绪 + 板块。"""
     indicators = {
         "volume_rhythm": ps.compute_volume_rhythm(bars=bars),
@@ -76,9 +70,7 @@ def match_nzi_fanji(
 
 
 # ── T4d: 低吸龙头 ─────────────────────────────────────────────────
-def match_dixi_longtou(
-    code: str, date: str, bars: list[dict] | None = None, msc: dict | None = None, **kwargs: Any
-) -> float | None:
+def match_dixi_longtou(code: str, date: str, bars: list[dict] | None = None, msc: dict | None = None, **kwargs: Any) -> float | None:
     """低吸龙头 match：技术 + 龙头确认 + 回调节奏 + 量能反转 + 情绪 + 板块改口径。"""
     sector_rank = msc.get("sector_rank") if msc else None
     lbc = msc.get("lbc") if msc else None
@@ -103,9 +95,7 @@ def match_dixi_longtou(
 
 
 # ── T4e: 形态反包 ─────────────────────────────────────────────────
-def match_xingtai_fanbao(
-    code: str, date: str, bars: list[dict] | None = None, msc: dict | None = None, **kwargs: Any
-) -> float | None:
+def match_xingtai_fanbao(code: str, date: str, bars: list[dict] | None = None, msc: dict | None = None, **kwargs: Any) -> float | None:
     """形态反包 match：技术 + 量能 + 反包确认 + 情绪 + 板块。"""
     indicators = {
         "tech_pattern": _msc_tech(msc, bars),

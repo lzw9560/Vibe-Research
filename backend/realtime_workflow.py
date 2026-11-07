@@ -92,9 +92,7 @@ class RealtimeWorkflow:
         # TODO: 接入实时行情数据
         return None
 
-    async def check_bomb_alerts(
-        self, code: str, name: str, seal_amount: float, prev_seal_amount: float
-    ) -> BombAlert | None:
+    async def check_bomb_alerts(self, code: str, name: str, seal_amount: float, prev_seal_amount: float) -> BombAlert | None:
         """检查炸板预警。"""
         if seal_amount <= 0:
             return None
@@ -120,9 +118,7 @@ class RealtimeWorkflow:
 
         return None
 
-    def adjust_position(
-        self, code: str, name: str, action: str, reason: str, old_pct: float, new_pct: float
-    ) -> PositionAdjustment:
+    def adjust_position(self, code: str, name: str, action: str, reason: str, old_pct: float, new_pct: float) -> PositionAdjustment:
         """记录仓位调整。"""
         adj = PositionAdjustment(
             timestamp=datetime.now().isoformat(),

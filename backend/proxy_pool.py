@@ -149,9 +149,7 @@ def fetch_fund_flow_via_pool(code: str, lmt: int = 120) -> list[dict]:
     url = "https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get"
     for p in pool:  # 轮换试每个代理
         try:
-            r = requests.get(
-                url, params=params, headers=headers, proxies={"http": f"http://{p}", "https": f"http://{p}"}, timeout=12
-            )
+            r = requests.get(url, params=params, headers=headers, proxies={"http": f"http://{p}", "https": f"http://{p}"}, timeout=12)
             if r.status_code != 200:
                 continue
             d = r.json()

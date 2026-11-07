@@ -193,15 +193,9 @@ def record(
     # write-once 守卫：完全相同的记录已存在 → 拒绝静默重复
     existing = _read_all()
     for ex in existing:
-        if (
-            ex.artifact_id == rec.artifact_id
-            and ex.as_of == rec.as_of
-            and ex.commit == rec.commit
-            and ex.output_hash == rec.output_hash
-        ):
+        if ex.artifact_id == rec.artifact_id and ex.as_of == rec.as_of and ex.commit == rec.commit and ex.output_hash == rec.output_hash:
             raise LineageError(
-                f"write-once 违反：记录已存在 artifact={artifact_id} as_of={as_of} "
-                f"commit={commit_hash} output_hash={rec.output_hash[:8]}…"
+                f"write-once 违反：记录已存在 artifact={artifact_id} as_of={as_of} commit={commit_hash} output_hash={rec.output_hash[:8]}…"
             )
     path = _store_path()
     path.parent.mkdir(parents=True, exist_ok=True)

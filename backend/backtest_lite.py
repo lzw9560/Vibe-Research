@@ -64,9 +64,7 @@ class BacktestResult:
     factor_ic_analysis: dict[str, Any] | None = None
 
 
-def _calc_next_day_return_meta(
-    code: str, date_str: str, kline_cache: dict[str, Any] | None = None
-) -> tuple[float, bool]:
+def _calc_next_day_return_meta(code: str, date_str: str, kline_cache: dict[str, Any] | None = None) -> tuple[float, bool]:
     """计算次日真实收益率 + fetch_ok 标记（S123 R4）。
 
     返回 (return_value, fetch_ok)：
@@ -102,9 +100,7 @@ def _calc_next_day_return_meta(
         ret = (next_close - target_close) / target_close if target_close else 0.0
         return ret, True
     except Exception as exc:
-        logging.getLogger("backtest_lite").warning(
-            "_calc_next_day_return_meta(%s, %s) 取数失败: %s", code, date_str, exc
-        )
+        logging.getLogger("backtest_lite").warning("_calc_next_day_return_meta(%s, %s) 取数失败: %s", code, date_str, exc)
         return 0.0, False
 
 
@@ -295,8 +291,7 @@ async def run_backtest_async(start_date: str, end_date: str) -> BacktestResult:
     _save_cache(cache)
     if degraded_kline:
         logging.getLogger("backtest_lite").warning(
-            "run_backtest_async %s~%s: %d 个信号 K 线取数失败（fetch_ok=False）"
-            "已排除出 hit_rate/returns 分母（§44 胜率数字为真）",
+            "run_backtest_async %s~%s: %d 个信号 K 线取数失败（fetch_ok=False）已排除出 hit_rate/returns 分母（§44 胜率数字为真）",
             start_date,
             end_date,
             degraded_kline,

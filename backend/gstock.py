@@ -230,9 +230,7 @@ def _search(q: str) -> dict | None:
         table = payload.get("QuotationCodeTable") if isinstance(payload, dict) else None
         data = table.get("Data") if isinstance(table, dict) else None
         if not isinstance(data, list):
-            last_error = (
-                f"{url} → 响应结构异常（缺少 QuotationCodeTable.Data 或类型不对），可能是接口改版或被风控页拦截"
-            )
+            last_error = f"{url} → 响应结构异常（缺少 QuotationCodeTable.Data 或类型不对），可能是接口改版或被风控页拦截"
             continue
 
         rows = data  # 结构正常但为空 = 真的没匹配到

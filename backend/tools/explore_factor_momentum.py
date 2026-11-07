@@ -155,9 +155,7 @@ def cross_sectional_deciles(snaps: dict, factor_idx: int) -> tuple[list[str], li
     return long_codes, short_codes
 
 
-def ew_close_return(
-    codes: list[str], entry_date: str, exit_date: str, closes: dict[str, dict[str, float]]
-) -> tuple[float | None, int]:
+def ew_close_return(codes: list[str], entry_date: str, exit_date: str, closes: dict[str, dict[str, float]]) -> tuple[float | None, int]:
     """Equal-weight close-to-close holding return for a code list."""
     rets: list[float] = []
     for c in codes:
@@ -174,9 +172,7 @@ def ew_close_return(
     return sum(rets) / len(rets), len(rets)
 
 
-def market_period_return(
-    mkt_daily: dict[str, float], entry_date: str, exit_date: str, calendar: list[str]
-) -> float | None:
+def market_period_return(mkt_daily: dict[str, float], entry_date: str, exit_date: str, calendar: list[str]) -> float | None:
     """Cumulative market return over [entry, exit] from daily pctChg (percent → decimal)."""
     try:
         ei = calendar.index(entry_date)
@@ -197,9 +193,7 @@ def market_period_return(
 # ---------- Newey-West HAC (statsmodels unavailable) ----------
 
 
-def newey_west(
-    y: np.ndarray, x: np.ndarray, max_lag: int | None = None
-) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+def newey_west(y: np.ndarray, x: np.ndarray, max_lag: int | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
     """OLS with Newey-West HAC SE (Bartlett kernel).
 
     Returns (beta, se, t) — arrays of length k.
@@ -341,19 +335,14 @@ def analyze_frequency(zoo: dict, closes: dict, step: int, label: str) -> dict:
     capm = capm_nw(factor_rets, mkt_rets)
     if capm is not None:
         alpha, a_se, a_t, beta_mkt = capm
-        print(
-            f"  CAPM: alpha = {alpha * 100:.4f}%  (se {a_se * 100:.4f}%, NW t = {a_t:.3f})  beta_mkt = {beta_mkt:.4f}"
-        )
+        print(f"  CAPM: alpha = {alpha * 100:.4f}%  (se {a_se * 100:.4f}%, NW t = {a_t:.3f})  beta_mkt = {beta_mkt:.4f}")
     else:
         alpha, a_t, beta_mkt = 0.0, 0.0, 0.0
 
     # Bonferroni: within-momentum (×N_FREQS) AND cross-factor (×N_CROSS_FACTOR)
     n_tests = len(FREQS) * N_CROSS_FACTOR
     p_bonf = bonferroni_p(p_one, n_tests)
-    print(
-        f"  Bonferroni: raw p={p_one:.6f} × {len(FREQS)}(freqs)×{N_CROSS_FACTOR}"
-        f"(factors) = ×{n_tests} → p_bonf = {p_bonf:.6f}"
-    )
+    print(f"  Bonferroni: raw p={p_one:.6f} × {len(FREQS)}(freqs)×{N_CROSS_FACTOR}(factors) = ×{n_tests} → p_bonf = {p_bonf:.6f}")
 
     # walk-forward: chronological split
     mid = n // 2
@@ -369,13 +358,8 @@ def analyze_frequency(zoo: dict, closes: dict, step: int, label: str) -> dict:
     te_capm = capm_nw(test, mkt_rets[mid:]) if len(test) >= 10 else None
     tr_alpha = tr_capm[0] if tr_capm else 0.0
     te_alpha = te_capm[0] if te_capm else 0.0
-    print(
-        f"  walk-forward: train n={len(train)} mean={train_m * 100:.4f}% NWt={train_t:.3f} alpha={tr_alpha * 100:.4f}%"
-    )
-    print(
-        f"               test  n={len(test)} mean={test_mean * 100:.4f}% NWt={test_t:.3f} "
-        f"alpha={te_alpha * 100:.4f}% p_one={test_p:.6f}"
-    )
+    print(f"  walk-forward: train n={len(train)} mean={train_m * 100:.4f}% NWt={train_t:.3f} alpha={tr_alpha * 100:.4f}%")
+    print(f"               test  n={len(test)} mean={test_mean * 100:.4f}% NWt={test_t:.3f} alpha={te_alpha * 100:.4f}% p_one={test_p:.6f}")
 
     # ---- honest verdict ----
     verdict = verdict_factor(mean, t, p_bonf, alpha, a_t, len(test) >= 60, train_m, test_mean, test_t, test_p, n, label)
@@ -506,13 +490,9 @@ def main() -> int:
     print("\n--- 诚实标注 (禁止外推) ---")
     print("1. 本脚本测的是横截面 momentum_15d 因子 (long-short decile), 非 long-only EV, 非其他因子.")
     print("2. long-short 需做空 bottom decile — A股散户融券极度受限, 统计 alpha ≠ 可交易 (仅机构/融券标的可用).")
-    print(
-        "3. survivorship: 早期 (2018-2020) 横截面 ~264-766 来自非随机 backfill 子集, 晚期 (2025-2026) 横截面大但天数少."
-    )
+    print("3. survivorship: 早期 (2018-2020) 横截面 ~264-766 来自非随机 backfill 子集, 晚期 (2025-2026) 横截面大但天数少.")
     print("4. 4 因子 (本脚本仅动量) ≠ 横截面有/无 edge ≠ 选股战法有/无 edge.")
-    print(
-        "5. 学术先验: A股呈短期反转非动量 (Kang 2002) — 若 long-high-momentum 为负, 是反转现象, 由 reversal 子代理测."
-    )
+    print("5. 学术先验: A股呈短期反转非动量 (Kang 2002) — 若 long-high-momentum 为负, 是反转现象, 由 reversal 子代理测.")
 
     # dump machine-readable
     out_path = Path(__file__).parent / "_momentum_result.json"

@@ -129,9 +129,7 @@ class WechatSender:
         """发送企业微信消息"""
         payload = self._gen_wechat_payload(content)
 
-        response = requests.post(
-            self._wechat_url, json=payload, timeout=timeout_seconds or 10, verify=self._webhook_verify_ssl
-        )
+        response = requests.post(self._wechat_url, json=payload, timeout=timeout_seconds or 10, verify=self._webhook_verify_ssl)
 
         if response.status_code == 200:
             result = response.json()

@@ -95,9 +95,7 @@ def s066_validation_checkpoint(payload: Dict[str, Any]) -> Dict[str, Any]:
     threshold = int(payload.get("threshold", 60))
     conn = get_healthy_conn(GENE_SCORES_DB_PATH)
     try:
-        days = conn.execute(
-            "SELECT COUNT(DISTINCT date) FROM gene_scores WHERE data_source='eastmoney_live'"
-        ).fetchone()[0]
+        days = conn.execute("SELECT COUNT(DISTINCT date) FROM gene_scores WHERE data_source='eastmoney_live'").fetchone()[0]
     finally:
         conn.close()
 
@@ -233,9 +231,7 @@ def evaluation_backtest(payload: Dict[str, Any]) -> Dict[str, Any]:
             n,
         )
     else:
-        logger.warning(
-            "[evaluation_backtest] S151 回溯 DUE（%s）自动写回空（compute 不可用）→ reminder：%s", phase, action
-        )
+        logger.warning("[evaluation_backtest] S151 回溯 DUE（%s）自动写回空（compute 不可用）→ reminder：%s", phase, action)
     return ckpt
 
 
@@ -452,8 +448,7 @@ def forward_test_t1_settle(payload: Dict[str, Any]) -> Dict[str, Any]:
         try:
             # S145：picks 取 code + strategy_code（建 strategy_params_map 供 path 模拟用其战法 params）
             pick_rows = conn.execute(
-                "SELECT code, strategy_code FROM forward_test_records "
-                "WHERE signal_date=? AND return_open2close IS NULL",
+                "SELECT code, strategy_code FROM forward_test_records WHERE signal_date=? AND return_open2close IS NULL",
                 (signal_date,),
             ).fetchall()
             pick_codes = list(dict.fromkeys(r[0] for r in pick_rows))
@@ -480,14 +475,8 @@ def forward_test_t1_settle(payload: Dict[str, Any]) -> Dict[str, Any]:
         if not returns_map:
             summary.append({"signal_date": signal_date, "status": "baostock_unavailable"})
             break  # baostock 不可用，后续日也跑不了
-        picks_returns = {
-            c: returns_map[c]
-            for c in pick_codes
-            if c in returns_map and returns_map[c]["return_open2close"] is not None
-        }
-        uni_returns = {
-            c: returns_map[c] for c in uni_codes if c in returns_map and returns_map[c]["return_open2close"] is not None
-        }
+        picks_returns = {c: returns_map[c] for c in pick_codes if c in returns_map and returns_map[c]["return_open2close"] is not None}
+        uni_returns = {c: returns_map[c] for c in uni_codes if c in returns_map and returns_map[c]["return_open2close"] is not None}
         n_picks = record_actual_returns(signal_date, picks_returns)
         n_uni = record_universe_returns(signal_date, uni_returns)
         settled = n_picks + n_uni
@@ -503,9 +492,7 @@ def forward_test_t1_settle(payload: Dict[str, Any]) -> Dict[str, Any]:
             len(uni_codes),
             " [stuck-mark]" if settled == 0 else "",
         )
-        summary.append(
-            {"signal_date": signal_date, "settled_picks": n_picks, "settled_universe": n_uni, "total": settled}
-        )
+        summary.append({"signal_date": signal_date, "settled_picks": n_picks, "settled_universe": n_uni, "total": settled})
 
     try:
         stuck_path.write_text(json.dumps(stuck, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -378,11 +378,7 @@ def new_verdict_for(
       8. All pass → edge-confirmed
     """
     print(f"\n  {subset_name} [NEW methodology — BH + rolling WF + HAC]:")
-    print(
-        f"    gross_EV={ev_gross}% net_EV={net_ev}% "
-        f"HAC_t={hac_t} HAC_p_raw={hac_p_raw} "
-        f"BH_full_rej={bh_full_rejected} n_days={n_days}"
-    )
+    print(f"    gross_EV={ev_gross}% net_EV={net_ev}% HAC_t={hac_t} HAC_p_raw={hac_p_raw} BH_full_rej={bh_full_rejected} n_days={n_days}")
     if rwf_status == "ok":
         print(
             f"    rolling-WF: pooled_OOS_gross={pooled_oos_ev}% "
@@ -398,10 +394,7 @@ def new_verdict_for(
         print(f"    → UNDERPOWERED: n_days={n_days} < 60")
         return "underpowered"
     if not bh_full_rejected:
-        print(
-            f"    → FALSIFIED: BH FDR 5% rejects full-sample HAC p "
-            f"(not significant even with less-conservative correction)"
-        )
+        print(f"    → FALSIFIED: BH FDR 5% rejects full-sample HAC p (not significant even with less-conservative correction)")
         return "falsified"
     if net_ev <= 0:
         print(f"    → FALSIFIED: net EV={net_ev}% <= 0 (cost eats gross edge)")
@@ -414,10 +407,7 @@ def new_verdict_for(
             print(f"    → EXPLORATORY: OOS HAC p={pooled_oos_hac_p} fails BH FDR 5% (OOS not significant)")
             return "exploratory"
         if fold_positive < fold_total * 2 / 3:
-            print(
-                f"    → EXPLORATORY: only {fold_positive}/{fold_total} "
-                f"folds positive (< 2/3, not robust across regimes)"
-            )
+            print(f"    → EXPLORATORY: only {fold_positive}/{fold_total} folds positive (< 2/3, not robust across regimes)")
             return "exploratory"
         print(
             f"    → EDGE-CONFIRMED: gross+net>0, BH PASS, "
@@ -529,10 +519,7 @@ def main() -> None:
         wf_te = wf.get("test_ev", {}).get("ev", 0.0) if wf_status == "ok" else 0.0
         wf_te_p = wf.get("test_day_t", {}).get("p_one_sided", 1.0) if wf_status == "ok" else 1.0
         v = verdict_for(ev, dt["t"], p_raw, wf_status, wf_tr, wf_te, wf_te_p, dt["n_days"], net, name, n_cross_factor=6)
-        print(
-            f"  → {name}: {v}  (Bonf×12={p_bonf:.4f}, "
-            f"OOS_test_p={wf_te_p}, OOS_test_p_Bonf×12={bonferroni_p(wf_te_p, 12):.4f})"
-        )
+        print(f"  → {name}: {v}  (Bonf×12={p_bonf:.4f}, OOS_test_p={wf_te_p}, OOS_test_p_Bonf×12={bonferroni_p(wf_te_p, 12):.4f})")
 
     # ---- BH FDR across family ----
     print(f"\n{'=' * 72}")
@@ -673,11 +660,7 @@ def main() -> None:
     print(f"    per-day t={dt3['t']} p_raw={dt3['p_one_sided']} Bonf×12={bonferroni_p(dt3['p_one_sided'], 12):.6f}")
     print(f"    OOS test_p={wf3_te_p} Bonf×12={bonferroni_p(wf3_te_p, 12):.6f} (>= 0.05 → exploratory)")
     print(f"  NEW: verdict={new_v}")
-    print(
-        f"    per-trade HAC t={h['t']} p_raw={h['p_one_sided']} "
-        f"BH_adj={bh_full_3['bh_adjusted_p'][1]} "
-        f"(rejected={bh_full_rej_top3})"
-    )
+    print(f"    per-trade HAC t={h['t']} p_raw={h['p_one_sided']} BH_adj={bh_full_3['bh_adjusted_p'][1]} (rejected={bh_full_rej_top3})")
     if rwf3_status == "ok":
         print(f"    OOS pooled HAC p={pooled_hac_p} BH_adj={bh_oos_3['bh_adjusted_p'][1]} (rejected={bh_oos_rej_top3})")
         print(f"    rolling WF: {fold_pos}/{fold_total} folds positive, pooled OOS EV={pooled_ev}%")
@@ -686,9 +669,7 @@ def main() -> None:
 
     # ---- Fake-edge audit (if flipped) ----
     print(f"\n{'=' * 72}")
-    print(
-        "[10] 假 edge 5 模式审" + (" (FLIPPED — must audit)" if flipped else " (not flipped — audit for transparency)")
-    )
+    print("[10] 假 edge 5 模式审" + (" (FLIPPED — must audit)" if flipped else " (not flipped — audit for transparency)"))
     print(f"{'=' * 72}")
 
     # 1. entry 涨停价溢价

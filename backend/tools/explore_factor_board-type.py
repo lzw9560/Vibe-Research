@@ -112,9 +112,7 @@ def main():
     # 分析各子集
     analyses = []
     for label, board, picks in built:
-        a = analyze_subset(
-            label, picks, ret_fn_basic=close_ev_basic, ret_fn_stop=close_ev_stop, ret_fn_label="close_ev"
-        )
+        a = analyze_subset(label, picks, ret_fn_basic=close_ev_basic, ret_fn_stop=close_ev_stop, ret_fn_label="close_ev")
         analyses.append((label, board, picks, a))
 
     # ---- honest verdict per subset (cross-factor Bonferroni ×12) ----
@@ -137,9 +135,7 @@ def main():
         wf_test = wf.get("test_ev", {}).get("ev", 0.0)
         wf_test_t = wf.get("test_day_t", {}).get("t", 0.0)
         wf_test_p = wf.get("test_day_t", {}).get("p_one_sided", 1.0)
-        v = verdict_for(
-            ev_gross, t_day, p_raw, wf_status, wf_train, wf_test, wf_test_p, n_days, net_ev, label, n_cross_factor=6
-        )
+        v = verdict_for(ev_gross, t_day, p_raw, wf_status, wf_train, wf_test, wf_test_p, n_days, net_ev, label, n_cross_factor=6)
         verdicts.append(
             {
                 "label": label,

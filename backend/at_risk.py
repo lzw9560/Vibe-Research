@@ -188,8 +188,7 @@ def report() -> dict:
         if per_trade_limit:
             over = [p for p in bounded if p["at_risk"] / base * 100 > float(per_trade_limit) + 1e-9]
             out["over_per_trade_limit"] = [
-                {"name": p["name"], "code": p["code"], "pct_of_equity": round(p["at_risk"] / base * 100, 2)}
-                for p in over
+                {"name": p["name"], "code": p["code"], "pct_of_equity": round(p["at_risk"] / base * 100, 2)} for p in over
             ]
     else:
         out["equity_base_hint"] = "填了账户规模才能给占比 —— 绝对金额说明不了'这个风险相对我的账户算大还是小'。"

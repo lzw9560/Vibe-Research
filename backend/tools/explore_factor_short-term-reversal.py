@@ -165,9 +165,7 @@ def build_deciles(factor_values: dict[str, float], n_deciles: int = N_DECILES) -
     return assignments
 
 
-def stock_return(
-    kline_closes: dict[str, dict[str, float]], code: str, calendar: list[str], entry_idx: int, exit_idx: int
-) -> float | None:
+def stock_return(kline_closes: dict[str, dict[str, float]], code: str, calendar: list[str], entry_idx: int, exit_idx: int) -> float | None:
     """Close-to-close return from entry_date to exit_date.
 
     If exit_date close is missing (suspended), uses nearest available close
@@ -544,9 +542,7 @@ def benjamini_hochberg(p_values: list[float]) -> list[float]:
 # ===================== verdict =====================
 
 
-def compute_verdict(
-    stats_basic: dict, capm: dict, wf: dict, n_total_tests: int, n_rebalances: int, cost_per_rebal: float
-) -> str:
+def compute_verdict(stats_basic: dict, capm: dict, wf: dict, n_total_tests: int, n_rebalances: int, cost_per_rebal: float) -> str:
     """Honest verdict cascade for cross-sectional factor return.
 
     1. factor_return_mean < 0 → falsified (negative factor return, reversal doesn't work)
@@ -590,10 +586,7 @@ def compute_verdict(
         alpha_t = capm["alpha_t"]
         alpha_p = capm["alpha_p_one_sided"]
         alpha_bonf = bonferroni_p(alpha_p, n_total_tests)
-        print(
-            f"    CAPM alpha = {alpha_pct:.4f}%, alpha_t = {alpha_t:.2f}, "
-            f"alpha_p_one_sided = {alpha_p:.6f}, Bonf = {alpha_bonf:.6f}"
-        )
+        print(f"    CAPM alpha = {alpha_pct:.4f}%, alpha_t = {alpha_t:.2f}, alpha_p_one_sided = {alpha_p:.6f}, Bonf = {alpha_bonf:.6f}")
         if alpha_pct < 0:
             print(f"    → FALSIFIED: CAPM alpha = {alpha_pct:.4f}% < 0")
             return "falsified"
@@ -610,15 +603,10 @@ def compute_verdict(
         te_p = wf["test_alpha_p_one_sided"]
         te_bonf = bonferroni_p(te_p, n_total_tests)
         print(
-            f"    walk-forward: train_alpha = {tr_alpha:.4f}%, "
-            f"test_alpha = {te_alpha:.4f}%, test_p = {te_p:.6f}, "
-            f"test_Bonf = {te_bonf:.6f}"
+            f"    walk-forward: train_alpha = {tr_alpha:.4f}%, test_alpha = {te_alpha:.4f}%, test_p = {te_p:.6f}, test_Bonf = {te_bonf:.6f}"
         )
         if tr_alpha <= 0:
-            print(
-                f"    → EXPLORATORY: train alpha = {tr_alpha:.4f}% <= 0 "
-                f"(edge not in train half, test may be regime overfitting)"
-            )
+            print(f"    → EXPLORATORY: train alpha = {tr_alpha:.4f}% <= 0 (edge not in train half, test may be regime overfitting)")
             return "exploratory"
         if te_alpha <= 0:
             print(f"    → FALSIFIED: walk-forward test alpha = {te_alpha:.4f}% <= 0")
@@ -725,10 +713,7 @@ def main() -> None:
         print(f"  n_rebalances: {len(fr)}")
         print(f"  avg stocks/period: {sum(series['n_codes_per_period']) / len(series['n_codes_per_period']):.0f}")
         print(f"  period: {series['rebal_dates'][0]} ~ {series['rebal_dates'][-1]}")
-        print(
-            f"  factor_return_mean: {gross_mean_pct:.4f}%/rebalance  "
-            f"std: {s_basic['std_pct']:.4f}%  WR: {s_basic['wr']:.1f}%"
-        )
+        print(f"  factor_return_mean: {gross_mean_pct:.4f}%/rebalance  std: {s_basic['std_pct']:.4f}%  WR: {s_basic['wr']:.1f}%")
         print(f"  raw t: {s_basic['t']:.2f}  raw p_one_sided: {s_basic['p_one_sided']:.6f}")
         print(f"  Sharpe (annualized): {s_basic['sharpe_annual']:.2f}")
         print(f"  net (after {cost_per_rebal * 100:.1f}% long-short cost): {net_mean_pct:.4f}%/rebalance")
@@ -783,10 +768,7 @@ def main() -> None:
         f"{'p_raw':>8} {'Bonf×16':>9} {'alpha%':>8} {'a_t':>6} "
         f"{'sharpe':>7} {'verdict':<14}"
     )
-    print(
-        f"  {'-' * 26} {'-' * 5} {'-' * 8} {'-' * 7} {'-' * 6} {'-' * 8} {'-' * 9} "
-        f"{'-' * 8} {'-' * 6} {'-' * 7} {'-' * 14}"
-    )
+    print(f"  {'-' * 26} {'-' * 5} {'-' * 8} {'-' * 7} {'-' * 6} {'-' * 8} {'-' * 9} {'-' * 8} {'-' * 6} {'-' * 7} {'-' * 14}")
 
     verdicts: list[str] = []
     for r in results:
@@ -823,11 +805,7 @@ def main() -> None:
     # Simplified: BH on our 4 variants, then note cross-factor would increase
     for r, pa in zip(results, bh_adj):
         if r["status"] == "ok":
-            print(
-                f"  {r['name']:<26} raw_p={r['stats']['p_one_sided']:.6f}  "
-                f"BH_adj={pa:.6f}  "
-                f"{'PASS' if pa < 0.05 else 'FAIL'} at 0.05"
-            )
+            print(f"  {r['name']:<26} raw_p={r['stats']['p_one_sided']:.6f}  BH_adj={pa:.6f}  {'PASS' if pa < 0.05 else 'FAIL'} at 0.05")
         else:
             print(f"  {r['name']:<26} (no data)")
 

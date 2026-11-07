@@ -436,8 +436,7 @@ def fake_edge_audit(picks: list[dict], ret_fn: Callable, rwf_result: dict | None
     return {
         "mode1_entry_gap_avg_pct": round(avg_gap, 3),
         "mode1_verdict": (
-            "PASS: entry=T+1 open (非 T close sealed), gap 是成本非假 edge; "
-            f"avg gap {avg_gap:.2f}% 是 entry 溢价 (close_ev 已含)"
+            f"PASS: entry=T+1 open (非 T close sealed), gap 是成本非假 edge; avg gap {avg_gap:.2f}% 是 entry 溢价 (close_ev 已含)"
         ),
         "mode1_pass": mode1_pass,
         "mode2_survivorship": "涨停股 universe (事件选择, 非存活偏差); 标注",
@@ -445,11 +444,7 @@ def fake_edge_audit(picks: list[dict], ret_fn: Callable, rwf_result: dict | None
         "mode3_open_ev_avg": round(avg_open_ev, 3),
         "mode3_close_ev_avg": round(avg_close_ev, 3),
         "mode3_leakage": round(leakage, 3),
-        "mode3_verdict": (
-            "PASS"
-            if avg_close_ev >= avg_open_ev
-            else f"FAIL: open_ev={avg_open_ev} > close_ev={avg_close_ev}, 日内泄漏"
-        ),
+        "mode3_verdict": ("PASS" if avg_close_ev >= avg_open_ev else f"FAIL: open_ev={avg_open_ev} > close_ev={avg_close_ev}, 日内泄漏"),
         "mode3_pass": avg_close_ev >= avg_open_ev,
         "mode4_detail": mode4_detail,
         "mode4_verdict": ("PASS" if mode4_pass else "FAIL: rolling WF not all positive/significant"),
@@ -523,14 +518,8 @@ def main() -> None:
     orig_day_t = day_paired_t(top5_by_date)
     orig_p_raw = orig_day_t["p_one_sided"]
     orig_bonf12 = bonferroni_p(orig_p_raw, 12)
-    print(
-        f"  per-day-mean t: n_days={orig_day_t['n_days']} mean={orig_day_t['mean']}% "
-        f"t={orig_day_t['t']} p_raw={orig_p_raw}"
-    )
-    print(
-        f"  Bonferroni ×12 = {orig_bonf12:.6f} → {'PASS' if orig_bonf12 < 0.05 else 'FAIL'} "
-        f"(original verdict: falsified)"
-    )
+    print(f"  per-day-mean t: n_days={orig_day_t['n_days']} mean={orig_day_t['mean']}% t={orig_day_t['t']} p_raw={orig_p_raw}")
+    print(f"  Bonferroni ×12 = {orig_bonf12:.6f} → {'PASS' if orig_bonf12 < 0.05 else 'FAIL'} (original verdict: falsified)")
 
     orig_wf = walk_forward(top5, close_ev_basic)
     if orig_wf["status"] == "ok":
@@ -572,10 +561,7 @@ def main() -> None:
 
     bh3 = bh_fdr(hac_p_list, alpha=0.05)
     top5_idx = labels.index("top-5")
-    print(
-        f"    BH(n=3): adjusted_p for top-5 = {bh3['adjusted_p'][top5_idx]} "
-        f"→ {'PASS' if bh3['rejected'][top5_idx] else 'FAIL'}"
-    )
+    print(f"    BH(n=3): adjusted_p for top-5 = {bh3['adjusted_p'][top5_idx]} → {'PASS' if bh3['rejected'][top5_idx] else 'FAIL'}")
     print(f"    {bh3['threshold_line']}")
     for k, (p_val, thresh, ok) in enumerate(bh3["sorted_p_with_threshold"]):
         print(f"      rank {k + 1}: p={p_val} threshold={thresh} {'✓' if ok else '✗'}")
@@ -615,10 +601,7 @@ def main() -> None:
     bh7 = bh_fdr(hac_p_list_12, alpha=0.05)
     top5_idx_12 = labels_12.index("top-5/equal")
     print(f"    BH(n={len(hac_p_list_12)}): tests = {labels_12}")
-    print(
-        f"    adjusted_p for top-5/equal = {bh7['adjusted_p'][top5_idx_12]} "
-        f"→ {'PASS' if bh7['rejected'][top5_idx_12] else 'FAIL'}"
-    )
+    print(f"    adjusted_p for top-5/equal = {bh7['adjusted_p'][top5_idx_12]} → {'PASS' if bh7['rejected'][top5_idx_12] else 'FAIL'}")
     print(f"    {bh7['threshold_line']}")
     for k, (p_val, thresh, ok) in enumerate(bh7["sorted_p_with_threshold"]):
         # find label for this rank
@@ -719,9 +702,7 @@ def main() -> None:
     print(f"\n  原方法学 verdict: FALSIFIED (Bonf×12={orig_bonf12:.6f})")
     print(f"\n  新方法学逐项:")
     print(f"    [1] gross EV = {ev_s['ev']:.3f}% → {'PASS' if ev_s['ev'] > 0 else 'FAIL'}")
-    print(
-        f"    [2] n_days = {hac_result['n_days']} → {'PASS' if hac_result['n_days'] >= 60 else 'FAIL (underpowered)'}"
-    )
+    print(f"    [2] n_days = {hac_result['n_days']} → {'PASS' if hac_result['n_days'] >= 60 else 'FAIL (underpowered)'}")
     print(f"    [3] per-trade HAC t = {hac_t}, p = {hac_p}")
     print(f"        BH(n=3 within-composite): adj_p={bh3['adjusted_p'][top5_idx]} → {'PASS' if bh3_pass else 'FAIL'}")
     print(f"        BH(n=7 all-tests): adj_p={bh7['adjusted_p'][top5_idx_12]} → {'PASS' if bh7_pass else 'FAIL'}")
@@ -733,13 +714,7 @@ def main() -> None:
     print(f"        → {'PASS' if rwf_all_test_pos and rwf_combined_p < 0.05 else 'FAIL/exploratory'}")
 
     # 假 edge 审结果 (5 模式全过才 PASS)
-    audit_pass = (
-        audit["mode1_pass"]
-        and audit["mode2_pass"]
-        and audit["mode3_pass"]
-        and audit["mode4_pass"]
-        and audit["mode5_pass"]
-    )
+    audit_pass = audit["mode1_pass"] and audit["mode2_pass"] and audit["mode3_pass"] and audit["mode4_pass"] and audit["mode5_pass"]
     audit_fail_modes = [f"mode{i}" for i in range(1, 6) if not audit.get(f"mode{i}_pass", False)]
     print(f"\n  假 edge 5 模式审: {'PASS' if audit_pass else 'FAIL'}")
     if not audit_pass:
@@ -785,10 +760,7 @@ def main() -> None:
     elif not wf_pass:
         new_verdict = "exploratory"
         flipped = False
-        key = (
-            f"BH PASS but rolling WF "
-            f"{'not all test windows positive' if not rwf_all_test_pos else 'combined p not significant'}"
-        )
+        key = f"BH PASS but rolling WF {'not all test windows positive' if not rwf_all_test_pos else 'combined p not significant'}"
     elif not audit_pass:
         new_verdict = "exploratory"
         flipped = False
@@ -814,10 +786,7 @@ def main() -> None:
     else:
         new_verdict = "edge-confirmed"
         flipped = True
-        key = (
-            f"BH FDR PASS + rolling WF PASS + fake-edge audit PASS "
-            f"(HAC p={hac_p:.5f}, combined WF p={rwf_combined_p:.5f})"
-        )
+        key = f"BH FDR PASS + rolling WF PASS + fake-edge audit PASS (HAC p={hac_p:.5f}, combined WF p={rwf_combined_p:.5f})"
 
     print(f"\n  {'=' * 60}")
     print(f"  NEW VERDICT: {new_verdict}")
@@ -837,10 +806,7 @@ def main() -> None:
         f"n=4r1:{'PASS' if bh4_rank1_pass else 'FAIL'} "
         f"n=4r2:{'PASS' if bh4_rank2_pass else 'FAIL'}"
     )
-    print(
-        f"  rolling WF:    all_test_pos={rwf_all_test_pos} "
-        f"combined_p={rwf_combined_p:.5f} combined_ev={rwf_combined_ev:.3f}%"
-    )
+    print(f"  rolling WF:    all_test_pos={rwf_all_test_pos} combined_p={rwf_combined_p:.5f} combined_ev={rwf_combined_ev:.3f}%")
     print(f"  fake-edge:     {'PASS' if audit_pass else 'FAIL'}")
     print(f"  NEW VERDICT:   {new_verdict}  (flipped={flipped})")
 

@@ -144,9 +144,7 @@ def _classify_macd_divergence_from_bars(bars: list[dict], target_idx: int) -> di
 
     closes = [_bar_get(b, "close") for b in bars]
     if len(closes) < MACD_SLOW + MACD_SIGNAL + DIVERGENCE_WINDOW:
-        result["params"] = {
-            "error": f"数据不足（需 {MACD_SLOW + MACD_SIGNAL + DIVERGENCE_WINDOW} 日，实际 {len(closes)} 日）"
-        }
+        result["params"] = {"error": f"数据不足（需 {MACD_SLOW + MACD_SIGNAL + DIVERGENCE_WINDOW} 日，实际 {len(closes)} 日）"}
         return result
 
     dif, dea, macd_hist = _compute_macd(closes)

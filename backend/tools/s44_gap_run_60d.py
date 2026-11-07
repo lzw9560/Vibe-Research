@@ -65,10 +65,7 @@ def load_universe() -> list[dict]:
     with open(UNIVERSE, encoding="utf-8") as f:
         data = json.load(f)
     print(f"[universe] meta window_days={data['meta']['window_days']} window={data['meta']['window']}")
-    print(
-        f"[universe] totals first_board={data['totals']['first_board']} "
-        f"zt={data['totals']['zt']} lianban={data['totals']['lianban']}"
-    )
+    print(f"[universe] totals first_board={data['totals']['first_board']} zt={data['totals']['zt']} lianban={data['totals']['lianban']}")
     fbs = data["first_boards"]
     print(f"[universe] flat records={len(fbs)}")
     return fbs
@@ -406,9 +403,7 @@ def main():
     snap_id = compute_composite_snapshot_id(UNIVERSE, KLINE)
     print(f"[snapshot] composite data_snapshot_id = {snap_id}")
 
-    returns, dates, costs, n_unbuyable, n_no_code, n_bad_close, n_suspended, n_adj_mm = compute_gap_series(
-        fbs, cache, idx_maps, calendar
-    )
+    returns, dates, costs, n_unbuyable, n_no_code, n_bad_close, n_suspended, n_adj_mm = compute_gap_series(fbs, cache, idx_maps, calendar)
     arr = np.asarray(returns, dtype=float)
     costs_arr = np.asarray(costs, dtype=float)
     n = arr.size
@@ -433,13 +428,8 @@ def main():
     print(f"n no_code in kline     = {n_no_code}")
     print(f"n bad close            = {n_bad_close}")
     print(f"unique dates (days_robust raw) = {days_robust}")
-    print(
-        f"date range            = {unique_dates[0] if unique_dates else '-'}"
-        f" -> {unique_dates[-1] if unique_dates else '-'}"
-    )
-    print(
-        f"avg cost % (real)     = {avg_cost_pct:.4f}  (min={float(costs_arr.min()):.4f} max={float(costs_arr.max()):.4f})"
-    )
+    print(f"date range            = {unique_dates[0] if unique_dates else '-'} -> {unique_dates[-1] if unique_dates else '-'}")
+    print(f"avg cost % (real)     = {avg_cost_pct:.4f}  (min={float(costs_arr.min()):.4f} max={float(costs_arr.max()):.4f})")
     print(f"gross mean %          = {gross_mean_pct:.4f}")
     print(f"net mean % (after real cost) = {net_mean_pct:.4f}")
     print(f"median net %         = {median_pct:.4f}")

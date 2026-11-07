@@ -73,9 +73,7 @@ def recalc_live_rows(conn: sqlite3.Connection, dry_run: bool = False) -> dict:
 
 
 def _factor_snapshot(conn: sqlite3.Connection) -> list[tuple]:
-    return conn.execute(
-        "SELECT rowid, code, date, " + ", ".join(FACTOR_COLS) + " FROM gene_scores ORDER BY rowid"
-    ).fetchall()
+    return conn.execute("SELECT rowid, code, date, " + ", ".join(FACTOR_COLS) + " FROM gene_scores ORDER BY rowid").fetchall()
 
 
 def main() -> None:
@@ -105,10 +103,7 @@ def main() -> None:
     )
     if backup_path:
         print(f"备份: {backup_path}")
-    print(
-        f"校验: 行数 {n_before}→{n_after} {'OK' if n_before == n_after else 'FAIL'}; "
-        f"因子列逐行不变 {'OK' if factors_ok else 'FAIL'}"
-    )
+    print(f"校验: 行数 {n_before}→{n_after} {'OK' if n_before == n_after else 'FAIL'}; 因子列逐行不变 {'OK' if factors_ok else 'FAIL'}")
     if n_before != n_after or not factors_ok:
         raise SystemExit("校验失败——请从备份恢复")
 

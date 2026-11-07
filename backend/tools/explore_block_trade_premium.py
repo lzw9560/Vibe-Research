@@ -264,9 +264,7 @@ def bench_return(bench: dict, cal_sorted: list[str], t1_idx: int, exit_idx: int)
 # ---------- main analysis ----------
 
 
-def analyze_n(
-    picks: list[dict], cal_sorted: list[str], bench: dict, n: int, label: str, n_cross_factor: int = 1
-) -> dict:
+def analyze_n(picks: list[dict], cal_sorted: list[str], bench: dict, n: int, label: str, n_cross_factor: int = 1) -> dict:
     print(f"\n{'=' * 72}")
     print(f"  {label}: exit T+{n} open (open_ev, 避 flaw4)")
     print(f"{'=' * 72}")

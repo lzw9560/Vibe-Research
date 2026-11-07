@@ -135,9 +135,7 @@ def is_limit_closed(bar, prev_close, code, is_st):
 
 
 # ---------- build_picks: 日K代理 (非 zt-based) ----------
-def build_picks_tail_rally(
-    code_map, calendar, market_overnight, close_thresh=CLOSE_STRENGTH_THRESH, vol_mult=VOL_SURGE_MULT
-):
+def build_picks_tail_rally(code_map, calendar, market_overnight, close_thresh=CLOSE_STRENGTH_THRESH, vol_mult=VOL_SURGE_MULT):
     """代理: close_strength >= thresh AND 量增 → T close 买, T+1 open 卖."""
     date_idx = {d: i for i, d in enumerate(calendar)}
     picks = []
@@ -202,12 +200,7 @@ def build_picks_tail_rally(
             exit_px = t1_open
             lim = limit_for_code(code, is_st)
             # 一字跌停: open==low 且 open <= close*(1-lim)
-            if (
-                t1_low is not None
-                and abs(t1_open - t1_low) / t1_open < 0.005
-                and prev_close
-                and t1_open <= prev_close * (1 - lim + 0.005)
-            ):
+            if t1_low is not None and abs(t1_open - t1_low) / t1_open < 0.005 and prev_close and t1_open <= prev_close * (1 - lim + 0.005):
                 exit_px = t1_close if t1_close and t1_close > 0 else t1_open
                 exit_reason = "t1_limit_down_fill_close"
 
@@ -263,10 +256,7 @@ def analyze_proxy(name, picks, n_cross=N_CROSS_STRATEGY):
         if p["bhar"] is not None:
             bhar_by_date[p["zt_date"]].append(p["bhar"])
     bdt = day_paired_t(bhar_by_date)
-    print(
-        f"  n_days={bdt['n_days']} BHAR_mean={bdt['mean']}% std={bdt['std']}% "
-        f"t={bdt['t']} p_one_sided={bdt['p_one_sided']}"
-    )
+    print(f"  n_days={bdt['n_days']} BHAR_mean={bdt['mean']}% std={bdt['std']}% t={bdt['t']} p_one_sided={bdt['p_one_sided']}")
     n_tests = max(2, n_cross)
     p_bonf = bonferroni_p(bdt["p_one_sided"], n_tests)
     print(f"  Bonferroni ×{n_tests} (cross-strategy): p={p_bonf:.6f} {'PASS' if p_bonf < ALPHA else 'FAIL'}")
@@ -288,10 +278,7 @@ def analyze_proxy(name, picks, n_cross=N_CROSS_STRATEGY):
     if wf["status"] == "ok":
         tr, te = wf["train_ev"], wf["test_ev"]
         print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} EV={tr['ev']}% t={tr['t']}")
-        print(
-            f"  test:  n={te['n']} n_dates={wf['n_test_dates']} EV={te['ev']}% t={te['t']} "
-            f"day_t={wf['test_day_t']['t']}"
-        )
+        print(f"  test:  n={te['n']} n_dates={wf['n_test_dates']} EV={te['ev']}% t={te['t']} day_t={wf['test_day_t']['t']}")
         decay = ((tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100) if tr["ev"] else 0
         print(f"  decay: {decay:.0f}% (train→test)")
     else:
@@ -336,10 +323,7 @@ def regime_stratify(picks, idx):
             if p["bhar"] is not None:
                 by_date[p["zt_date"]].append(p["bhar"])
         bdt = day_paired_t(by_date)
-        print(
-            f"  {reg}: n_picks={len(sub)} n_dates={bdt['n_days']} "
-            f"BHAR_mean={bdt['mean']}% t={bdt['t']} p={bdt['p_one_sided']}"
-        )
+        print(f"  {reg}: n_picks={len(sub)} n_dates={bdt['n_days']} BHAR_mean={bdt['mean']}% t={bdt['t']} p={bdt['p_one_sided']}")
 
 
 # ---------- main ----------
@@ -387,10 +371,7 @@ def main():
                 by_date[p["zt_date"]].append(p["bhar"])
         bdt = day_paired_t(by_date)
         family_results.append((th, len(fp), bdt))
-        print(
-            f"  cs>={th}: n={len(fp)} n_dates={bdt['n_days']} "
-            f"BHAR_mean={bdt['mean']}% t={bdt['t']} p={bdt['p_one_sided']}"
-        )
+        print(f"  cs>={th}: n={len(fp)} n_dates={bdt['n_days']} BHAR_mean={bdt['mean']}% t={bdt['t']} p={bdt['p_one_sided']}")
     # 家族 Bonferroni ×len
     if family_results:
         print(f"\n  家族 Bonferroni ×{len(FAMILY_THRESHOLDS)} (cross-parameter):")
@@ -411,10 +392,7 @@ def main():
         f"n_dates={bdt_nv['n_days']} BHAR_mean={bdt_nv['mean']}% t={bdt_nv['t']} "
         f"p={bdt_nv['p_one_sided']}"
     )
-    print(
-        f"  → 对比主代理: 量增条件 {'缩小' if len(fp_novol) > len(picks) else '扩大'}了样本 "
-        f"({len(fp_novol)} -> {len(picks)})"
-    )
+    print(f"  → 对比主代理: 量增条件 {'缩小' if len(fp_novol) > len(picks) else '扩大'}了样本 ({len(fp_novol)} -> {len(picks)})")
 
     print(f"\n{'=' * 72}\n最终诚实结论\n{'=' * 72}")
     print(f"原始 14:30 策略: NO-DATA (5min 不可得, 无法隔离 14:30-15:00 段).")

@@ -222,9 +222,7 @@ def main() -> None:
     print("  - A股 regime 跳变（政策/流动性催化可突然反转）——历史恢复时间分布给的是'类似状态的典型持续'，")
     print("    不排除这次更长或更短（如 2024-09 政策催化 V 型反转 vs 2018 贸易战阴跌数月）")
     print("  - 极端区域样本量少（breadth≤21.2% 的次数有限），分布宽，median 仅供参照")
-    print(
-        "  - amount-decile 代理小盘（≠ cap-decile），cap 口径当前值（21.2%/-1.33%）在 amount 历史分布里找分位有口径差异"
-    )
+    print("  - amount-decile 代理小盘（≠ cap-decile），cap 口径当前值（21.2%/-1.33%）在 amount 历史分布里找分位有口径差异")
     print("  - 命题B已证伪 market timing——不给'X 天后转牛'的单点预测，给分布")
 
 

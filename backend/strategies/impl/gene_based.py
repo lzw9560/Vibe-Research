@@ -696,16 +696,13 @@ def _detect_leader_drop_reversal(bars):
         # C3 T 吞没: curr.close ≥ prev.open（吞没前日阴线）AND curr.open ≤ prev.close（低开反包）
         c3_hit = float(curr["close"]) >= float(prev["open"]) and float(curr["open"]) <= float(prev["close"])
         c3_desc = (
-            f"T close {curr['close']} ≥ T-1 open {prev['open']}（吞没）且 "
-            f"T open {curr['open']} ≤ T-1 close {prev['close']}（低开反包）"
+            f"T close {curr['close']} ≥ T-1 open {prev['open']}（吞没）且 T open {curr['open']} ≤ T-1 close {prev['close']}（低开反包）"
         )
         # C4 放量: curr.volume / prev.volume ≥ 1.2
         prev_vol = float(prev.get("volume", 0))
         curr_vol = float(curr.get("volume", 0))
         c4_hit = prev_vol > 0 and curr_vol / prev_vol >= 1.2
-        c4_desc = (
-            f"T 量比 {curr_vol / prev_vol:.2f}（阈值≥1.2，爆量反包）" if prev_vol > 0 else "T-1 volume=0 无法算量比"
-        )
+        c4_desc = f"T 量比 {curr_vol / prev_vol:.2f}（阈值≥1.2，爆量反包）" if prev_vol > 0 else "T-1 volume=0 无法算量比"
         return c2_hit, c3_hit, c4_hit, [c2_desc, c3_desc, c4_desc]
     except (TypeError, ValueError, ZeroDivisionError, KeyError) as e:
         return None, None, None, [f"bars 解析失败: {e}"]

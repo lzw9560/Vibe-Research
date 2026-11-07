@@ -215,9 +215,7 @@ def emotion_from_dict(raw: dict) -> Emotion:
     不进 Emotion 聚合。
     """
     ladder_raw = raw.get("ladder") or []
-    ladder = tuple(
-        {"boards": item.get("boards"), "count": item.get("count")} for item in ladder_raw if isinstance(item, dict)
-    )
+    ladder = tuple({"boards": item.get("boards"), "count": item.get("count")} for item in ladder_raw if isinstance(item, dict))
     return Emotion(
         max_boards=_numf(raw.get("max_boards")),
         limit_up_count=_numf(raw.get("zt_count")),
@@ -277,9 +275,7 @@ def valuation_from_full_valuation(code: str, raw: dict) -> Valuation:
         norm_code, market = normalize_stock_code(code)
     except (ValueError, AttributeError):
         norm_code, market = code, Market.A
-    mcap_yi = (
-        _numf(raw.get("mcap_yi")) or None
-    )  # S125 契约补全：0 永不合法（市值=0 喂 LLM 当真低估），对齐 quote_from_tencent:62
+    mcap_yi = _numf(raw.get("mcap_yi")) or None  # S125 契约补全：0 永不合法（市值=0 喂 LLM 当真低估），对齐 quote_from_tencent:62
     return Valuation(
         code=norm_code,
         market=market,
@@ -292,9 +288,7 @@ def valuation_from_full_valuation(code: str, raw: dict) -> Valuation:
         pcf_ttm=_numf(raw.get("pcf_ttm")) or None,  # S106：hithink 补；0 永不合法
         dividend_yield=_numf(raw.get("dividend_yield")),
         discrepancy=raw.get("discrepancy"),  # S106：数据层 cross_validate 仲裁结果透传
-        data_status=raw.get(
-            "ps_pcf_status"
-        ),  # S131 R3：PS/PCF 源断标（astock full_valuation except 块设 'hithink_unavailable'）
+        data_status=raw.get("ps_pcf_status"),  # S131 R3：PS/PCF 源断标（astock full_valuation except 块设 'hithink_unavailable'）
         forecast_status=raw.get(
             "forecast_status"
         ),  # S132 R2：eps/peg 源断标（astock full_valuation if not rows 设 'empty_or_source_unavailable'）

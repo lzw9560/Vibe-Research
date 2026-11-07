@@ -122,9 +122,7 @@ def get_latest_partition() -> tuple[str, str] | None:
         return None
     conn = get_healthy_conn(db_path)
     try:
-        rows = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'seal_intraday_snapshots_%'"
-        ).fetchall()
+        rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'seal_intraday_snapshots_%'").fetchall()
     finally:
         conn.close()
     if not rows:

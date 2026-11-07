@@ -86,9 +86,7 @@ for i in range(1, len(calendar)):
     d1 = datetime.strptime(calendar[i], "%Y-%m-%d")
     gap = (d1 - d0).days
     if gap >= HOLIDAY_GAP:
-        holidays.append(
-            {"last_before": calendar[i - 1], "first_after": calendar[i], "gap": gap, "idx_last": i - 1, "idx_first": i}
-        )
+        holidays.append({"last_before": calendar[i - 1], "first_after": calendar[i], "gap": gap, "idx_last": i - 1, "idx_first": i})
 for h in holidays:
     h["type"] = classify_holiday(h)
 
@@ -214,10 +212,7 @@ for ratio, label in splits:
     )
 # 默认用 70/30 作为主 walk-forward 结果（兼容后续 tr_s/te_s 引用）
 tr_s, te_s, decay, oos_bonf4, _, _ = wf_results["70/30"]
-print(
-    f"\n  主结果（70/30，最优比例 post-hoc 可疑）: test raw_p={te_s['p']:.4f} "
-    f"OOS_Bonf×4={oos_bonf4:.4f} 衰减={decay:.1f}%"
-)
+print(f"\n  主结果（70/30，最优比例 post-hoc 可疑）: test raw_p={te_s['p']:.4f} OOS_Bonf×4={oos_bonf4:.4f} 衰减={decay:.1f}%")
 print(
     f"  ⚠️ R42: OOS test raw p={te_s['p']:.4f} Bonf×4={oos_bonf4:.4f} — "
     f"{'PASS' if oos_bonf4 < 0.05 else 'FAIL'}（原脚本漏了 OOS Bonf，grill 戳破）"
@@ -238,10 +233,7 @@ if top_outlier:
     test_no_top = [p["ret"] for p in test_70 if p != top_outlier]
     te_no_top = stats(test_no_top)
     print(f"    最大离群: {top_outlier['buy_date']} ret={top_outlier['ret']:.3f}%")
-    print(
-        f"    去后: n={te_no_top['n']} EV={te_no_top['mean']:.4f}% raw_p={te_no_top['p']:.4f} "
-        f"Bonf×4={min(te_no_top['p'] * 4, 1.0):.4f}"
-    )
+    print(f"    去后: n={te_no_top['n']} EV={te_no_top['mean']:.4f}% raw_p={te_no_top['p']:.4f} Bonf×4={min(te_no_top['p'] * 4, 1.0):.4f}")
     print(
         f"    离群贡献: test 总 EV {(te_s['mean'] * te_s['n'] - te_no_top['mean'] * te_no_top['n']):.3f}% "
         f"中该 1 笔贡献 {top_outlier['ret']:.3f}%"
@@ -285,10 +277,7 @@ if n_clusters > 1:
     se_cr = (cluster_var / n_clusters) ** 0.5
     t_nw = a_s["mean"] / se_cr if se_cr > 0 else 0
     p_nw = 0.5 * (1 - erf(t_nw / sqrt(2))) if t_nw > 0 else 1.0
-    print(
-        f"  NW HAC ({n_clusters} 年月聚簇): t={t_nw:.2f} p={p_nw:.4f} "
-        f"{'PASS' if p_nw < 0.05 else 'FAIL'}（raw t={a_s['t']:.2f}）"
-    )
+    print(f"  NW HAC ({n_clusters} 年月聚簇): t={t_nw:.2f} p={p_nw:.4f} {'PASS' if p_nw < 0.05 else 'FAIL'}（raw t={a_s['t']:.2f}）")
 
 # ---------- 4. 衰减检查（按 era）----------
 print(f"\n{'=' * 70}")
@@ -304,10 +293,7 @@ for label, d0, d1 in eras:
     sub = [p["ret"] for p in a_picks if d0 <= p["buy_date"] <= d1]
     s = stats(sub)
     if s["n"] > 0:
-        print(
-            f"  {label}: n={s['n']} EV={s['mean']:.3f}% WR={s['wr'] * 100:.1f}% "
-            f"median={s['median']:.3f}% p={s['p']:.4f}"
-        )
+        print(f"  {label}: n={s['n']} EV={s['mean']:.3f}% WR={s['wr'] * 100:.1f}% median={s['median']:.3f}% p={s['p']:.4f}")
 
 # ---------- 5. 可交易期子分析（2011+，510210 ETF 上线后）----------
 print(f"\n{'=' * 70}")
@@ -323,9 +309,7 @@ print(
     f"{'PASS' if t_bonf7 < 0.05 else 'FAIL'}"
 )
 print(f"  对比全期 n={a_s['n']} EV={a_s['mean']:.4f}% Bonf×6={bonf7_overall:.4f} PASS")
-print(
-    f"  ⚠️ 扣可交易约束后 Bonf×6 {'PASS' if t_bonf7 < 0.05 else 'FAIL'}（{t_bonf7:.4f}）— edge 是边界值非稳健 confirmed"
-)
+print(f"  ⚠️ 扣可交易约束后 Bonf×6 {'PASS' if t_bonf7 < 0.05 else 'FAIL'}（{t_bonf7:.4f}）— edge 是边界值非稳健 confirmed")
 print(f"  原因: 2004-2010 的 30 picks（29%）EV+1.258% WR80% 最高拉高整体，")
 print(f"        但 510210（唯一跟踪上证综指 ETF）2011-01-30 才上线 → 不可交易")
 

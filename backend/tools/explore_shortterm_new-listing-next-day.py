@@ -453,11 +453,7 @@ def analyze_window(
         tr_dt = wf["train_day_t"]
         te_dt = wf["test_day_t"]
         print(f"  train: n={tr['n']} n_dates={wf['n_train_dates']} EV={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
-        print(
-            f"  test:  n={te['n']} n_dates={wf['n_test_dates']} "
-            f"EV={te['ev']}% t={te['t']} day_t={te_dt['t']} "
-            f"p={te_dt['p_one_sided']}"
-        )
+        print(f"  test:  n={te['n']} n_dates={wf['n_test_dates']} EV={te['ev']}% t={te['t']} day_t={te_dt['t']} p={te_dt['p_one_sided']}")
         decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
         print(f"  decay: {decay:.0f}% (train→test)")
     else:
@@ -518,10 +514,7 @@ def verdict_cascade(
         return "edge-falsified"
     if wf_status == "ok":
         if wf_train_ev <= 0:
-            print(
-                f"    → EXPLORATORY: train_EV={wf_train_ev}% <= 0 "
-                f"(edge not in train half, test may be regime overfitting)"
-            )
+            print(f"    → EXPLORATORY: train_EV={wf_train_ev}% <= 0 (edge not in train half, test may be regime overfitting)")
             return "exploratory"
         if wf_test_ev <= 0:
             print(f"    → FALSIFIED: walk-forward test_EV={wf_test_ev}% <= 0")
@@ -534,10 +527,7 @@ def verdict_cascade(
                 f"(not significant OOS)"
             )
             return "exploratory"
-        print(
-            f"    → EDGE-CONFIRMED: gross+net EV > 0, Bonferroni PASS, "
-            f"OOS test EV={wf_test_ev}% significant (p={wf_test_p})"
-        )
+        print(f"    → EDGE-CONFIRMED: gross+net EV > 0, Bonferroni PASS, OOS test EV={wf_test_ev}% significant (p={wf_test_p})")
         return "edge-confirmed"
     print(f"    → EXPLORATORY: walk-forward not available")
     return "exploratory"
@@ -668,10 +658,7 @@ def main() -> None:
 
     # ---- Bonferroni + verdict ----
     print(f"\n{'#' * 70}")
-    print(
-        f"[verdict] cross-strategy Bonferroni ×{N_CROSS_STRATEGY} "
-        f"(5 策略并行) + ×{N_WINDOWS} windows = ×{N_CROSS_STRATEGY * N_WINDOWS}"
-    )
+    print(f"[verdict] cross-strategy Bonferroni ×{N_CROSS_STRATEGY} (5 策略并行) + ×{N_WINDOWS} windows = ×{N_CROSS_STRATEGY * N_WINDOWS}")
     print(f"{'#' * 70}")
 
     best = max(
@@ -695,10 +682,7 @@ def main() -> None:
     wf_test_p = wf.get("test_day_t", {}).get("p_one_sided", 1.0) if wf_status == "ok" else 1.0
 
     print(f"\n  best window: {best['name']}")
-    print(
-        f"    n_events={best['n_events']} n_dates={best['n_dates']} "
-        f"gross_EV={best['gross_ev']}% net_EV={best['net_ev']:.3f}%"
-    )
+    print(f"    n_events={best['n_events']} n_dates={best['n_dates']} gross_EV={best['gross_ev']}% net_EV={best['net_ev']:.3f}%")
     print(f"    day_t={best['day_t']} raw_p={p_raw}")
     print(f"    Bonferroni ×{N_CROSS_STRATEGY}: p={p_bonf5:.6f}")
     print(f"    Bonferroni ×{N_CROSS_STRATEGY * N_WINDOWS} (with windows): p={p_bonf10:.6f}")

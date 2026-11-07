@@ -276,10 +276,7 @@ def verify(
             checked_windows.append(wname)
         if not any_advantage and checked_windows:
             r5_skip_heavy = True
-            r5_note = (
-                f"R5 window sanity: no advantage in ANY window "
-                f"({checked_windows}) → exploratory, heavy methodology skipped"
-            )
+            r5_note = f"R5 window sanity: no advantage in ANY window ({checked_windows}) → exploratory, heavy methodology skipped"
         # window_sanity empty/no windows → R5 can't check, proceed normally
     else:
         r5_note = "R5 window sanity: not provided, skipped"
@@ -348,9 +345,7 @@ def verify(
             pk_n_folds = len(pk_lifts)
             if pk_lifts:
                 pk_mean_lift = round(float(np.mean(pk_lifts)), 4)
-                pk_status = (
-                    "purged_kfold_oos_stable" if all(l >= 1.0 for l in pk_lifts) else "purged_kfold_oos_unstable"
-                )
+                pk_status = "purged_kfold_oos_stable" if all(l >= 1.0 for l in pk_lifts) else "purged_kfold_oos_unstable"
 
     # ── event metrics + event_status (day-clustered one-sample t-test) ────
     # R8 双算 (决策#7): event_metrics computed for ANY edge_type (not just
@@ -384,9 +379,7 @@ def verify(
                 drift.universe_mean if drift is not None and drift.universe_mean is not None else 0.0
             )  # R11: base_rate = universe baseline (not 0) when drift-adjusted
             net_mean_val: Optional[float] = (
-                drift.drift_adjusted_mean
-                if drift is not None and drift.drift_adjusted_mean is not None
-                else t_res.day_mean
+                drift.drift_adjusted_mean if drift is not None and drift.drift_adjusted_mean is not None else t_res.day_mean
             )  # R11: net = drift-adjusted (event - universe) when universe provided
 
             # 多重比较校正（grill #3）：event 边际多 horizon/arm 重复测，p_one_sided

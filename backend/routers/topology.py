@@ -111,9 +111,7 @@ class FundFlowEdgeProvider:
         return _collect_shared_sets(
             candidates,
             fetch_fn=lambda code, d: astock.stock_fund_flow_120d(code, date=d),  # S085 A6 残留：传 d 修 replay 误取今日
-            extract_fn=lambda flow: {
-                r.get("date", "") for r in (flow or [])[-_FUND_RECENT_DAYS:] if (r.get("main_net") or 0) > 0
-            },
+            extract_fn=lambda flow: {r.get("date", "") for r in (flow or [])[-_FUND_RECENT_DAYS:] if (r.get("main_net") or 0) > 0},
             edge_type="fund_flow",
             date=date,
             min_shared=3,  # S048 R9：共享 ≥3 天才连边（<3 偶发同向不构成关联）

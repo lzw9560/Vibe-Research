@@ -584,9 +584,7 @@ async def _calculate_concentration_risk_meta(code: str) -> tuple[float, str]:
         )
         dt = dragon_tiger_from_dict(payload)
     except Exception as e:
-        logging.getLogger("risk_models").warning(
-            "_calculate_concentration_risk(%s) 取数失败，降级 missing: %s", code, e
-        )
+        logging.getLogger("risk_models").warning("_calculate_concentration_risk(%s) 取数失败，降级 missing: %s", code, e)
         return 0.0, "missing"
 
     # 命中陈旧缓存（源断时降级）：不基于陈旧算集中度，标 degraded（对齐 R1/R4）
@@ -836,9 +834,7 @@ def _get_realtime_capital_flow(code: str) -> dict:
             big_fund_type = "大单"
 
     # 转换为资金流历史格式（供趋势判断使用）
-    fund_flow_history = [
-        {"capital_flow_signal": max(-1.0, min(1.0, float(h.get("main_net", 0) or 0) / max_abs))} for h in history[-5:]
-    ]
+    fund_flow_history = [{"capital_flow_signal": max(-1.0, min(1.0, float(h.get("main_net", 0) or 0) / max_abs))} for h in history[-5:]]
 
     return {
         "capital_flow_signal": signal,

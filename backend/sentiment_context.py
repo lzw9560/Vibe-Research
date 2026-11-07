@@ -142,9 +142,7 @@ def build_context(decision_date: str) -> SentimentContext:
     )
 
 
-def _compute_weather_from_row(
-    t1_row: dict[str, Any], sti_score: float | None
-) -> tuple[str | None, float | None, dict[str, Any] | None]:
+def _compute_weather_from_row(t1_row: dict[str, Any], sti_score: float | None) -> tuple[str | None, float | None, dict[str, Any] | None]:
     """复用 sentiment_weather 的多因子天气计算，但只读 T-1 行（不重新查 DB）。
 
     sentiment_weather 的 _calculate_risk_score 等函数各自查 latest 行——这里

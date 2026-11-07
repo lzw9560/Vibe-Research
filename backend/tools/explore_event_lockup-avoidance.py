@@ -114,9 +114,7 @@ def main():
     code_map, kline_dates = load_kline_overlap("2025-11-01")
     calendar = sorted(d for d in kline_dates if d >= "2025-11-01")
     cal_idx = {d: i for i, d in enumerate(calendar)}
-    print(
-        f"\nkline overlap window: {calendar[0]} -> {calendar[-1]} ({len(calendar)} trading days, codes={len(code_map)})"
-    )
+    print(f"\nkline overlap window: {calendar[0]} -> {calendar[-1]} ({len(calendar)} trading days, codes={len(code_map)})")
 
     # testable window: rebalance t needs t+HOLD within calendar AND lockup events cover (t, t+HOLD]
     # lockup events end 2026-09-30; kline ends 2026-09-23. forward 20d must be <= last kline date.
@@ -257,11 +255,7 @@ def main():
     if not period_results:
         print("  无周期数据")
     else:
-        print(
-            f"\n{'t':<12}{'n_uni':>7}{'n_avd':>7}{'frac':>7}"
-            f"{'full%':>9}{'avoid%':>9}{'avoided%':>10}"
-            f"{'spread%':>9}{'sizeM%':>9}"
-        )
+        print(f"\n{'t':<12}{'n_uni':>7}{'n_avd':>7}{'frac':>7}{'full%':>9}{'avoid%':>9}{'avoided%':>10}{'spread%':>9}{'sizeM%':>9}")
         cum_full = 1.0
         cum_avoid = 1.0
         for p in period_results:
@@ -423,9 +417,7 @@ def main():
         print(f"\n  daily Fama-MacBeth avoid coefficient (negative=避险有效):")
         print(f"    n_days={n_days} mean_b={mean_b * 100:+.4f}% median_b={med_b * 100:+.4f}%")
         print(f"    WR(b<0)={wr_b * 100:.1f}% std={statistics.pstdev(bs) * 100:.4f}%")
-        print(
-            f"    NW-HAC t(lag={lag})={nw_t:.3f} p_two_sided={p_raw_panel:.4f} Bonf(×{N_TESTS_BONF})={p_bonf_panel:.4f}"
-        )
+        print(f"    NW-HAC t(lag={lag})={nw_t:.3f} p_two_sided={p_raw_panel:.4f} Bonf(×{N_TESTS_BONF})={p_bonf_panel:.4f}")
         print(f"    avg cross-section n={avg_n:.0f} avg avoided={avg_avd:.1f}")
         # size coef summary
         bsz = [r[2] for r in daily_b]
@@ -509,10 +501,7 @@ def main():
 
         print(f"\n  primary (daily Fama-MacBeth, size-controlled, HAC):")
         print(f"    gross_EV(avoid edge)={gross_ev:+.4f}% net_EV={net_ev:+.4f}% (cost={cost:.4f}%)")
-        print(
-            f"    median={median_ev:+.4f}% WR(avoid_coef<0)={wr:.1f}% "
-            f"n_days={n_days_v} day_t(NW-HAC)={day_t:.3f} Bonf={p_bonf:.4f}"
-        )
+        print(f"    median={median_ev:+.4f}% WR(avoid_coef<0)={wr:.1f}% n_days={n_days_v} day_t(NW-HAC)={day_t:.3f} Bonf={p_bonf:.4f}")
         print(f"    wf test_ev={wf_test_ev:+.4f}%")
         print(
             f"  portfolio BHAR headline: n_periods={headline['n_periods']} "
@@ -541,9 +530,7 @@ def main():
         if panel["wf_test"] >= 0 and v not in ("falsified",):
             if panel["wf_train"] < 0:  # train half had avoid<0 (good), test half lost it
                 v = "exploratory"
-                reasons.append(
-                    f"wf: train={-panel['wf_train'] * 100:+.4f}% test={-panel['wf_test'] * 100:+.4f}% (test半消失)"
-                )
+                reasons.append(f"wf: train={-panel['wf_train'] * 100:+.4f}% test={-panel['wf_test'] * 100:+.4f}% (test半消失)")
             else:
                 v = "exploratory"
                 reasons.append(f"wf test_ev={wf_test_ev:+.4f}% <= 0")

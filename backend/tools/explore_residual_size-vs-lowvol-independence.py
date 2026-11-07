@@ -412,10 +412,7 @@ def main() -> int:
     print(f"  corr(lowvol, mkt)  = {corr_lv_mkt:+.4f}")
     print(f"  VIF(size, lowvol)  = {vif_sz_lv:.3f}  (>5 = 多重共线严重; >10 = 系数不可信)")
     print(f"  R²(size ~ lowvol)  = {r2_sz_lv:.4f}  (低波动率解释规模因子收益的比例)")
-    print(
-        f"  -> {'高共线/同一笔交易迹象' if abs(corr_sz_lv) > 0.5 else '低共线, 可能独立'} "
-        f"(corr={corr_sz_lv:+.4f}, R²={r2_sz_lv:.3f})"
-    )
+    print(f"  -> {'高共线/同一笔交易迹象' if abs(corr_sz_lv) > 0.5 else '低共线, 可能独立'} (corr={corr_sz_lv:+.4f}, R²={r2_sz_lv:.3f})")
 
     # ---- regime classification ----
     print("\n[5] Regime 分类 (sh.000001 60d SMA + 2% band) ...", flush=True)
@@ -433,9 +430,7 @@ def main() -> int:
     X_A = pd.DataFrame({"mkt": r_mkt.values, "r_lowvol": r_lowvol.values}, index=common)
     res_A = run_ols_hac(r_size, X_A, label="size ~ mkt + lowvol")
     print(f"  n={res_A['n']}, NW lag={res_A['nlag']}")
-    print(
-        f"  alpha (size | mkt+lowvol) = {res_A['alpha_pct']:.5f}%/day (annualized {res_A['alpha_pct'] * 252:.3f}%/yr)"
-    )
+    print(f"  alpha (size | mkt+lowvol) = {res_A['alpha_pct']:.5f}%/day (annualized {res_A['alpha_pct'] * 252:.3f}%/yr)")
     print(f"  t (NW-HAC) = {res_A['alpha_t']:.3f}  p_two={res_A['alpha_p_two']:.4f}  p_one={res_A['alpha_p_one']:.4f}")
     print(f"  R² = {res_A['r_squared']:.4f}  resid_std = {res_A['resid_std_pct']:.4f}%/day")
     for k, v in res_A["loadings"].items():
@@ -455,9 +450,7 @@ def main() -> int:
     X_B = pd.DataFrame({"mkt": r_mkt.values, "r_size": r_size.values}, index=common)
     res_B = run_ols_hac(r_lowvol, X_B, label="lowvol ~ mkt + size")
     print(f"  n={res_B['n']}, NW lag={res_B['nlag']}")
-    print(
-        f"  alpha (lowvol | mkt+size) = {res_B['alpha_pct']:.5f}%/day (annualized {res_B['alpha_pct'] * 252:.3f}%/yr)"
-    )
+    print(f"  alpha (lowvol | mkt+size) = {res_B['alpha_pct']:.5f}%/day (annualized {res_B['alpha_pct'] * 252:.3f}%/yr)")
     print(f"  t (NW-HAC) = {res_B['alpha_t']:.3f}  p_two={res_B['alpha_p_two']:.4f}  p_one={res_B['alpha_p_one']:.4f}")
     print(f"  R² = {res_B['r_squared']:.4f}  resid_std = {res_B['resid_std_pct']:.4f}%/day")
     for k, v in res_B["loadings"].items():
@@ -509,10 +502,7 @@ def main() -> int:
         if r.get("status") == "too_few_obs":
             print(f"  A | {name}: too few obs")
             continue
-        print(
-            f"  A | {name}: alpha={r['alpha_pct']:.5f}%/d "
-            f"(t={r['alpha_t']:.3f}, p_one={r['alpha_p_one']:.4f}, R²={r['r_squared']:.4f})"
-        )
+        print(f"  A | {name}: alpha={r['alpha_pct']:.5f}%/d (t={r['alpha_t']:.3f}, p_one={r['alpha_p_one']:.4f}, R²={r['r_squared']:.4f})")
     # Direction B: lowvol controlled by various baselines
     combos_B = [
         ("mkt only (CAPM)", ["mkt"]),
@@ -527,10 +517,7 @@ def main() -> int:
         if r.get("status") == "too_few_obs":
             print(f"  B | {name}: too few obs")
             continue
-        print(
-            f"  B | {name}: alpha={r['alpha_pct']:.5f}%/d "
-            f"(t={r['alpha_t']:.3f}, p_one={r['alpha_p_one']:.4f}, R²={r['r_squared']:.4f})"
-        )
+        print(f"  B | {name}: alpha={r['alpha_pct']:.5f}%/d (t={r['alpha_t']:.3f}, p_one={r['alpha_p_one']:.4f}, R²={r['r_squared']:.4f})")
     sig_A = sum(1 for v in alt_A.values() if v.get("alpha_p_one", 1) < ALPHA)
     sig_B = sum(1 for v in alt_B.values() if v.get("alpha_p_one", 1) < ALPHA)
     print(f"  -> A: {sig_A}/{len(combos_A)} baselines significant | B: {sig_B}/{len(combos_B)} baselines significant")
@@ -563,9 +550,7 @@ def main() -> int:
             ols = r.get("ols", {})
             ap = ols.get("alpha_pct", "n/a")
             at = ols.get("alpha_t", "n/a")
-            print(
-                f"    {reg}: n={r['n_days']} day_mean={r['day_mean_pct']}% (t={r['t_mean']}) | OLS alpha={ap}% (t={at})"
-            )
+            print(f"    {reg}: n={r['n_days']} day_mean={r['day_mean_pct']}% (t={r['t_mean']}) | OLS alpha={ap}% (t={at})")
 
     # ============ HONEST VERDICT ============
     print(f"\n{'=' * 76}")
@@ -618,14 +603,8 @@ def main() -> int:
 
     # honest caveats (do NOT downgrade verdict, but must be reported)
     print(f"\n  诚实 caveat (不降级 verdict, 但必须标注):")
-    print(
-        f"    - SMB=size=log(20d 均成交额) 是流动性/换手代理非真市值; "
-        f"low-vol=20d 收益 std. 'size≈lowvol' 非独立结论受 size 代理选择影响"
-    )
-    print(
-        f"    - standalone size/lowvol 各自 verdict='exploratory' (非 edge-confirmed); "
-        f"互相控制后残差 alpha 通常更弱 (因子衰减+共享方差)"
-    )
+    print(f"    - SMB=size=log(20d 均成交额) 是流动性/换手代理非真市值; low-vol=20d 收益 std. 'size≈lowvol' 非独立结论受 size 代理选择影响")
+    print(f"    - standalone size/lowvol 各自 verdict='exploratory' (非 edge-confirmed); 互相控制后残差 alpha 通常更弱 (因子衰减+共享方差)")
     print(f"    - long-short 需做空 (A股散户融券受限), 统计 alpha ≠ 可交易")
     print(f"    - HML 缺失 (无历史 PB), 3-factor baseline; UMD 与 SMB corr=-0.71 (VIF~2.0)")
     print(f"    - survivorship: 早期 (2018-2020) 横截面 ~264-766 来自非随机 backfill")

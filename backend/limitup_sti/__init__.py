@@ -39,9 +39,9 @@ try:
 
     # S063 T1：sti_intraday 盘中采样表迁移（幂等，已应用则跳过）——独立 try，失败不影响 weather/raw_break_rate/zt_real（audit: 原全嵌在 sti_intraday try 内,inaday 失败则全跳过）
     try:
-        _intraday_sql = (
-            _Path(__file__).resolve().parent.parent / "migrations" / "sti" / "20260813-001_create_sti_intraday.sql"
-        ).read_text(encoding="utf-8")
+        _intraday_sql = (_Path(__file__).resolve().parent.parent / "migrations" / "sti" / "20260813-001_create_sti_intraday.sql").read_text(
+            encoding="utf-8"
+        )
         _intraday_zone_sql = (
             _Path(__file__).resolve().parent.parent / "migrations" / "sti" / "20260813-002_add_sti_intraday_zone.sql"
         ).read_text(encoding="utf-8")
@@ -67,9 +67,9 @@ try:
         _logger.warning("[limitup_sti] weather_history 迁移失败（不影响主流程）: %s", _we)
     # S063 T4 补齐：sti_timeline 加 raw_break_rate 列（盘前简报 T-1 炸板率直读）——独立 try
     try:
-        _raw_br_sql = (
-            _Path(__file__).resolve().parent.parent / "migrations" / "sti" / "20260817-001_add_raw_break_rate.sql"
-        ).read_text(encoding="utf-8")
+        _raw_br_sql = (_Path(__file__).resolve().parent.parent / "migrations" / "sti" / "20260817-001_add_raw_break_rate.sql").read_text(
+            encoding="utf-8"
+        )
         _MM(db_path=_STI_DB).upgrade(
             [
                 {"version": "20260817-001", "name": "add_raw_break_rate", "sql": _raw_br_sql},
@@ -79,9 +79,9 @@ try:
         _logger.warning("[limitup_sti] raw_break_rate 迁移失败（不影响主流程）: %s", _re)
     # T18（S094 S4）：sti_timeline 加 zt_real 列（真实涨停数，akshare legu 源）——独立 try
     try:
-        _zt_real_sql = (
-            _Path(__file__).resolve().parent.parent / "migrations" / "sti" / "20260823-001_add_zt_real.sql"
-        ).read_text(encoding="utf-8")
+        _zt_real_sql = (_Path(__file__).resolve().parent.parent / "migrations" / "sti" / "20260823-001_add_zt_real.sql").read_text(
+            encoding="utf-8"
+        )
         _MM(db_path=_STI_DB).upgrade(
             [
                 {"version": "20260823-001", "name": "add_zt_real", "sql": _zt_real_sql},

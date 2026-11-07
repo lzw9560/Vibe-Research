@@ -139,8 +139,7 @@ def main() -> None:
     # 日期域: 有 ≥1 gene-scored pick 的 zt_date (top-k 子集的日期域)
     gene_dates_with_picks = sorted({p["zt_date"] for p in blanket if p.get("gene_score") is not None})
     print(
-        f"  gene-scored pick 日期数: {len(gene_dates_with_picks)} "
-        f"({gene_dates_with_picks[0]} ~ {gene_dates_with_picks[-1]})"
+        f"  gene-scored pick 日期数: {len(gene_dates_with_picks)} ({gene_dates_with_picks[0]} ~ {gene_dates_with_picks[-1]})"
         if gene_dates_with_picks
         else "  无 gene-scored pick 日期"
     )
@@ -214,19 +213,13 @@ def main() -> None:
                     "t_day": dt.get("t", 0.0),
                     "p_raw": dt.get("p_one_sided", 1.0),
                     "wf_train_ev": (
-                        r.get("wf_basic", {}).get("train_ev", {}).get("ev", 0.0)
-                        if r.get("wf_basic", {}).get("status") == "ok"
-                        else 0.0
+                        r.get("wf_basic", {}).get("train_ev", {}).get("ev", 0.0) if r.get("wf_basic", {}).get("status") == "ok" else 0.0
                     ),
                     "wf_test_ev": (
-                        r.get("wf_basic", {}).get("test_ev", {}).get("ev", 0.0)
-                        if r.get("wf_basic", {}).get("status") == "ok"
-                        else 0.0
+                        r.get("wf_basic", {}).get("test_ev", {}).get("ev", 0.0) if r.get("wf_basic", {}).get("status") == "ok" else 0.0
                     ),
                     "wf_test_t": (
-                        r.get("wf_basic", {}).get("test_day_t", {}).get("t", 0.0)
-                        if r.get("wf_basic", {}).get("status") == "ok"
-                        else 0.0
+                        r.get("wf_basic", {}).get("test_day_t", {}).get("t", 0.0) if r.get("wf_basic", {}).get("status") == "ok" else 0.0
                     ),
                     "wf_test_p": (
                         r.get("wf_basic", {}).get("test_day_t", {}).get("p_one_sided", 1.0)
@@ -298,10 +291,7 @@ def main() -> None:
     )
     for s in summary_rows:
         if s.get("verdict") == "no-data":
-            print(
-                f"  {s['name']:<22} {'-':>6} {'-':>5} {'-':>8} "
-                f"{'-':>6} {'-':>8} {'-':>8} {'-':>7} {'-':>7} {'-':>7} no-data"
-            )
+            print(f"  {s['name']:<22} {'-':>6} {'-':>5} {'-':>8} {'-':>6} {'-':>8} {'-':>8} {'-':>7} {'-':>7} {'-':>7} no-data")
             continue
         v = s.get("verdict", "")
         bonf = s.get("bonf_x12", "-")
@@ -323,10 +313,7 @@ def main() -> None:
     for s in summary_rows:
         if s["name"] in ("top-1", "top-3", "top-5"):
             delta = s.get("ev_gross", 0.0) - base_ev
-            print(
-                f"  {s['name']:<10}: EV={s.get('ev_gross', '-'):+.3f}%  "
-                f"Δ vs all_gene_scored({base_ev:+.3f}%) = {delta:+.3f}%"
-            )
+            print(f"  {s['name']:<10}: EV={s.get('ev_gross', '-'):+.3f}%  Δ vs all_gene_scored({base_ev:+.3f}%) = {delta:+.3f}%")
 
     # ---- overall ----
     if "edge-confirmed" in verdicts:

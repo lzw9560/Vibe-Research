@@ -337,10 +337,7 @@ def analyze_combo(results: list[dict], combo_name: str) -> dict:
     gross_wr = sum(1 for x in gross if x > 0) / n * 100
 
     print(f"\n--- gross excess (portfolio - benchmark) ---")
-    print(
-        f"  n_rebalances={n} mean={gross_mean:.3f}% std={gross_std:.3f}% "
-        f"WR={gross_wr:.1f}% t={gross_t:.2f} p={gross_p:.6f}"
-    )
+    print(f"  n_rebalances={n} mean={gross_mean:.3f}% std={gross_std:.3f}% WR={gross_wr:.1f}% t={gross_t:.2f} p={gross_p:.6f}")
     print(
         f"  portfolio avg={sum(r['portfolio_return_pct'] for r in results) / n:.3f}% "
         f"benchmark avg={sum(r['benchmark_return_pct'] for r in results) / n:.3f}%"
@@ -425,12 +422,8 @@ def analyze_combo(results: list[dict], combo_name: str) -> dict:
         "wf_train_t": round(wf_train_t, 2),
         "wf_test_t": round(wf_test_t, 2),
         "wf_test_p": wf_test_p,
-        "regime_strong_ev": (
-            round(sum(by_regime["strong"]) / len(by_regime["strong"]), 3) if by_regime.get("strong") else None
-        ),
-        "regime_weak_ev": (
-            round(sum(by_regime["weak"]) / len(by_regime["weak"]), 3) if by_regime.get("weak") else None
-        ),
+        "regime_strong_ev": (round(sum(by_regime["strong"]) / len(by_regime["strong"]), 3) if by_regime.get("strong") else None),
+        "regime_weak_ev": (round(sum(by_regime["weak"]) / len(by_regime["weak"]), 3) if by_regime.get("weak") else None),
         "all_results": results,  # keep for DSR/PBO
     }
 
@@ -480,9 +473,7 @@ def normal_inv_cdf(p: float) -> float:
     phigh = 1 - plow
     if p < plow:
         q = sqrt(-2 * log(p))
-        x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
-            (((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1
-        )
+        x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
     elif p <= phigh:
         q = p - 0.5
         r = q * q
@@ -493,9 +484,7 @@ def normal_inv_cdf(p: float) -> float:
         )
     else:
         q = sqrt(-2 * log(1 - p))
-        x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
-            (((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1
-        )
+        x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
     return x
 
 
@@ -671,9 +660,7 @@ def verdict_for_combo(
 
     print(f"\n  {combo_name}:")
     print(
-        f"    gross_excess_EV={gross_ev}% net_excess_EV={net_ev}% "
-        f"net_t={net_t} Bonf_p(×{n_tests})={p_bonf:.6f} "
-        f"n_rebalances={n_rebalances}"
+        f"    gross_excess_EV={gross_ev}% net_excess_EV={net_ev}% net_t={net_t} Bonf_p(×{n_tests})={p_bonf:.6f} n_rebalances={n_rebalances}"
     )
 
     if wf_status == "ok":
@@ -705,10 +692,7 @@ def verdict_for_combo(
             return "falsified"
         wf_test_p_bonf = bonferroni_p(wf_test_p, n_tests)
         if wf_test_p_bonf >= ALPHA:
-            print(
-                f"    → EXPLORATORY: OOS test EV={wf_test_ev}% > 0 but "
-                f"test p={wf_test_p} Bonf×{n_tests}={wf_test_p_bonf} >= {ALPHA}"
-            )
+            print(f"    → EXPLORATORY: OOS test EV={wf_test_ev}% > 0 but test p={wf_test_p} Bonf×{n_tests}={wf_test_p_bonf} >= {ALPHA}")
             return "exploratory"
         print(f"    → EDGE-CONFIRMED: all checks pass")
         return "edge-confirmed"
@@ -733,9 +717,7 @@ def main():
     lg = bs.login()
     etf_ok = False
     for code in ["sh.510300", "sz.159915", "sh.510050", "sh.512890"]:
-        rs = bs.query_history_k_data_plus(
-            code, "date,close", start_date="2024-01-01", end_date="2024-01-31", frequency="d"
-        )
+        rs = bs.query_history_k_data_plus(code, "date,close", start_date="2024-01-01", end_date="2024-01-31", frequency="d")
         rows = []
         while (rs.error_code == "0") and rs.next():
             rows.append(rs.get_row_data())
@@ -844,9 +826,7 @@ def main():
     pbo = compute_pbo(all_results, n_bins=4)
     print(f"\n  PBO (Probability of Backtest Overfitting):")
     if pbo.get("pbo") is not None:
-        print(
-            f"    PBO={pbo['pbo']} (n_splits={pbo['n_splits']}, n_combos={pbo['n_combos']}, n_dates={pbo['n_dates']})"
-        )
+        print(f"    PBO={pbo['pbo']} (n_splits={pbo['n_splits']}, n_combos={pbo['n_combos']}, n_dates={pbo['n_dates']})")
         if pbo["pbo"] > 0.5:
             print(f"    → PBO > 0.5: likely overfit (IS-best underperforms OOS > 50%)")
         else:
@@ -866,8 +846,7 @@ def main():
     print(f"  verdicts: {dict(vc)}")
     print(f"  best combo: {best_combo['name']} (net_excess_EV={best_combo['net_ev']}%, t={best_combo['net_t']})")
     print(
-        f"  best combo walk-forward: train={best_combo['wf_train_ev']}% "
-        f"test={best_combo['wf_test_ev']}% test_p={best_combo['wf_test_p']}"
+        f"  best combo walk-forward: train={best_combo['wf_train_ev']}% test={best_combo['wf_test_ev']}% test_p={best_combo['wf_test_p']}"
     )
 
     # overall verdict

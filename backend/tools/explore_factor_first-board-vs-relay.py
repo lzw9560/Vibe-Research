@@ -365,10 +365,7 @@ def analyze_subset(name: str, picks: list[dict]) -> dict:
         if r is not None:
             basic_by_date[p["zt_date"]].append(r)
     basic_dt = day_paired_t(basic_by_date)
-    print(
-        f"  day-paired: n_days={basic_dt['n_days']} mean={basic_dt['mean']}% "
-        f"t={basic_dt['t']} p_one_sided={basic_dt['p_one_sided']}"
-    )
+    print(f"  day-paired: n_days={basic_dt['n_days']} mean={basic_dt['mean']}% t={basic_dt['t']} p_one_sided={basic_dt['p_one_sided']}")
 
     # ---- stop variant with R6 ----
     print(f"\n--- stop variant (-{STOP_PCT * 100:.0f}% stop + R6 gap-through fill) ---")
@@ -388,10 +385,7 @@ def analyze_subset(name: str, picks: list[dict]) -> dict:
         if r is not None:
             stop_by_date[p["zt_date"]].append(r[0])
     stop_dt = day_paired_t(stop_by_date)
-    print(
-        f"  day-paired: n_days={stop_dt['n_days']} mean={stop_dt['mean']}% "
-        f"t={stop_dt['t']} p_one_sided={stop_dt['p_one_sided']}"
-    )
+    print(f"  day-paired: n_days={stop_dt['n_days']} mean={stop_dt['mean']}% t={stop_dt['t']} p_one_sided={stop_dt['p_one_sided']}")
 
     # exit reason breakdown
     reasons: dict[str, int] = defaultdict(int)
@@ -447,9 +441,7 @@ def analyze_subset(name: str, picks: list[dict]) -> dict:
         te_dt = wf_stop["test_day_t"]
         print(f"  train: n={tr['n']} n_dates={wf_basic['n_train_dates']} EV={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
         print(
-            f"  test:  n={te['n']} n_dates={wf_stop['n_test_dates']} "
-            f"EV={te['ev']}% t={te['t']} day_t={te_dt['t']} "
-            f"p={te_dt['p_one_sided']}"
+            f"  test:  n={te['n']} n_dates={wf_stop['n_test_dates']} EV={te['ev']}% t={te['t']} day_t={te_dt['t']} p={te_dt['p_one_sided']}"
         )
         decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
         print(f"  decay: {decay:.0f}% (train→test)")
@@ -579,9 +571,7 @@ def main():
     # 判定逻辑
     print(f"\n[判定]")
 
-    def verdict_for(
-        ev_gross, t_day, p_bonf, wf_status, wf_train_ev, wf_test_ev, wf_test_p, n_days, net_ev, subset_name
-    ):
+    def verdict_for(ev_gross, t_day, p_bonf, wf_status, wf_train_ev, wf_test_ev, wf_test_p, n_days, net_ev, subset_name):
         """诚实判定: edge-confirmed / falsified / underpowered / exploratory."""
         print(f"\n  {subset_name}:")
         print(f"    gross_EV={ev_gross}% net_EV={net_ev}% day_t={t_day} Bonf_p={p_bonf} n_days={n_days}")
@@ -610,15 +600,9 @@ def main():
                 print(f"    → FALSIFIED: walk-forward test_EV={wf_test_ev}% <= 0")
                 return "falsified"
             if wf_test_p >= ALPHA:
-                print(
-                    f"    → EXPLORATORY: OOS test EV={wf_test_ev}% > 0 but "
-                    f"test p={wf_test_p} >= {ALPHA} (not significant OOS)"
-                )
+                print(f"    → EXPLORATORY: OOS test EV={wf_test_ev}% > 0 but test p={wf_test_p} >= {ALPHA} (not significant OOS)")
                 return "exploratory"
-            print(
-                f"    → EDGE-CONFIRMED: gross+net EV > 0, Bonferroni PASS, "
-                f"OOS test EV={wf_test_ev}% significant (p={wf_test_p})"
-            )
+            print(f"    → EDGE-CONFIRMED: gross+net EV > 0, Bonferroni PASS, OOS test EV={wf_test_ev}% significant (p={wf_test_p})")
             return "edge-confirmed"
         print(f"    → EXPLORATORY: walk-forward not available")
         return "exploratory"

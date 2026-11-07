@@ -128,10 +128,7 @@ def select_stable_features(
     kept = tuple(sorted_names[:max_features])
     dropped = tuple(sorted_names[max_features:])
 
-    rationale = (
-        f"按 permutation importance bootstrap 均值降序取 top{max_features}，"
-        f"n_bootstrap={n_bootstrap}, random_state={random_state}"
-    )
+    rationale = f"按 permutation importance bootstrap 均值降序取 top{max_features}，n_bootstrap={n_bootstrap}, random_state={random_state}"
 
     return SelectionResult(
         kept=kept,

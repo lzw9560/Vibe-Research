@@ -105,8 +105,7 @@ def upsert_indicator_snapshot(
     ind_json = json.dumps(indicators or {}, ensure_ascii=False)
     with sqlite3.connect(_DB_PATH) as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO indicator_snapshots "
-            "(code, trade_date, indicators_json, snapshot_source) VALUES (?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO indicator_snapshots (code, trade_date, indicators_json, snapshot_source) VALUES (?, ?, ?, ?)",
             (code, trade_date, ind_json, snapshot_source),
         )
 
@@ -133,8 +132,7 @@ def update_tracking_status(
     with sqlite3.connect(_DB_PATH) as conn:
         if tracking_age_days is not None:
             conn.execute(
-                "UPDATE candidate_tracking_pool SET current_status=?, tracking_age_days=? "
-                "WHERE code=? AND first_admit_date=?",
+                "UPDATE candidate_tracking_pool SET current_status=?, tracking_age_days=? WHERE code=? AND first_admit_date=?",
                 (new_status, tracking_age_days, code, first_admit_date),
             )
         else:
@@ -155,8 +153,7 @@ def get_snapshots_for(code: str, up_to_date: Optional[str] = None) -> list[Indic
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT code, trade_date, indicators_json, snapshot_source "
-                "FROM indicator_snapshots WHERE code=? ORDER BY trade_date",
+                "SELECT code, trade_date, indicators_json, snapshot_source FROM indicator_snapshots WHERE code=? ORDER BY trade_date",
                 (code,),
             ).fetchall()
         return [IndicatorSnapshot(r[0], r[1], r[2] or "{}", r[3] or "") for r in rows]

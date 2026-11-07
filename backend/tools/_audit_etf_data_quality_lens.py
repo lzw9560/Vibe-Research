@@ -108,9 +108,7 @@ def main() -> None:
             if prev.get("nav", 0) > 0 and curr.get("nav", 0) > 0:
                 nr = day_ret(prev["nav"], curr["nav"])
                 if abs(nr) > 5:
-                    nav_jumps.append(
-                        (nr, code, ds[i - 1], ds[i], prev["nav"], curr["nav"], prev.get("close"), curr.get("close"))
-                    )
+                    nav_jumps.append((nr, code, ds[i - 1], ds[i], prev["nav"], curr["nav"], prev.get("close"), curr.get("close")))
             if prev.get("close", 0) > 0 and curr.get("close", 0) > 0:
                 pr = day_ret(prev["close"], curr["close"])
                 if abs(pr) > 5 and abs(pr) < 50:  # 50%+ 可能真涨跌停
@@ -120,18 +118,12 @@ def main() -> None:
     nav_jumps.sort(key=lambda x: abs(x[0]), reverse=True)
     print(f"\n  NAV |日变化|>5%: {len(nav_jumps)} 个")
     for nr, code, d0, d1, n0, n1, c0, c1 in nav_jumps[:25]:
-        print(
-            f"  {code:7} {ETF_NAMES.get(code, '?'):12} {d0}->{d1}  "
-            f"NAV {n0:.4f}->{n1:.4f} ({nr:+7.2f}%)  close {c0} -> {c1}"
-        )
+        print(f"  {code:7} {ETF_NAMES.get(code, '?'):12} {d0}->{d1}  NAV {n0:.4f}->{n1:.4f} ({nr:+7.2f}%)  close {c0} -> {c1}")
 
     print(f"\n  price |日变化|>5% 且 NAV 不跳（split 嫌疑）: 前 25")
     price_jumps.sort(key=lambda x: abs(x[0]), reverse=True)
     for pr, code, d0, d1, c0, c1, pn in price_jumps[:25]:
-        print(
-            f"  {code:7} {ETF_NAMES.get(code, '?'):12} {d0}->{d1}  "
-            f"price {c0:.4f}->{c1:.4f} ({pr:+7.2f}%)  NAV_ret={pn:+.2f}%"
-        )
+        print(f"  {code:7} {ETF_NAMES.get(code, '?'):12} {d0}->{d1}  price {c0:.4f}->{c1:.4f} ({pr:+7.2f}%)  NAV_ret={pn:+.2f}%")
 
     # ============================================================
     # 3. 510310 split artifact 复核 + 扫所有 ETF 类似
@@ -215,10 +207,7 @@ def main() -> None:
     picks.sort(key=lambda x: x["disc"])
     total_bhar = sum(p["bhar"] for p in picks)
     total_raw = sum(p["raw"] for p in picks)
-    print(
-        f"  n_picks={len(picks)}  total_BHAR={total_bhar:+.2f}% "
-        f"(mean={total_bhar / len(picks):+.4f}%)  total_raw={total_raw:+.2f}%"
-    )
+    print(f"  n_picks={len(picks)}  total_BHAR={total_bhar:+.2f}% (mean={total_bhar / len(picks):+.4f}%)  total_raw={total_raw:+.2f}%")
 
     print("\n  --- 折价最深 15 个 picks（BHAR 贡献）---")
     cum = 0
@@ -234,8 +223,7 @@ def main() -> None:
     top5_bhar = sum(p["bhar"] for p in picks[:5])
     top10_bhar = sum(p["bhar"] for p in picks[:10])
     print(
-        f"  最深 5 picks BHAR 合计={top5_bhar:+.2f}%  / total={total_bhar:+.2f}% "
-        f"= {top5_bhar / total_bhar * 100 if total_bhar else 0:.1f}%"
+        f"  最深 5 picks BHAR 合计={top5_bhar:+.2f}%  / total={total_bhar:+.2f}% = {top5_bhar / total_bhar * 100 if total_bhar else 0:.1f}%"
     )
     print(
         f"  最深 10 picks BHAR 合计={top10_bhar:+.2f}%  / total={total_bhar:+.2f}% "

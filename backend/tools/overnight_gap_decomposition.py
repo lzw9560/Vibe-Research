@@ -34,9 +34,7 @@ raw_cache = json.loads(KLINE.read_bytes())
 # enrich 后 path 数干净——reframe 的 path 负收益结论若变需重验（隔夜 gap 核心结论不受影响）。
 cache = {code: enrich_pctchg(bars) for code, bars in raw_cache.items()}
 # S163 R1: 坏 bar（缺字段/负价/high<low/stale/空/错型）拒绝进 §44 verdict
-validate_or_reject(
-    "baostock_kline", [b for bars in cache.values() for b in bars], as_of=datetime.date.today().isoformat()
-)
+validate_or_reject("baostock_kline", [b for bars in cache.values() for b in bars], as_of=datetime.date.today().isoformat())
 
 # build trading calendar for date-adjacency check (MEDIUM #3)
 _all_dates = sorted({b["date"] for bars in cache.values() for b in bars})
@@ -53,9 +51,7 @@ def _calendar_next(date_str):
 
 
 conn = sqlite3.connect(str(DB), timeout=10)
-pairs = conn.execute(
-    "SELECT DISTINCT date, code FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date"
-).fetchall()
+pairs = conn.execute("SELECT DISTINCT date, code FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date").fetchall()
 conn.close()
 
 overnight = []  # (D close → D+1 open) / D close  隔夜 gap

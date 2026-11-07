@@ -77,8 +77,7 @@ def migrate(dry_run: bool = False) -> dict:
         for d in dates:
             # 该 date 下所有 snapshot_at，取最晚一条时点
             snap_rows = conn.execute(
-                "SELECT snapshot_at, COUNT(*) c FROM zt_history WHERE date = ? "
-                "GROUP BY snapshot_at ORDER BY snapshot_at",
+                "SELECT snapshot_at, COUNT(*) c FROM zt_history WHERE date = ? GROUP BY snapshot_at ORDER BY snapshot_at",
                 (d,),
             ).fetchall()
             if len(snap_rows) <= 1:
@@ -87,9 +86,7 @@ def migrate(dry_run: bool = False) -> dict:
                     continue
                 latest_snap = snap_rows[-1]["snapshot_at"]
                 is_final = _is_final_by_time(latest_snap)
-                rowcount = conn.execute(
-                    "UPDATE zt_history SET is_final = ? WHERE date = ?", (1 if is_final else 0, d)
-                ).rowcount
+                rowcount = conn.execute("UPDATE zt_history SET is_final = ? WHERE date = ?", (1 if is_final else 0, d)).rowcount
                 total_kept_rows += rowcount
                 if is_final:
                     final_count += 1
@@ -101,13 +98,9 @@ def migrate(dry_run: bool = False) -> dict:
             is_final = _is_final_by_time(latest_snap)
 
             # 数删除行
-            del_count = conn.execute(
-                "SELECT COUNT(*) FROM zt_history WHERE date = ? AND snapshot_at != ?", (d, latest_snap)
-            ).fetchone()[0]
+            del_count = conn.execute("SELECT COUNT(*) FROM zt_history WHERE date = ? AND snapshot_at != ?", (d, latest_snap)).fetchone()[0]
             # 取保留行
-            keep_rows = conn.execute(
-                "SELECT * FROM zt_history WHERE date = ? AND snapshot_at = ?", (d, latest_snap)
-            ).fetchall()
+            keep_rows = conn.execute("SELECT * FROM zt_history WHERE date = ? AND snapshot_at = ?", (d, latest_snap)).fetchall()
 
             if not dry_run:
                 conn.execute("DELETE FROM zt_history WHERE date = ?", (d,))
@@ -164,9 +157,7 @@ def main() -> None:
     # 验证：每日唯一
     conn = sqlite3.connect(zth._DB_PATH)
     try:
-        dups = conn.execute(
-            "SELECT date, COUNT(DISTINCT snapshot_at) c FROM zt_history GROUP BY date HAVING c > 1"
-        ).fetchall()
+        dups = conn.execute("SELECT date, COUNT(DISTINCT snapshot_at) c FROM zt_history GROUP BY date HAVING c > 1").fetchall()
         print("\n=== 验证：每日唯一（多时点日应为空）===")
         if dups:
             for r in dups:

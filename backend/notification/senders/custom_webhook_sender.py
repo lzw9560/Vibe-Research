@@ -113,9 +113,7 @@ class CustomWebhookSender:
                     headers = {"User-Agent": "StockAnalysis/1.0"}
                     if self._custom_webhook_bearer_token:
                         headers["Authorization"] = f"Bearer {self._custom_webhook_bearer_token}"
-                    response = requests.post(
-                        url, data=data, files=files, headers=headers, timeout=30, verify=self._webhook_verify_ssl
-                    )
+                    response = requests.post(url, data=data, files=files, headers=headers, timeout=30, verify=self._webhook_verify_ssl)
                     if response.status_code in (200, 204):
                         logger.info("自定义 Webhook %d（Discord 图片）推送成功", i + 1)
                         success_count += 1

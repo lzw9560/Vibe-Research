@@ -80,10 +80,7 @@ def backfill(limit: int = 0):
     t0 = time.time()
     for i, code in enumerate(codes):
         if i % 100 == 0 and i > 0:
-            print(
-                f"  {i}/{len(codes)} ok={ok} empty={empty} err={err} "
-                f"elapsed={time.time() - t0:.0f}s rate={i / (time.time() - t0):.1f}/s"
-            )
+            print(f"  {i}/{len(codes)} ok={ok} empty={empty} err={err} elapsed={time.time() - t0:.0f}s rate={i / (time.time() - t0):.1f}/s")
         res = fetch_holder_detail(code)
         if isinstance(res, str):
             err += 1

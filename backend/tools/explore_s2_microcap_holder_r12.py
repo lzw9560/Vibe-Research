@@ -313,10 +313,7 @@ def verdict_highrisk(
     p_bonf_raw = bonferroni_p(raw_p, N_BONF)
     p_bonf_bhar = bonferroni_p(bhar_p, N_BONF)
 
-    print(
-        f"\n  [raw EV] gross={raw_gross:+.4f}% net={raw_net:+.4f}% day_t={raw_t} "
-        f"Bonf×{N_BONF}={p_bonf_raw:.6f} n_days={raw_n_days}"
-    )
+    print(f"\n  [raw EV] gross={raw_gross:+.4f}% net={raw_net:+.4f}% day_t={raw_t} Bonf×{N_BONF}={p_bonf_raw:.6f} n_days={raw_n_days}")
     print(
         f"  [R12 size-matched BHAR] gross={bhar_gross:+.4f}% net={bhar_net:+.4f}% "
         f"day_t={bhar_t} Bonf×{N_BONF}={p_bonf_bhar:.6f} n_days={bhar_n_days}"
@@ -331,14 +328,11 @@ def verdict_highrisk(
     # 3. R12 size-matched BHAR gross <= 0 → size premium 误标 (核心判据)
     if bhar_gross <= 0:
         return "falsified", (
-            f"R12 size-matched BHAR {bhar_gross:+.4f}% <= 0 — "
-            f"raw {raw_gross:+.4f}% 是 size premium 误标, 非 shareholder alpha"
+            f"R12 size-matched BHAR {bhar_gross:+.4f}% <= 0 — raw {raw_gross:+.4f}% 是 size premium 误标, 非 shareholder alpha"
         )
     # 4. R12 BHAR 不显著 → residual 弱 (exploratory)
     if p_bonf_bhar >= ALPHA:
-        return "exploratory", (
-            f"R12 BHAR {bhar_gross:+.4f}% > 0 but Bonf p={p_bonf_bhar:.4f} >= 0.05 (residual 不显著, 可能噪声)"
-        )
+        return "exploratory", (f"R12 BHAR {bhar_gross:+.4f}% > 0 but Bonf p={p_bonf_bhar:.4f} >= 0.05 (residual 不显著, 可能噪声)")
     # 5. R12 net BHAR <= 0 → residual 被成本吃掉
     if bhar_net <= 0:
         return "falsified", (f"R12 net BHAR {bhar_net:+.4f}% <= 0 — residual 被成本吃掉")
@@ -346,16 +340,14 @@ def verdict_highrisk(
     if wf_bhar["status"] == "ok":
         if wf_bhar["train_ev"]["ev"] <= 0:
             return "exploratory", (
-                f"R12 BHAR train EV {wf_bhar['train_ev']['ev']:+.4f}% <= 0 "
-                f"(edge 不在 train 半, test 可能 regime 过拟合)"
+                f"R12 BHAR train EV {wf_bhar['train_ev']['ev']:+.4f}% <= 0 (edge 不在 train 半, test 可能 regime 过拟合)"
             )
         if wf_bhar["test_ev"]["ev"] <= 0:
             return "falsified", (f"R12 BHAR walk-forward test EV {wf_bhar['test_ev']['ev']:+.4f}% <= 0")
         wf_test_p_bonf = bonferroni_p(wf_bhar["test_day_t"]["p_one_sided"], N_BONF)
         if wf_test_p_bonf >= ALPHA:
             return "exploratory", (
-                f"R12 BHAR OOS test EV {wf_bhar['test_ev']['ev']:+.4f}% > 0 "
-                f"but test p Bonf={wf_test_p_bonf:.4f} >= 0.05 (OOS 不显著)"
+                f"R12 BHAR OOS test EV {wf_bhar['test_ev']['ev']:+.4f}% > 0 but test p Bonf={wf_test_p_bonf:.4f} >= 0.05 (OOS 不显著)"
             )
         return "edge-confirmed", (
             f"R12 size-matched BHAR {bhar_gross:+.4f}% > 0 显著 "
@@ -383,8 +375,7 @@ def main():
     date_idx = {d: i for i, d in enumerate(calendar)}
     index_map = load_index()
     print(
-        f"\n[数据] holder codes={len(holder)}, kline codes={len(code_map)}, "
-        f"calendar {calendar[0]}~{calendar[-1]} ({len(calendar)} dates)",
+        f"\n[数据] holder codes={len(holder)}, kline codes={len(code_map)}, calendar {calendar[0]}~{calendar[-1]} ({len(calendar)} dates)",
         flush=True,
     )
 
@@ -422,8 +413,7 @@ def main():
         if (i + 1) % 30 == 0:
             print(f"  ... {i + 1}/{len(bench_dates_sorted)} dates done ({time.time() - t0:.0f}s)", flush=True)
     print(
-        f"  算出 benchmark 的日期数: {len(benchmarks)} (skip {skipped_no_universe} universe不足) "
-        f"[{time.time() - t0:.0f}s]",
+        f"  算出 benchmark 的日期数: {len(benchmarks)} (skip {skipped_no_universe} universe不足) [{time.time() - t0:.0f}s]",
         flush=True,
     )
 
@@ -479,10 +469,7 @@ def main():
 
     print(f"\n{'=' * 72}")
     print(f"[raw EV] (散户实际, 含 size beta)")
-    print(
-        f"  n={raw_s['n']} gross={raw_s['ev']:+.4f}% net={raw_net:+.4f}% "
-        f"median={raw_median:+.4f}% WR={raw_s['wr']}% std={raw_s['std']}%"
-    )
+    print(f"  n={raw_s['n']} gross={raw_s['ev']:+.4f}% net={raw_net:+.4f}% median={raw_median:+.4f}% WR={raw_s['wr']}% std={raw_s['std']}%")
     print(f"  day_t={raw_dt['t']} p_one_sided={raw_dt['p_one_sided']} n_days={raw_dt['n_days']}")
 
     print(f"\n[R12 size-matched BHAR] (减全市场 decile-1 同窗口等权均值)")
@@ -508,10 +495,7 @@ def main():
     print(f"  flaw5 拥挤倒U: 见 walk-forward decay")
     print(f"  flaw7 timing: benchmark 同 T+1→T+21 窗口 ✓")
     print(f"  flaw8 cost乐观: {COST}% round-trip (微盘实际可能更高, 偏保守)")
-    print(
-        f"  flaw9 phantom: raw {raw_s['ev']:+.4f}% - BHAR {bhar_s['ev']:+.4f}% = "
-        f"size premium 成分 {raw_s['ev'] - bhar_s['ev']:+.4f}%"
-    )
+    print(f"  flaw9 phantom: raw {raw_s['ev']:+.4f}% - BHAR {bhar_s['ev']:+.4f}% = size premium 成分 {raw_s['ev'] - bhar_s['ev']:+.4f}%")
 
     # ---- walk-forward ----
     print(f"\n[walk-forward OOS]")

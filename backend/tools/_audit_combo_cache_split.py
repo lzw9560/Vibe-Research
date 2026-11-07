@@ -186,10 +186,7 @@ def main() -> None:
         s = stats(dm)
         if s:
             sig = "✅" if s["p"] < 0.05 else "❌"
-            print(
-                f"  {label}: n={s['n']} mean {s['mean'] * 100:+.4f}% net {s['net'] * 100:+.4f}% "
-                f"t={s['t']:.2f} p={s['p']:.4f} {sig}"
-            )
+            print(f"  {label}: n={s['n']} mean {s['mean'] * 100:+.4f}% net {s['net'] * 100:+.4f}% t={s['t']:.2f} p={s['p']:.4f} {sig}")
         else:
             print(f"  {label}: 无数据")
 
@@ -211,9 +208,7 @@ def main() -> None:
     all_dm = combo_top_fwd(test_dates, by_date, exclude_zt=True)
     all_s = stats(all_dm)
 
-    print(
-        f"  ALL test: n={all_s['n'] if all_s else 0} t={all_s['t']:.2f if all_s else 0}（vs memory 去涨停 net t10.29）"
-    )
+    print(f"  ALL test: n={all_s['n'] if all_s else 0} t={all_s['t']:.2f if all_s else 0}（vs memory 去涨停 net t10.29）")
     if correct_s:
         print(f"  correct-period（universe 完整）: t={correct_s['t']:.2f} p={correct_s['p']:.4f}")
     if wrong_s:

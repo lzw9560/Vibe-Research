@@ -207,9 +207,7 @@ async def _collect(run_id: str, target_date: str) -> None:
         # S063 T4：管线头部一次采集 SentimentContext（T-1 硬标准）
         _t1 = _time.time()
         ctx = await asyncio.to_thread(build_context, target_date)
-        logger.info(
-            "[_collect] build_context: %.1fs weather=%s", _time.time() - _t1, ctx.weather_state if ctx else None
-        )
+        logger.info("[_collect] build_context: %.1fs weather=%s", _time.time() - _t1, ctx.weather_state if ctx else None)
         _t2 = _time.time()
         me = await asyncio.to_thread(_fetch_market_emotion, target_date, ctx)
         logger.info("[_collect] _fetch_market_emotion: %.1fs", _time.time() - _t2)
@@ -274,9 +272,7 @@ async def _collect(run_id: str, target_date: str) -> None:
 
                     _t5 = _time.time()
                     zt_pool = await asyncio.to_thread(fetch_zt_pool, target_date)
-                    logger.info(
-                        "[_collect] fetch_zt_pool: %.1fs pool=%d", _time.time() - _t5, len(zt_pool) if zt_pool else 0
-                    )
+                    logger.info("[_collect] fetch_zt_pool: %.1fs pool=%d", _time.time() - _t5, len(zt_pool) if zt_pool else 0)
                     for p in zt_pool or []:
                         code = str(p.get("c", "") or "").strip()
                         if code:
@@ -930,8 +926,7 @@ def verify_verification_card() -> Dict[str, Any]:
             "data": {
                 "verified": len(verified),
                 "conditions": [
-                    {"date": c.date, "metric": c.metric, "actual": c.actual, "status": c.status, "note": c.note}
-                    for c in verified
+                    {"date": c.date, "metric": c.metric, "actual": c.actual, "status": c.status, "note": c.note} for c in verified
                 ],
             }
         }
@@ -1223,9 +1218,7 @@ def get_single_workflow_state(
 
 
 @router.get("/api/workflow/state/{code}/history")
-def get_workflow_state_history(
-    code: str, date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；不传则全部")
-) -> Dict[str, Any]:
+def get_workflow_state_history(code: str, date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；不传则全部")) -> Dict[str, Any]:
     """S032 R10：某股流转历史（可按日期过滤）。"""
     try:
         history = _wf_state_repo.get_history(code, date)
@@ -1342,9 +1335,7 @@ def get_first_board_candidates(
                     "excluded": [],
                     "env_flags": {},
                     "note": (
-                        f"T-1（{target}）选股结果未取得，"
-                        "选股只在盘后执行（调度16:15），盘中不实时跑避免数据污染· "
-                        "§44未validated仅参考"
+                        f"T-1（{target}）选股结果未取得，选股只在盘后执行（调度16:15），盘中不实时跑避免数据污染· §44未validated仅参考"
                     ),
                     "from_cache": False,
                 }

@@ -279,9 +279,7 @@ def _chain(sources: list[str] | None, adjust: str | None) -> list[str]:
     return [s for s in base if _SOURCE_ADJUST.get(s) == adjust]
 
 
-def fetch_kline(
-    code: str, sources: list[str] | None = None, adjust: str | None = None
-) -> tuple[list[dict], str | None]:
+def fetch_kline(code: str, sources: list[str] | None = None, adjust: str | None = None) -> tuple[list[dict], str | None]:
     """取日K线。返 (bars, source_name)；全失败/超时返 ([], None)。
 
     顺序 fallback 链：baostock 优先 → 失败/空/黑名单 fallback 东方财富（em_get
