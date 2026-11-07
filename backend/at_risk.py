@@ -187,9 +187,7 @@ def report() -> dict:
         out["capital_of_equity_pct"] = round(total_capital / base * 100, 2)
         if per_trade_limit:
             over = [p for p in bounded if p["at_risk"] / base * 100 > float(per_trade_limit) + 1e-9]
-            out["over_per_trade_limit"] = [
-                {"name": p["name"], "code": p["code"], "pct_of_equity": round(p["at_risk"] / base * 100, 2)} for p in over
-            ]
+            out["over_per_trade_limit"] = [{"name": p["name"], "code": p["code"], "pct_of_equity": round(p["at_risk"] / base * 100, 2)} for p in over]
     else:
         out["equity_base_hint"] = "填了账户规模才能给占比 —— 绝对金额说明不了'这个风险相对我的账户算大还是小'。"
     if max_positions and len(pos) > int(max_positions):
@@ -232,8 +230,7 @@ def honest_risk_labels(bounded: list[dict], unbounded: list[dict]) -> dict:
     return {
         "labels": labels,
         "kill_switch_note": "kill_switch 是通知级非阻断（grill #8），不阻止已发出的单——不是 core 风控保护。",
-        "honest_summary": "真实风控 = 仓位 sizing + gap-down 诚实标，非 'core 风控保护'。"
-        "在险金额是基于已设止损的**下限**，gap-down 实际亏损可能远超此数。",
+        "honest_summary": "真实风控 = 仓位 sizing + gap-down 诚实标，非 'core 风控保护'。在险金额是基于已设止损的**下限**，gap-down 实际亏损可能远超此数。",
     }
 
 

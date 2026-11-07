@@ -267,9 +267,7 @@ def _load_universe(max_per_day: int | None = None) -> dict[str, list[str]]:
     conn = get_healthy_conn(GENE_SCORES_DB_PATH)
     try:
         if max_per_day:
-            rows = conn.execute(
-                "SELECT date, code, total_score FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date, total_score DESC"
-            ).fetchall()
+            rows = conn.execute("SELECT date, code, total_score FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date, total_score DESC").fetchall()
         else:
             rows = conn.execute("SELECT date, code FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date").fetchall()
     finally:

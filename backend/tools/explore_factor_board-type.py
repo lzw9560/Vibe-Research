@@ -178,22 +178,14 @@ def main():
     for r in verdicts:
         bonf = bonferroni_p(r["p_raw"], 12)
         short = r["label"].split("(")[0].strip()
-        print(
-            f"{short:<44} {r['n_picks']:>5} {r['ev_gross']:>8.3f} "
-            f"{r['net_ev']:>8.3f} {r['t_day']:>7.2f} {r['n_days']:>6} "
-            f"{bonf:>9.6f} {r['verdict']:<14}"
-        )
+        print(f"{short:<44} {r['n_picks']:>5} {r['ev_gross']:>8.3f} {r['net_ev']:>8.3f} {r['t_day']:>7.2f} {r['n_days']:>6} {bonf:>9.6f} {r['verdict']:<14}")
 
     # walk-forward 汇总
     print(f"\nwalk-forward OOS 汇总:")
     print(f"{'subset':<44} {'train%':>8} {'test%':>8} {'test_t':>7} {'test_p':>8}")
     for r in verdicts:
         if r["wf_status"] == "ok":
-            print(
-                f"{r['label'].split('(')[0].strip():<44} "
-                f"{r['wf_train']:>8.3f} {r['wf_test']:>8.3f} "
-                f"{r['wf_test_t']:>7.2f} {r['wf_test_p']:>8.6f}"
-            )
+            print(f"{r['label'].split('(')[0].strip():<44} {r['wf_train']:>8.3f} {r['wf_test']:>8.3f} {r['wf_test_t']:>7.2f} {r['wf_test_p']:>8.6f}")
         else:
             print(f"{r['label'].split('(')[0].strip():<44} {r['wf_status']}")
 

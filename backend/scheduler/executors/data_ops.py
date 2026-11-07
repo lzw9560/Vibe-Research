@@ -290,9 +290,9 @@ def daily_full_pull(payload: Dict[str, Any]) -> Dict[str, Any]:
         if zt_db.exists():
             try:
                 _c = _sql.connect(str(zt_db), timeout=5)
-                report_codes = [
-                    r[0] for r in _c.execute("SELECT code FROM zt_history WHERE date=? AND code IS NOT NULL", (date_str,)).fetchall()
-                ][:30]  # 限 30 股研报（防 stoke subprocess 长时间）
+                report_codes = [r[0] for r in _c.execute("SELECT code FROM zt_history WHERE date=? AND code IS NOT NULL", (date_str,)).fetchall()][
+                    :30
+                ]  # 限 30 股研报（防 stoke subprocess 长时间）
                 _c.close()
             except Exception as e:  # noqa: BLE001
                 logger.warning("[daily_full_pull] zt_history 取 codes 失败: %s", e)

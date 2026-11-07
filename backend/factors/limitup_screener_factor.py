@@ -77,9 +77,7 @@ class LimitupScreenerFactor:
 
         # ---- S031 R14：因子三层漏斗（打分→战法→仓位），数据全来自 report 既有字段，禁臆造 ----
         # L1 打分
-        l1_filtered = [
-            FilterRecord(code=f.get("code", ""), name=f.get("name"), reason=f.get("reason", "基因得分未达标")) for f in report.filtered_out
-        ]
+        l1_filtered = [FilterRecord(code=f.get("code", ""), name=f.get("name"), reason=f.get("reason", "基因得分未达标")) for f in report.filtered_out]
         # S028 三态：仅当无 qualified 时才标 data_status（有合格候选=正常，与 S028 原 if not candidates 一致）
         if qualified:
             l1_status, l1_reason = None, None

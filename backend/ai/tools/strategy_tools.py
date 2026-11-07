@@ -81,11 +81,7 @@ def _build_backtest_section(code: str) -> str:
         sample_note = f"n={n}"
         verdict = "历史正胜率"
 
-    return (
-        f"\n## 历史战绩（{lookback}日回测）\n"
-        f"- 胜率 {win_pct:.1f}% · 均值收益 {avg:+.2f}% · 样本 {n}\n"
-        f"- §44 口径：{sample_note}，{verdict}，未 validated\n"
-    )
+    return f"\n## 历史战绩（{lookback}日回测）\n- 胜率 {win_pct:.1f}% · 均值收益 {avg:+.2f}% · 样本 {n}\n- §44 口径：{sample_note}，{verdict}，未 validated\n"
 
 
 def _trigger_backtest_async(code: str) -> None:

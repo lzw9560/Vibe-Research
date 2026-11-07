@@ -256,10 +256,7 @@ def rolling_walk_forward(picks: list[dict], ret_fn, n_windows: int = 4) -> dict:
     all_test_dates = [p["zt_date"] for p in all_test_picks if ret_fn(p) is not None]
     pooled_hac = per_trade_t_hac(all_test_rets, all_test_dates)
     pooled_dt = day_paired_t(
-        {
-            d: [ret_fn(p) for p in all_test_picks if p["zt_date"] == d and ret_fn(p) is not None]
-            for d in set(p["zt_date"] for p in all_test_picks)
-        }
+        {d: [ret_fn(p) for p in all_test_picks if p["zt_date"] == d and ret_fn(p) is not None] for d in set(p["zt_date"] for p in all_test_picks)}
     )
     return {
         "status": "ok",
@@ -503,10 +500,7 @@ def main():
     basic_rets = [close_ev_basic(p) for p in picks]
     basic_rets = [r for r in basic_rets if r is not None]
     basic_s = ev_stats(basic_rets)
-    print(
-        f"  n={basic_s['n']} gross_EV={basic_s['ev']}% std={basic_s['std']}% "
-        f"WR={basic_s['wr']}% t={basic_s['t']} CI[{basic_s['ci_lo']},{basic_s['ci_hi']}]"
-    )
+    print(f"  n={basic_s['n']} gross_EV={basic_s['ev']}% std={basic_s['std']}% WR={basic_s['wr']}% t={basic_s['t']} CI[{basic_s['ci_lo']},{basic_s['ci_hi']}]")
     net_ev = basic_s["ev"] - BOARD_COST * 100
     print(f"  net EV (after {BOARD_COST * 100:.1f}% cost): {net_ev:.3f}%")
 
@@ -517,10 +511,7 @@ def main():
         if r is not None:
             basic_by_date[p["zt_date"]].append(r)
     basic_dt = day_paired_t(basic_by_date)
-    print(
-        f"\n  [original method] per-day-mean: n_days={basic_dt['n_days']} "
-        f"mean={basic_dt['mean']}% t={basic_dt['t']} p={basic_dt['p_one_sided']}"
-    )
+    print(f"\n  [original method] per-day-mean: n_days={basic_dt['n_days']} mean={basic_dt['mean']}% t={basic_dt['t']} p={basic_dt['p_one_sided']}")
 
     # per-trade HAC (new method)
     basic_dates = [p["zt_date"] for p in picks if close_ev_basic(p) is not None]
@@ -607,16 +598,10 @@ def main():
         oos_day_ps = [w["test_day_p"] for w in wf["windows"]]
         bh_oos_hac = bh_fdr(oos_hac_ps, alpha=ALPHA)
         bh_oos_day = bh_fdr(oos_day_ps, alpha=ALPHA)
-        print(
-            f"\n  BH on OOS per-trade-HAC p's (m={bh_oos_hac['m']}): "
-            f"{bh_oos_hac['verdict']} ({bh_oos_hac['n_passed']}/{bh_oos_hac['m']} passed)"
-        )
+        print(f"\n  BH on OOS per-trade-HAC p's (m={bh_oos_hac['m']}): {bh_oos_hac['verdict']} ({bh_oos_hac['n_passed']}/{bh_oos_hac['m']} passed)")
         print(f"    p-values: {oos_hac_ps}")
         print(f"    q-values: {bh_oos_hac['q_values']}")
-        print(
-            f"  BH on OOS per-day-mean p's (m={bh_oos_day['m']}): "
-            f"{bh_oos_day['verdict']} ({bh_oos_day['n_passed']}/{bh_oos_day['m']} passed)"
-        )
+        print(f"  BH on OOS per-day-mean p's (m={bh_oos_day['m']}): {bh_oos_day['verdict']} ({bh_oos_day['n_passed']}/{bh_oos_day['m']} passed)")
         print(f"    p-values: {oos_day_ps}")
         print(f"    q-values: {bh_oos_day['q_values']}")
         # also BH on pooled + 3 windows (m=4)

@@ -169,10 +169,7 @@ def main() -> dict:
         chrono["underpowered"] = n_test < 30
         print(f"\n[V2 chrono-OOS] {tag} regime 2/3-1/3 chronological holdout:")
         print(f"  n_train_days={chrono['n_train_days']} n_test_days={chrono['n_test_days']} train_day_mean={chrono['train_day_mean']}")
-        print(
-            f"  test_day_mean={chrono['test_day_mean']} test_p_one_sided={chrono['test_p_one_sided']} "
-            f"test_win_rate={chrono['test_win_rate']}"
-        )
+        print(f"  test_day_mean={chrono['test_day_mean']} test_p_one_sided={chrono['test_p_one_sided']} test_win_rate={chrono['test_win_rate']}")
         print(f"  decision={chrono['decision']} note={chrono['decision_note']}")
         return chrono
 
@@ -187,8 +184,7 @@ def main() -> dict:
         f"p={bull_chrono.get('test_p_one_sided', '?')} n_test={bull_chrono.get('n_test_days', '?')}"
     )
     print(
-        f"  V2 bear: net_mean={bear_chrono.get('test_day_mean', '?')} "
-        f"p={bear_chrono.get('test_p_one_sided', '?')} n_test={bear_chrono.get('n_test_days', '?')}"
+        f"  V2 bear: net_mean={bear_chrono.get('test_day_mean', '?')} p={bear_chrono.get('test_p_one_sided', '?')} n_test={bear_chrono.get('n_test_days', '?')}"
     )
     print("  结论: V2 edge 消失/变负 → 当前 +1.04% 是'D 涨停封板溢价'非'连板接力 edge'→ 战法证否")
     print("        V2 edge 仍 +1% 左右 → edge 是真连板接力 → fix 安全")

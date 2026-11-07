@@ -431,9 +431,7 @@ def _gene_stale_note(data_date: str) -> str:
     return f"数据日={data_date}，非今日（盘后预计算可能未跑），建议盘后重算"
 
 
-def _with_gene_freshness(
-    extra: dict[str, Any], risk_notes: list[str], data_date: str, data_stale: bool
-) -> tuple[dict[str, Any], list[str]]:
+def _with_gene_freshness(extra: dict[str, Any], risk_notes: list[str], data_date: str, data_stale: bool) -> tuple[dict[str, Any], list[str]]:
     """把 gene 数据日/stale 标注并入 AdvisoryItem.extra + risk_notes（immutable：返回新副本）。"""
     new_extra = {**extra, "gene_data_date": data_date, "data_stale": data_stale}
     new_notes = [*risk_notes]
@@ -564,9 +562,7 @@ def _holding_action_layer1(pnl_pct: float, win_rate: float | None, stop_pct: flo
     return "hold", "当日战法信号有效，持有"
 
 
-def _holding_action_layer2(
-    pnl_pct: float, win_rate: float | None, stop_pct: float, price: float, cost: float, code: str
-) -> tuple[str, str]:
+def _holding_action_layer2(pnl_pct: float, win_rate: float | None, stop_pct: float, price: float, cost: float, code: str) -> tuple[str, str]:
     """层 2：历史战法已过期——ATR trailing 止盈。"""
     if pnl_pct <= stop_pct:
         return "close", f"触及战法止损 {stop_pct}%，止损"
@@ -708,9 +704,7 @@ def _lookup_holding_strategies_batch(
         conn = get_db()
         try:
             rows = conn.execute(
-                f"SELECT code, MAX(date) AS d FROM gene_scores "
-                f"WHERE code IN ({placeholders}) AND date < ? AND date >= date(?, '-30 days') "
-                f"GROUP BY code",
+                f"SELECT code, MAX(date) AS d FROM gene_scores WHERE code IN ({placeholders}) AND date < ? AND date >= date(?, '-30 days') GROUP BY code",
                 (*need_hist, today, today),
             ).fetchall()
             for r in rows:

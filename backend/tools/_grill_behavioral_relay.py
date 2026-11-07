@@ -53,9 +53,7 @@ def load_zt_with_meta() -> list[dict]:
     """zt_history with lbc/hybk/ltsz/zbc(封单成交比)/fund(资金净流入)."""
     conn = sqlite3.connect(str(ZT_DB))
     rows = []
-    for r in conn.execute(
-        "SELECT date, code, name, lbc, zbc, fund, zje, p, ltsz, fundamt, hybk, source FROM zt_history WHERE is_final=1 ORDER BY date"
-    ):
+    for r in conn.execute("SELECT date, code, name, lbc, zbc, fund, zje, p, ltsz, fundamt, hybk, source FROM zt_history WHERE is_final=1 ORDER BY date"):
         rows.append(
             {
                 "date": r[0],
@@ -206,11 +204,7 @@ def main():
     regime = load_regime_labels()
     print(f"kline codes={len(code_map)} calendar_days={len(calendar)}")
     print(f"zt_meta rows={len(zt_meta)} (lbc>=2: {sum(1 for r in zt_meta if r['lbc'] >= 2)})")
-    print(
-        f"regime labels={len(regime)} "
-        f"(bull={sum(1 for v in regime.values() if v == 'bull')} "
-        f"bear={sum(1 for v in regime.values() if v == 'bear')})"
-    )
+    print(f"regime labels={len(regime)} (bull={sum(1 for v in regime.values() if v == 'bull')} bear={sum(1 for v in regime.values() if v == 'bear')})")
 
     picks = build_relay_picks_with_meta(code_map, calendar, zt_meta)
     print(f"\nrelay picks (lbc>=2, T+1 一字过滤后): {len(picks)}")

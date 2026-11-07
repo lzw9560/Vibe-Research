@@ -42,9 +42,7 @@ BEHAVIOR_SPECS: tuple[FeatureSpec, ...] = (
         stage="s3",
         compliance_flag="ok",
         description=(
-            "集合竞价信号：9:15-9:25 竞价金额/高开幅度/竞价封单。"
-            "次日开盘强领先信号，S3阶段解锁。"
-            "TODO: S3竞价数据走 astock.em_get + limitup_sti，S008接。"
+            "集合竞价信号：9:15-9:25 竞价金额/高开幅度/竞价封单。次日开盘强领先信号，S3阶段解锁。TODO: S3竞价数据走 astock.em_get + limitup_sti，S008接。"
         ),
     ),
     FeatureSpec(
@@ -63,9 +61,7 @@ BEHAVIOR_SPECS: tuple[FeatureSpec, ...] = (
         availability_offset=1,
         stage="s1",
         compliance_flag="aggregate_only",
-        description=(
-            "游资一日游风险评分：基于龙虎榜席位聚合持仓周期画像。不依赖个体席位标签，只用聚合持仓天数。一日游参与过高=负向风险特征。"
-        ),
+        description=("游资一日游风险评分：基于龙虎榜席位聚合持仓周期画像。不依赖个体席位标签，只用聚合持仓天数。一日游参与过高=负向风险特征。"),
     ),
 )
 

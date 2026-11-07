@@ -131,12 +131,8 @@ pre_eom = [p for p in pre_picks if p["eom"]]
 pre_not_eom = [p for p in pre_picks if not p["eom"]]
 s_eom = stats([p["ret"] for p in pre_eom])
 s_not_eom = stats([p["ret"] for p in pre_not_eom])
-print(
-    f"  Pre-holiday + EoM:     n={s_eom['n']} EV={s_eom['mean']:.3f}% WR={s_eom['wr'] * 100:.1f}% lift={s_eom['mean'] / base_s['mean']:.2f}x"
-)
-print(
-    f"  Pre-holiday NOT EoM:  n={s_not_eom['n']} EV={s_not_eom['mean']:.3f}% WR={s_not_eom['wr'] * 100:.1f}% lift={s_not_eom['mean'] / base_s['mean']:.2f}x"
-)
+print(f"  Pre-holiday + EoM:     n={s_eom['n']} EV={s_eom['mean']:.3f}% WR={s_eom['wr'] * 100:.1f}% lift={s_eom['mean'] / base_s['mean']:.2f}x")
+print(f"  Pre-holiday NOT EoM:  n={s_not_eom['n']} EV={s_not_eom['mean']:.3f}% WR={s_not_eom['wr'] * 100:.1f}% lift={s_not_eom['mean'] / base_s['mean']:.2f}x")
 
 # ---------- Type × ToM cross-tab ----------
 print(f"\n{'=' * 70}")

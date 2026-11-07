@@ -648,11 +648,7 @@ def main() -> None:
             skew=skew_approx,
             kurt=kurt_approx,
         )
-        print(
-            f"  {r['name']}: excess_SR={r['excess_sr']:.3f} "
-            f"(total strat SR={r['sr_strat']:.3f} includes beta) "
-            f"→ DSR P(timing alpha>0)={dsr:.4f}"
-        )
+        print(f"  {r['name']}: excess_SR={r['excess_sr']:.3f} (total strat SR={r['sr_strat']:.3f} includes beta) → DSR P(timing alpha>0)={dsr:.4f}")
 
     # ---- Honest verdict summary ----
     print(f"\n{'=' * 70}")
@@ -662,9 +658,7 @@ def main() -> None:
         bonf_p = bonferroni_p(r["nw_p"], N_CROSS_FACTOR * 2)
         wf = r["wf"]
         print(f"\n  {r['name']}:")
-        print(
-            f"    gross_daily_ev={r['gross_ev']}% net_daily_ev={r['net_ev']}% (after {r['n_switches']}×{ETF_ONE_WAY_COST * 100:.1f}% cost)"
-        )
+        print(f"    gross_daily_ev={r['gross_ev']}% net_daily_ev={r['net_ev']}% (after {r['n_switches']}×{ETF_ONE_WAY_COST * 100:.1f}% cost)")
         print(f"    NW_t={r['nw_t']} NW_p={r['nw_p']} Bonf_p(×{N_CROSS_FACTOR * 2})={bonf_p:.6f}")
         print(f"    simple_t={r['simple_t']} simple_p={r['simple_p']} (simple t OVERSTATES — daily excess autocorrelated)")
         if wf["status"] == "ok":

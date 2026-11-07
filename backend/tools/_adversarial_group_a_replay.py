@@ -247,11 +247,7 @@ def summarize(trades, label):
     reasons = defaultdict(int)
     for t in trades:
         reasons[t["reason"]] += 1
-    print(
-        f"  [{label}] n={n} days={ndays} WR={wr * 100:.1f}% "
-        f"mean_gross={mean_gross:+.3f}% mean_net={mean_net:+.3f}% "
-        f"median={med:+.3f}% day_t={t_val:+.2f}"
-    )
+    print(f"  [{label}] n={n} days={ndays} WR={wr * 100:.1f}% mean_gross={mean_gross:+.3f}% mean_net={mean_net:+.3f}% median={med:+.3f}% day_t={t_val:+.2f}")
     print(f"           exits: {dict(reasons)}")
     return {"n": n, "wr": wr, "mean_net": mean_net, "median": med, "day_t": t_val}
 

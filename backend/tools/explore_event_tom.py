@@ -499,9 +499,7 @@ def main():
     tom_picks3 = build_tom_windows(calendar, bmap, month_ends, hold=3, start_year=START_YEAR)
     tom_rets3 = [p["ret"] for p in tom_picks3]
     s3 = ev_stats(tom_rets3)
-    bench_rets3 = build_benchmark_windows(
-        calendar, bmap, hold=3, tom_signal_dates=set(p["signal_date"] for p in tom_picks3), start_year=START_YEAR
-    )
+    bench_rets3 = build_benchmark_windows(calendar, bmap, hold=3, tom_signal_dates=set(p["signal_date"] for p in tom_picks3), start_year=START_YEAR)
     bench_s3 = ev_stats(bench_rets3)
     bhar3 = s3["ev"] - bench_s3["ev"]
     lift3 = s3["ev"] / bench_s3["ev"] if abs(bench_s3["ev"]) > 1e-6 else 0

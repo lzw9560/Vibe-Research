@@ -45,9 +45,7 @@ def main(limit: int | None = None) -> int:
         dates = [
             r[0]
             for r in conn.execute(
-                "SELECT DISTINCT signal_date FROM forward_test_records "
-                "WHERE return_path IS NULL AND return_open2close IS NOT NULL "
-                "ORDER BY signal_date DESC"
+                "SELECT DISTINCT signal_date FROM forward_test_records WHERE return_path IS NULL AND return_open2close IS NOT NULL ORDER BY signal_date DESC"
             ).fetchall()
         ]
     finally:
@@ -70,9 +68,7 @@ def main(limit: int | None = None) -> int:
         try:
             # picks: code + strategy_code（取首个战法 params）；build strategy_params_map
             pick_rows = conn.execute("SELECT code, strategy_code FROM forward_test_records WHERE signal_date=?", (signal_date,)).fetchall()
-            uni_codes = [
-                r[0] for r in conn.execute("SELECT DISTINCT code FROM universe_returns WHERE signal_date=?", (signal_date,)).fetchall()
-            ]
+            uni_codes = [r[0] for r in conn.execute("SELECT DISTINCT code FROM universe_returns WHERE signal_date=?", (signal_date,)).fetchall()]
         finally:
             conn.close()
         # 每 code 取首个战法 params（多战法同 code 时 record_actual_returns 按 code UPDATE 全行同 path）

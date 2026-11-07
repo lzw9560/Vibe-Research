@@ -103,9 +103,7 @@ def load_index_levels() -> dict[str, float]:
 # ---------- low-vol daily factor series (self-built, mirrors SMB builder) ----------
 
 
-def build_lowvol_series(
-    close: np.ndarray, amount: np.ndarray, ret: np.ndarray, calendar: list[str], rebal_idx: list[int]
-) -> dict[str, float]:
+def build_lowvol_series(close: np.ndarray, amount: np.ndarray, ret: np.ndarray, calendar: list[str], rebal_idx: list[int]) -> dict[str, float]:
     """Low-vol daily returns: month-end rebalance, 20d return-std signal.
 
     long = bottom decile (LOW volatility), short = top decile (HIGH volatility).
@@ -468,14 +466,8 @@ def main() -> int:
     p_B_raw = res_B["alpha_p_one"]
     p_A_bonf = bonferroni_p(p_A_raw, N_STRATEGIES_PARALLEL)
     p_B_bonf = bonferroni_p(p_B_raw, N_STRATEGIES_PARALLEL)
-    print(
-        f"  回归A (size|lowvol): raw p_one={p_A_raw:.4f} -> Bonf×{N_STRATEGIES_PARALLEL}={p_A_bonf:.4f} "
-        f"({'PASS' if p_A_bonf < ALPHA else 'FAIL'} @ {ALPHA})"
-    )
-    print(
-        f"  回归B (lowvol|size): raw p_one={p_B_raw:.4f} -> Bonf×{N_STRATEGIES_PARALLEL}={p_B_bonf:.4f} "
-        f"({'PASS' if p_B_bonf < ALPHA else 'FAIL'} @ {ALPHA})"
-    )
+    print(f"  回归A (size|lowvol): raw p_one={p_A_raw:.4f} -> Bonf×{N_STRATEGIES_PARALLEL}={p_A_bonf:.4f} ({'PASS' if p_A_bonf < ALPHA else 'FAIL'} @ {ALPHA})")
+    print(f"  回归B (lowvol|size): raw p_one={p_B_raw:.4f} -> Bonf×{N_STRATEGIES_PARALLEL}={p_B_bonf:.4f} ({'PASS' if p_B_bonf < ALPHA else 'FAIL'} @ {ALPHA})")
     # within-script ×2 sensitivity (2 directions tested)
     p_A_bonf8 = bonferroni_p(p_A_raw, N_STRATEGIES_PARALLEL * 2)
     p_B_bonf8 = bonferroni_p(p_B_raw, N_STRATEGIES_PARALLEL * 2)

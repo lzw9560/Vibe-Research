@@ -48,9 +48,7 @@ def get_sti_latest(date: str = Query(None, description="日期，格式 YYYY-MM-
                             limit_up_count=default_dims[0],
                             limit_down_count=float(row["dimension_limit_down_count"]) if row["dimension_limit_down_count"] else 0,
                             seal_rate=default_dims[1],
-                            advance_decline_ratio=float(row["dimension_advance_decline_ratio"])
-                            if row["dimension_advance_decline_ratio"]
-                            else 0,
+                            advance_decline_ratio=float(row["dimension_advance_decline_ratio"]) if row["dimension_advance_decline_ratio"] else 0,
                             promotion_rate=default_dims[2],
                             prev_zt_performance=float(row["dimension_prev_zt_performance"]) if row["dimension_prev_zt_performance"] else 0,
                             max_boards=float(row["dimension_max_boards"]) if row["dimension_max_boards"] else 0,

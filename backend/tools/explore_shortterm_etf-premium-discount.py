@@ -233,10 +233,7 @@ def analyze_variant(name: str, picks: list[dict], threshold: float) -> dict:
     raw_rets = [raw_ev(p) for p in picks]
     raw_s = ev_stats(raw_rets)
     print(f"\n--- raw EV (二级市场价收益, T+1 open→T+2 close) ---")
-    print(
-        f"  n={raw_s['n']} gross_EV={raw_s['ev']}% std={raw_s['std']}% "
-        f"WR={raw_s['wr']}% t={raw_s['t']} CI[{raw_s['ci_lo']},{raw_s['ci_hi']}]"
-    )
+    print(f"  n={raw_s['n']} gross_EV={raw_s['ev']}% std={raw_s['std']}% WR={raw_s['wr']}% t={raw_s['t']} CI[{raw_s['ci_lo']},{raw_s['ci_hi']}]")
     raw_net = raw_s["ev"] - ETF_COST
     print(f"  net EV (after {ETF_COST}% ETF cost): {raw_net:.3f}%")
     raw_by_date: dict[str, list[float]] = defaultdict(list)
@@ -249,10 +246,7 @@ def analyze_variant(name: str, picks: list[dict], threshold: float) -> dict:
     bhar_rets = [bhar(p) for p in picks]
     bhar_s = ev_stats(bhar_rets)
     print(f"\n--- BHAR alpha (price_return - nav_return, 折价收敛 alpha) ---")
-    print(
-        f"  n={bhar_s['n']} gross_BHAR={bhar_s['ev']}% std={bhar_s['std']}% "
-        f"WR={bhar_s['wr']}% t={bhar_s['t']} CI[{bhar_s['ci_lo']},{bhar_s['ci_hi']}]"
-    )
+    print(f"  n={bhar_s['n']} gross_BHAR={bhar_s['ev']}% std={bhar_s['std']}% WR={bhar_s['wr']}% t={bhar_s['t']} CI[{bhar_s['ci_lo']},{bhar_s['ci_hi']}]")
     bhar_net = bhar_s["ev"] - ETF_COST
     print(f"  net BHAR (after {ETF_COST}% cost): {bhar_net:.3f}%")
     bhar_by_date: dict[str, list[float]] = defaultdict(list)

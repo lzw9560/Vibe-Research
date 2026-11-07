@@ -256,11 +256,7 @@ print("-" * 90)
 for (bn, mn), r in results.items():
     p_bonf = bonferroni_p(r["p_raw"], N_BUCKETS)
     mshort = "(A)naive" if "NAIVE" in mn else "(B)honest"
-    print(
-        f"{bn:<8} {mshort:<14} {r['n']:>5} {r['gross_ev']:>+7.3f}% "
-        f"{r['net_ev']:>+7.3f}% {r['day_t']:>7.2f} {r['n_days']:>6} "
-        f"{p_bonf:>7.4f}  {r['verdict']}"
-    )
+    print(f"{bn:<8} {mshort:<14} {r['n']:>5} {r['gross_ev']:>+7.3f}% {r['net_ev']:>+7.3f}% {r['day_t']:>7.2f} {r['n_days']:>6} {p_bonf:>7.4f}  {r['verdict']}")
 
 # honest-only overall verdict
 honest_vs = [r["verdict"] for (b, m), r in results.items() if "HONEST" in m]
@@ -281,7 +277,5 @@ print(f"\n⚠️ 诚实定位: 散户口径下大宗折价信号 = 均值回归�
 print(f"   同家族 (5日跌/RSI超卖) 此前 9/9 falsified. 本信号是同家族子信号.")
 print(f"   verdict 基于 (B) HONEST 口径 (可交易). (A) NAIVE 仅诊断 look-ahead 通胀.")
 print(f"⚠️ 不外推: 大宗折价信号 ≠ 事件驱动有/无 edge ≠ 短线有/无 edge.")
-print(
-    f"   对照: 2026-09-08 selection_lift 测过 (9 verdict 全 exploratory, best 1.17x). 本脚本测 ABSOLUTE close_ev, 桶定义不同, 互补非重复."
-)
+print(f"   对照: 2026-09-08 selection_lift 测过 (9 verdict 全 exploratory, best 1.17x). 本脚本测 ABSOLUTE close_ev, 桶定义不同, 互补非重复.")
 print(f"\n数据窗口: {len(dates)} 交易日 ({dates[0]}~{dates[-1]}), <60 门下属 underpowered 区间.")

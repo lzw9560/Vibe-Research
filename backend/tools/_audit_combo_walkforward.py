@@ -87,12 +87,8 @@ def main() -> None:
     tr = composite_top_decile(train_dates)
     te = composite_top_decile(test_dates)
     if tr and te:
-        print(
-            f"train: top-decile mean {tr['mean'] * 100:+.4f}% (base {tr['base'] * 100:+.4f}%, diff {tr['diff'] * 100:+.4f}%, t={tr['t']:.2f})"
-        )
-        print(
-            f"test:  top-decile mean {te['mean'] * 100:+.4f}% (base {te['base'] * 100:+.4f}%, diff {te['diff'] * 100:+.4f}%, t={te['t']:.2f})"
-        )
+        print(f"train: top-decile mean {tr['mean'] * 100:+.4f}% (base {tr['base'] * 100:+.4f}%, diff {tr['diff'] * 100:+.4f}%, t={tr['t']:.2f})")
+        print(f"test:  top-decile mean {te['mean'] * 100:+.4f}% (base {te['base'] * 100:+.4f}%, diff {te['diff'] * 100:+.4f}%, t={te['t']:.2f})")
         oos = te["t"] > 2.4 and te["diff"] > 0  # Bonferroni×3 粗
         print(f"\nOOS (Bonferroni×3, t>2.4): {'✅ SURVIVOR' if oos else '❌ FAIL'}")
         if oos:

@@ -449,9 +449,7 @@ def walk_forward_cv(
         lift_mean = np.mean(lifts) if len(lifts) else 1
         lift_std = np.std(lifts) if len(lifts) else 0
         sig = "**" if ic_pval < BONF_ALPHA else ("*" if ic_pval < ALPHA else "")
-        print(
-            f"{mname:<20s} {r2_mean:+.4f}±{r2_std:.4f}   {ic_mean:+.4f}±{ic_std:.4f}   {lift_mean:.3f}±{lift_std:.3f}   {ic_pval:.4f}{sig}"
-        )
+        print(f"{mname:<20s} {r2_mean:+.4f}±{r2_std:.4f}   {ic_mean:+.4f}±{ic_std:.4f}   {lift_mean:.3f}±{lift_std:.3f}   {ic_pval:.4f}{sig}")
         results[mname] = {
             "r2_mean": r2_mean,
             "r2_std": r2_std,

@@ -100,10 +100,7 @@ async def recompute_range(start: str, end: str, dry_run: bool = False) -> None:
     total_nonzero = 0
     for i, d in enumerate(dates):
         r = await recompute_one(d, dry_run=dry_run)
-        print(
-            f"[{i + 1}/{len(dates)}] {d}: codes_in={r['codes_in']} deleted={r['deleted']} "
-            f"rebuilt={r['rebuilt']} nonzero={r['nonzero']} {r.get('note', '')}"
-        )
+        print(f"[{i + 1}/{len(dates)}] {d}: codes_in={r['codes_in']} deleted={r['deleted']} rebuilt={r['rebuilt']} nonzero={r['nonzero']} {r.get('note', '')}")
         total_rebuilt += r["rebuilt"]
         total_nonzero += r["nonzero"]
     print("=" * 50)

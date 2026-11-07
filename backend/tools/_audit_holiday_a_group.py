@@ -170,10 +170,7 @@ for ht in types_present:
     sub = [p["ret"] for p in a_picks if p["type"] == ht]
     s = stats(sub)
     bonf_p = min(s["p"] * 7, 1.0)  # Bonf×7（7 类型：春节/国庆/清明/劳动/端午/元旦/其他）
-    print(
-        f"  {ht}: n={s['n']} EV={s['mean']:.3f}% WR={s['wr'] * 100:.1f}% "
-        f"p_raw={s['p']:.4f} Bonf×7={bonf_p:.4f} {'PASS' if bonf_p < 0.05 else 'FAIL'}"
-    )
+    print(f"  {ht}: n={s['n']} EV={s['mean']:.3f}% WR={s['wr'] * 100:.1f}% p_raw={s['p']:.4f} Bonf×7={bonf_p:.4f} {'PASS' if bonf_p < 0.05 else 'FAIL'}")
     if s["p"] < min_p:
         min_p = s["p"]
 bonf7_overall = min(a_s["p"] * 7, 1.0)
@@ -213,13 +210,9 @@ for ratio, label in splits:
 # 默认用 70/30 作为主 walk-forward 结果（兼容后续 tr_s/te_s 引用）
 tr_s, te_s, decay, oos_bonf4, _, _ = wf_results["70/30"]
 print(f"\n  主结果（70/30，最优比例 post-hoc 可疑）: test raw_p={te_s['p']:.4f} OOS_Bonf×4={oos_bonf4:.4f} 衰减={decay:.1f}%")
+print(f"  ⚠️ R42: OOS test raw p={te_s['p']:.4f} Bonf×4={oos_bonf4:.4f} — {'PASS' if oos_bonf4 < 0.05 else 'FAIL'}（原脚本漏了 OOS Bonf，grill 戳破）")
 print(
-    f"  ⚠️ R42: OOS test raw p={te_s['p']:.4f} Bonf×4={oos_bonf4:.4f} — "
-    f"{'PASS' if oos_bonf4 < 0.05 else 'FAIL'}（原脚本漏了 OOS Bonf，grill 戳破）"
-)
-print(
-    f"  ⚠️ R45: 80/20 test_p={wf_results['80/20'][1]['p']:.4f} "
-    f"{'PASS' if wf_results['80/20'][4] else 'FAIL'}（2022后 n={wf_results['80/20'][1]['n']} 暴露衰减）"
+    f"  ⚠️ R45: 80/20 test_p={wf_results['80/20'][1]['p']:.4f} {'PASS' if wf_results['80/20'][4] else 'FAIL'}（2022后 n={wf_results['80/20'][1]['n']} 暴露衰减）"
 )
 
 # ---------- 2b. 去离群稳定性（R45 离群依赖）----------
@@ -234,10 +227,7 @@ if top_outlier:
     te_no_top = stats(test_no_top)
     print(f"    最大离群: {top_outlier['buy_date']} ret={top_outlier['ret']:.3f}%")
     print(f"    去后: n={te_no_top['n']} EV={te_no_top['mean']:.4f}% raw_p={te_no_top['p']:.4f} Bonf×4={min(te_no_top['p'] * 4, 1.0):.4f}")
-    print(
-        f"    离群贡献: test 总 EV {(te_s['mean'] * te_s['n'] - te_no_top['mean'] * te_no_top['n']):.3f}% "
-        f"中该 1 笔贡献 {top_outlier['ret']:.3f}%"
-    )
+    print(f"    离群贡献: test 总 EV {(te_s['mean'] * te_s['n'] - te_no_top['mean'] * te_no_top['n']):.3f}% 中该 1 笔贡献 {top_outlier['ret']:.3f}%")
 
 # ---------- 3. 真 DSR（Bailey-Lopez de Prado PSR）+ NW HAC 聚簇校正 ----------
 print(f"\n{'=' * 70}")

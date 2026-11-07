@@ -90,11 +90,7 @@ def screen_low_volume_dip(
     """
     result = LVDResult(params=LVD_PARAMS.copy())
 
-    valid = [
-        s
-        for s in all_stocks
-        if s.get("price_change_ratio_pct") is not None and s.get("turnover") is not None and s.get("last_price") is not None
-    ]
+    valid = [s for s in all_stocks if s.get("price_change_ratio_pct") is not None and s.get("turnover") is not None and s.get("last_price") is not None]
     result.total_scanned = len(valid)
 
     if not valid:
@@ -166,9 +162,7 @@ def screen_low_volume_dip(
     result.candidates = candidates[:max_stocks]
 
     # 回测统计摘要
-    result.edge_stats = (
-        "回测2026.1-9: 日组合n=158 mean=+0.99% WR=44% t=1.96 p=0.026(显著) | 单只n=5517 mean=+1.60% 止损-5% 持有2周 p75=+5.5%"
-    )
+    result.edge_stats = "回测2026.1-9: 日组合n=158 mean=+0.99% WR=44% t=1.96 p=0.026(显著) | 单只n=5517 mean=+1.60% 止损-5% 持有2周 p75=+5.5%"
 
     return result
 

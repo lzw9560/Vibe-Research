@@ -93,9 +93,7 @@ def main() -> None:
             best_net = r["net"]
             best_lim = lim
     if best_lim is not None:
-        print(
-            f"最佳 gap_limit = {best_lim}（net {best_net * 100:+.3f}% vs 不限 {base['net'] * 100:+.3f}%，提升 {(best_net - base['net']) * 100:+.3f}%）"
-        )
+        print(f"最佳 gap_limit = {best_lim}（net {best_net * 100:+.3f}% vs 不限 {base['net'] * 100:+.3f}%，提升 {(best_net - base['net']) * 100:+.3f}%）")
     else:
         print(f"限 gap 未提升（不限 net {base['net'] * 100:+.3f}% 最高）→ entry gap 优化空间不在限 T 日 gap")
 

@@ -81,9 +81,7 @@ def settle_combo_5d() -> int:
             continue
         net_pnl = (exit_price - entry_price) / entry_price * 100 - COST_PCT
         conn.execute(
-            "UPDATE trade_journal SET entry_price=?, exit_price=?, exit_date=?, "
-            "net_pnl=?, is_realized=1, exit_reason='nostop_t5_settled' "
-            "WHERE signal_id=?",
+            "UPDATE trade_journal SET entry_price=?, exit_price=?, exit_date=?, net_pnl=?, is_realized=1, exit_reason='nostop_t5_settled' WHERE signal_id=?",
             (entry_price, exit_price, exit_date, round(net_pnl, 4), sig_id),
         )
         settled += 1

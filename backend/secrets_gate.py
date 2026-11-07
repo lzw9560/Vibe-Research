@@ -47,10 +47,7 @@ def _check_hithink_key() -> list[str]:
     if not key:
         warnings.append("HITHINK_FINANCE_API_KEY 未设置——hithink 估值(PS/PCF)/异动/涨停池数据将不可用")
     elif _LEAKED_KEY_MARKER in key:
-        warnings.append(
-            "HITHINK_FINANCE_API_KEY 疑似泄漏 key（sk-fuyaro- 前缀）——"
-            "请立即去 fuyao.aicubes.cn/admin revoke 并重新生成，写入 .env（不贴对话）"
-        )
+        warnings.append("HITHINK_FINANCE_API_KEY 疑似泄漏 key（sk-fuyaro- 前缀）——请立即去 fuyao.aicubes.cn/admin revoke 并重新生成，写入 .env（不贴对话）")
     return warnings
 
 

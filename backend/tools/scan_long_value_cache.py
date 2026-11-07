@@ -244,8 +244,7 @@ def scan_kline_long(adjustflag: str = "both", limit: int | None = None) -> dict:
                         break
                     el = time.time() - t0
                     print(
-                        f"[S171 Layer1/{suffix}] re-login @ {i}/{len(todo)} done={len(cache)} "
-                        f"elapsed={el:.0f}s eta={el / i * (len(todo) - i):.0f}s",
+                        f"[S171 Layer1/{suffix}] re-login @ {i}/{len(todo)} done={len(cache)} elapsed={el:.0f}s eta={el / i * (len(todo) - i):.0f}s",
                         flush=True,
                     )
 

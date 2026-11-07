@@ -148,9 +148,7 @@ def _log_gate(date, breadth, sm5, sm20, lg5, spread, viable, action) -> None:
             "lg5 REAL, spread REAL, viable INTEGER, combo_action TEXT, logged_at TEXT)"
         )
         conn.execute(
-            "INSERT OR REPLACE INTO regime_gate_combo_log "
-            "(date, breadth, sm5, sm20, lg5, spread, viable, combo_action, logged_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT OR REPLACE INTO regime_gate_combo_log (date, breadth, sm5, sm20, lg5, spread, viable, combo_action, logged_at) VALUES (?,?,?,?,?,?,?,?,?)",
             (date, breadth, sm5, sm20, lg5, spread, 1 if viable else 0, action, datetime.datetime.now().isoformat()),
         )
         conn.commit()

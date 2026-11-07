@@ -204,9 +204,7 @@ def build_winners(all_bars: dict[str, list[dict]], zt_by_date: dict[str, dict[st
 # ---------- exit simulation ----------
 
 
-def simulate_exit(
-    w: dict, exit_day: str, atr_mult: float = ATR_MULT, hard_stop: float = HARD_STOP, realistic: bool = True
-) -> tuple[float, str, str] | None:
+def simulate_exit(w: dict, exit_day: str, atr_mult: float = ATR_MULT, hard_stop: float = HARD_STOP, realistic: bool = True) -> tuple[float, str, str] | None:
     """Trailing stop + higher-high exit. Returns (exit_price, day_label, reason) or None."""
     entry = w["entry"]
     atr = w["atr"]
@@ -462,10 +460,7 @@ def main():
     base_rets = [baseline_close_ev(w) for w in winners]
     base_rets = [r for r in base_rets if r is not None]
     base_s = ev_stats(base_rets)
-    print(
-        f"  n={base_s['n']} EV={base_s['ev']}% std={base_s['std']}% "
-        f"WR={base_s['wr']}% t={base_s['t']} CI[{base_s['ci_lo']},{base_s['ci_hi']}]"
-    )
+    print(f"  n={base_s['n']} EV={base_s['ev']}% std={base_s['std']}% WR={base_s['wr']}% t={base_s['t']} CI[{base_s['ci_lo']},{base_s['ci_hi']}]")
     net_base = base_s["ev"] - COST * 100
     print(f"  net EV (after {COST * 100:.1f}% cost): {net_base:.3f}%")
 
@@ -570,10 +565,7 @@ def main():
     rbase_rets = [realistic_baseline(w) for w in winners]
     rbase_rets = [r for r in rbase_rets if r is not None]
     rbase_s = ev_stats(rbase_rets)
-    print(
-        f"  n={rbase_s['n']} EV={rbase_s['ev']}% std={rbase_s['std']}% "
-        f"WR={rbase_s['wr']}% t={rbase_s['t']} CI[{rbase_s['ci_lo']},{rbase_s['ci_hi']}]"
-    )
+    print(f"  n={rbase_s['n']} EV={rbase_s['ev']}% std={rbase_s['std']}% WR={rbase_s['wr']}% t={rbase_s['t']} CI[{rbase_s['ci_lo']},{rbase_s['ci_hi']}]")
     net_rbase = rbase_s["ev"] - COST * 100
     print(f"  net EV (after cost): {net_rbase:.3f}%")
 
@@ -637,9 +629,7 @@ def main():
         print(f"  train {ed}: EV={tr['ev']}% t={tr['t']} n={tr['n']}")
     print(f"  best exit day (train): {wf['best_exit_day_train']}")
     tb = wf["test_ev_best"]
-    print(
-        f"  test (best={wf['best_exit_day_train']}): EV={tb['ev']}% t={tb['t']} WR={tb['wr']}% n={tb['n']} CI[{tb['ci_lo']},{tb['ci_hi']}]"
-    )
+    print(f"  test (best={wf['best_exit_day_train']}): EV={tb['ev']}% t={tb['t']} WR={tb['wr']}% n={tb['n']} CI[{tb['ci_lo']},{tb['ci_hi']}]")
     for ed in ("T+3", "T+4"):
         ts = wf["test_ev_both"][ed]
         print(f"  test {ed}: EV={ts['ev']}% t={ts['t']} WR={ts['wr']}% n={ts['n']}")

@@ -328,10 +328,7 @@ def verdict_for_factor(
     if wf["status"] == "ok":
         tr = wf["train"]
         te = wf["test"]
-        print(
-            f"    walk-forward: train mean={tr['mean_pct']}% (t={tr['t']}) "
-            f"| test mean={te['mean_pct']}% (t={te['t']} p={te['p_one_sided']})"
-        )
+        print(f"    walk-forward: train mean={tr['mean_pct']}% (t={tr['t']}) | test mean={te['mean_pct']}% (t={te['t']} p={te['p_one_sided']})")
 
     if gross_mean_pct <= 0:
         print("    -> FALSIFIED: gross factor mean <= 0 (no positive alpha)")
@@ -340,19 +337,14 @@ def verdict_for_factor(
         print(f"    -> UNDERPOWERED: n_blocks={n_blocks} < 60")
         return "underpowered"
     if bonf_p >= ALPHA_LEVEL:
-        print(
-            f"    -> FALSIFIED: Bonferroni p={bonf_p} >= {ALPHA_LEVEL} "
-            f"(not significant after ×{N_METHODS_PARALLEL * len(FORMATION_WEEKS_LIST)} correction)"
-        )
+        print(f"    -> FALSIFIED: Bonferroni p={bonf_p} >= {ALPHA_LEVEL} (not significant after ×{N_METHODS_PARALLEL * len(FORMATION_WEEKS_LIST)} correction)")
         return "falsified"
     if net_mean_pct <= 0:
         print(f"    -> FALSIFIED: net factor mean={net_mean_pct}% <= 0 (alpha eaten by transaction cost)")
         return "falsified"
     if wf["status"] == "ok":
         if wf["train"]["mean_pct"] <= 0:
-            print(
-                f"    -> EXPLORATORY: train mean={wf['train']['mean_pct']}% <= 0 (alpha absent in train half — test may be regime overfit)"
-            )
+            print(f"    -> EXPLORATORY: train mean={wf['train']['mean_pct']}% <= 0 (alpha absent in train half — test may be regime overfit)")
             return "exploratory"
         if wf["test"]["mean_pct"] <= 0:
             print(f"    -> FALSIFIED: walk-forward test mean={wf['test']['mean_pct']}% <= 0")
@@ -360,8 +352,7 @@ def verdict_for_factor(
         wf_test_bonf = bonferroni_p(wf["test"]["p_one_sided"], N_METHODS_PARALLEL * len(FORMATION_WEEKS_LIST))
         if wf_test_bonf >= ALPHA_LEVEL:
             print(
-                f"    -> EXPLORATORY: OOS test mean={wf['test']['mean_pct']}% > 0 but "
-                f"test p={wf['test']['p_one_sided']} Bonf={wf_test_bonf} >= {ALPHA_LEVEL}"
+                f"    -> EXPLORATORY: OOS test mean={wf['test']['mean_pct']}% > 0 but test p={wf['test']['p_one_sided']} Bonf={wf_test_bonf} >= {ALPHA_LEVEL}"
             )
             return "exploratory"
         print(f"    -> EDGE-CONFIRMED: gross+net alpha > 0, Bonferroni PASS, OOS test mean={wf['test']['mean_pct']}% significant")
@@ -385,9 +376,7 @@ def run_one_formation(data: dict, universe: list[str], fw: int) -> dict:
     # isolation audit: regress LS factor on benchmark block returns
     paired = [(f, b) for f, b in zip(fb["block_factor"], fb["block_bench"]) if b is not None]
     iso = (
-        ols_regression([p[0] for p in paired], [p[1] for p in paired])
-        if len(paired) >= 5
-        else {"alpha_pct": 0, "beta": 0, "alpha_t": 0, "beta_t": 0, "r2": 0}
+        ols_regression([p[0] for p in paired], [p[1] for p in paired]) if len(paired) >= 5 else {"alpha_pct": 0, "beta": 0, "alpha_t": 0, "beta_t": 0, "r2": 0}
     )
 
     # long-only Jensen alpha (散户可行性交叉验证: top-K only regressed on benchmark)
@@ -529,9 +518,7 @@ def main() -> None:
     if b["walk_forward"]["status"] == "ok":
         wf = b["walk_forward"]
         print(f"  walk-forward: train({wf['train_dates']}) mean={wf['train']['mean_pct']}% t={wf['train']['t']}")
-        print(
-            f"                test ({wf['test_dates']})  mean={wf['test']['mean_pct']}% t={wf['test']['t']} p={wf['test']['p_one_sided']}"
-        )
+        print(f"                test ({wf['test_dates']})  mean={wf['test']['mean_pct']}% t={wf['test']['t']} p={wf['test']['p_one_sided']}")
     print(f"  VERDICT: {b['verdict']}")
 
     # 散户可行性 + 诚实总结

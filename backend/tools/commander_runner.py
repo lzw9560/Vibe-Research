@@ -255,9 +255,7 @@ def load_combo_5d_today(date: str | None = None, mode: str = "filtered", top_n: 
                 continue
             if code.startswith("920"):  # 北交所
                 continue
-            if (c - prev_c) / prev_c >= _board_limit(
-                code
-            ):  # 涨停封板次日跌 live 不可交易（R4: 涨停贡献40%是假edge，去涨停后真edge +1.07% net t10.29）
+            if (c - prev_c) / prev_c >= _board_limit(code):  # 涨停封板次日跌 live 不可交易（R4: 涨停贡献40%是假edge，去涨停后真edge +1.07% net t10.29）
                 continue
         factors.append(
             {

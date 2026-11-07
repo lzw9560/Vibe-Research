@@ -239,11 +239,7 @@ def main() -> None:
     t_gap = day_clustered_t_test(gap_returns, gap_dates)
     t_no_gap = day_clustered_t_test(no_gap_returns, no_gap_dates)
     if t_gap:
-        print(
-            f"\n  gap-present day_clustered_t_test: t={t_gap.t_stat:+.3f} "
-            f"p={t_gap.p_one_sided:.4f} day_mean={t_gap.day_mean:+.6f} "
-            f"n_days={t_gap.n_days}"
-        )
+        print(f"\n  gap-present day_clustered_t_test: t={t_gap.t_stat:+.3f} p={t_gap.p_one_sided:.4f} day_mean={t_gap.day_mean:+.6f} n_days={t_gap.n_days}")
     else:
         print(f"\n  gap-present day_clustered_t_test: insufficient (n_days<2)")
     if t_no_gap:
@@ -376,10 +372,7 @@ def main() -> None:
         pl = day_paired_lift(surv_day, raw_day)
         if pl and pl.winrate_lift_avg is not None:
             pp = permutation_p_value(surv_day, all_day, pl.winrate_lift_avg)
-            print(
-                f"  | {n}日 | {pl.winrate_lift_avg:.4f} | {pl.mean_lift_avg} | "
-                f"{pp:.4f} | {pl.n_days} | {pl.surv_n_pooled} | {pl.raw_n_pooled} |"
-            )
+            print(f"  | {n}日 | {pl.winrate_lift_avg:.4f} | {pl.mean_lift_avg} | {pp:.4f} | {pl.n_days} | {pl.surv_n_pooled} | {pl.raw_n_pooled} |")
             p_list.append(pp)
             p_keys.append(f"perm_{n}d")
         else:
@@ -469,12 +462,7 @@ def main() -> None:
                 r = mkt_reg[tag].get(n, {})
                 lift_v = r.get("lift")
                 lift_s = f"{lift_v:.4f}" if lift_v is not None else "n/a"
-                print(
-                    f"  | {tag} | {n}d | {lift_s} | "
-                    f"{r.get('perm_p', 1.0):.4f} | "
-                    f"{r.get('n_days', 0)} | {r.get('surv_n', 0)} | "
-                    f"{r.get('raw_n', 0)} |"
-                )
+                print(f"  | {tag} | {n}d | {lift_s} | {r.get('perm_p', 1.0):.4f} | {r.get('n_days', 0)} | {r.get('surv_n', 0)} | {r.get('raw_n', 0)} |")
                 if lift_v is not None:
                     regime_p_list.append(r["perm_p"])
                     regime_p_keys.append(f"mkt_{tag}_{n}d")

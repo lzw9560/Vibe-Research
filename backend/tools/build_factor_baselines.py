@@ -365,8 +365,7 @@ def main() -> int:
             "date_range": f"{calendar[0]}~{calendar[-1]}",
             "n_dates": len(calendar),
             "n_codes_loaded": len(codes),
-            "survivorship_note": "early 2018-2020 cross-section ~264-766 from non-random "
-            "backfill; unbalanced panel; small-cap leg survivorship bias",
+            "survivorship_note": "early 2018-2020 cross-section ~264-766 from non-random backfill; unbalanced panel; small-cap leg survivorship bias",
             "caveats": [
                 "SMB size proxy = log(20d mean amount) is liquidity/turnover proxy, NOT true "
                 "market cap (needs shares outstanding). High-amount stocks may be high-turnover "

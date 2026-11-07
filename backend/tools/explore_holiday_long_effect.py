@@ -325,11 +325,7 @@ print(
     f"p_raw={combined_dt['p_one_sided']:.6f} p_bonf(×{N_TESTS})={bonferroni_p(combined_dt['p_one_sided'], N_TESTS):.6f}"
 )
 if wf_all["status"] == "ok":
-    decay = (
-        (wf_all["train_s"]["mean"] - wf_all["test_s"]["mean"]) / abs(wf_all["train_s"]["mean"]) * 100
-        if wf_all["train_s"]["mean"] != 0
-        else 0
-    )
+    decay = (wf_all["train_s"]["mean"] - wf_all["test_s"]["mean"]) / abs(wf_all["train_s"]["mean"]) * 100 if wf_all["train_s"]["mean"] != 0 else 0
     print(
         f"  Walk-forward: train_EV={wf_all['train_s']['mean']:.3f}% (n={wf_all['n_train']}) "
         f"test_EV={wf_all['test_s']['mean']:.3f}% (n={wf_all['n_test']}) "
@@ -421,9 +417,7 @@ elif wf_all["status"] == "ok":
         reason = f"walk-forward test_EV={wf_test_ev:.3f}% <= 0"
     elif bonferroni_p(wf_test_p, N_TESTS) >= ALPHA:
         verdict = "exploratory"
-        reason = (
-            f"OOS test EV={wf_test_ev:.3f}% > 0 but test p={wf_test_p:.6f} Bonf×{N_TESTS}={bonferroni_p(wf_test_p, N_TESTS):.6f} >= {ALPHA}"
-        )
+        reason = f"OOS test EV={wf_test_ev:.3f}% > 0 but test p={wf_test_p:.6f} Bonf×{N_TESTS}={bonferroni_p(wf_test_p, N_TESTS):.6f} >= {ALPHA}"
     else:
         verdict = "edge-confirmed"
         reason = f"all gates pass: gross+net>0, Bonf PASS, OOS significant"

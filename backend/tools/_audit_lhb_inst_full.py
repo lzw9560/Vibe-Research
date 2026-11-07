@@ -44,9 +44,7 @@ ALPHA = 0.05
 
 def load_picks_by_layer() -> dict:
     conn = sqlite3.connect(str(DT_DB))
-    rows = conn.execute(
-        "SELECT trade_date, security_code, dept_name, buy, net FROM dragon_tiger_rows WHERE side='buy' AND buy > 0"
-    ).fetchall()
+    rows = conn.execute("SELECT trade_date, security_code, dept_name, buy, net FROM dragon_tiger_rows WHERE side='buy' AND buy > 0").fetchall()
     conn.close()
     picks: dict = defaultdict(list)
     for date, code, dept, buy, net in rows:

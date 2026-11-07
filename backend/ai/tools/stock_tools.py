@@ -190,8 +190,7 @@ def query_hot_stock(period: str = "day") -> list[dict]:
 
 @register_tool(
     "query_anomaly",
-    "查 A 股异动分析（同花顺口径，hithink 独家）：个股异动标签/原因。"
-    "东财无独立异动源。tag_codes 可选过滤异动类型。盘后可能空（异动本就少）。",
+    "查 A 股异动分析（同花顺口径，hithink 独家）：个股异动标签/原因。东财无独立异动源。tag_codes 可选过滤异动类型。盘后可能空（异动本就少）。",
     params={"tag_codes": {"description": "可选，异动类型标签逗号分隔过滤"}},
 )
 def query_anomaly(tag_codes: str | None = None) -> list[dict]:

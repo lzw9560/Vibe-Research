@@ -167,9 +167,7 @@ def main() -> None:
     for label, ds in [("train", train), ("test", test)]:
         r = stats(ds, by_date)
         if r:
-            print(
-                f"  {label}: mean={r['mean'] * 100:+.3f}% net={r['net'] * 100:+.3f}% t={r['t']:.2f} WR={r['wr'] * 100:.1f}% median={r['median'] * 100:+.3f}%"
-            )
+            print(f"  {label}: mean={r['mean'] * 100:+.3f}% net={r['net'] * 100:+.3f}% t={r['t']:.2f} WR={r['wr'] * 100:.1f}% median={r['median'] * 100:+.3f}%")
     print()
 
     # 3. 60 天滚动前向模拟
@@ -199,9 +197,7 @@ def main() -> None:
                 else:
                     neg_streak = 0
             print(f"  10 日 batch 连续负 max streak: {max_consec_neg}（前 10 clean batch 都负=STOP 的历史最坏）")
-            print(
-                f"  10 日 batch 正占比: {sum(1 for b in batches if b > 0)}/{len(batches)} ({sum(1 for b in batches if b > 0) / len(batches) * 100:.1f}%)"
-            )
+            print(f"  10 日 batch 正占比: {sum(1 for b in batches if b > 0)}/{len(batches)} ({sum(1 for b in batches if b > 0) / len(batches) * 100:.1f}%)")
 
 
 if __name__ == "__main__":

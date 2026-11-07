@@ -33,9 +33,7 @@ def main() -> int:
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(schema, f, ensure_ascii=False, indent=2)
-    print(
-        f"[dump_openapi] wrote {OUT} ({len(schema.get('paths', {}))} paths, {len(schema.get('components', {}).get('schemas', {}))} schemas)"
-    )
+    print(f"[dump_openapi] wrote {OUT} ({len(schema.get('paths', {}))} paths, {len(schema.get('components', {}).get('schemas', {}))} schemas)")
     return 0
 
 

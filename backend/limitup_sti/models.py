@@ -11,8 +11,7 @@ from pydantic import BaseModel
 
 
 DISCLAIMER = (
-    "免责声明：情绪温度仅为历史统计维度之一，不构成任何操作建议。"
-    "股市有风险，投资需谨慎。所有分析由用户自己的 AI 给出，Vibe-Research 仅提供数据呈现工具。"
+    "免责声明：情绪温度仅为历史统计维度之一，不构成任何操作建议。股市有风险，投资需谨慎。所有分析由用户自己的 AI 给出，Vibe-Research 仅提供数据呈现工具。"
 )
 
 STI_WEIGHTS: dict[str, float] = {

@@ -252,9 +252,7 @@ def main() -> None:
             if r["net"] <= 0
             else "exploratory"
         )
-        print(
-            f"  {lab:<10} gross={r['ev']:>+7.3f}% net={r['net']:>+7.3f}% p={r['p']:.4f} Bonf×10={bonf:.4f} days={r['n_days']} -> {verdict}"
-        )
+        print(f"  {lab:<10} gross={r['ev']:>+7.3f}% net={r['net']:>+7.3f}% p={r['p']:.4f} Bonf×10={bonf:.4f} days={r['n_days']} -> {verdict}")
 
 
 if __name__ == "__main__":

@@ -301,8 +301,7 @@ def _collect_internal_factor(date: str) -> StormFactor:
         # 炸板后溢价/封板率 NULL→0（data.py load 时 or 0），原代码或 0 致
         # rebound_score=50 中性 fabricated + data_status 默认 ok 当权威。
         gene_degraded = any(
-            g.data_source == "kline_rebuild" or "炸板后溢价" in (g.missing_factors or []) or "封板率" in (g.missing_factors or [])
-            for g in genes
+            g.data_source == "kline_rebuild" or "炸板后溢价" in (g.missing_factors or []) or "封板率" in (g.missing_factors or []) for g in genes
         )
 
         # S131 R1.2：读炸板后溢价/封板率 without `or 0`（None→degraded，不 fabricated 0→50）
@@ -374,11 +373,7 @@ def _collect_news_factor(date: str) -> StormFactor:
 
             radar = newsradar.get_radar(force=False) or {}
             # fetch_radar 顶层是 industries 嵌套 items（无顶层 items 键）；扁平化聚合
-            items = (
-                [it for ind in (radar.get("industries", []) or []) for it in (ind.get("items", []) or [])]
-                if isinstance(radar, dict)
-                else []
-            )
+            items = [it for ind in (radar.get("industries", []) or []) for it in (ind.get("items", []) or [])] if isinstance(radar, dict) else []
             if data_status == "ok":
                 data_status = "fallback_current"
         except Exception as exc:  # noqa: BLE001

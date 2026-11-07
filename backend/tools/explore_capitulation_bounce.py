@@ -143,10 +143,7 @@ def load_breadth() -> dict[str, dict]:
     rows = conn.execute("""SELECT date, breadth, adv, dec, total, limit_up, limit_down, smallcap_ret
         FROM daily_breadth ORDER BY date""").fetchall()
     conn.close()
-    return {
-        d: {"breadth": b, "adv": a, "dec": de, "total": t, "limit_up": lu, "limit_down": ld, "smallcap_ret": sr}
-        for d, b, a, de, t, lu, ld, sr in rows
-    }
+    return {d: {"breadth": b, "adv": a, "dec": de, "total": t, "limit_up": lu, "limit_down": ld, "smallcap_ret": sr} for d, b, a, de, t, lu, ld, sr in rows}
 
 
 def backtest_capitulation(breadth_thresh: float, ld_thresh: int, hold: int, mode: str = "direct") -> None:
@@ -247,15 +244,11 @@ def backtest_capitulation(breadth_thresh: float, ld_thresh: int, hold: int, mode
         te_t = te_m / (statistics.pstdev(test) / sqrt(len(test))) if len(test) > 1 and statistics.pstdev(test) > 0 else 0
         te_p = norm_sf_positive(te_t)
         decay = (tr_m - te_m) / abs(tr_m) * 100 if tr_m != 0 else 0
-        print(
-            f"  walk-forward: train n={len(train)} mean={tr_m:.3f}% t={tr_t:.2f} | test n={len(test)} mean={te_m:.3f}% t={te_t:.2f} p={te_p:.4f}"
-        )
+        print(f"  walk-forward: train n={len(train)} mean={tr_m:.3f}% t={tr_t:.2f} | test n={len(test)} mean={te_m:.3f}% t={te_t:.2f} p={te_p:.4f}")
         print(f"  衰减: {decay:.0f}%")
     print(f"\n抽样事件（最近5）:")
     for e in events[-5:]:
-        print(
-            f"  {e['cap_date']}: breadth={e['breadth_at_cap']:.2%} 跌停={e['ld_at_cap']} → 买{e['buy_date']} 卖{e['exit_date']} ret={e['fwd_ret']:.2f}%"
-        )
+        print(f"  {e['cap_date']}: breadth={e['breadth_at_cap']:.2%} 跌停={e['ld_at_cap']} → 买{e['buy_date']} 卖{e['exit_date']} ret={e['fwd_ret']:.2f}%")
 
     N_BONF = 4
     p_bonf = bonferroni_p(p, N_BONF)

@@ -221,9 +221,7 @@ def run_first_board_filter(date: str, pool: list[dict] | None = None) -> dict:
     try:
         from datetime import date as _fb_date
 
-        _parsed = (
-            _fb_date.fromisoformat(date) if "-" in date else _fb_date(int(compact_date[:4]), int(compact_date[4:6]), int(compact_date[6:8]))
-        )
+        _parsed = _fb_date.fromisoformat(date) if "-" in date else _fb_date(int(compact_date[:4]), int(compact_date[4:6]), int(compact_date[6:8]))
     except (ValueError, TypeError):
         _parsed = _fb_date.today()
     if not _is_trading_day(_parsed):

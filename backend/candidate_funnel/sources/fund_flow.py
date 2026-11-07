@@ -81,9 +81,7 @@ def _fetch_single(c: str, as_of: str, sectors: list[dict] | None, industry_map: 
     return c, entry
 
 
-def fetch_fund_flow(
-    codes: list[str], as_of: str, sectors: list[dict] | None = None, industry_map: dict[str, str] | None = None
-) -> dict[str, dict]:
+def fetch_fund_flow(codes: list[str], as_of: str, sectors: list[dict] | None = None, industry_map: dict[str, str] | None = None) -> dict[str, dict]:
     """并行采集资金流（max_workers=5，防 em_get 限流）。
 
     原 36 只串行 186s → 并行后预估 ~37s（5 并发 × 36/5 × 2.6s/只）。

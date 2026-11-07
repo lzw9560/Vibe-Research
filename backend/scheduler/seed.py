@@ -37,8 +37,7 @@ def _ensure_seed_tasks() -> None:
             t.cron_expr = "25 17 * * 0-4"
             _manager.update_task(t)
             logger.info(
-                "[scheduler] candidate_funnel_precompute cron 迁移 %s → 25 17 * * 0-4"
-                "（S184 P1-1：晚 kline_refresh 17:15 +10min，避免并发读 stale cache）",
+                "[scheduler] candidate_funnel_precompute cron 迁移 %s → 25 17 * * 0-4（S184 P1-1：晚 kline_refresh 17:15 +10min，避免并发读 stale cache）",
                 old_cron,
             )
 
@@ -200,8 +199,7 @@ def _ensure_seed_tasks() -> None:
             t.cron_expr = "* 9-15 * * 0-4"
             _manager.update_task(t)
             logger.info(
-                "[scheduler] seal_intraday_collect cron 迁移 %s → * 9-15 * * 0-4"
-                "（S123 R3：覆盖 15:00 收盘集合竞价终态，写入由 is_intraday_trading_time 门控）",
+                "[scheduler] seal_intraday_collect cron 迁移 %s → * 9-15 * * 0-4（S123 R3：覆盖 15:00 收盘集合竞价终态，写入由 is_intraday_trading_time 门控）",
                 old_cron,
             )
 
@@ -777,8 +775,7 @@ def _ensure_seed_tasks() -> None:
         _manager.create_task(
             ScheduledTask(
                 name="fund_accumulation",
-                description="S219 #11 fund 前向累积：每日盘后 UPDATE zt_history.fund/fundamt"
-                "（UPDATE-only 不毁 lbc；~60 天后 S219 un-defer 条件3）",
+                description="S219 #11 fund 前向累积：每日盘后 UPDATE zt_history.fund/fundamt（UPDATE-only 不毁 lbc；~60 天后 S219 un-defer 条件3）",
                 task_type="fund_accumulation",
                 cron_expr="30 16 * * 0-4",  # 16:30 工作日盘后（Mon-Fri，weekday 0=周一）
                 payload={},
@@ -841,8 +838,7 @@ def _ensure_seed_tasks() -> None:
             t.cron_expr = "15 17 * * 0-4"
             _manager.update_task(t)
             logger.info(
-                "[scheduler] zt_history_snapshot cron 迁移 %s → 15 17 * * 0-4"
-                "（17:15 过稳定点写 is_final=true，旧 16:00 写 is_final=false 无 final run）",
+                "[scheduler] zt_history_snapshot cron 迁移 %s → 15 17 * * 0-4（17:15 过稳定点写 is_final=true，旧 16:00 写 is_final=false 无 final run）",
                 old_cron,
             )
 
@@ -871,9 +867,7 @@ def _ensure_seed_tasks() -> None:
     for t in _manager.list_tasks():
         if t.name == "n8n-trigger":
             _manager.delete_task(t.id)
-            logger.info(
-                "[scheduler] 删除重复任务 n8n-trigger（type=limitup_precompute，cron 1-5 错误，limitup_precompute 0-4 已正确 seed）"
-            )
+            logger.info("[scheduler] 删除重复任务 n8n-trigger（type=limitup_precompute，cron 1-5 错误，limitup_precompute 0-4 已正确 seed）")
             break
 
     # P0-2：每日回测快照 cron 迁移 1-5→0-4（1-5=周二至周六，周日不应跑 backtest）。

@@ -631,25 +631,17 @@ def verdict_bhar_gated(r: dict) -> str:
     p_bonf = r["p_bonf"]
     print(f"\n  --- verdict cascade (BHAR-gated, §44 v3) ---")
     print(f"    bhar_gross={g}% bhar_net={net:.3f}% day_t={t_day} Bonf×{CROSS_STRATEGY_N}={p_bonf:.6f} n_dates={n_dates}")
-    print(
-        f"    [descriptive raw stock_ret={r['raw_stock_ret_mean']}% — NOT gated, "
-        f"market beta; if raw>0 but BHAR<0 → fake edge = market drift]"
-    )
+    print(f"    [descriptive raw stock_ret={r['raw_stock_ret_mean']}% — NOT gated, market beta; if raw>0 but BHAR<0 → fake edge = market drift]")
     if r["wf_status"] == "ok":
         print(
-            f"    walk-forward: train_BHAR={r['wf_train_bhar']}% "
-            f"test_BHAR={r['wf_test_bhar']}% test_p={r['wf_test_p']} "
-            f"(n_test_dates={r['wf_n_test_dates']})"
+            f"    walk-forward: train_BHAR={r['wf_train_bhar']}% test_BHAR={r['wf_test_bhar']}% test_p={r['wf_test_p']} (n_test_dates={r['wf_n_test_dates']})"
         )
 
     if g < 0:
         # §44 v2: 小n不判劣于随机 — gross<0 with n_dates<30 = underpowered not falsified
         # (3 dates could be regime artifact; need ≥30 to definitively falsify a loser)
         if n_dates >= 30:
-            print(
-                f"    → FALSIFIED: bhar_gross={g}% < 0 (no post-removal bounce; "
-                f"n_dates={n_dates}≥30; if raw_ret>0 it was market beta not abnormal)"
-            )
+            print(f"    → FALSIFIED: bhar_gross={g}% < 0 (no post-removal bounce; n_dates={n_dates}≥30; if raw_ret>0 it was market beta not abnormal)")
             return "edge-falsified"
         print(
             f"    → UNDERPOWERED: bhar_gross={g}% < 0 BUT n_dates={n_dates} < 30 "
@@ -675,10 +667,7 @@ def verdict_bhar_gated(r: dict) -> str:
             return "edge-falsified"
         wf_p_bonf = bonferroni_p(r["wf_test_p"], CROSS_STRATEGY_N)
         if wf_p_bonf >= ALPHA:
-            print(
-                f"    → EXPLORATORY: OOS BHAR>0 but test p={r['wf_test_p']} "
-                f"Bonf×{CROSS_STRATEGY_N}={wf_p_bonf} >= {ALPHA} (not significant OOS)"
-            )
+            print(f"    → EXPLORATORY: OOS BHAR>0 but test p={r['wf_test_p']} Bonf×{CROSS_STRATEGY_N}={wf_p_bonf} >= {ALPHA} (not significant OOS)")
             return "exploratory"
         print(f"    → EDGE-CONFIRMED: BHAR>0, Bonf PASS, OOS significant")
         return "edge-confirmed"
@@ -756,10 +745,7 @@ def main() -> None:
     primary = results.get("T5")
     if primary and primary.get("n_picks", 0) > 0:
         print(f"\n  primary window: T5")
-        print(
-            f"    n_events={primary['n_events']} n_dates={primary['n_dates']} "
-            f"BHAR_gross={primary['bhar_gross']}% BHAR_net={primary['bhar_net']:.3f}%"
-        )
+        print(f"    n_events={primary['n_events']} n_dates={primary['n_dates']} BHAR_gross={primary['bhar_gross']}% BHAR_net={primary['bhar_net']:.3f}%")
         print(f"    day_t={primary['day_t']} p_raw={primary['p_raw']} Bonf×{CROSS_STRATEGY_N}={primary['p_bonf']}")
         print(f"    [descriptive raw stock_ret={primary['raw_stock_ret_mean']}% — market beta, NOT gated]")
         if primary["wf_status"] == "ok":

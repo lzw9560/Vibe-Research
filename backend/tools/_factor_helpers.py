@@ -376,10 +376,7 @@ def analyze_subset(
     basic_rets = [ret_fn_basic(p) for p in picks]
     basic_rets = [r for r in basic_rets if r is not None]
     basic_s = ev_stats(basic_rets)
-    print(
-        f"  n={basic_s['n']} gross_EV={basic_s['ev']}% std={basic_s['std']}% "
-        f"WR={basic_s['wr']}% t={basic_s['t']} CI[{basic_s['ci_lo']},{basic_s['ci_hi']}]"
-    )
+    print(f"  n={basic_s['n']} gross_EV={basic_s['ev']}% std={basic_s['std']}% WR={basic_s['wr']}% t={basic_s['t']} CI[{basic_s['ci_lo']},{basic_s['ci_hi']}]")
     net_basic = basic_s["ev"] - COST * 100
     print(f"  net EV (after {COST * 100:.1f}% cost): {net_basic:.3f}%")
 
@@ -402,10 +399,7 @@ def analyze_subset(
         stop_rets = [ret_fn_stop(p) for p in picks]
         stop_rets_clean = [r[0] for r in stop_rets if r is not None]
         stop_s = ev_stats(stop_rets_clean)
-        print(
-            f"  n={stop_s['n']} gross_EV={stop_s['ev']}% std={stop_s['std']}% "
-            f"WR={stop_s['wr']}% t={stop_s['t']} CI[{stop_s['ci_lo']},{stop_s['ci_hi']}]"
-        )
+        print(f"  n={stop_s['n']} gross_EV={stop_s['ev']}% std={stop_s['std']}% WR={stop_s['wr']}% t={stop_s['t']} CI[{stop_s['ci_lo']},{stop_s['ci_hi']}]")
         net_stop = stop_s["ev"] - COST * 100
         print(f"  net EV (after cost): {net_stop:.3f}%")
 
@@ -456,11 +450,7 @@ def analyze_subset(
         tr_dt = wf_basic["train_day_t"]
         te_dt = wf_basic["test_day_t"]
         print(f"  train: n={tr['n']} n_dates={wf_basic['n_train_dates']} EV={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
-        print(
-            f"  test:  n={te['n']} n_dates={wf_basic['n_test_dates']} "
-            f"EV={te['ev']}% t={te['t']} day_t={te_dt['t']} "
-            f"p={te_dt['p_one_sided']}"
-        )
+        print(f"  test:  n={te['n']} n_dates={wf_basic['n_test_dates']} EV={te['ev']}% t={te['t']} day_t={te_dt['t']} p={te_dt['p_one_sided']}")
         decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
         print(f"  decay: {decay:.0f}% (train→test)")
     else:
@@ -532,9 +522,7 @@ def verdict_for(
     if wf_status == "ok":
         # Fix 2026-10-06: train_ev>0 检查——train 半无 edge 而 test 半有 = regime 过拟合
         if wf_train_ev <= 0:
-            print(
-                f"    → EXPLORATORY: train_EV={wf_train_ev}% <= 0 (edge not in train half, test_EV={wf_test_ev}% may be regime overfitting)"
-            )
+            print(f"    → EXPLORATORY: train_EV={wf_train_ev}% <= 0 (edge not in train half, test_EV={wf_test_ev}% may be regime overfitting)")
             return "exploratory"
         if wf_test_ev <= 0:
             print(f"    → FALSIFIED: walk-forward test_EV={wf_test_ev}% <= 0")
@@ -542,14 +530,10 @@ def verdict_for(
         # Fix 2026-10-06: OOS test_p 也施 Bonferroni（与 step3 一致，旧版用 raw test_p = leniency）
         wf_test_p_bonf = bonferroni_p(wf_test_p, n_tests)
         if wf_test_p_bonf >= ALPHA:
-            print(
-                f"    → EXPLORATORY: OOS test EV={wf_test_ev}% > 0 but "
-                f"test p={wf_test_p} Bonf×{n_tests}={wf_test_p_bonf} >= {ALPHA} (not significant OOS)"
-            )
+            print(f"    → EXPLORATORY: OOS test EV={wf_test_ev}% > 0 but test p={wf_test_p} Bonf×{n_tests}={wf_test_p_bonf} >= {ALPHA} (not significant OOS)")
             return "exploratory"
         print(
-            f"    → EDGE-CONFIRMED: gross+net EV > 0, Bonferroni PASS, "
-            f"OOS test EV={wf_test_ev}% significant (p={wf_test_p}, Bonf×{n_tests}={wf_test_p_bonf})"
+            f"    → EDGE-CONFIRMED: gross+net EV > 0, Bonferroni PASS, OOS test EV={wf_test_ev}% significant (p={wf_test_p}, Bonf×{n_tests}={wf_test_p_bonf})"
         )
         return "edge-confirmed"
     print(f"    → EXPLORATORY: walk-forward not available")

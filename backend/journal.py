@@ -541,9 +541,7 @@ def add_trade(
         "market": _market_context(settled.get("first_buy") or date),
         "stock": _stock_context(settled.get("first_buy") or date, code),
         "exit_market": (
-            _market_context(settled["last_sell"])
-            if settled.get("last_sell") and settled["last_sell"] != (settled.get("first_buy") or date)
-            else None
+            _market_context(settled["last_sell"]) if settled.get("last_sell") and settled["last_sell"] != (settled.get("first_buy") or date) else None
         ),
     }
     with _LOCK:
@@ -643,9 +641,7 @@ def _bucket_stats(rows: list[dict]) -> dict:
     有成交明细的另外汇总盈亏金额——百分比与金额是两个口径，仓位不同时二者结论可能相反。
     """
     vals = [t["pnl_pct"] for t in rows if t.get("pnl_pct") is not None]
-    money = [
-        t["settled"]["realized_pnl"] for t in rows if isinstance(t.get("settled"), dict) and t["settled"].get("realized_pnl") is not None
-    ]
+    money = [t["settled"]["realized_pnl"] for t in rows if isinstance(t.get("settled"), dict) and t["settled"].get("realized_pnl") is not None]
     base = {
         "count": len(rows),
         "scored": len(vals),

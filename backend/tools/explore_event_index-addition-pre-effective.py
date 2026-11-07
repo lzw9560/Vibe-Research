@@ -106,9 +106,7 @@ def probe_akshare_announcement_date() -> dict:
         date_col = cols[0] if cols else ""
         sample_date = str(df[date_col].iloc[0]) if len(df) else ""
         is_snapshot = sample_date >= "2026-01-01"  # 近期日期=快照非历史公告日
-        out["detail"].append(
-            f"index_stock_cons_csindex('000300'): cols={cols}, 首行日期={sample_date}, is_snapshot={is_snapshot} (非公告日)"
-        )
+        out["detail"].append(f"index_stock_cons_csindex('000300'): cols={cols}, 首行日期={sample_date}, is_snapshot={is_snapshot} (非公告日)")
         if not any("announce" in (c or "").lower() or "公告" in (c or "") for c in cols):
             out["available"] = False
         else:
@@ -120,9 +118,7 @@ def probe_akshare_announcement_date() -> dict:
     try:
         df2 = ak.index_detail_hist_adjust_cni(symbol="399300")
         out["detail"].append(
-            f"index_detail_hist_adjust_cni('399300'): shape={df2.shape}, "
-            f"cols={list(df2.columns)} (HS300=000300 非 399 系→返空, "
-            f"该函数仅覆盖国证深证系 399xxx)"
+            f"index_detail_hist_adjust_cni('399300'): shape={df2.shape}, cols={list(df2.columns)} (HS300=000300 非 399 系→返空, 该函数仅覆盖国证深证系 399xxx)"
         )
     except Exception as e:
         out["detail"].append(f"index_detail_hist_adjust_cni error: {e}")
@@ -173,10 +169,7 @@ def main() -> None:
     print(f"    login_ok={bs_probe['login_ok']}")
     print(f"    query_hs300_stocks fields={bs_probe['fields']}")
     print(f"    'updateDate' = 生效/快照日 (如 2024-06-17), 非 announcement 日")
-    print(
-        f"    全 query_* 方法 ({len(bs_probe.get('methods', []))}): "
-        f"{bs_probe.get('methods', [])[:8]}{'...' if len(bs_probe.get('methods', [])) > 8 else ''}"
-    )
+    print(f"    全 query_* 方法 ({len(bs_probe.get('methods', []))}): {bs_probe.get('methods', [])[:8]}{'...' if len(bs_probe.get('methods', [])) > 8 else ''}")
     print(f"    has_announcement_fn={bs_probe['has_announcement_fn']} → {'有' if bs_probe['available'] else '无'} announcement 日")
 
     print("\n(b) akshare...")
@@ -184,9 +177,7 @@ def main() -> None:
     for d in ak_probe["detail"]:
         print(f"    {d}")
     print(f"    index adjust/cons funcs: {ak_probe.get('index_funcs', [])}")
-    print(
-        f"    has_announcement_fn={ak_probe.get('has_announcement_fn', False)} → {'有' if ak_probe['available'] else '无'} announcement 日"
-    )
+    print(f"    has_announcement_fn={ak_probe.get('has_announcement_fn', False)} → {'有' if ak_probe['available'] else '无'} announcement 日")
 
     announcement_available = bs_probe["available"] or ak_probe["available"]
     print(f"\n(c) 其他通道（probe 已测+WebSearch 补充验证）:")

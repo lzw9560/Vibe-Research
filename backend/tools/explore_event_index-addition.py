@@ -431,10 +431,7 @@ def main() -> None:
         all_additions.extend(adds)
     print(f"\n  TOTAL additions (all indices, all rebalances): {len(all_additions)}")
     eff_dates_all = sorted(set(a["effective_date"] for a in all_additions))
-    print(
-        f"  distinct effective dates: {len(eff_dates_all)} "
-        f"({eff_dates_all[0] if eff_dates_all else '-'}~{eff_dates_all[-1] if eff_dates_all else '-'})"
-    )
+    print(f"  distinct effective dates: {len(eff_dates_all)} ({eff_dates_all[0] if eff_dates_all else '-'}~{eff_dates_all[-1] if eff_dates_all else '-'})")
     print(f"  ⚠ 结构性限制: 半年一次 rebalance → per-day-mean t N_days={len(eff_dates_all)} < 60 → 预期 underpowered (诚实标注)")
 
     # ---- 3. kline for additions (cache + fetch) ----
@@ -489,9 +486,7 @@ def main() -> None:
         ev = ev_stats(bhars)
         pet = per_event_t(bhars)
         net_ev = ev["ev"] - COST * 100
-        print(
-            f"\n  per-event: n={ev['n']} BHAR_mean={ev['ev']}% std={ev['std']}% WR={ev['wr']}% t={ev['t']} CI[{ev['ci_lo']},{ev['ci_hi']}]"
-        )
+        print(f"\n  per-event: n={ev['n']} BHAR_mean={ev['ev']}% std={ev['std']}% WR={ev['wr']}% t={ev['t']} CI[{ev['ci_lo']},{ev['ci_hi']}]")
         print(f"  per-event t: mean={pet['mean']}% t={pet['t']} p_one_sided={pet['p_one_sided']}")
         print(f"  net BHAR (after {COST * 100:.1f}% cost): {net_ev:.3f}%")
 

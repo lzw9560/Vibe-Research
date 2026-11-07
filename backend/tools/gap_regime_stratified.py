@@ -570,11 +570,7 @@ def main():
     # regime balance check
     max_share = max(regime_in_uni.values()) / len(uni_dates) if uni_dates else 0
     dominant = max(regime_in_uni, key=regime_in_uni.get)
-    print(
-        f"  regime balance: bull={regime_in_uni['bull']} "
-        f"bear={regime_in_uni['bear']} range={regime_in_uni['range']} "
-        f"(of {len(uni_dates)} days)"
-    )
+    print(f"  regime balance: bull={regime_in_uni['bull']} bear={regime_in_uni['bear']} range={regime_in_uni['range']} (of {len(uni_dates)} days)")
     print(f"  dominant regime: {dominant} ({max_share:.1%} of days)")
     print(f"  gap net negative in: {neg_regimes if neg_regimes else 'none'}")
     print(f"  gap net positive in: {pos_regimes if pos_regimes else 'none'}")

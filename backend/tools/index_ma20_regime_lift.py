@@ -180,9 +180,7 @@ for label, days in [("strong(bull)", strong_days), ("weak(bear)", weak_days)]:
     ns = agg(days, "n")
     total_picks = sum(ns)
     print(f"  {label}: n_days={len(days)} n_picks={total_picks}")
-    print(
-        f"    gross_gap mean={statistics.mean(mg):.2f}% net_gap mean={statistics.mean(ng):.2f}% net_WR mean={statistics.mean(wr) * 100:.1f}%"
-    )
+    print(f"    gross_gap mean={statistics.mean(mg):.2f}% net_gap mean={statistics.mean(ng):.2f}% net_WR mean={statistics.mean(wr) * 100:.1f}%")
     print(f"    net_gap median={statistics.median(ng):.2f}% net_gap std={statistics.pstdev(ng):.2f}%" if len(ng) > 1 else "")
 
 # overall
@@ -294,9 +292,7 @@ if zt_obs:
             f"  zt strong: net_gap mean={statistics.mean(o['net_gap'] for o in zt_strong):.2f}% WR={sum(o['win'] for o in zt_strong) * 100 / len(zt_strong):.1f}%"
         )
     if zt_weak:
-        print(
-            f"  zt weak:   net_gap mean={statistics.mean(o['net_gap'] for o in zt_weak):.2f}% WR={sum(o['win'] for o in zt_weak) * 100 / len(zt_weak):.1f}%"
-        )
+        print(f"  zt weak:   net_gap mean={statistics.mean(o['net_gap'] for o in zt_weak):.2f}% WR={sum(o['win'] for o in zt_weak) * 100 / len(zt_weak):.1f}%")
 else:
     print("  no zt_history overlap")
 

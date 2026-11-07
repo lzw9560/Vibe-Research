@@ -85,9 +85,7 @@ class TelegramSender:
                 return self._send_telegram_message(api_url, chat_id, content, message_thread_id, timeout_seconds=timeout_seconds)
             else:
                 # 分段发送长消息
-                return self._send_telegram_chunked(
-                    api_url, chat_id, content, max_length, message_thread_id, timeout_seconds=timeout_seconds
-                )
+                return self._send_telegram_chunked(api_url, chat_id, content, max_length, message_thread_id, timeout_seconds=timeout_seconds)
 
         except Exception as e:
             logger.error(f"发送 Telegram 消息失败: {e}")
@@ -161,9 +159,7 @@ class TelegramSender:
             else:
                 if attempt < max_retries and response.status_code >= 500:
                     delay = 2**attempt
-                    logger.warning(
-                        f"Telegram server error HTTP {response.status_code} (attempt {attempt}/{max_retries}), retrying in {delay}s..."
-                    )
+                    logger.warning(f"Telegram server error HTTP {response.status_code} (attempt {attempt}/{max_retries}), retrying in {delay}s...")
                     time.sleep(delay)
                     continue
                 if self._should_fallback_to_plain_text(response_text=response.text):

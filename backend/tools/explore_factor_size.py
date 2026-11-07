@@ -358,10 +358,7 @@ def analyze_frequency(zoo: dict, closes: dict, step: int, label: str) -> dict:
     n_tests = len(FREQS) * N_CROSS_FACTOR
     p_bonf_two = bonferroni_p(p_two, n_tests)
     p_bonf_one = bonferroni_p(p_one, n_tests)
-    print(
-        f"  Bonferroni: two-sided raw p={p_two:.6f} × {len(FREQS)}(freqs)×{N_CROSS_FACTOR}"
-        f"(factors) = ×{n_tests} → p_bonf_two = {p_bonf_two:.6f}"
-    )
+    print(f"  Bonferroni: two-sided raw p={p_two:.6f} × {len(FREQS)}(freqs)×{N_CROSS_FACTOR}(factors) = ×{n_tests} → p_bonf_two = {p_bonf_two:.6f}")
     print(f"             one-sided(>0) raw p={p_one:.6f} × {n_tests} → p_bonf_one = {p_bonf_one:.6f}")
 
     # walk-forward: chronological split
@@ -486,8 +483,7 @@ def main() -> int:
     meta = zoo["metadata"]
     print(f"    factors: {list(meta['factors'].keys())}")
     print(
-        f"    range: {meta['date_range']}  n_dates={meta['n_dates']}  "
-        f"n_rebal={len(rd)}  cross-sec avg={meta['cross_section_size']['avg_codes_per_rebalance']}",
+        f"    range: {meta['date_range']}  n_dates={meta['n_dates']}  n_rebal={len(rd)}  cross-sec avg={meta['cross_section_size']['avg_codes_per_rebalance']}",
         flush=True,
     )
 
@@ -528,15 +524,10 @@ def main() -> int:
     print("\n--- 诚实标注 (禁止外推) ---")
     print("1. 本脚本测的是横截面 size_logamt20 因子 (SMB long-short decile), 非 long-only EV, 非其他因子.")
     print(
-        "2. size 代理 = log(20d 均成交额) 是流动性/换手代理, 非真市值 (需流通股本). "
-        "高成交额股 ≠ 大市值 (可能是高换手投机股). "
-        "本 SMB 实为 '低换手-高换手' 近似."
+        "2. size 代理 = log(20d 均成交额) 是流动性/换手代理, 非真市值 (需流通股本). 高成交额股 ≠ 大市值 (可能是高换手投机股). 本 SMB 实为 '低换手-高换手' 近似."
     )
     print("3. long-short 需做空大盘股 — A股散户融券极度受限, 统计 alpha ≠ 可交易 (仅机构/融券标的可用).")
-    print(
-        "4. survivorship: 早期 (2018-2020) 横截面 ~264-766 来自非随机 backfill 子集; "
-        "小盘股退市/ST 概率更高, unbalanced panel 对小盘腿有 survivorship bias."
-    )
+    print("4. survivorship: 早期 (2018-2020) 横截面 ~264-766 来自非随机 backfill 子集; 小盘股退市/ST 概率更高, unbalanced panel 对小盘腿有 survivorship bias.")
     print("5. 注册制 (2019-2023 逐步落地) 削弱壳价值 → 小盘效应可能 regime-dependent, 全样本均值可能掩盖前后期反转.")
     print("6. 4 因子 (本脚本仅规模) ≠ 横截面有/无 edge ≠ 选股战法有/无 edge.")
     print("7. 方向: SMB>0=小盘效应, SMB<0=大盘效应 (镜像因子, 同样是规模因子 alpha).")

@@ -267,11 +267,7 @@ def _fetch_single_realtime(c: str, raw: dict, as_of: str) -> tuple[str, dict]:
         bars = []
     if bars:
         # T-1 bar：今日无 K线 → bars[-1]；今日已有一根 → bars[-2]
-        idx_t1 = (
-            len(bars) - 2
-            if len(bars) >= 2 and (bars[-1].get("datetime") or bars[-1].get("date") or "")[:10] >= as_of[:10]
-            else len(bars) - 1
-        )
+        idx_t1 = len(bars) - 2 if len(bars) >= 2 and (bars[-1].get("datetime") or bars[-1].get("date") or "")[:10] >= as_of[:10] else len(bars) - 1
         if idx_t1 >= 0:
             # float_shares：从 tencent 流通市值/价格近似（与历史日路径一致）
             float_shares = None

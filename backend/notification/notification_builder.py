@@ -66,8 +66,7 @@ class NotificationBuilder:
             _, emoji, _ = get_signal_level(r.operation_advice, r.sentiment_score, report_language)
             name = get_localized_stock_name(r.name, r.code, report_language)
             lines.append(
-                f"{emoji} {name}({r.code}): {localize_operation_advice(r.operation_advice, report_language)} | "
-                f"{labels['score_label']} {r.sentiment_score}"
+                f"{emoji} {name}({r.code}): {localize_operation_advice(r.operation_advice, report_language)} | {labels['score_label']} {r.sentiment_score}"
             )
 
         return "\n".join(lines)

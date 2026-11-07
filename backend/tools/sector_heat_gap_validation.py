@@ -269,9 +269,7 @@ def gap_framing(
     _print_gap_results(hot_rets, cold_rets, hot_wins, cold_wins, n_days_hot, n_days_cold, skips)
 
 
-def _gap_for(
-    kline: dict, code_cal_idx: dict, code: str, d: str, d1: str, cal_idx: dict[str, int], skips: Counter
-) -> tuple[float, float, float] | None:
+def _gap_for(kline: dict, code_cal_idx: dict, code: str, d: str, d1: str, cal_idx: dict[str, int], skips: Counter) -> tuple[float, float, float] | None:
     """gap_net_return(D close, D+1 open) for one code-day. None + skip-reason on miss."""
     d_bar = _bar_at(kline, code_cal_idx, code, d, cal_idx)
     if d_bar is None:
@@ -328,10 +326,7 @@ def main() -> None:
     zt = load_zt_pools()
     kline, code_cal_idx, calendar = load_kline_and_calendar()
     cal_idx = {d: i for i, d in enumerate(calendar)}
-    print(
-        f"industry map: {len(industry)} codes | zt pools: {len(zt)} days | "
-        f"kline: {len(kline)} codes | calendar: {len(calendar)} trading days"
-    )
+    print(f"industry map: {len(industry)} codes | zt pools: {len(zt)} days | kline: {len(kline)} codes | calendar: {len(calendar)} trading days")
     binary_framing(zt, industry, calendar, cal_idx)
     gap_framing(zt, industry, kline, code_cal_idx, calendar, cal_idx)
     print(

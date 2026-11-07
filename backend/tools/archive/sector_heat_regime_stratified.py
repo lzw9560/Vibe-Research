@@ -185,11 +185,7 @@ def main() -> None:
     regime_dates = set(regime_map.keys())
     calendar = sorted(zt_dates | regime_dates)
     cal_idx = {d: i for i, d in enumerate(calendar)}
-    print(
-        f"industry map: {len(industry)} codes | zt pools: {len(zt)} days | "
-        f"regime labels: {len(regime_map)} dates | "
-        f"calendar: {len(calendar)} trading days"
-    )
+    print(f"industry map: {len(industry)} codes | zt pools: {len(zt)} days | regime labels: {len(regime_map)} dates | calendar: {len(calendar)} trading days")
 
     binary_framing_stratified(zt, industry, calendar, cal_idx, regime_map)
 

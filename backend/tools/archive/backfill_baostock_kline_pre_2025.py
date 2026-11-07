@@ -54,9 +54,7 @@ def _codes_needing_backfill(cache: dict) -> list[tuple[str, str | None]]:
     """
     conn = sqlite3.connect(str(DB))
     # train third 全量 picks（team-lead 测 bear train third = 2024-06..2025-12）
-    rows = conn.execute(
-        "SELECT date, code FROM zt_history WHERE date>='2024-06-01' AND date<='2025-12-31' AND lbc>=2 AND is_final=1"
-    ).fetchall()
+    rows = conn.execute("SELECT date, code FROM zt_history WHERE date>='2024-06-01' AND date<='2025-12-31' AND lbc>=2 AND is_final=1").fetchall()
     conn.close()
 
     # 每股最早 pick date

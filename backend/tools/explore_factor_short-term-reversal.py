@@ -602,9 +602,7 @@ def compute_verdict(stats_basic: dict, capm: dict, wf: dict, n_total_tests: int,
         te_alpha = wf["test_alpha_pct"]
         te_p = wf["test_alpha_p_one_sided"]
         te_bonf = bonferroni_p(te_p, n_total_tests)
-        print(
-            f"    walk-forward: train_alpha = {tr_alpha:.4f}%, test_alpha = {te_alpha:.4f}%, test_p = {te_p:.6f}, test_Bonf = {te_bonf:.6f}"
-        )
+        print(f"    walk-forward: train_alpha = {tr_alpha:.4f}%, test_alpha = {te_alpha:.4f}%, test_p = {te_p:.6f}, test_Bonf = {te_bonf:.6f}")
         if tr_alpha <= 0:
             print(f"    → EXPLORATORY: train alpha = {tr_alpha:.4f}% <= 0 (edge not in train half, test may be regime overfitting)")
             return "exploratory"
@@ -721,14 +719,8 @@ def main() -> None:
         print(f"  Bonferroni p (×{n_total_tests}): {p_bonf:.6f}")
 
         if capm["status"] == "ok":
-            print(
-                f"  CAPM: alpha={capm['alpha_pct']:.4f}%  beta={capm['beta']:.3f}  "
-                f"alpha_t={capm['alpha_t']:.2f} (HAC lag={capm['max_lag']})"
-            )
-            print(
-                f"  CAPM alpha p_one_sided: {capm['alpha_p_one_sided']:.6f}  "
-                f"Bonf: {bonferroni_p(capm['alpha_p_one_sided'], n_total_tests):.6f}"
-            )
+            print(f"  CAPM: alpha={capm['alpha_pct']:.4f}%  beta={capm['beta']:.3f}  alpha_t={capm['alpha_t']:.2f} (HAC lag={capm['max_lag']})")
+            print(f"  CAPM alpha p_one_sided: {capm['alpha_p_one_sided']:.6f}  Bonf: {bonferroni_p(capm['alpha_p_one_sided'], n_total_tests):.6f}")
 
         if wf["status"] == "ok":
             print(f"  walk-forward: n_train={wf['n_train']} n_test={wf['n_test']}")
@@ -763,11 +755,7 @@ def main() -> None:
     print(f"\n{'=' * 70}")
     print(f"汇总表 (cross-sectional long-short, CAPM alpha, Newey-West HAC SE)")
     print(f"{'=' * 70}")
-    print(
-        f"  {'variant':<26} {'n':>5} {'mean%':>8} {'std%':>7} {'t':>6} "
-        f"{'p_raw':>8} {'Bonf×16':>9} {'alpha%':>8} {'a_t':>6} "
-        f"{'sharpe':>7} {'verdict':<14}"
-    )
+    print(f"  {'variant':<26} {'n':>5} {'mean%':>8} {'std%':>7} {'t':>6} {'p_raw':>8} {'Bonf×16':>9} {'alpha%':>8} {'a_t':>6} {'sharpe':>7} {'verdict':<14}")
     print(f"  {'-' * 26} {'-' * 5} {'-' * 8} {'-' * 7} {'-' * 6} {'-' * 8} {'-' * 9} {'-' * 8} {'-' * 6} {'-' * 7} {'-' * 14}")
 
     verdicts: list[str] = []

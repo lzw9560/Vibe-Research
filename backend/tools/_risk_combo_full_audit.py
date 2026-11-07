@@ -265,9 +265,7 @@ for yr in ["2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025", "2026
         continue
     s = equity_and_stats(ds)
     if s:
-        print(
-            f"  {yr}: days={s['n_days']} net={s['net_mean'] * 100:.4f}% t_nw={s['t_nw']:.2f} WR={s['wr'] * 100:.1f}% maxDD={s['max_dd'] * 100:.2f}%"
-        )
+        print(f"  {yr}: days={s['n_days']} net={s['net_mean'] * 100:.4f}% t_nw={s['t_nw']:.2f} WR={s['wr'] * 100:.1f}% maxDD={s['max_dd'] * 100:.2f}%")
 
 # Walk-forward
 print("\n=== WALK-FORWARD (train<2023 / test>=2023) ===", flush=True)

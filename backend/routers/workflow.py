@@ -925,9 +925,7 @@ def verify_verification_card() -> Dict[str, Any]:
         return {
             "data": {
                 "verified": len(verified),
-                "conditions": [
-                    {"date": c.date, "metric": c.metric, "actual": c.actual, "status": c.status, "note": c.note} for c in verified
-                ],
+                "conditions": [{"date": c.date, "metric": c.metric, "actual": c.actual, "status": c.status, "note": c.note} for c in verified],
             }
         }
     except Exception as e:  # noqa: BLE001
@@ -1191,9 +1189,7 @@ def _settle_on_transition(
 
 
 @router.get("/api/workflow/state/{code}")
-def get_single_workflow_state(
-    code: str, date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；默认最近交易日")
-) -> Dict[str, Any]:
+def get_single_workflow_state(code: str, date: Optional[str] = Query(None, description="日期 YYYY-MM-DD；默认最近交易日")) -> Dict[str, Any]:
     """S033 R3：单股工作流状态 + 当前态允许的目标态（无记录 404）。
 
     路由顺序注意：本端点须先于 /state/{code}/history 注册（FastAPI 按注册序匹配）。
@@ -1334,9 +1330,7 @@ def get_first_board_candidates(
                     "candidates": [],
                     "excluded": [],
                     "env_flags": {},
-                    "note": (
-                        f"T-1（{target}）选股结果未取得，选股只在盘后执行（调度16:15），盘中不实时跑避免数据污染· §44未validated仅参考"
-                    ),
+                    "note": (f"T-1（{target}）选股结果未取得，选股只在盘后执行（调度16:15），盘中不实时跑避免数据污染· §44未validated仅参考"),
                     "from_cache": False,
                 }
             }

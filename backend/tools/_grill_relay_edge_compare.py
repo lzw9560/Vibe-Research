@@ -73,11 +73,7 @@ def run_subset(name, picks, ev_fn, label):
             by_date[p["zt_date"]].append(r)
     dt = day_paired_t(by_date)
     wf = walk_forward(picks, ev_fn)
-    print(
-        f"\n{name} [{label}]: n={s['n']} days={dt['n_days']} "
-        f"gross_EV={s['ev']}% net_EV={net:.3f}% WR={s['wr']}% "
-        f"day_t={dt['t']} day_p={dt['p_one_sided']}"
-    )
+    print(f"\n{name} [{label}]: n={s['n']} days={dt['n_days']} gross_EV={s['ev']}% net_EV={net:.3f}% WR={s['wr']}% day_t={dt['t']} day_p={dt['p_one_sided']}")
     if wf.get("status") == "ok":
         tr, te = wf["train_ev"], wf["test_ev"]
         print(

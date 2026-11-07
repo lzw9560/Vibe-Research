@@ -102,19 +102,11 @@ class SeatEngine:
         if profile.seat_name == "机构专用":
             return "机构专用"
 
-        is_quant = (
-            profile.total_appearances >= SEAT_QUANT_THRESHOLD
-            and len(profile._stock_buy_sell_pairs) > 0
-            and profile.avg_buy_amt < SEAT_LARGE_POS
-        )
+        is_quant = profile.total_appearances >= SEAT_QUANT_THRESHOLD and len(profile._stock_buy_sell_pairs) > 0 and profile.avg_buy_amt < SEAT_LARGE_POS
         if is_quant:
             return "量化席位"
 
-        is_active_youzi = (
-            SEAT_ACTIVE_MIN <= profile.total_appearances < SEAT_QUANT_THRESHOLD
-            and profile.net_amt > 0
-            and profile.avg_buy_amt >= SEAT_LARGE_POS
-        )
+        is_active_youzi = SEAT_ACTIVE_MIN <= profile.total_appearances < SEAT_QUANT_THRESHOLD and profile.net_amt > 0 and profile.avg_buy_amt >= SEAT_LARGE_POS
         if is_active_youzi:
             return "活跃游资"
 

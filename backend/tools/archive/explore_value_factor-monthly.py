@@ -348,10 +348,7 @@ def stats_block(rets: list[float], label: str, n_bonf: int) -> dict:
     nw = nw_t_monthly(rets)
     wr = sum(1 for x in rets if x > 0) / len(rets) * 100
     p_bonf = bonferroni_p(nw["p"], n_bonf)
-    print(
-        f"  {label}: n={nw['n']} mean={nw['mean']:.4f}%/月 WR={wr:.1f}% "
-        f"t_nw={nw['t']} p={nw['p']} Bonf×{n_bonf}={p_bonf:.6f} n_eff={nw['n_eff']}"
-    )
+    print(f"  {label}: n={nw['n']} mean={nw['mean']:.4f}%/月 WR={wr:.1f}% t_nw={nw['t']} p={nw['p']} Bonf×{n_bonf}={p_bonf:.6f} n_eff={nw['n_eff']}")
     return {**nw, "wr": round(wr, 1), "p_bonf": round(p_bonf, 6)}
 
 
@@ -681,9 +678,7 @@ def main() -> None:
             stats_block(r["train"], "train(2018-2022)", N_BONF)
             stats_block(r["test"], "test(2022-2026)", N_BONF)
             if r["benchmark"]:
-                print(
-                    f"  benchmark(filtered等权) mean: {statistics.mean(r['benchmark']):.4f}%/月 | strategy: {statistics.mean(r['strategy']):.4f}%/月"
-                )
+                print(f"  benchmark(filtered等权) mean: {statistics.mean(r['benchmark']):.4f}%/月 | strategy: {statistics.mean(r['strategy']):.4f}%/月")
             slippage_sensitivity_bp(funds, prices, month_rets, month_dates)
             _verdict(r, "B/P raw")
 
@@ -704,9 +699,7 @@ def main() -> None:
             stats_block(re["train"], "train(2018-2022)", N_BONF)
             stats_block(re["test"], "test(2022-2026)", N_BONF)
             if re["benchmark"]:
-                print(
-                    f"  benchmark(正盈利等权) mean: {statistics.mean(re['benchmark']):.4f}%/月 | strategy: {statistics.mean(re['strategy']):.4f}%/月"
-                )
+                print(f"  benchmark(正盈利等权) mean: {statistics.mean(re['benchmark']):.4f}%/月 | strategy: {statistics.mean(re['strategy']):.4f}%/月")
             slippage_sensitivity_ep(funds, raw_close, month_rets, month_dates)
             _verdict(re, "E/P raw")
 
@@ -724,9 +717,7 @@ def main() -> None:
             stats_block(rd["train"], "train(2018-2022)", N_BONF)
             stats_block(rd["test"], "test(2022-2026)", N_BONF)
             if rd["benchmark"]:
-                print(
-                    f"  benchmark(有分红股等权) mean: {statistics.mean(rd['benchmark']):.4f}%/月 | strategy: {statistics.mean(rd['strategy']):.4f}%/月"
-                )
+                print(f"  benchmark(有分红股等权) mean: {statistics.mean(rd['benchmark']):.4f}%/月 | strategy: {statistics.mean(rd['strategy']):.4f}%/月")
             _verdict(rd, "D/P raw")
 
     # 存 result

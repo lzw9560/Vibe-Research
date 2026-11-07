@@ -258,9 +258,7 @@ if __name__ == "__main__":
     print("\n=== gap × pctChg combos (n>=30) by close_ev (post-confirmation 真实 edge) ===")
     for x in sorted([c for c in r["combo_buckets"] if c["n"] >= 30], key=lambda c: -c["close_ev"]):
         flag = " ★" if x["close_ev"] > 0.7 else ""
-        print(
-            f"  {x['combo']}: n={x['n']} hit={x['hit']} rate={x['rate'] * 100:.2f}% open_ev={x['open_ev']}% close_ev={x['close_ev']}%{flag}"
-        )
+        print(f"  {x['combo']}: n={x['n']} hit={x['hit']} rate={x['rate'] * 100:.2f}% open_ev={x['open_ev']}% close_ev={x['close_ev']}%{flag}")
     print("\n=== 同 combo open_ev vs close_ev 对比（看 T+1 日内泄漏大小）===")
     for x in sorted([c for c in r["combo_buckets"] if c["n"] >= 30], key=lambda c: -(c["open_ev"] - c["close_ev"])):
         print(f"  {x['combo']}: open_ev={x['open_ev']}% close_ev={x['close_ev']}% 泄漏={round(x['open_ev'] - x['close_ev'], 2)}%")

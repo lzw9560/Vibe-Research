@@ -120,14 +120,10 @@ def main():
     print(f"\n=== R4 涨停 vs 未涨停（survivorship）===")
     if obs_zt:
         r = [o["edge"] for o in obs_zt]
-        print(
-            f"  涨停股: n={len(obs_zt)} net_mean={statistics.mean(r) * 100:.2f}% WR={sum(o['win'] for o in obs_zt) / len(obs_zt) * 100:.2f}%"
-        )
+        print(f"  涨停股: n={len(obs_zt)} net_mean={statistics.mean(r) * 100:.2f}% WR={sum(o['win'] for o in obs_zt) / len(obs_zt) * 100:.2f}%")
     if obs_nonzt:
         r = [o["edge"] for o in obs_nonzt]
-        print(
-            f"  未涨停股: n={len(obs_nonzt)} net_mean={statistics.mean(r) * 100:.2f}% WR={sum(o['win'] for o in obs_nonzt) / len(obs_nonzt) * 100:.2f}%"
-        )
+        print(f"  未涨停股: n={len(obs_nonzt)} net_mean={statistics.mean(r) * 100:.2f}% WR={sum(o['win'] for o in obs_nonzt) / len(obs_nonzt) * 100:.2f}%")
         # R4 helper
         from s44_verifier.verifier import compare_filtered_vs_unfiltered_edge
 

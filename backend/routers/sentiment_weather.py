@@ -643,8 +643,7 @@ def get_weather_timeline(days: int = Query(30, ge=1, le=365)) -> Dict[str, Any]:
         _as_of = last_trading_date_str()
         db = _get_db()
         rows = db.execute(
-            "SELECT date, score, phase, change_from_yesterday FROM sti_timeline "
-            "WHERE score IS NOT NULL AND date <= ? ORDER BY date DESC LIMIT ?",
+            "SELECT date, score, phase, change_from_yesterday FROM sti_timeline WHERE score IS NOT NULL AND date <= ? ORDER BY date DESC LIMIT ?",
             (_as_of, days),
         ).fetchall()
 

@@ -74,9 +74,7 @@ def load_baselines() -> dict:
 # ---------- build low-vol daily factor series ----------
 
 
-def build_lowvol_series(
-    close: np.ndarray, amount: np.ndarray, ret: np.ndarray, calendar: list[str], rebal_idx: list[int]
-) -> dict[str, float]:
+def build_lowvol_series(close: np.ndarray, amount: np.ndarray, ret: np.ndarray, calendar: list[str], rebal_idx: list[int]) -> dict[str, float]:
     """Low-vol daily returns: month-end rebalance, 20d return std signal.
 
     long = bottom decile (LOW volatility, low-volatility anomaly)

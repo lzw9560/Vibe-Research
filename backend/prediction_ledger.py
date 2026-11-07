@@ -53,9 +53,7 @@ def _migrate_schema(db_path: str = WINRATE_DB_PATH) -> None:
     """执行 prediction_ledger 表迁移。"""
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     manager = MigrationManager(db_path=db_path)
-    sql = (Path(__file__).resolve().parent / "migrations" / "prediction_ledger" / "20260812-001_create_prediction_ledger.sql").read_text(
-        encoding="utf-8"
-    )
+    sql = (Path(__file__).resolve().parent / "migrations" / "prediction_ledger" / "20260812-001_create_prediction_ledger.sql").read_text(encoding="utf-8")
     manager.upgrade(
         [
             {
@@ -194,9 +192,7 @@ def get_due_predictions(as_of: str, db_path: str = WINRATE_DB_PATH) -> list[Pred
         conn.close()
 
 
-def verify_prediction(
-    pred_id: int, actual_return: float | None, status: str, attribution: str = "", db_path: str = WINRATE_DB_PATH
-) -> bool:
+def verify_prediction(pred_id: int, actual_return: float | None, status: str, attribution: str = "", db_path: str = WINRATE_DB_PATH) -> bool:
     """写验证结果。status ∈ {hit, miss, voided}。幂等：已验证的不重写。"""
     if status not in {"hit", "miss", "voided"}:
         raise ValueError(f"非法验证 status: {status}")

@@ -461,9 +461,7 @@ class TradeJournal:
             "killed_at": row[4],
         }
 
-    def set_arm_status(
-        self, arm: str, *, is_active: bool = True, weight_override: float | None = None, kill_reason: str | None = None
-    ) -> None:
+    def set_arm_status(self, arm: str, *, is_active: bool = True, weight_override: float | None = None, kill_reason: str | None = None) -> None:
         """S213 设置 arm kill switch 状态（upsert）。
 
         is_active=False + kill_reason → lift_for_arm 返 0.0 停交易。

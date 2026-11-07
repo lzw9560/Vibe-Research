@@ -135,10 +135,7 @@ def main():
         sm_mean = statistics.mean(bhar_vals)
         sm_med = statistics.median(bhar_vals)
         sm_wr = sum(1 for r in bhar_vals if r > 0) / len(bhar_vals) * 100
-        print(
-            f"  size-decile-matched BHAR: mean={sm_mean:+.4f}% net={sm_mean - COST:+.4f}% "
-            f"median={sm_med:+.4f}% WR={sm_wr:.1f}% n={len(bhar_vals)}"
-        )
+        print(f"  size-decile-matched BHAR: mean={sm_mean:+.4f}% net={sm_mean - COST:+.4f}% median={sm_med:+.4f}% WR={sm_wr:.1f}% n={len(bhar_vals)}")
         print(f"  (vs 标的习惯专家 claim: +0.36% net, WR 43.4%)")
 
 

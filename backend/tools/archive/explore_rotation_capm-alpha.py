@@ -446,9 +446,7 @@ def verdict_capm(
 def main() -> None:
     dates, inds, R, bench = load_clean_window()
     print(f"Clean window: {dates[0]} -> {dates[-1]}  ({len(dates)} trading days, {len(inds)} dense industries)")
-    print(
-        f"  NOTE: 银行Ⅱ (banks) & 保险Ⅱ (insurance) ABSENT (zero long-history codes) — major financial sectors missing from this rotation."
-    )
+    print(f"  NOTE: 银行Ⅱ (banks) & 保险Ⅱ (insurance) ABSENT (zero long-history codes) — major financial sectors missing from this rotation.")
     print(f"  Bonferroni: x{N_METHODS} (methods) x{N_FORMATION_SEARCH} (formation search) = x{N_BONF}")
     print(f"  Holding: {HOLDING_WEEKS} wk ({HOLD_DAYS} days), rebalance every {HOLD_DAYS} days. Top-{TOP_K} equal-weight long.")
 
@@ -493,10 +491,7 @@ def main() -> None:
         alpha_daily_ann = annualize_daily_alpha(daily_gross["alpha"])
 
         print(f"\n  n_rebalances (blocks) = {n_blk}  (>= {MIN_BLOCKS}? {'OK' if n_blk >= MIN_BLOCKS else 'UNDERPOWERED'})")
-        print(
-            f"  avg turnover/block = {avg_turn * 100:.1f}%  "
-            f"avg cost/block = {avg_cost * 100:.3f}%  annual cost drag ~= {annual_cost * 100:.2f}%"
-        )
+        print(f"  avg turnover/block = {avg_turn * 100:.1f}%  avg cost/block = {avg_cost * 100:.3f}%  annual cost drag ~= {annual_cost * 100:.2f}%")
         print(f"\n  --- BLOCK-level CAPM (primary, per-rebalance-block) ---")
         print(
             f"  GROSS: alpha={alpha_gross_blk * 100:.4f}%/block  "
@@ -585,14 +580,11 @@ def main() -> None:
         f"(annual {best['alpha_annual_net'] * 100:.2f}%)  [after {best['annual_cost_drag'] * 100:.2f}%/yr turnover cost]"
     )
     print(f"  beta = {best['beta_block']:.3f}  (beta isolated: alpha is residual after beta*r_mkt)")
-    print(
-        f"  t(alpha) = {best['t_block']:.3f}  p_one_sided = {best['p_one_block']:.5f}  Bonferroni(x{N_BONF}) = {best['p_bonf_block']:.5f}"
-    )
+    print(f"  t(alpha) = {best['t_block']:.3f}  p_one_sided = {best['p_one_block']:.5f}  Bonferroni(x{N_BONF}) = {best['p_bonf_block']:.5f}")
     print(f"  Sharpe = {best['sharpe']:.3f} (annualized, gross)")
     if wf.get("status") == "ok":
         print(
-            f"  walk-forward: train_alpha={wf['train_alpha'] * 100:.4f}%/blk  "
-            f"test_alpha={wf['test_alpha'] * 100:.4f}%/blk  test_p_one={wf['test_p_one']:.5f}"
+            f"  walk-forward: train_alpha={wf['train_alpha'] * 100:.4f}%/blk  test_alpha={wf['test_alpha'] * 100:.4f}%/blk  test_p_one={wf['test_p_one']:.5f}"
         )
     print(f"  n_rebalances = {best['n_rebalances']}")
     print(f"  VERDICT: {best['verdict'].upper()} — {best['reason']}")

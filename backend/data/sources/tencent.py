@@ -70,9 +70,7 @@ def _parse_gtimg(data: str) -> dict[str, dict]:
 
         # 五档买卖盘：price_start=9→买1-5，19→卖1-5（price/vol 交替，步长2）
         def levels(price_start: int) -> list[dict]:
-            return [
-                {"level": i, "price": num(price_start + (i - 1) * 2), "vol": num(price_start + (i - 1) * 2 + 1) * 100} for i in range(1, 6)
-            ]
+            return [{"level": i, "price": num(price_start + (i - 1) * 2), "vol": num(price_start + (i - 1) * 2 + 1) * 100} for i in range(1, 6)]
 
         result[code] = {
             "name": vals[1],

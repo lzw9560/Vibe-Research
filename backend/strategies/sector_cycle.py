@@ -282,9 +282,7 @@ def aggregate_sectors(date: str) -> list[dict]:
         if prev_dates:
             placeholders = ",".join("?" * len(prev_dates))
             rows = conn.execute(
-                f"SELECT industry, COUNT(DISTINCT code) FROM gene_scores "
-                f"WHERE date IN ({placeholders}) AND industry IS NOT NULL "
-                f"GROUP BY industry, date",
+                f"SELECT industry, COUNT(DISTINCT code) FROM gene_scores WHERE date IN ({placeholders}) AND industry IS NOT NULL GROUP BY industry, date",
                 prev_dates,
             ).fetchall()
             for ind, cnt in rows:
@@ -486,10 +484,7 @@ def aggregate_multi(date: str) -> list[dict]:
         for k, v in sorted(label_count.items(), key=lambda x: -x[1]["count"])
     ]
 
-    return [
-        {"label": k, "zt_count_today": v["count"], "dims": sorted(v["dims"])}
-        for k, v in sorted(label_count.items(), key=lambda x: -x[1]["count"])
-    ]
+    return [{"label": k, "zt_count_today": v["count"], "dims": sorted(v["dims"])} for k, v in sorted(label_count.items(), key=lambda x: -x[1]["count"])]
 
 
 def multi_rotation(date: str) -> dict:

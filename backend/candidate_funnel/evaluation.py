@@ -294,8 +294,7 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
         validation_status="探索性",
         weight_multiplier=0.5,
         source_script="(未测——S176 compute_seal_delta_ratio/volatility/drawdown 已建，60d live 后复验)",
-        note="封单诚意 = Δseal_amount/volatility/drawdown 三合一；compute_seal_delta_ratio 已建；"
-        "§44 窗口盘中→D收；breakout 臂盘中 conditioning",
+        note="封单诚意 = Δseal_amount/volatility/drawdown 三合一；compute_seal_delta_ratio 已建；§44 窗口盘中→D收；breakout 臂盘中 conditioning",
     ),
     "bid_ask_pressure": DimensionValidation(
         dimension_id="bid_ask_pressure",
@@ -306,8 +305,7 @@ DIMENSION_LIFT_REGISTRY: dict[str, DimensionValidation] = {
         validation_status="探索性",
         weight_multiplier=0.5,
         source_script="(未测——S176 compute_bid_ask_pressure 已建，60d live 后复验)",
-        note="bid_ask_pressure = Σbuy/Σsell（涨停 sell=0 → cap 999）；compute_bid_ask_pressure 已建；"
-        "§44 窗口盘中→D收；breakout 臂盘中 conditioning",
+        note="bid_ask_pressure = Σbuy/Σsell（涨停 sell=0 → cap 999）；compute_bid_ask_pressure 已建；§44 窗口盘中→D收；breakout 臂盘中 conditioning",
     ),
 }
 

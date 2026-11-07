@@ -549,9 +549,7 @@ def run_layer_lift(days_back: int = 120, fetch_miss: bool = True) -> dict:
             survivors_by_day=dict(_surv),
             universe_by_day=_raw_universe,
             n_comparisons=3,  # 3 layer 同族 Bonferroni K=3（honest count；非模板 8，§1.2 不臆造）
-            round_trip_cost=sum(_all_layer_costs) / len(_all_layer_costs)
-            if _all_layer_costs
-            else 0.0,  # S201b: per-trade mean 非 flat 0.70
+            round_trip_cost=sum(_all_layer_costs) / len(_all_layer_costs) if _all_layer_costs else 0.0,  # S201b: per-trade mean 非 flat 0.70
             script="tools/first_board_layer_lift.py",
             params={"layer": _arm_name, "thresholds": LAYER_THRESHOLDS, "cost_pct": COST_PCT, "days_back": days_back},
         )
@@ -688,10 +686,7 @@ def run_momentum_broaden(pct_lo: float = 5.0, pct_hi: float = 9.9) -> dict:
     out_path = out_dir / "matrix_momentum.json"
     out_path.write_text(json.dumps(matrix, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[momentum] 矩阵已存：{out_path}")
-    print(
-        f"  movers: n={len(movers_returns)} winrate={matrix['movers']['winrate']} "
-        f"mean={matrix['movers']['mean_pct']} dates={matrix['movers']['n_dates']}"
-    )
+    print(f"  movers: n={len(movers_returns)} winrate={matrix['movers']['winrate']} mean={matrix['movers']['mean_pct']} dates={matrix['movers']['n_dates']}")
     print(f"  non_movers: n={len(nm_returns)} winrate={matrix['non_movers_baseline']['winrate']}")
     print(f"  lift={lift} n={n} status={matrix['validation_status']}")
     return matrix
@@ -753,10 +748,7 @@ def run_layer_lift_baostock() -> dict:
         "n_first_boards": n_fb,
         "raw_first_board": raw_stats,
         "layer2_turnover": l2_stats,
-        "note": (
-            "涨停代理 pctChg>=9.9（主板+10%/创业+20%抓，ST漏）；层1/3 跳过"
-            "（baostock 无 zbc/fund/hybk）；1121 cache codes 选择偏（lift 内抵消）"
-        ),
+        "note": ("涨停代理 pctChg>=9.9（主板+10%/创业+20%抓，ST漏）；层1/3 跳过（baostock 无 zbc/fund/hybk）；1121 cache codes 选择偏（lift 内抵消）"),
     }
     out_dir = Path(__file__).resolve().parents[2] / ".scratch" / "s077-layer-lift"
     out_dir.mkdir(parents=True, exist_ok=True)

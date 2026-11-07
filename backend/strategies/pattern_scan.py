@@ -281,9 +281,7 @@ def compute_ma5_slope(bars: list[dict]) -> float | None:
         return None
 
 
-def compute_consolidation(
-    bars: list[dict], threshold: float = 8.0, min_days: int = 5
-) -> tuple[int | None, float | None, float | None, float | None]:
+def compute_consolidation(bars: list[dict], threshold: float = 8.0, min_days: int = 5) -> tuple[int | None, float | None, float | None, float | None]:
     """横盘形态：N 日振幅 < 阈值（spec §5.5）。S153 R1：返 4-tuple (days, amplitude, max_high, min_low)。
 
     max_high/min_low 从**完整 consolidation_days 窗口**算（下方 line 336 段，非循环内 line 318

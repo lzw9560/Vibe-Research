@@ -285,14 +285,8 @@ def analyze_subset(name: str, picks: list[dict], verbose: bool = True) -> dict:
 
     if verbose:
         print(f"\n  {name}: n={len(picks)} n_days={cor_dt['n_days']}")
-        print(
-            f"    R1 BHAR:    gross={r1_s['ev']:+.3f}% net={r1_s['ev'] - ETF_COST:+.3f}% "
-            f"day_t={r1_dt['t']} p={r1_dt['p_one_sided']} WR={r1_s['wr']}%"
-        )
-        print(
-            f"    修正 BHAR:  gross={cor_s['ev']:+.3f}% net={cor_s['ev'] - ETF_COST:+.3f}% "
-            f"day_t={cor_dt['t']} p={cor_dt['p_one_sided']} WR={cor_s['wr']}%"
-        )
+        print(f"    R1 BHAR:    gross={r1_s['ev']:+.3f}% net={r1_s['ev'] - ETF_COST:+.3f}% day_t={r1_dt['t']} p={r1_dt['p_one_sided']} WR={r1_s['wr']}%")
+        print(f"    修正 BHAR:  gross={cor_s['ev']:+.3f}% net={cor_s['ev'] - ETF_COST:+.3f}% day_t={cor_dt['t']} p={cor_dt['p_one_sided']} WR={cor_s['wr']}%")
         print(f"    raw EV:     gross={raw_s['ev']:+.3f}% net={raw_s['ev'] - ETF_COST:+.3f}% WR={raw_s['wr']}%")
         print(f"    beta 泄漏 = R1 - 修正 = {r1_s['ev'] - cor_s['ev']:+.3f}% ({'R1 通胀' if r1_s['ev'] > cor_s['ev'] else 'R1 通缩'})")
         if wf["status"] == "ok":
@@ -461,10 +455,7 @@ def main() -> None:
             continue
         r = analyze_subset(str(yr), pk, verbose=False)
         yearly_trend.append((yr, r))
-        print(
-            f"{yr:<6} {r['n']:>6} {r['n_days']:>7} {r['cor']['ev']:>+9} "
-            f"{r['cor_net']:>+8} {r['cor_dt']['t']:>7} {r['cor_dt']['p_one_sided']:>9}"
-        )
+        print(f"{yr:<6} {r['n']:>6} {r['n_days']:>7} {r['cor']['ev']:>+9} {r['cor_net']:>+8} {r['cor_dt']['t']:>7} {r['cor_dt']['p_one_sided']:>9}")
 
     # 断点定位：哪一年 BHAR 首次转负且持续
     flip_year = None
@@ -577,11 +568,7 @@ def main() -> None:
             v = "survives-bonf"
         sc["sub_verdict"] = v
         flag = " <== survives Bonf" if v == "survives-bonf" else ""
-        print(
-            f"{sc['name']:<40} {sc['n']:>5} {sc['cor']['ev']:>+8} "
-            f"{sc['cor_net']:>+7} {sc['cor_dt']['p_one_sided']:>9} "
-            f"{p_bonf:>9} {v:<14}{flag}"
-        )
+        print(f"{sc['name']:<40} {sc['n']:>5} {sc['cor']['ev']:>+8} {sc['cor_net']:>+7} {sc['cor_dt']['p_one_sided']:>9} {p_bonf:>9} {v:<14}{flag}")
         if v == "survives-bonf":
             survivors.append(sc)
 
@@ -606,10 +593,7 @@ def main() -> None:
     print("\n" + "=" * 78)
     print("诚实总结")
     print("=" * 78)
-    print(
-        f"\n[BHAR 口径] R1 全样本 gross={sub_full['r1']['ev']:+.3f}% vs "
-        f"修正={sub_full['cor']['ev']:+.3f}% → beta 泄漏={sub_full['beta_leak']:+.3f}%"
-    )
+    print(f"\n[BHAR 口径] R1 全样本 gross={sub_full['r1']['ev']:+.3f}% vs 修正={sub_full['cor']['ev']:+.3f}% → beta 泄漏={sub_full['beta_leak']:+.3f}%")
     print(f"  → {'R1 通胀了 edge（beta 泄漏假 edge 成分）' if sub_full['beta_leak'] > 0 else 'R1 通缩了 edge'}")
 
     print(f"\n[结构断点] 断点年={flip_year}")

@@ -175,8 +175,7 @@ def main(max_stocks: int | None = None, codes: list[str] | None = None) -> int:
 
             if (i + 1) % 100 == 0:
                 print(
-                    f"[refresh] {i + 1}/{len(codes)} updated={updated} new={new_codes_added} "
-                    f"new_bars={new_bars_total} elapsed={time.time() - t0:.0f}s",
+                    f"[refresh] {i + 1}/{len(codes)} updated={updated} new={new_codes_added} new_bars={new_bars_total} elapsed={time.time() - t0:.0f}s",
                     flush=True,
                 )
     finally:

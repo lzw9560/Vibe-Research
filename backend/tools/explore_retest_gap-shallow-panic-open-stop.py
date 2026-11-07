@@ -761,10 +761,7 @@ def main() -> None:
     rwf = rolling_walk_forward(capped3, realistic_stop_ret, n_windows=4)
     print(f"\nstatus: {rwf['status']}  n_dates={rwf.get('n_dates', 0)}")
     if rwf["status"] == "ok":
-        print(
-            f"\n{'win':>4} {'train_n':>8} {'train_ev':>10} {'test_n':>8} "
-            f"{'test_n_days':>12} {'test_ev':>10} {'test_HAC_t':>10} {'test_HAC_p':>10}"
-        )
+        print(f"\n{'win':>4} {'train_n':>8} {'train_ev':>10} {'test_n':>8} {'test_n_days':>12} {'test_ev':>10} {'test_HAC_t':>10} {'test_HAC_p':>10}")
         print("-" * 82)
         for w in rwf["windows"]:
             print(
@@ -796,10 +793,7 @@ def main() -> None:
     print(f"\n1. entry 涨停价溢价:")
     print(f"   entry = T+1 open (after gap-DOWN in [-3,-2)), NOT at limit-up")
     print(f"   trades with t1_open >= t1_close: {entry_at_limit}/{len(capped3)} ({entry_at_limit / max(len(capped3), 1) * 100:.1f}%)")
-    print(
-        f"   → {'CLEAN' if entry_at_limit < len(capped3) * 0.05 else 'SUSPICIOUS'}: "
-        f"gap-down entry is below T close, not at limit-up premium"
-    )
+    print(f"   → {'CLEAN' if entry_at_limit < len(capped3) * 0.05 else 'SUSPICIOUS'}: gap-down entry is below T close, not at limit-up premium")
 
     # Pattern 2: survivorship — all watchlist stocks included, no filtering by survival
     print(f"\n2. survivorship:")
@@ -901,10 +895,7 @@ def main() -> None:
                 f"test_EV={w['test_ev']:+.4f}% HAC_t={w['test_hac_t']:+.4f} "
                 f"p={w['test_hac_p']:.4f} [{pos}{sig}]"
             )
-        print(
-            f"  positive: {rwf['positive_test_windows']}/{rwf['n_test_windows']}, "
-            f"significant: {rwf['significant_test_windows']}/{rwf['n_test_windows']}"
-        )
+        print(f"  positive: {rwf['positive_test_windows']}/{rwf['n_test_windows']}, significant: {rwf['significant_test_windows']}/{rwf['n_test_windows']}")
 
     # --- Verdict logic (frozen before running) ---
     # Using less-conservative methodology but keeping honest constraints:
@@ -942,28 +933,21 @@ def main() -> None:
         print(f"  4. net EV = {net_ev:+.4f}% <= 0 → FALSIFIED")
     elif rwf["status"] == "ok" and rwf["positive_test_windows"] < rwf["n_test_windows"] / 2:
         verdict = "edge-falsified"
-        reason = (
-            f"rolling WF: only {rwf['positive_test_windows']}/{rwf['n_test_windows']} "
-            f"test windows positive (majority negative = not robust OOS)"
-        )
+        reason = f"rolling WF: only {rwf['positive_test_windows']}/{rwf['n_test_windows']} test windows positive (majority negative = not robust OOS)"
         print(f"  5. rolling WF majority negative → FALSIFIED")
     elif close_ev_val <= 0:
         # open_stop passes HAC + BH + net + rolling WF, but close_ev negative
         # = T+1 intraday leakage fake edge (pattern #3)
         verdict = "exploratory"
         reason = (
-            f"open_stop passes HAC/BH/net/WF but close_ev = {close_ev_val:+.4f}% ≤ 0 "
-            f"(T+1 intraday leakage: edge from gap-down recovery, not overnight drift)"
+            f"open_stop passes HAC/BH/net/WF but close_ev = {close_ev_val:+.4f}% ≤ 0 (T+1 intraday leakage: edge from gap-down recovery, not overnight drift)"
         )
         print(f"  6. close_ev = {close_ev_val:+.4f}% ≤ 0 → EXPLORATORY (intraday leakage)")
         print(f"     open_stop edge comes from T+1 intraday recovery, NOT overnight drift")
         print(f"     close_ev HAC t = {close_ev_hac_t:+.4f} (strongly negative)")
     elif rwf["status"] == "ok" and rwf["significant_test_windows"] < rwf["n_test_windows"] / 2:
         verdict = "exploratory"
-        reason = (
-            f"rolling WF: only {rwf['significant_test_windows']}/{rwf['n_test_windows']} "
-            f"test windows HAC-significant (OOS not consistently significant)"
-        )
+        reason = f"rolling WF: only {rwf['significant_test_windows']}/{rwf['n_test_windows']} test windows HAC-significant (OOS not consistently significant)"
         print(f"  6b. rolling WF not consistently significant → EXPLORATORY")
     else:
         verdict = "edge-confirmed"

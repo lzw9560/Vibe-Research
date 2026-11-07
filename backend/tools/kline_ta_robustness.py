@@ -79,16 +79,9 @@ def main() -> int:
     cache = json.loads(KLINE_CACHE.read_bytes())
     conn = sqlite3.connect(str(DB), timeout=10)
     try:
-        em_dates = [
-            r[0] for r in conn.execute("SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date").fetchall()
-        ]
+        em_dates = [r[0] for r in conn.execute("SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date").fetchall()]
         zt_by_date = {
-            d: {
-                r[0]
-                for r in conn.execute(
-                    "SELECT DISTINCT code FROM gene_scores WHERE date=? AND data_source='eastmoney_live'", (d,)
-                ).fetchall()
-            }
+            d: {r[0] for r in conn.execute("SELECT DISTINCT code FROM gene_scores WHERE date=? AND data_source='eastmoney_live'", (d,)).fetchall()}
             for d in em_dates
         }
         # 8 因子（gene_scores，今日涨停子集）

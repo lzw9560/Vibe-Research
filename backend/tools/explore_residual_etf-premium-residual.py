@@ -418,11 +418,7 @@ def main() -> int:
     print("\n[4] 主回归: 全 3-factor OLS + NW-HAC (策略=raw_ev)...")
     res_full = run_ols_hac(raw_series, X_full, label="3-factor (mkt+smb+umd)")
     print(f"  n={res_full['n']}, NW lag={res_full['nlag']}")
-    print(
-        f"  alpha = {res_full['alpha_pct']:.4f}%/day "
-        f"(t={res_full['alpha_t']:.3f}, p_two={res_full['alpha_p_two']:.4f}, "
-        f"p_one={res_full['alpha_p_one']:.4f})"
-    )
+    print(f"  alpha = {res_full['alpha_pct']:.4f}%/day (t={res_full['alpha_t']:.3f}, p_two={res_full['alpha_p_two']:.4f}, p_one={res_full['alpha_p_one']:.4f})")
     print(f"  R² = {res_full['r_squared']:.4f}, resid_std = {res_full['resid_std_pct']:.4f}%/day")
     print(f"  factor loadings:")
     for k, v in res_full["loadings"].items():
@@ -551,11 +547,7 @@ def main() -> int:
     print(f"  t (NW-HAC) = {a_t:.3f}, one-sided p = {a_p_one:.4f}")
     print(f"  Bonferroni ×{N_STRATEGIES_PARALLEL} p = {p_bonf_final:.4f} ({'PASS' if p_bonf_final < ALPHA else 'FAIL'} @ {ALPHA})")
     print(f"  net trade-day alpha (after cost): {net_trade_mean:.4f}% (对比 gross {gross_trade_mean:.4f}%)")
-    print(
-        f"  rolling: mean={roll.get('mean_alpha_pct', 0):.4f}%/day "
-        f"%pos={roll.get('pct_positive', 0):.1f}% "
-        f"%sig={roll.get('pct_sig_t2', 0):.1f}%"
-    )
+    print(f"  rolling: mean={roll.get('mean_alpha_pct', 0):.4f}%/day %pos={roll.get('pct_positive', 0):.1f}% %sig={roll.get('pct_sig_t2', 0):.1f}%")
     print(f"  alt baseline: {alphas_sig}/{len(combos)} combos significant")
     print(
         f"  regime: bull={rb['bull'].get('day_mean_trade_alpha_pct', '-')}% "
@@ -614,9 +606,7 @@ def main() -> int:
 
     print(f"\n禁外推声明:")
     print(f"  - 仅测 disc<-0.3% 在因子可对齐窗口 ({common[0]}~{common[-1]}, {len(common)} 日, {s_meta['n_trade_days']} trade days)")
-    print(
-        f"  - 全样本 2970 picks 中仅 {s_meta['total_trades_on_trade_days']} 在窗口内 (因子数据 2019-02 起, 早 2005-2018 picks 无法控因子)"
-    )
+    print(f"  - 全样本 2970 picks 中仅 {s_meta['total_trades_on_trade_days']} 在窗口内 (因子数据 2019-02 起, 早 2005-2018 picks 无法控因子)")
     print(f"  - HML 缺失 (无历史 PB), 3-factor Carhart-minus-HML baseline")
     print(f"  - SMB=log(20d amount) 是流动性代理非真市值, UMD=12-2 动量")
     print(f"  - 单策略 ≠ 机制套利域有/无 edge; 跨境 QDII/LOF/封基未测")

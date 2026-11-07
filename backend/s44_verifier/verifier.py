@@ -498,10 +498,7 @@ def verify(
     if wf_status == "insufficient_skipped":
         notes.append("walk-forward: insufficient data, skipped")
     if pk_status is not None:
-        notes.append(
-            f"PurgedKFold: {pk_status} ({pk_n_folds} folds; "
-            f"walk-forward {'insufficient' if wf_status == 'insufficient_skipped' else 'ran'})"
-        )
+        notes.append(f"PurgedKFold: {pk_status} ({pk_n_folds} folds; walk-forward {'insufficient' if wf_status == 'insufficient_skipped' else 'ran'})")
     # R38: falsified 须假阴性审计 (2026-10-17 幽灵政策落地)
     r38_fnr: Optional[str] = None
     if status == "falsified":

@@ -392,9 +392,7 @@ def main() -> None:
         f"net={(i10_m - COST) * 100:+.3f}%；20%板 raw={i20_m * 100:+.3f}%(n={i20_n},WR={i20_wr * 100:.1f}%) "
         f"net={(i20_m - COST) * 100:+.3f}%"
     )
-    print(
-        f"LU-20% 逐年 event-level: {yr20_tot}年中{yr20_neg}年负均值；逐年WR<50%={all(statistics.mean(v) > 0 for v in by_year20.values())}"
-    )
+    print(f"LU-20% 逐年 event-level: {yr20_tot}年中{yr20_neg}年负均值；逐年WR<50%={all(statistics.mean(v) > 0 for v in by_year20.values())}")
 
     # sliver 判定（严格）：daily-mean net>0.3% 且 event-level net>0.3% 且逐年过半正 且 WR>50%
     intra20_sliver = intra20_net_dm > 0.003 and (i20_m - COST) > 0.003 and yr20_neg < yr20_tot / 2 and i20_wr > 0.50

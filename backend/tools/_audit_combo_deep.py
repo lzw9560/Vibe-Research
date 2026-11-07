@@ -161,17 +161,13 @@ def main() -> None:
         r = stats_for(ds, by_date)
         if not r:
             continue
-        print(
-            f"{label:<14}{r['mean'] * 100:>+9.4f}%{r['median'] * 100:>+9.4f}%{r['wr'] * 100:>6.1f}%{r['net'] * 100:>+9.4f}%{r['t']:>6.2f}{r['n_days']:>8}"
-        )
+        print(f"{label:<14}{r['mean'] * 100:>+9.4f}%{r['median'] * 100:>+9.4f}%{r['wr'] * 100:>6.1f}%{r['net'] * 100:>+9.4f}%{r['t']:>6.2f}{r['n_days']:>8}")
     # 2025-2026 by year
     for yr in ("2025", "2026"):
         ds = sorted(d for d in h2 if d.startswith(yr))
         r = stats_for(ds, by_date)
         if r:
-            print(
-                f"{yr:<14}{r['mean'] * 100:>+9.4f}%{r['median'] * 100:>+9.4f}%{r['wr'] * 100:>6.1f}%{r['net'] * 100:>+9.4f}%{r['t']:>6.2f}{r['n_days']:>8}"
-            )
+            print(f"{yr:<14}{r['mean'] * 100:>+9.4f}%{r['median'] * 100:>+9.4f}%{r['wr'] * 100:>6.1f}%{r['net'] * 100:>+9.4f}%{r['t']:>6.2f}{r['n_days']:>8}")
     print()
 
     # 2. 集中度
@@ -183,9 +179,7 @@ def main() -> None:
         if not r:
             print(f"{label:<14} (n不足跳过)")
             continue
-        print(
-            f"{label:<14}{r['mean'] * 100:>+9.4f}%{r['median'] * 100:>+9.4f}%{r['wr'] * 100:>6.1f}%{r['net'] * 100:>+9.4f}%{r['t']:>6.2f}{r['n_days']:>8}"
-        )
+        print(f"{label:<14}{r['mean'] * 100:>+9.4f}%{r['median'] * 100:>+9.4f}%{r['wr'] * 100:>6.1f}%{r['net'] * 100:>+9.4f}%{r['t']:>6.2f}{r['n_days']:>8}")
     print()
 
     # 3. 因子分解
@@ -204,9 +198,7 @@ def main() -> None:
         r = stats_for(all_test, by_date, use_gap=g, use_tr=tr, use_amt=a)
         if not r:
             continue
-        print(
-            f"{label:<22}{r['mean'] * 100:>+9.4f}%{r['median'] * 100:>+9.4f}%{r['wr'] * 100:>6.1f}%{r['net'] * 100:>+9.4f}%{r['t']:>6.2f}"
-        )
+        print(f"{label:<22}{r['mean'] * 100:>+9.4f}%{r['median'] * 100:>+9.4f}%{r['wr'] * 100:>6.1f}%{r['net'] * 100:>+9.4f}%{r['t']:>6.2f}")
     print()
 
     # 4. 尾部分布（全 combo top-decile 全test）
@@ -228,9 +220,7 @@ def main() -> None:
         cut = int(n * 0.05)
         trimmed = sorted(pk)[:-cut] if cut else pk
         if trimmed:
-            print(
-                f"  去 top5%暴利后 mean={statistics.mean(trimmed) * 100:+.3f}% median={statistics.median(trimmed) * 100:+.3f}%（核心是否还正）"
-            )
+            print(f"  去 top5%暴利后 mean={statistics.mean(trimmed) * 100:+.3f}% median={statistics.median(trimmed) * 100:+.3f}%（核心是否还正）")
 
 
 if __name__ == "__main__":

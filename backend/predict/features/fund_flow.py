@@ -269,12 +269,8 @@ def fetch_dt_hot_money_relay(code: str, date: str | None = None, look_back: int 
     start = (datetime.strptime(ref, "%Y-%m-%d") - timedelta(days=look_back)).strftime("%Y-%m-%d")
     flt = f"(SECURITY_CODE=\"{code}\")(TRADE_DATE>='{start}')(TRADE_DATE<='{ref}')"
     try:
-        buy = astock.eastmoney_datacenter(
-            "RPT_BILLBOARD_DAILYDETAILSBUY", filter_str=flt, page_size=200, sort_columns="TRADE_DATE", sort_types="-1"
-        )
-        sell = astock.eastmoney_datacenter(
-            "RPT_BILLBOARD_DAILYDETAILSSELL", filter_str=flt, page_size=200, sort_columns="TRADE_DATE", sort_types="-1"
-        )
+        buy = astock.eastmoney_datacenter("RPT_BILLBOARD_DAILYDETAILSBUY", filter_str=flt, page_size=200, sort_columns="TRADE_DATE", sort_types="-1")
+        sell = astock.eastmoney_datacenter("RPT_BILLBOARD_DAILYDETAILSSELL", filter_str=flt, page_size=200, sort_columns="TRADE_DATE", sort_types="-1")
     except Exception:
         return None
     rows = list(buy or []) + list(sell or [])

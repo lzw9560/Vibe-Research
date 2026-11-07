@@ -267,9 +267,7 @@ def r3_enforce(payload: Dict[str, Any]) -> Dict[str, Any]:
     enforced: list[dict] = []
     skipped_underpowered: list[dict] = []
     skipped_non_arm: list[str] = []
-    skipped_event_edge: list[
-        dict
-    ] = []  # S219-deep-review（2026-09-18 w1d19k2hl）：event-edge (lift=None/regime_caps) → weekly_review cap gate 管
+    skipped_event_edge: list[dict] = []  # S219-deep-review（2026-09-18 w1d19k2hl）：event-edge (lift=None/regime_caps) → weekly_review cap gate 管
 
     for dim_id, dim in DIMENSION_LIFT_REGISTRY.items():
         if dim_id.endswith("_ref"):
@@ -431,9 +429,7 @@ def forward_test_t1_settle(payload: Dict[str, Any]) -> Dict[str, Any]:
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT DISTINCT signal_date FROM forward_test_records "
-                "WHERE return_open2close IS NULL AND signal_date < ? "
-                "ORDER BY signal_date DESC LIMIT ?",
+                "SELECT DISTINCT signal_date FROM forward_test_records WHERE return_open2close IS NULL AND signal_date < ? ORDER BY signal_date DESC LIMIT ?",
                 [today, limit],
             ).fetchall()
         dates = [r[0] for r in rows]  # stuck 已在 SQL 排除

@@ -25,9 +25,7 @@ _LOCK = threading.Lock()
 def _migrate_schema() -> None:
     """建表（幂等，模块 import 时自动跑）。"""
     Path(_DB_PATH).parent.mkdir(parents=True, exist_ok=True)
-    sql = (Path(__file__).resolve().parent.parent / "migrations" / "seat_engine" / "20260823-001_create_seat_profiles.sql").read_text(
-        encoding="utf-8"
-    )
+    sql = (Path(__file__).resolve().parent.parent / "migrations" / "seat_engine" / "20260823-001_create_seat_profiles.sql").read_text(encoding="utf-8")
     MigrationManager(db_path=_DB_PATH).upgrade(
         [
             {

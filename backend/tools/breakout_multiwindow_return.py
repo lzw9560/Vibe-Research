@@ -150,9 +150,7 @@ async def _run(trades: list[dict], dry_run: bool = False) -> dict:
             "cost_pct": round(_cost_pct(50.0, 100.0, ""), 3),  # 参考成本（entry=50 估算）
             "win_rate": round(win_rate * 100, 2),
             "wilson_lower_bound_winrate": round(wilson_lb * 100, 2),
-            "t_stat": round(mean_net / ((sum((x - mean_net) ** 2 for x in nets) / len(nets)) ** 0.5 / (len(nets) ** 0.5)), 3)
-            if len(nets) > 1
-            else None,
+            "t_stat": round(mean_net / ((sum((x - mean_net) ** 2 for x in nets) / len(nets)) ** 0.5 / (len(nets) ** 0.5)), 3) if len(nets) > 1 else None,
         }
 
     out = {

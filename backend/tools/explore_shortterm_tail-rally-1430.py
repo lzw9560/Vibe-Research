@@ -400,9 +400,7 @@ def main():
         print(f"日K代理 (强收+量增→隔夜gap BHAR): verdict={res.get('verdict', '?')}")
         bdt = res.get("bhar_day_t", {})
         print(
-            f"  n_picks={res.get('n', 0)} n_dates={bdt.get('n_days', 0)} "
-            f"BHAR_mean={bdt.get('mean', 0)}% day_t={bdt.get('t', 0)} "
-            f"p={bdt.get('p_one_sided', 1)}"
+            f"  n_picks={res.get('n', 0)} n_dates={bdt.get('n_days', 0)} BHAR_mean={bdt.get('mean', 0)}% day_t={bdt.get('t', 0)} p={bdt.get('p_one_sided', 1)}"
         )
         print(f"  ⚠ 代理 verdict ≠ 原始 14:30 策略 verdict (不同假设).")
         print(f"  ⚠ survivorship: cache 仅含现上市股 (退市股缺失).")

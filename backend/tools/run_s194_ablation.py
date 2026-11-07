@@ -53,8 +53,7 @@ def main() -> None:
         "gap": bsw.weight("gap", 0, 0),  # dead_arm 先验
     }
     print(
-        f"# FS2 权重: breakout={fs2_weights['breakout']:.4f} (wins={wins} losses={losses} "
-        f"n={n_picks} wr={wr:.3f}) | gap={fs2_weights['gap']:.4f} (prior)",
+        f"# FS2 权重: breakout={fs2_weights['breakout']:.4f} (wins={wins} losses={losses} n={n_picks} wr={wr:.3f}) | gap={fs2_weights['gap']:.4f} (prior)",
         file=sys.stderr,
     )
 
@@ -105,10 +104,7 @@ def main() -> None:
         K=K,
     )
     print(f"\n=== gap 消融 · Version A（方向感知）===")
-    print(
-        f"  full_ic_mean={r_gap_a['full_ic_mean']:+.4f}  ablated_ic_mean={r_gap_a['ablated_ic_mean']:+.4f}  "
-        f"delta_ic={r_gap_a['delta_ic']:+.4f}"
-    )
+    print(f"  full_ic_mean={r_gap_a['full_ic_mean']:+.4f}  ablated_ic_mean={r_gap_a['ablated_ic_mean']:+.4f}  delta_ic={r_gap_a['delta_ic']:+.4f}")
     print(f"  delta_pval={r_gap_a['delta_pval']:.4f}  n_folds={r_gap_a['n_folds']}")
     print(f"  verdict: {v_gap_a['verdict']} (tier={v_gap_a['tier']}, adjusted_alpha={v_gap_a['adjusted_alpha']:.4f})")
     print(f"  caveat: {v_gap_a['caveat']}")
@@ -123,10 +119,7 @@ def main() -> None:
         K=K,
     )
     print(f"\n=== gap 消融 · Version B（旧方向无关，对照）===")
-    print(
-        f"  full_ic_mean={r_gap_b['full_ic_mean']:+.4f}  ablated_ic_mean={r_gap_b['ablated_ic_mean']:+.4f}  "
-        f"delta_ic={r_gap_b['delta_ic']:+.4f}"
-    )
+    print(f"  full_ic_mean={r_gap_b['full_ic_mean']:+.4f}  ablated_ic_mean={r_gap_b['ablated_ic_mean']:+.4f}  delta_ic={r_gap_b['delta_ic']:+.4f}")
     print(f"  delta_pval={r_gap_b['delta_pval']:.4f}  n_folds={r_gap_b['n_folds']}")
     print(f"  verdict: {v_gap_b['verdict']} (tier={v_gap_b['tier']}, adjusted_alpha={v_gap_b['adjusted_alpha']:.4f})")
     print(f"  caveat: {v_gap_b['caveat']}")

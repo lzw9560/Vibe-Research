@@ -65,9 +65,7 @@ def fetch_snapshot() -> dict:
 
         radar = newsradar.fetch_radar() or {}
         # S088 grill Q5：fetch_radar 顶层无 items 键，是 industries 嵌套 items，须扁平化
-        snap["news_items"] = (
-            [it for ind in (radar.get("industries", []) or []) for it in (ind.get("items", []) or [])] if isinstance(radar, dict) else []
-        )
+        snap["news_items"] = [it for ind in (radar.get("industries", []) or []) for it in (ind.get("items", []) or [])] if isinstance(radar, dict) else []
         news_fetch_ok = bool(snap["news_items"])
         if not news_fetch_ok:
             _logger.debug("[storm-daemon] 新闻快照空")

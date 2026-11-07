@@ -443,9 +443,7 @@ if __name__ == "__main__":
     print(f"选股: {len(r['selected'])}")
     print(f"建仓: {len(r['entered'])}")
     for e in r["entered"]:
-        print(
-            f"  {e['code']} entry={e['entry_price_actual']} stop={e['stop_loss']} tp={e['take_profit']} pct={e['position_pct'] * 100:.0f}%"
-        )
+        print(f"  {e['code']} entry={e['entry_price_actual']} stop={e['stop_loss']} tp={e['take_profit']} pct={e['position_pct'] * 100:.0f}%")
     print(f"持仓: {len(r['holdings'])}")
 
     # 测试止盈止损

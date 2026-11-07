@@ -375,12 +375,7 @@ class FeishuSender:
                 CreateMessageRequest.builder()
                 .receive_id_type(self._feishu_receive_id_type)
                 .request_body(
-                    CreateMessageRequestBody.builder()
-                    .receive_id(self._feishu_chat_id)
-                    .content(content_json)
-                    .msg_type(msg_type)
-                    .uuid(send_uuid)
-                    .build()
+                    CreateMessageRequestBody.builder().receive_id(self._feishu_chat_id).content(content_json).msg_type(msg_type).uuid(send_uuid).build()
                 )
                 .build()
             )

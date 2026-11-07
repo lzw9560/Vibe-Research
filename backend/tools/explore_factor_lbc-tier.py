@@ -159,9 +159,7 @@ def main() -> None:
     print("汇总表 (lbc-tier 三子集)")
     print(f"{'=' * 70}")
     print(
-        f"  {'subset':<18} {'n':>6} {'days':>5} {'gross%':>8} {'net%':>7} "
-        f"{'day_t':>6} {'p_raw':>8} {'Bonf×12':>8} {'wf_tr%':>7} "
-        f"{'wf_te%':>7} {'verdict':<14}"
+        f"  {'subset':<18} {'n':>6} {'days':>5} {'gross%':>8} {'net%':>7} {'day_t':>6} {'p_raw':>8} {'Bonf×12':>8} {'wf_tr%':>7} {'wf_te%':>7} {'verdict':<14}"
     )
     for s in summary_rows:
         if s.get("verdict") == "no-data":

@@ -374,9 +374,7 @@ def violations(trades: list[dict], rules: Optional[dict] = None) -> dict:
         streak = streak + 1 if t["pnl_pct"] < 0 else 0
     checked["max_trades_per_day"] = "checked"
     checked["max_loss_per_trade_pct"] = "checked"
-    checked["max_unplanned_ratio"] = (
-        "checked" if any(t.get("as_planned") is not None for t in trades) else "unavailable：还没有标注过「按计划 / 计划外」的交易"
-    )
+    checked["max_unplanned_ratio"] = "checked" if any(t.get("as_planned") is not None for t in trades) else "unavailable：还没有标注过「按计划 / 计划外」的交易"
     checked["pause_after_losses"] = "checked"
 
     return {
@@ -456,9 +454,7 @@ def rolling(trades: list[dict]) -> dict:
         out["win_rate_drift"] = round(w10["win_rate"] - life["win_rate"], 3)
     if w10.get("enough") and w10.get("profit_factor") is not None and life.get("profit_factor") is not None:
         out["profit_factor_drift"] = round(w10["profit_factor"] - life["profit_factor"], 2)
-    out["note"] = (
-        "10 笔看状态、20 笔看节奏、50 笔看打法是否还成立。终身统计会把最近的退化藏起来——前面赚够了，最近一直亏，终身数字照样漂亮。"
-    )
+    out["note"] = "10 笔看状态、20 笔看节奏、50 笔看打法是否还成立。终身统计会把最近的退化藏起来——前面赚够了，最近一直亏，终身数字照样漂亮。"
     return out
 
 
@@ -501,9 +497,7 @@ def render(rep: dict) -> str:
     )
     if eq.get("best_trade_share") is not None:
         lines.append(
-            f"· 盈利集中度：最好一笔占净利 {eq['best_trade_share']:.0%}；"
-            f"去掉最好 1 笔剩 {eq['net_without_best1']}，"
-            f"去掉最好 3 笔剩 {eq['net_without_best3']}"
+            f"· 盈利集中度：最好一笔占净利 {eq['best_trade_share']:.0%}；去掉最好 1 笔剩 {eq['net_without_best1']}，去掉最好 3 笔剩 {eq['net_without_best3']}"
         )
     if dp.get("available") and dp.get("execution_rate") is not None:
         wi = dp["what_if_only_planned"]
@@ -512,10 +506,7 @@ def render(rep: dict) -> str:
             seg += f"；只做按计划的交易，净盈亏会是 {wi['planned_only_net']}（实际 {wi['actual_net']}，差 {wi['cost_of_indiscipline']}）"
         lines.append(seg)
     if vi.get("available") and vi.get("violation_count"):
-        lines.append(
-            f"· 违反自设规则 {vi['violation_count']} 次"
-            + ("（用的还是默认阈值，建议先按自己的习惯改一遍）" if vi.get("is_default_rules") else "")
-        )
+        lines.append(f"· 违反自设规则 {vi['violation_count']} 次" + ("（用的还是默认阈值，建议先按自己的习惯改一遍）" if vi.get("is_default_rules") else ""))
     return "\n".join(lines)
 
 

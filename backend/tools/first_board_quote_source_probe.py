@@ -259,11 +259,7 @@ def _probe_em_push2(codes: list[str]) -> dict:
                 "raw": _truncate(data),
                 # 东财 stock/get 返回 {rc, rt, data:{f43,f46,...}}；data 非空且有 f43 算可用
                 "has_price": bool(
-                    data
-                    and isinstance(data, dict)
-                    and data.get("data")
-                    and isinstance(data["data"], dict)
-                    and data["data"].get("f43") is not None
+                    data and isinstance(data, dict) and data.get("data") and isinstance(data["data"], dict) and data["data"].get("f43") is not None
                 ),
             }
         except Exception as e:  # noqa: BLE001

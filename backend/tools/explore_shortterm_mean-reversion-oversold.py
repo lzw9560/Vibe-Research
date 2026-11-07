@@ -507,10 +507,7 @@ def analyze_hold_variant(
     basic_s = ev_stats(basic_rets)
     net_basic = basic_s["ev"] - COST * 100
     print(f"\n--- basic close_ev (no stop) ---")
-    print(
-        f"  n={basic_s['n']} gross_EV={basic_s['ev']}% std={basic_s['std']}% "
-        f"WR={basic_s['wr']}% t={basic_s['t']} CI[{basic_s['ci_lo']},{basic_s['ci_hi']}]"
-    )
+    print(f"  n={basic_s['n']} gross_EV={basic_s['ev']}% std={basic_s['std']}% WR={basic_s['wr']}% t={basic_s['t']} CI[{basic_s['ci_lo']},{basic_s['ci_hi']}]")
     print(f"  net EV (after {COST * 100:.1f}% cost): {net_basic:.3f}%")
 
     # day-paired t
@@ -528,10 +525,7 @@ def analyze_hold_variant(
     stop_rets_clean = [r[0] for r in stop_rets if r is not None]
     stop_s = ev_stats(stop_rets_clean)
     net_stop = stop_s["ev"] - COST * 100
-    print(
-        f"  n={stop_s['n']} gross_EV={stop_s['ev']}% std={stop_s['std']}% "
-        f"WR={stop_s['wr']}% t={stop_s['t']} CI[{stop_s['ci_lo']},{stop_s['ci_hi']}]"
-    )
+    print(f"  n={stop_s['n']} gross_EV={stop_s['ev']}% std={stop_s['std']}% WR={stop_s['wr']}% t={stop_s['t']} CI[{stop_s['ci_lo']},{stop_s['ci_hi']}]")
     print(f"  net EV (after cost): {net_stop:.3f}%")
 
     stop_reasons: dict[str, int] = defaultdict(int)
@@ -676,9 +670,7 @@ def compute_dsr(
         p_high = 1 - p_low
         if p < p_low:
             q = msqrt(-2 * log(p))
-            x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
-                (((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1
-            )
+            x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
         elif p <= p_high:
             q = p - 0.5
             r_val = q * q
@@ -689,9 +681,7 @@ def compute_dsr(
             )
         else:
             q = msqrt(-2 * log(1 - p))
-            x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
-                (((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1
-            )
+            x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
         return x
 
     # SR_0 = expected max Sharpe under H0
@@ -798,10 +788,7 @@ def main() -> None:
     print(f"\n\n{'=' * 70}")
     print(f"[3] 主 sweep 汇总表 (T+2 hold, all regime)")
     print(f"{'=' * 70}")
-    print(
-        f"{'signal':<25} {'n_picks':>8} {'n_days':>7} {'gross%':>8} {'net%':>8} "
-        f"{'day_t':>7} {'p_raw':>9} {'Bonf':>9} {'wf_tr':>7} {'wf_te':>7} {'wf_p':>9}"
-    )
+    print(f"{'signal':<25} {'n_picks':>8} {'n_days':>7} {'gross%':>8} {'net%':>8} {'day_t':>7} {'p_raw':>9} {'Bonf':>9} {'wf_tr':>7} {'wf_te':>7} {'wf_p':>9}")
     print("-" * 120)
     for r in results:
         if r["n_picks"] == 0:
@@ -922,10 +909,7 @@ def main() -> None:
     n_falsified = sum(1 for r in results if r["n_picks"] > 0 and r["basic_ev_gross"] < 0)
     n_positive_gross = sum(1 for r in results if r["n_picks"] > 0 and r["basic_ev_gross"] > 0)
     n_positive_net = sum(1 for r in results if r["n_picks"] > 0 and r["basic_ev_net"] > 0)
-    print(
-        f"  结果: {n_falsified}/{len([r for r in results if r['n_picks'] > 0])} gross EV < 0, "
-        f"{n_positive_gross} gross EV > 0, {n_positive_net} net EV > 0"
-    )
+    print(f"  结果: {n_falsified}/{len([r for r in results if r['n_picks'] > 0])} gross EV < 0, {n_positive_gross} gross EV > 0, {n_positive_net} net EV > 0")
 
     if best_signal:
         best_r = next(r for r in results if r["name"].startswith(best_signal))

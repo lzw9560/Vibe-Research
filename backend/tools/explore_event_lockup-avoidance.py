@@ -63,8 +63,7 @@ def load_lockup() -> list[dict]:
     big = [
         e
         for e in d
-        if (e.get("free_ratio") is not None and e["free_ratio"] > FR_THRESH)
-        or (e.get("lift_mkt_cap") is not None and e["lift_mkt_cap"] > LM_THRESH)
+        if (e.get("free_ratio") is not None and e["free_ratio"] > FR_THRESH) or (e.get("lift_mkt_cap") is not None and e["lift_mkt_cap"] > LM_THRESH)
     ]
     return big, d
 
@@ -299,10 +298,7 @@ def main():
         p_bonf_sp = min(1.0, p_raw_sp * N_TESTS_BONF)
 
         print(f"\n  per-period spread (avoidance - full):")
-        print(
-            f"    n_periods={n_per} mean={mean_sp * 100:+.4f}% median={med_sp * 100:+.4f}% "
-            f"WR(spread>0)={wr_sp * 100:.1f}% std={std_sp * 100:.4f}%"
-        )
+        print(f"    n_periods={n_per} mean={mean_sp * 100:+.4f}% median={med_sp * 100:+.4f}% WR(spread>0)={wr_sp * 100:.1f}% std={std_sp * 100:.4f}%")
         print(f"    t={t_sp:.3f} p_two_sided={p_raw_sp:.4f} Bonf(×{N_TESTS_BONF})={p_bonf_sp:.4f}")
         print(
             f"    gross spread mean={mean_sp * 100:+.4f}% | cost/period={cost_per_period * 100:.4f}% "
@@ -462,10 +458,7 @@ def main():
     for dmap in code_map.values():
         cov = sum(1 for d in testable if d in dmap)
         cov_counts.append(cov)
-    print(
-        f"  per-code coverage of {len(testable)} testable days: "
-        f"median={statistics.median(cov_counts):.0f} min={min(cov_counts)} max={max(cov_counts)}"
-    )
+    print(f"  per-code coverage of {len(testable)} testable days: median={statistics.median(cov_counts):.0f} min={min(cov_counts)} max={max(cov_counts)}")
     print(f"  -> kline 多数仅 2025-12 起 (~180 bars), 退市股缺失 (cache 偏现存股).")
     print(f"  -> 退市股缺失方向: big-unlock 后退市的股若不在 cache, full universe 偏高,")
     print(f"     使避险组对比的基准偏高 → 偏向不利信号 (conservative).")

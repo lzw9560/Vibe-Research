@@ -402,21 +402,13 @@ def get_forward_test_summary(
         # —— 策略 picks（forward_test_records）—— S144 buyable-only 口径（剔 is_unbuyable=1 一字板）
         total = conn.execute("SELECT COUNT(*) FROM forward_test_records").fetchone()[0]
         s_unbuyable = conn.execute("SELECT COUNT(*) FROM forward_test_records WHERE is_unbuyable = 1").fetchone()[0]
-        s_settled = conn.execute(
-            "SELECT COUNT(*) FROM forward_test_records WHERE return_open2close IS NOT NULL AND is_unbuyable = 0"
-        ).fetchone()[0]
+        s_settled = conn.execute("SELECT COUNT(*) FROM forward_test_records WHERE return_open2close IS NOT NULL AND is_unbuyable = 0").fetchone()[0]
         s_wins = conn.execute("SELECT COUNT(*) FROM forward_test_records WHERE is_win = 1 AND is_unbuyable = 0").fetchone()[0]
         # S144 R5：open2next_close 双报（T+1 可实现口径，与 o2c 诚实基线并列；escape hatch：不改 is_win）
-        o2nc_settled = conn.execute(
-            "SELECT COUNT(*) FROM forward_test_records WHERE return_open2next_close IS NOT NULL AND is_unbuyable = 0"
-        ).fetchone()[0]
-        o2nc_wins = conn.execute(
-            "SELECT COUNT(*) FROM forward_test_records WHERE return_open2next_close > 0 AND is_unbuyable = 0"
-        ).fetchone()[0]
+        o2nc_settled = conn.execute("SELECT COUNT(*) FROM forward_test_records WHERE return_open2next_close IS NOT NULL AND is_unbuyable = 0").fetchone()[0]
+        o2nc_wins = conn.execute("SELECT COUNT(*) FROM forward_test_records WHERE return_open2next_close > 0 AND is_unbuyable = 0").fetchone()[0]
         days = conn.execute("SELECT COUNT(DISTINCT signal_date) FROM forward_test_records").fetchone()[0]
-        avg_row = conn.execute(
-            "SELECT AVG(return_open2close) FROM forward_test_records WHERE return_open2close IS NOT NULL AND is_unbuyable = 0"
-        ).fetchone()
+        avg_row = conn.execute("SELECT AVG(return_open2close) FROM forward_test_records WHERE return_open2close IS NOT NULL AND is_unbuyable = 0").fetchone()
         avg_return = float(avg_row[0]) if avg_row and avg_row[0] is not None else 0.0
         recent = conn.execute(
             """SELECT is_win FROM forward_test_records
@@ -432,9 +424,7 @@ def get_forward_test_summary(
 
         # —— 随机基准 universe（universe_returns）—— S144 buyable-only（消分母偏高）
         u_total = conn.execute("SELECT COUNT(*) FROM universe_returns").fetchone()[0]
-        u_settled = conn.execute(
-            "SELECT COUNT(*) FROM universe_returns WHERE return_open2close IS NOT NULL AND is_unbuyable = 0"
-        ).fetchone()[0]
+        u_settled = conn.execute("SELECT COUNT(*) FROM universe_returns WHERE return_open2close IS NOT NULL AND is_unbuyable = 0").fetchone()[0]
         u_wins = conn.execute("SELECT COUNT(*) FROM universe_returns WHERE is_win = 1 AND is_unbuyable = 0").fetchone()[0]
         # S144 A3：原口径（unfiltered，含 unbuyable）lift 双报——量化一字板污染对 lift 的影响
         # is_win=1 自然排除 unbuyable（NULL），故 s_wins/u_wins 同；差异在 settled 分母（含/剔 unbuyable）
@@ -442,13 +432,9 @@ def get_forward_test_summary(
         u_settled_unfilt = conn.execute("SELECT COUNT(*) FROM universe_returns WHERE return_open2close IS NOT NULL").fetchone()[0]
         # S145 R3/R4：path-dependent（SL/TP/max_hold 模拟）——picks + universe path-winrate/lift 双报
         # is_win_path=1 自然排除 unbuyable(NULL) + 缺 bars(NULL)；settled 分母 = return_path IS NOT NULL
-        path_settled = conn.execute(
-            "SELECT COUNT(*) FROM forward_test_records WHERE return_path IS NOT NULL AND is_unbuyable = 0"
-        ).fetchone()[0]
+        path_settled = conn.execute("SELECT COUNT(*) FROM forward_test_records WHERE return_path IS NOT NULL AND is_unbuyable = 0").fetchone()[0]
         path_wins = conn.execute("SELECT COUNT(*) FROM forward_test_records WHERE is_win_path = 1 AND is_unbuyable = 0").fetchone()[0]
-        u_path_settled = conn.execute(
-            "SELECT COUNT(*) FROM universe_returns WHERE return_path IS NOT NULL AND is_unbuyable = 0"
-        ).fetchone()[0]
+        u_path_settled = conn.execute("SELECT COUNT(*) FROM universe_returns WHERE return_path IS NOT NULL AND is_unbuyable = 0").fetchone()[0]
         u_path_wins = conn.execute("SELECT COUNT(*) FROM universe_returns WHERE is_win_path = 1 AND is_unbuyable = 0").fetchone()[0]
     finally:
         conn.close()
@@ -471,14 +457,7 @@ def get_forward_test_summary(
 
     # §44 60日复验窗口口径：forward_test 内部 passed 判定逻辑不变（lift>=2.0 仍为门）；
     # passed=False 不阻断接入跑通——§44 统计结论作为诚实标注，60 日后复验定权重。
-    passed = (
-        days >= min_days
-        and s_settled > 0
-        and s_winrate >= PASS_WINRATE_FLOOR
-        and u_settled > 0
-        and lift >= PASS_LIFT_FLOOR
-        and consecutive_loss < 8
-    )
+    passed = days >= min_days and s_settled > 0 and s_winrate >= PASS_WINRATE_FLOOR and u_settled > 0 and lift >= PASS_LIFT_FLOOR and consecutive_loss < 8
 
     note_parts: list[str] = []
     if days < min_days:

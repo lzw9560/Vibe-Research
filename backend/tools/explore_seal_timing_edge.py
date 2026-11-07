@@ -138,9 +138,7 @@ def main():
             continue
         g_rets = [o["edge"] for o in g]
         g_wr = sum(o["win"] for o in g) / len(g)
-        print(
-            f"  {name}: n={len(g)} days={len(set(o['date'] for o in g))} net_mean={statistics.mean(g_rets) * 100:.2f}% WR={g_wr * 100:.2f}%"
-        )
+        print(f"  {name}: n={len(g)} days={len(set(o['date'] for o in g))} net_mean={statistics.mean(g_rets) * 100:.2f}% WR={g_wr * 100:.2f}%")
 
     # §44 v3 R1+R3 filter
     obs_f = [o for o in obs if not o["entry_locked"] and not o["next_locked"]]

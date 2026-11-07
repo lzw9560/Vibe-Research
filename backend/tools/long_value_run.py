@@ -523,14 +523,8 @@ def _build_survivors_universe_with_inject(
         if not month_universe:
             month_universe = set(kline_raw.keys())
         q1_codes, _q5_codes, _pe_map = select_quintiles(month, month_universe, kline_raw, profit_cache)
-        q1_returns = [
-            r for code in q1_codes if (r := _delisting_return(code, month, prev_month, kline_raw, delisting_map, inject_return)) is not None
-        ]
-        u_returns = [
-            r
-            for code in month_universe
-            if (r := _delisting_return(code, month, prev_month, kline_raw, delisting_map, inject_return)) is not None
-        ]
+        q1_returns = [r for code in q1_codes if (r := _delisting_return(code, month, prev_month, kline_raw, delisting_map, inject_return)) is not None]
+        u_returns = [r for code in month_universe if (r := _delisting_return(code, month, prev_month, kline_raw, delisting_map, inject_return)) is not None]
         if q1_returns and u_returns:
             survivors_by_month[month] = q1_returns
             universe_by_month[month] = u_returns
@@ -585,9 +579,7 @@ def run_sensitivity_two_tier(months: list[str] | None = None) -> dict:
 
     results: dict[float, dict] = {}
     for inject_return in (-0.5, -1.0):
-        survivors, universe = _build_survivors_universe_with_inject(
-            months, kline_raw, profit_cache, universe_cache, delisting_map, inject_return
-        )
+        survivors, universe = _build_survivors_universe_with_inject(months, kline_raw, profit_cache, universe_cache, delisting_map, inject_return)
         if not survivors:
             results[inject_return] = {"status": "empty", "lift": 0.0}
             continue

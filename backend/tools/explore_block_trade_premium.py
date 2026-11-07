@@ -93,9 +93,7 @@ def is_yizi_dit_deal(exit_bar: dict, prev_close: float, limit: float) -> bool:
 # ---------- pick construction ----------
 
 
-def build_block_picks(
-    block_recs: list[dict], code_map: dict[str, dict[str, dict]], calendar_sorted: list[str], max_n: int = 5
-) -> list[dict]:
+def build_block_picks(block_recs: list[dict], code_map: dict[str, dict[str, dict]], calendar_sorted: list[str], max_n: int = 5) -> list[dict]:
     """构建 picks: entry = T+1 open, exit = T+N open (N=2..max_n).
 
     跳过: 无 kline / T+1 无 bar / T+1 一字涨停 (买不进) / 任意 T+k 无 bar.
@@ -279,10 +277,7 @@ def analyze_n(picks: list[dict], cal_sorted: list[str], bench: dict, n: int, lab
     s = ev_stats(valid_rets)
     gross_ev = s["ev"]
     net_ev = gross_ev - COST * 100
-    print(
-        f"  raw_ev (散户实际收益): n={s['n']} gross={gross_ev}% net={net_ev}% "
-        f"std={s['std']}% WR={s['wr']}% t={s['t']} CI[{s['ci_lo']},{s['ci_hi']}]"
-    )
+    print(f"  raw_ev (散户实际收益): n={s['n']} gross={gross_ev}% net={net_ev}% std={s['std']}% WR={s['wr']}% t={s['t']} CI[{s['ci_lo']},{s['ci_hi']}]")
 
     # day-paired t (同日 block 聚簇)
     by_date: dict[str, list[float]] = defaultdict(list)

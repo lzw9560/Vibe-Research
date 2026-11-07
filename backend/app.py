@@ -267,9 +267,7 @@ _API_KEY = os.environ.get("VR_API_KEY", "").strip()
 if not _API_KEY:
     import logging as _logging  # noqa: PLC0415
 
-    _logging.getLogger("vibe-research").warning(
-        "[startup] VR_API_KEY 未设——公网部署务必设（否则别人能读持仓/调后端，v5 H2）。localhost 自托管可忽略。"
-    )
+    _logging.getLogger("vibe-research").warning("[startup] VR_API_KEY 未设——公网部署务必设（否则别人能读持仓/调后端，v5 H2）。localhost 自托管可忽略。")
 
 
 @app.middleware("http")
@@ -327,9 +325,7 @@ app.include_router(market_router.router)
 app.include_router(stock_data.router)
 app.include_router(stock_financial.router)
 app.include_router(limitup.router)
-app.include_router(
-    review.router
-)  # 2026-09-27 restored: v6 发现 Settings.tsx 依赖（useReviewParams/saveReviewParams 调 /api/review/params）
+app.include_router(review.router)  # 2026-09-27 restored: v6 发现 Settings.tsx 依赖（useReviewParams/saveReviewParams 调 /api/review/params）
 app.include_router(discipline_gate_router.router)  # S231: 打板纪律门禁看板 /api/discipline-gate/*
 app.include_router(t1_forecast_router.router)  # S232: T+1 涨停预测 watchlist /api/t1-forecast/*
 app.include_router(limitup_workflow_router.router)  # S233: 打板工作流 /api/limitup-workflow/*

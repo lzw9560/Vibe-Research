@@ -437,10 +437,7 @@ def analyze_window(
     dt = day_paired_t(by_date)
 
     print(f"\n--- {ret_label} stats ---")
-    print(
-        f"  n={s['n']} n_dates={dt['n_days']} gross_{ret_label}={s['ev']}% "
-        f"std={s['std']}% WR={s['wr']}% t={s['t']} CI[{s['ci_lo']},{s['ci_hi']}]"
-    )
+    print(f"  n={s['n']} n_dates={dt['n_days']} gross_{ret_label}={s['ev']}% std={s['std']}% WR={s['wr']}% t={s['t']} CI[{s['ci_lo']},{s['ci_hi']}]")
     print(f"  net_{ret_label} (after {COST * 100:.1f}% cost): {net:.3f}%")
     print(f"  day-paired t: n_days={dt['n_days']} mean={dt['mean']}% t={dt['t']} p_one_sided={dt['p_one_sided']}")
 
@@ -521,11 +518,7 @@ def verdict_cascade(
             return "edge-falsified"
         wf_p_bonf = bonferroni_p(wf_test_p, n_tests)
         if wf_p_bonf >= ALPHA:
-            print(
-                f"    → EXPLORATORY: OOS test EV={wf_test_ev}% > 0 but "
-                f"test p={wf_test_p} Bonf×{n_tests}={wf_p_bonf} >= {ALPHA} "
-                f"(not significant OOS)"
-            )
+            print(f"    → EXPLORATORY: OOS test EV={wf_test_ev}% > 0 but test p={wf_test_p} Bonf×{n_tests}={wf_p_bonf} >= {ALPHA} (not significant OOS)")
             return "exploratory"
         print(f"    → EDGE-CONFIRMED: gross+net EV > 0, Bonferroni PASS, OOS test EV={wf_test_ev}% significant (p={wf_test_p})")
         return "edge-confirmed"
@@ -568,11 +561,7 @@ def main() -> None:
         fdr_mean = sum(fdr) / len(fdr)
         fdr_median = statistics.median(fdr)
         fdr_pos = sum(1 for x in fdr if x > 0)
-        print(
-            f"[build] first-day return: mean={fdr_mean:.1f}% "
-            f"median={fdr_median:.1f}% positive={fdr_pos}/{len(fdr)} "
-            f"({fdr_pos / len(fdr) * 100:.1f}%)"
-        )
+        print(f"[build] first-day return: mean={fdr_mean:.1f}% median={fdr_median:.1f}% positive={fdr_pos}/{len(fdr)} ({fdr_pos / len(fdr) * 100:.1f}%)")
 
     # survivorship warning
     print(f"[build] ⚠ survivorship: cache 仅含仍上市码, 退市新股缺失 → 上偏")
@@ -701,10 +690,7 @@ def main() -> None:
         bp_raw = best_board.get("day_p", 1.0)
         bp_bonf = bonferroni_p(bp_raw, N_CROSS_STRATEGY)
         print(f"\n  best board variant: {best_board.get('board_name', '?')} {best_board['name']}")
-        print(
-            f"    n_events={best_board['n_events']} n_dates={best_board['n_dates']} "
-            f"gross_EV={best_board['gross_ev']}% net_EV={best_board['net_ev']:.3f}%"
-        )
+        print(f"    n_events={best_board['n_events']} n_dates={best_board['n_dates']} gross_EV={best_board['gross_ev']}% net_EV={best_board['net_ev']:.3f}%")
         print(f"    day_t={best_board['day_t']} Bonf×{N_CROSS_STRATEGY}={bp_bonf:.6f}")
 
     # verdict cascade

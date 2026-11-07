@@ -73,11 +73,7 @@ class NotificationDispatcherMixin:
     def _resolve_feishu(config: Any) -> bool:
         return bool(
             getattr(config, "feishu_webhook_url", None)
-            or (
-                getattr(config, "feishu_app_id", None)
-                and getattr(config, "feishu_app_secret", None)
-                and getattr(config, "feishu_chat_id", None)
-            )
+            or (getattr(config, "feishu_app_id", None) and getattr(config, "feishu_app_secret", None) and getattr(config, "feishu_chat_id", None))
         )
 
     @staticmethod
@@ -273,10 +269,7 @@ class NotificationDispatcherMixin:
         if not isinstance(raw_data, dict):
             return None
         session_webhook = (
-            raw_data.get("_session_webhook")
-            or raw_data.get("sessionWebhook")
-            or raw_data.get("session_webhook")
-            or raw_data.get("session_webhook_url")
+            raw_data.get("_session_webhook") or raw_data.get("sessionWebhook") or raw_data.get("session_webhook") or raw_data.get("session_webhook_url")
         )
         if not session_webhook and isinstance(raw_data.get("headers"), dict):
             session_webhook = raw_data["headers"].get("sessionWebhook")
@@ -630,9 +623,7 @@ class NotificationDispatcherMixin:
         # Per-channel decision via _should_use_image_for_channel (see send() docstring for fallback rules).
         image_bytes = None
         channels_needing_image = {
-            ch
-            for ch in target_channels
-            if ch.value in self._markdown_to_image_channels and ch not in {NotificationChannel.NTFY, NotificationChannel.GOTIFY}
+            ch for ch in target_channels if ch.value in self._markdown_to_image_channels and ch not in {NotificationChannel.NTFY, NotificationChannel.GOTIFY}
         }
         if channels_needing_image:
             try:
@@ -646,11 +637,7 @@ class NotificationDispatcherMixin:
                         engine = getattr(default_config, "md2img_engine", "wkhtmltoimage")
                     except Exception:
                         engine = "wkhtmltoimage"
-                    hint = (
-                        "npm i -g markdown-to-file"
-                        if engine == "markdown-to-file"
-                        else "wkhtmltopdf (apt install wkhtmltopdf / brew install wkhtmltopdf)"
-                    )
+                    hint = "npm i -g markdown-to-file" if engine == "markdown-to-file" else "wkhtmltopdf (apt install wkhtmltopdf / brew install wkhtmltopdf)"
                     logger.warning(
                         "Markdown 转图片失败，将回退为文本发送。请检查 MARKDOWN_TO_IMAGE_CHANNELS 配置并安装 %s",
                         hint,

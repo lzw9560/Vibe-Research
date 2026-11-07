@@ -222,28 +222,17 @@ def main() -> None:
     print(f"\n  --- 折价最深 5 picks 占总 BHAR 比例 ---")
     top5_bhar = sum(p["bhar"] for p in picks[:5])
     top10_bhar = sum(p["bhar"] for p in picks[:10])
-    print(
-        f"  最深 5 picks BHAR 合计={top5_bhar:+.2f}%  / total={total_bhar:+.2f}% = {top5_bhar / total_bhar * 100 if total_bhar else 0:.1f}%"
-    )
-    print(
-        f"  最深 10 picks BHAR 合计={top10_bhar:+.2f}%  / total={total_bhar:+.2f}% "
-        f"= {top10_bhar / total_bhar * 100 if total_bhar else 0:.1f}%"
-    )
+    print(f"  最深 5 picks BHAR 合计={top5_bhar:+.2f}%  / total={total_bhar:+.2f}% = {top5_bhar / total_bhar * 100 if total_bhar else 0:.1f}%")
+    print(f"  最深 10 picks BHAR 合计={top10_bhar:+.2f}%  / total={total_bhar:+.2f}% = {top10_bhar / total_bhar * 100 if total_bhar else 0:.1f}%")
 
     print("\n  --- BHAR 最极端 15 个 picks（正负两端）---")
     by_bhar = sorted(picks, key=lambda x: x["bhar"])
     print("  最负 15：")
     for p in by_bhar[:15]:
-        print(
-            f"  {p['code']:7} {ETF_NAMES.get(p['code'], '?'):12} {p['d']}  "
-            f"disc={p['disc']:+7.3f}%  BHAR={p['bhar']:+8.3f}%  raw={p['raw']:+8.3f}%"
-        )
+        print(f"  {p['code']:7} {ETF_NAMES.get(p['code'], '?'):12} {p['d']}  disc={p['disc']:+7.3f}%  BHAR={p['bhar']:+8.3f}%  raw={p['raw']:+8.3f}%")
     print("  最正 15：")
     for p in by_bhar[-15:]:
-        print(
-            f"  {p['code']:7} {ETF_NAMES.get(p['code'], '?'):12} {p['d']}  "
-            f"disc={p['disc']:+7.3f}%  BHAR={p['bhar']:+8.3f}%  raw={p['raw']:+8.3f}%"
-        )
+        print(f"  {p['code']:7} {ETF_NAMES.get(p['code'], '?'):12} {p['d']}  disc={p['disc']:+7.3f}%  BHAR={p['bhar']:+8.3f}%  raw={p['raw']:+8.3f}%")
 
     # 极端正 BHAR 占比
     by_bhar.sort(key=lambda x: x["bhar"], reverse=True)

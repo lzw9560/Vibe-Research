@@ -198,10 +198,7 @@ def main() -> dict:
         print(f"  decision={chrono['decision']}")
         print(f"  note: {chrono['decision_note']}")
         if chrono["underpowered"]:
-            print(
-                f"  [underpowered] n_test_days={n_test}<30 -> §44 v2 不判 ×1.0 definitive "
-                f"(provisional only; adequate-power bar >=60, pursue backfill S214)"
-            )
+            print(f"  [underpowered] n_test_days={n_test}<30 -> §44 v2 不判 ×1.0 definitive (provisional only; adequate-power bar >=60, pursue backfill S214)")
         return chrono
 
     bull_chrono = _chrono_for_regime("bull")

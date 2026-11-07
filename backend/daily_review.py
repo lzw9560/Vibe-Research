@@ -156,9 +156,7 @@ class DailyReviewer:
         zb_pool: list = []
         yzt_pool: list = []
         try:
-            zt_pool = [
-                zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicZTPool", date_fmt, "fbt:asc", raise_on_failure=True)
-            ]
+            zt_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicZTPool", date_fmt, "fbt:asc", raise_on_failure=True)]
         except Exception as e:
             logging.getLogger("vibe-research").warning("daily_review 涨停池取数失败 date=%s err=%s", date_fmt, e)
         try:
@@ -166,16 +164,11 @@ class DailyReviewer:
         except Exception as e:
             logging.getLogger("vibe-research").warning("daily_review 跌停池取数失败 date=%s err=%s", date_fmt, e)
         try:
-            zb_pool = [
-                zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicZBPool", date_fmt, "fbt:asc", raise_on_failure=True)
-            ]
+            zb_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicZBPool", date_fmt, "fbt:asc", raise_on_failure=True)]
         except Exception as e:
             logging.getLogger("vibe-research").warning("daily_review 炸板池取数失败 date=%s err=%s", date_fmt, e)
         try:
-            yzt_pool = [
-                zt_pool_item_from_dict(it)
-                for it in astock.em_zt_topic_pool("getYesterdayZTPool", date_fmt, "zs:desc", raise_on_failure=True)
-            ]
+            yzt_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getYesterdayZTPool", date_fmt, "zs:desc", raise_on_failure=True)]
         except Exception as e:
             logging.getLogger("vibe-research").warning("daily_review 昨涨停池取数失败 date=%s err=%s", date_fmt, e)
 
@@ -236,9 +229,7 @@ class DailyReviewer:
                 yesterday = prev_trading_date_str(datetime.strptime(trade_date, "%Y-%m-%d").date())
                 try:
                     prev_result = engine.get_latest(yesterday)
-                    change = (
-                        (result.score - prev_result.score) if prev_result and prev_result.source_ok and result.score is not None else None
-                    )
+                    change = (result.score - prev_result.score) if prev_result and prev_result.source_ok and result.score is not None else None
                 except Exception:
                     change = None
                 return {

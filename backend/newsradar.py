@@ -232,10 +232,7 @@ def skeleton() -> dict:
     return {
         "generated_at": None,
         "recent_days": cfg.get("fetch", {}).get("recent_days", 7),
-        "industries": [
-            {"key": i["key"], "name": i["name"], "accent": i["accent"], "total": byhint.get(i["key"], 0), "items": []}
-            for i in cfg["industries"]
-        ],
+        "industries": [{"key": i["key"], "name": i["name"], "accent": i["accent"], "total": byhint.get(i["key"], 0), "items": []} for i in cfg["industries"]],
         "stats": {"industries": len(cfg["industries"]), "total_sources": len(cfg["sources"])},
     }
 

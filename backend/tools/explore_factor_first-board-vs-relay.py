@@ -352,10 +352,7 @@ def analyze_subset(name: str, picks: list[dict]) -> dict:
     basic_rets = [close_ev_basic(p) for p in picks]
     basic_rets = [r for r in basic_rets if r is not None]
     basic_s = ev_stats(basic_rets)
-    print(
-        f"  n={basic_s['n']} gross_EV={basic_s['ev']}% std={basic_s['std']}% "
-        f"WR={basic_s['wr']}% t={basic_s['t']} CI[{basic_s['ci_lo']},{basic_s['ci_hi']}]"
-    )
+    print(f"  n={basic_s['n']} gross_EV={basic_s['ev']}% std={basic_s['std']}% WR={basic_s['wr']}% t={basic_s['t']} CI[{basic_s['ci_lo']},{basic_s['ci_hi']}]")
     net_basic = basic_s["ev"] - COST * 100
     print(f"  net EV (after {COST * 100:.1f}% cost): {net_basic:.3f}%")
 
@@ -372,10 +369,7 @@ def analyze_subset(name: str, picks: list[dict]) -> dict:
     stop_rets = [close_ev_stop(p) for p in picks]
     stop_rets_clean = [r[0] for r in stop_rets if r is not None]
     stop_s = ev_stats(stop_rets_clean)
-    print(
-        f"  n={stop_s['n']} gross_EV={stop_s['ev']}% std={stop_s['std']}% "
-        f"WR={stop_s['wr']}% t={stop_s['t']} CI[{stop_s['ci_lo']},{stop_s['ci_hi']}]"
-    )
+    print(f"  n={stop_s['n']} gross_EV={stop_s['ev']}% std={stop_s['std']}% WR={stop_s['wr']}% t={stop_s['t']} CI[{stop_s['ci_lo']},{stop_s['ci_hi']}]")
     net_stop = stop_s["ev"] - COST * 100
     print(f"  net EV (after cost): {net_stop:.3f}%")
 
@@ -422,11 +416,7 @@ def analyze_subset(name: str, picks: list[dict]) -> dict:
         tr_dt = wf_basic["train_day_t"]
         te_dt = wf_basic["test_day_t"]
         print(f"  train: n={tr['n']} n_dates={wf_basic['n_train_dates']} EV={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
-        print(
-            f"  test:  n={te['n']} n_dates={wf_basic['n_test_dates']} "
-            f"EV={te['ev']}% t={te['t']} day_t={te_dt['t']} "
-            f"p={te_dt['p_one_sided']}"
-        )
+        print(f"  test:  n={te['n']} n_dates={wf_basic['n_test_dates']} EV={te['ev']}% t={te['t']} day_t={te_dt['t']} p={te_dt['p_one_sided']}")
         decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
         print(f"  decay: {decay:.0f}% (train→test)")
     else:
@@ -440,9 +430,7 @@ def analyze_subset(name: str, picks: list[dict]) -> dict:
         tr_dt = wf_stop["train_day_t"]
         te_dt = wf_stop["test_day_t"]
         print(f"  train: n={tr['n']} n_dates={wf_basic['n_train_dates']} EV={tr['ev']}% t={tr['t']} day_t={tr_dt['t']}")
-        print(
-            f"  test:  n={te['n']} n_dates={wf_stop['n_test_dates']} EV={te['ev']}% t={te['t']} day_t={te_dt['t']} p={te_dt['p_one_sided']}"
-        )
+        print(f"  test:  n={te['n']} n_dates={wf_stop['n_test_dates']} EV={te['ev']}% t={te['t']} day_t={te_dt['t']} p={te_dt['p_one_sided']}")
         decay = (tr["ev"] - te["ev"]) / abs(tr["ev"]) * 100 if tr["ev"] != 0 else 0
         print(f"  decay: {decay:.0f}% (train→test)")
     else:

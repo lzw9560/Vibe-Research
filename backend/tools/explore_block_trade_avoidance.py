@@ -335,10 +335,7 @@ for K in WINDOWS:
             test_by_date[p["bt_date"]].append(p["bhar"])
     test_dt = day_paired_t_neg(test_by_date)
     test_p_bonf = min(1.0, test_dt["p_one_sided"] * N_BONF)
-    print(
-        f"  walk-forward: train_BHAR={train_ev:+.3f}% (n={len(train_b)},{mid}d) | "
-        f"test_BHAR={test_ev:+.3f}% (n={len(test_b)},{len(wdates) - mid}d)"
-    )
+    print(f"  walk-forward: train_BHAR={train_ev:+.3f}% (n={len(train_b)},{mid}d) | test_BHAR={test_ev:+.3f}% (n={len(test_b)},{len(wdates) - mid}d)")
     print(f"    test day_t={test_dt['t']:.2f} test_p={test_dt['p_one_sided']:.6f} Bonf={test_p_bonf:.6f}")
 
     # verdict (avoidance: BHAR<0 = valid)
@@ -383,10 +380,7 @@ for K in WINDOWS:
 print(f"\n{'=' * 74}")
 print("SUMMARY")
 print(f"{'=' * 74}")
-print(
-    f"{'window':<8} {'n':>6} {'days':>5} {'gross':>8} {'bench':>8} {'BHAR':>8} "
-    f"{'med':>7} {'wr':>6} {'day_t':>7} {'Bonf':>8} {'wf_test':>8}  verdict"
-)
+print(f"{'window':<8} {'n':>6} {'days':>5} {'gross':>8} {'bench':>8} {'BHAR':>8} {'med':>7} {'wr':>6} {'day_t':>7} {'Bonf':>8} {'wf_test':>8}  verdict")
 print("-" * 105)
 for K in WINDOWS:
     r = summary.get(K)

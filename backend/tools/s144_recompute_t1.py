@@ -71,12 +71,8 @@ def main(limit: int | None = None) -> int:
     for i, signal_date in enumerate(dates, 1):
         conn = sqlite3.connect(GENE_SCORES_DB_PATH)
         try:
-            pick_codes = [
-                r[0] for r in conn.execute("SELECT DISTINCT code FROM forward_test_records WHERE signal_date=?", (signal_date,)).fetchall()
-            ]
-            uni_codes = [
-                r[0] for r in conn.execute("SELECT DISTINCT code FROM universe_returns WHERE signal_date=?", (signal_date,)).fetchall()
-            ]
+            pick_codes = [r[0] for r in conn.execute("SELECT DISTINCT code FROM forward_test_records WHERE signal_date=?", (signal_date,)).fetchall()]
+            uni_codes = [r[0] for r in conn.execute("SELECT DISTINCT code FROM universe_returns WHERE signal_date=?", (signal_date,)).fetchall()]
         finally:
             conn.close()
         all_codes = list(dict.fromkeys(pick_codes + uni_codes))

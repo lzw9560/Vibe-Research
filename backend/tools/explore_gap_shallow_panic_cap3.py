@@ -567,10 +567,7 @@ def main() -> None:
 
     bonf = bonferroni_grid(all_records)
     print(f"\nn_combos={bonf['n_combos']}  Bonferroni alpha={bonf['bonf_alpha']}")
-    print(
-        f"\n{'gap_width':<14} {'cap':<6} {'n_trades':>8} {'n_days':>6} "
-        f"{'per_trade_EV':>12} {'per_day_mean_EV':>14} {'day_t':>8} {'p_one':>10}"
-    )
+    print(f"\n{'gap_width':<14} {'cap':<6} {'n_trades':>8} {'n_days':>6} {'per_trade_EV':>12} {'per_day_mean_EV':>14} {'day_t':>8} {'p_one':>10}")
     print("-" * 86)
     for c in bonf["combos"]:
         marker = " <- MAIN" if c["gap_width"] == "[-3,-2)" and c["cap"] == "3" else ""
@@ -695,9 +692,7 @@ def main() -> None:
         reason = f"walk-forward decay: train {wf_open['train_ev']:+.4f}% → test {wf_test_ev:+.4f}% (regime-dependent, not robust)"
     elif close_ev <= 0 and open_ev > 0:
         verdict = "edge-falsified"
-        reason = (
-            f"close_ev honest caliber per-day-mean EV = {close_ev:+.4f}% ≤ 0 (open_stop EV {open_ev:+.4f}% is intraday leakage fake edge)"
-        )
+        reason = f"close_ev honest caliber per-day-mean EV = {close_ev:+.4f}% ≤ 0 (open_stop EV {open_ev:+.4f}% is intraday leakage fake edge)"
     elif open_t < 2 or not bonf_pass:
         verdict = "exploratory"
         reason = f"EV={open_ev:+.4f}% but t={open_t:.2f} < 2 or Bonferroni fail (p={bonf['main_bonf_p']:.4f}), not robust enough to confirm"

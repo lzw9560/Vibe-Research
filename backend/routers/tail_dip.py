@@ -316,8 +316,7 @@ def scan_tail_dip(
         return TailDipScanResponse(
             candidates=candidates[:limit],
             sector_change_pct=round(sector_pct, 2),
-            sector_source=sector_src
-            + (f" | 财务过滤: {financial_summary['passed']}/{financial_summary['total_candidates']}通过" if financial_summary else ""),
+            sector_source=sector_src + (f" | 财务过滤: {financial_summary['passed']}/{financial_summary['total_candidates']}通过" if financial_summary else ""),
             thresholds={k: v for k, v in HARD_THRESHOLDS.items() if isinstance(v, (int, float))},
             total_scanned=len(all_stocks),
         )

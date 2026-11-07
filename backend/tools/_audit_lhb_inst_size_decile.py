@@ -42,9 +42,7 @@ INST_KEYWORDS = (
 
 def load_inst_dominant() -> list:
     conn = sqlite3.connect(str(DT_DB))
-    rows = conn.execute(
-        "SELECT trade_date, security_code, dept_name, buy, net FROM dragon_tiger_rows WHERE side='buy' AND buy > 0"
-    ).fetchall()
+    rows = conn.execute("SELECT trade_date, security_code, dept_name, buy, net FROM dragon_tiger_rows WHERE side='buy' AND buy > 0").fetchall()
     conn.close()
     picks_by_dc: dict = defaultdict(list)
     for date, code, dept, buy, net in rows:
@@ -116,9 +114,7 @@ def audit_size_decile() -> None:
     small_threshold = deciles[3]
     small_cnt = sum(1 for a in amts if a[2] < small_threshold)
     print(f"\n小盘（decile 1-3, <{small_threshold / 1e8:.2f}亿）: {small_cnt}/{n} = {small_cnt / n * 100:.1f}%")
-    print(
-        f"  → {'偏小盘，size premium 风险大，须完整 size-matched BHAR' if small_cnt / n > 0.35 else '分散，size premium 风险小（但仍须完整 BHAR 确认）'}"
-    )
+    print(f"  → {'偏小盘，size premium 风险大，须完整 size-matched BHAR' if small_cnt / n > 0.35 else '分散，size premium 风险小（但仍须完整 BHAR 确认）'}")
 
 
 if __name__ == "__main__":

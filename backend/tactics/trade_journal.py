@@ -101,9 +101,7 @@ class TradeJournal:
         stop_price = entry_price * (1 + stop_pct / 100)
         with sqlite3.connect(self.db_path) as conn:
             cur = conn.execute(
-                "INSERT INTO trades (signal_id, code, tactic, entry_time, "
-                "entry_price, fill_price, stop_price, slippage_pct) "
-                "VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT INTO trades (signal_id, code, tactic, entry_time, entry_price, fill_price, stop_price, slippage_pct) VALUES (?,?,?,?,?,?,?,?)",
                 (
                     signal_id,
                     code,

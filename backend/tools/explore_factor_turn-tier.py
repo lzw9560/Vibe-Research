@@ -167,11 +167,7 @@ def main() -> None:
             continue
         be = res["basic_ev"]
         bdt = res["basic_day_t"]
-        print(
-            f"{name:<20} {np_:>8} {bdt['n_days']:>7} {be['ev']:>10.3f} "
-            f"{be['ev'] - 0.3:>9.3f} {bdt['t']:>7.2f} {bdt['p_one_sided']:>9.4f} "
-            f"{v:<16}"
-        )
+        print(f"{name:<20} {np_:>8} {bdt['n_days']:>7} {be['ev']:>10.3f} {be['ev'] - 0.3:>9.3f} {bdt['t']:>7.2f} {bdt['p_one_sided']:>9.4f} {v:<16}")
 
     # ---- factor-level honest verdict ----
     print("\n" + "=" * 70)

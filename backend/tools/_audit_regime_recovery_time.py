@@ -98,9 +98,7 @@ def main() -> None:
     b_pct_cap = sum(1 for b in all_b if b <= CAP_B) / len(all_b)
     sm5_pct_cap = sum(1 for s in all_sm5 if s <= CAP_SM5) / len(all_sm5)
     print("【1】当前值的历史分位（越低=越极端=比现在更差的日子越少）")
-    print(
-        f"  breadth {cur_b * 100:.1f}%(amount口径): {b_pct_amt * 100:.1f}% 的日子比现在更差（即 {(1 - b_pct_amt) * 100:.1f}% 日子比现在好）"
-    )
+    print(f"  breadth {cur_b * 100:.1f}%(amount口径): {b_pct_amt * 100:.1f}% 的日子比现在更差（即 {(1 - b_pct_amt) * 100:.1f}% 日子比现在好）")
     print(f"  breadth {CAP_B * 100:.1f}%(cap口径基准): {b_pct_cap * 100:.1f}% 的日子比现在更差")
     print(f"  小盘5d {cur_sm5 * 100:+.2f}%(amount口径): {sm5_pct_amt * 100:.1f}% 的日子比现在更差")
     print(f"  小盘5d {CAP_SM5 * 100:+.2f}%(cap口径基准): {sm5_pct_cap * 100:.1f}% 的日子比现在更差")

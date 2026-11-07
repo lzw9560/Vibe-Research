@@ -175,11 +175,7 @@ def _resolve_name(
     需回退到 R1/R2 已采集的 genes/activity，避免 name 退化成 code（S028 R3）。
     """
     return (
-        genes.get(code, {}).get("name")
-        or activity.get(code, {}).get("name")
-        or auction.get(code, {}).get("name")
-        or catalyst.get(code, {}).get("name")
-        or code
+        genes.get(code, {}).get("name") or activity.get(code, {}).get("name") or auction.get(code, {}).get("name") or catalyst.get(code, {}).get("name") or code
     )
 
 

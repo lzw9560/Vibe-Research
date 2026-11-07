@@ -168,11 +168,7 @@ def backfill(days: int = 30, dry_run: bool = False) -> dict:
             )
             for r in rows_out
         ]
-        cols = (
-            "stated_at,source,signal_ref,code,name,prediction_type,"
-            "baseline_price,expected,horizon,due_date,actual_return,"
-            "status,attribution,verified_at"
-        )
+        cols = "stated_at,source,signal_ref,code,name,prediction_type,baseline_price,expected,horizon,due_date,actual_return,status,attribution,verified_at"
         ph = ",".join(["?"] * len(cols.split(",")))
         conn.executemany(
             f"INSERT INTO prediction_ledger ({cols}) VALUES ({ph})",

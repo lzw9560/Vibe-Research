@@ -244,14 +244,10 @@ if policy_picks:
         by_policy[p["policy_near"]].append(p)
     for ptype, sub in sorted(by_policy.items()):
         s = stats([p["ret"] for p in sub])
-        print(
-            f"  {ptype:>10}: n={s['n']:>3} EV={s['mean']:.3f}% net={s['mean'] - ETF_COST:.3f}% WR={s['wr'] * 100:.1f}% t={s['t']:.2f} p={s['p']:.4f}"
-        )
+        print(f"  {ptype:>10}: n={s['n']:>3} EV={s['mean']:.3f}% net={s['mean'] - ETF_COST:.3f}% WR={s['wr'] * 100:.1f}% t={s['t']:.2f} p={s['p']:.4f}")
 if non_policy:
     s = stats([p["ret"] for p in non_policy])
-    print(
-        f"  {'无政策邻近':>10}: n={s['n']:>3} EV={s['mean']:.3f}% net={s['mean'] - ETF_COST:.3f}% WR={s['wr'] * 100:.1f}% t={s['t']:.2f} p={s['p']:.4f}"
-    )
+    print(f"  {'无政策邻近':>10}: n={s['n']:>3} EV={s['mean']:.3f}% net={s['mean'] - ETF_COST:.3f}% WR={s['wr'] * 100:.1f}% t={s['t']:.2f} p={s['p']:.4f}")
 print(f"  -> If policy-near edge >> non-policy => policy expectation driver")
 
 # ================================================================
@@ -374,6 +370,4 @@ tom_s = stats([p["ret"] for p in pre_picks if p["is_tom"]])
 ntom_s = stats([p["ret"] for p in pre_picks if not p["is_tom"]])
 print(f"  TOM overlap edge: {tom_s['mean']:.3f}% (n={tom_s['n']})")
 print(f"  Non-TOM edge:     {ntom_s['mean']:.3f}% (n={ntom_s['n']})")
-print(
-    f"  Liquidity confound? {'YES (TOM-only)' if tom_s['mean'] > 0 and ntom_s['mean'] <= 0 else 'NO (both positive)' if ntom_s['mean'] > 0 else 'PARTIAL'}"
-)
+print(f"  Liquidity confound? {'YES (TOM-only)' if tom_s['mean'] > 0 and ntom_s['mean'] <= 0 else 'NO (both positive)' if ntom_s['mean'] > 0 else 'PARTIAL'}")

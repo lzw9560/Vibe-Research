@@ -224,9 +224,7 @@ def _build_condition_matches(
             ConditionMatch(
                 condition="高封板率",
                 value=f"封板率 {seal_rate:.1f}%",
-                description=(
-                    f"策略逻辑上，{name} 的封板率为 {seal_rate:.1f}%，属于较高封板率水平。策略逻辑上，高封板率意味着该股的涨停较为稳固。"
-                ),
+                description=(f"策略逻辑上，{name} 的封板率为 {seal_rate:.1f}%，属于较高封板率水平。策略逻辑上，高封板率意味着该股的涨停较为稳固。"),
             )
         )
 
@@ -249,10 +247,7 @@ def _build_condition_matches(
             ConditionMatch(
                 condition="基因高分",
                 value=f"基因得分 {gene.total_score}",
-                description=(
-                    f"策略逻辑上，{name} 的基因得分为 {gene.total_score}，"
-                    f"属于高基因股票。历史统计特征显示，高基因股票在涨停后次日溢价的概率较高。"
-                ),
+                description=(f"策略逻辑上，{name} 的基因得分为 {gene.total_score}，属于高基因股票。历史统计特征显示，高基因股票在涨停后次日溢价的概率较高。"),
             )
         )
     elif gene.total_score >= GENE_QUALIFY_THRESHOLD:
@@ -260,10 +255,7 @@ def _build_condition_matches(
             ConditionMatch(
                 condition="基因合格",
                 value=f"基因得分 {gene.total_score}",
-                description=(
-                    f"策略逻辑上，{name} 的基因得分为 {gene.total_score}，"
-                    f"属于基因合格股票。历史统计特征显示，该类股票具备一定的涨停后溢价能力。"
-                ),
+                description=(f"策略逻辑上，{name} 的基因得分为 {gene.total_score}，属于基因合格股票。历史统计特征显示，该类股票具备一定的涨停后溢价能力。"),
             )
         )
     else:
@@ -271,10 +263,7 @@ def _build_condition_matches(
             ConditionMatch(
                 condition="基因偏低",
                 value=f"基因得分 {gene.total_score}",
-                description=(
-                    f"策略逻辑上，{name} 的基因得分为 {gene.total_score}，"
-                    f"低于合格阈值。历史统计特征显示，该类股票的涨停后溢价概率相对较低。"
-                ),
+                description=(f"策略逻辑上，{name} 的基因得分为 {gene.total_score}，低于合格阈值。历史统计特征显示，该类股票的涨停后溢价概率相对较低。"),
             )
         )
 
@@ -285,9 +274,7 @@ def _build_condition_matches(
             ConditionMatch(
                 condition="低封板率",
                 value=f"封板率 {seal_rate:.1f}%",
-                description=(
-                    f"策略逻辑上，{name} 的封板率为 {seal_rate:.1f}%，属于较低封板率水平。策略逻辑上，低封板率意味着涨停的稳固性可能不足。"
-                ),
+                description=(f"策略逻辑上，{name} 的封板率为 {seal_rate:.1f}%，属于较低封板率水平。策略逻辑上，低封板率意味着涨停的稳固性可能不足。"),
             )
         )
 
@@ -299,8 +286,7 @@ def _build_condition_matches(
                 condition="高频涨停",
                 value=f"涨停频次得分 {freq:.1f}",
                 description=(
-                    f"策略逻辑上，{name} 在近 {LOOKBACK_DAYS} 日内涨停 {gene.zt_count_250d} 次，"
-                    f"涨停频次较高。历史统计特征显示，高频涨停股通常受资金关注度高。"
+                    f"策略逻辑上，{name} 在近 {LOOKBACK_DAYS} 日内涨停 {gene.zt_count_250d} 次，涨停频次较高。历史统计特征显示，高频涨停股通常受资金关注度高。"
                 ),
             )
         )
@@ -313,8 +299,7 @@ def _build_condition_matches(
                 condition="高次日溢价",
                 value=f"次日溢价率 {premium:.1f}%",
                 description=(
-                    f"策略逻辑上，{name} 的次日溢价率为 {premium:.1f}%，"
-                    f"属于较高的次日溢价水平。历史统计特征显示，该类股票涨停后次日获得正收益的概率较高。"
+                    f"策略逻辑上，{name} 的次日溢价率为 {premium:.1f}%，属于较高的次日溢价水平。历史统计特征显示，该类股票涨停后次日获得正收益的概率较高。"
                 ),
             )
         )
@@ -324,9 +309,7 @@ def _build_condition_matches(
         logic_parts = [m.description for m in matches]
         logic_desc = "；".join(logic_parts) + "。"
     else:
-        logic_desc = (
-            f"策略逻辑上，{name} 在当前条件下未匹配到明显的策略信号。这不代表没有机会，只是基于历史统计特征，该股的因子表现较为中性。"
-        )
+        logic_desc = f"策略逻辑上，{name} 在当前条件下未匹配到明显的策略信号。这不代表没有机会，只是基于历史统计特征，该股的因子表现较为中性。"
 
     return StrategyLogicMatch(
         code=code,

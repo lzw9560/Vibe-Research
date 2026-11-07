@@ -55,8 +55,7 @@ class NotificationReportMixin:
         report_lines = [
             f"# 📅 {report_date} {labels['report_title']}",
             "",
-            f"> {labels['analyzed_prefix']} **{len(results)}** {labels['stock_unit']} | "
-            f"{labels['generated_at_label']}：{self._get_report_date('%H:%M:%S')}",
+            f"> {labels['analyzed_prefix']} **{len(results)}** {labels['stock_unit']} | {labels['generated_at_label']}：{self._get_report_date('%H:%M:%S')}",
             "",
             "---",
             "",

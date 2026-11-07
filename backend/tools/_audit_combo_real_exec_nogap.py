@@ -103,9 +103,7 @@ def main() -> None:
         else:
             verdict = "🟡 0.15-0.3% 灰区"
         print(f"\n判定: net real-exec {re['net'] * 100:+.3f}% → {verdict}")
-        print(
-            f"对比含 gap 版(轮11): real-exec net +0.311% / median -0.141% → 去 gap 版 net {re['net'] * 100:+.3f}% / median {re['median'] * 100:+.3f}%"
-        )
+        print(f"对比含 gap 版(轮11): real-exec net +0.311% / median -0.141% → 去 gap 版 net {re['net'] * 100:+.3f}% / median {re['median'] * 100:+.3f}%")
         delta = re["net"] - 0.00311
         print(f"  去 gap vs 含 gap: net {'提升' if delta > 0 else '降'} {delta * 100:+.3f}%（去 entry gap 右尾是否提升 edge）")
 

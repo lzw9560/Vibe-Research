@@ -240,10 +240,7 @@ class EmailSender:
 
             alt = MIMEMultipart("alternative")
             alt.attach(MIMEText("报告已生成，详见下方图片。", "plain", "utf-8"))
-            html_body = (
-                "<p>报告已生成，详见下方图片（点击可查看大图）：</p>"
-                '<p><img src="cid:report-image" alt="股票分析报告" style="max-width:100%%;" /></p>'
-            )
+            html_body = '<p>报告已生成，详见下方图片（点击可查看大图）：</p><p><img src="cid:report-image" alt="股票分析报告" style="max-width:100%%;" /></p>'
             alt.attach(MIMEText(html_body, "html", "utf-8"))
             msg.attach(alt)
 

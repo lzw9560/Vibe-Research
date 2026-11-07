@@ -189,15 +189,11 @@ for i in range(len(calendar) - 1):
 tom_all_s = stats(tom_all_rets)
 tom_not_pre_s = stats(tom_not_pre_rets)
 tom_pre_s = stats(tom_pre_rets)
-print(
-    f"  All ToM:              n={tom_all_s['n']} EV={tom_all_s['mean']:.4f}% WR={tom_all_s['wr'] * 100:.1f}% lift={tom_all_s['mean'] / base_s['mean']:.2f}x"
-)
+print(f"  All ToM:              n={tom_all_s['n']} EV={tom_all_s['mean']:.4f}% WR={tom_all_s['wr'] * 100:.1f}% lift={tom_all_s['mean'] / base_s['mean']:.2f}x")
 print(
     f"  ToM NOT pre-holiday:  n={tom_not_pre_s['n']} EV={tom_not_pre_s['mean']:.4f}% WR={tom_not_pre_s['wr'] * 100:.1f}% lift={tom_not_pre_s['mean'] / base_s['mean']:.2f}x"
 )
-print(
-    f"  ToM + pre-holiday:    n={tom_pre_s['n']} EV={tom_pre_s['mean']:.4f}% WR={tom_pre_s['wr'] * 100:.1f}% lift={tom_pre_s['mean'] / base_s['mean']:.2f}x"
-)
+print(f"  ToM + pre-holiday:    n={tom_pre_s['n']} EV={tom_pre_s['mean']:.4f}% WR={tom_pre_s['wr'] * 100:.1f}% lift={tom_pre_s['mean'] / base_s['mean']:.2f}x")
 print(f"  -> If ToM-not-pre ~ base => ToM effect is actually holiday effect, not ToM")
 
 # ---------- 3. January effect vs 元旦 ----------
@@ -216,14 +212,10 @@ for i in range(len(calendar) - 1):
         if o and c and o > 0:
             jan_not_pre.append((c - o) / o * 100)
 jan_s = stats(jan_not_pre)
-print(
-    f"  January (non-holiday): n={jan_s['n']} EV={jan_s['mean']:.4f}% WR={jan_s['wr'] * 100:.1f}% lift={jan_s['mean'] / base_s['mean']:.2f}x"
-)
+print(f"  January (non-holiday): n={jan_s['n']} EV={jan_s['mean']:.4f}% WR={jan_s['wr'] * 100:.1f}% lift={jan_s['mean'] / base_s['mean']:.2f}x")
 yuan = [p for p in pre_picks if p["type"] == "元旦"]
 yuan_s = stats([p["ret"] for p in yuan])
-print(
-    f"  元旦 pre-holiday:       n={yuan_s['n']} EV={yuan_s['mean']:.3f}% WR={yuan_s['wr'] * 100:.1f}% lift={yuan_s['mean'] / base_s['mean']:.2f}x"
-)
+print(f"  元旦 pre-holiday:       n={yuan_s['n']} EV={yuan_s['mean']:.3f}% WR={yuan_s['wr'] * 100:.1f}% lift={yuan_s['mean'] / base_s['mean']:.2f}x")
 print(f"  -> 元旦 positive + January non-holiday negative => holiday-specific, not January effect")
 
 # ---------- 4. Partial: pre-holiday return controlling for ToM ----------
@@ -284,9 +276,7 @@ for i in range(len(calendar) - 1):
         if o and c and o > 0:
             mon_rets.append((c - o) / o * 100)
 mon_s = stats(mon_rets)
-print(
-    f"  Monday open->Tue close (non-holiday): n={mon_s['n']} EV={mon_s['mean']:.4f}% WR={mon_s['wr'] * 100:.1f}% lift={mon_s['mean'] / base_s['mean']:.2f}x"
-)
+print(f"  Monday open->Tue close (non-holiday): n={mon_s['n']} EV={mon_s['mean']:.4f}% WR={mon_s['wr'] * 100:.1f}% lift={mon_s['mean'] / base_s['mean']:.2f}x")
 print(f"  -> If Monday ~ base => no weekend-gap premium; holiday effect is distinct")
 
 # ---------- 7. 2022 后分层（验证 TOM 死延伸，2026-10-07 加）----------

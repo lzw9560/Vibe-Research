@@ -241,9 +241,7 @@ def score_candidates(
                     continue
             # S094 audit fix: market_scan 候选无 factors dict（run_non_limitup_funnel 产 pattern 不产 factors）
             # → 从 PatternScan+strat_code 建 per-strategy factors（量能信号 per-strategy R4），否则 score=0.0
-            _factors_for_score = (
-                _build_market_scan_factors(cand.get("pattern"), cand, strat_code) if funnel_type == "market_scan" else factors
-            )
+            _factors_for_score = _build_market_scan_factors(cand.get("pattern"), cand, strat_code) if funnel_type == "market_scan" else factors
             score, breakdown = compute_strategy_score(_factors_for_score, cfg.weight_set)
             # S073 §9.4 游资画像修饰（画像未建→modifier 1.0 不扣分，标 risk_label）
             seat_risk = None

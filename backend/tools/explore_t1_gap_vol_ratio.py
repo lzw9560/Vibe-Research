@@ -186,9 +186,7 @@ def t1_gap_vol_ratio_analysis(end_date: str, days: int = 180) -> dict[str, Any]:
     print(f"\nBASELINE: n={baseline['n']} hit={baseline['hit']} rate={baseline['rate'] * 100:.2f}% EV={baseline['ev']:+.2f}%")
     print(f"\n--- gap-only buckets（验证 baseline 一致）---")
     for b in gap_buckets:
-        print(
-            f"  {b['combo']:30s} n={b['n']:5d} hit={b['hit']:4d} rate={b['rate'] * 100:5.2f}% EV={b['ev']:+6.2f}% {'POS' if b['positive_ev'] else ''}"
-        )
+        print(f"  {b['combo']:30s} n={b['n']:5d} hit={b['hit']:4d} rate={b['rate'] * 100:5.2f}% EV={b['ev']:+6.2f}% {'POS' if b['positive_ev'] else ''}")
     print(f"\n--- gap × T+1量比 combos（15 组）---")
     for c in combos:
         flag = "  <-- BEATS BASELINE+0.70% n>=30" if c["ev"] > 0.70 and c["n"] >= 30 else ""

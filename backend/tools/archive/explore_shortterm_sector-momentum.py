@@ -339,8 +339,7 @@ def analyze_combo(results: list[dict], combo_name: str) -> dict:
     print(f"\n--- gross excess (portfolio - benchmark) ---")
     print(f"  n_rebalances={n} mean={gross_mean:.3f}% std={gross_std:.3f}% WR={gross_wr:.1f}% t={gross_t:.2f} p={gross_p:.6f}")
     print(
-        f"  portfolio avg={sum(r['portfolio_return_pct'] for r in results) / n:.3f}% "
-        f"benchmark avg={sum(r['benchmark_return_pct'] for r in results) / n:.3f}%"
+        f"  portfolio avg={sum(r['portfolio_return_pct'] for r in results) / n:.3f}% benchmark avg={sum(r['benchmark_return_pct'] for r in results) / n:.3f}%"
     )
 
     # --- net stats (after 0.3% cost) ---
@@ -477,11 +476,7 @@ def normal_inv_cdf(p: float) -> float:
     elif p <= phigh:
         q = p - 0.5
         r = q * q
-        x = (
-            (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5])
-            * q
-            / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1)
-        )
+        x = (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1)
     else:
         q = sqrt(-2 * log(1 - p))
         x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
@@ -659,9 +654,7 @@ def verdict_for_combo(
     p_bonf = bonferroni_p(net_p, n_tests)
 
     print(f"\n  {combo_name}:")
-    print(
-        f"    gross_excess_EV={gross_ev}% net_excess_EV={net_ev}% net_t={net_t} Bonf_p(×{n_tests})={p_bonf:.6f} n_rebalances={n_rebalances}"
-    )
+    print(f"    gross_excess_EV={gross_ev}% net_excess_EV={net_ev}% net_t={net_t} Bonf_p(×{n_tests})={p_bonf:.6f} n_rebalances={n_rebalances}")
 
     if wf_status == "ok":
         print(f"    walk-forward: train_EV={wf_train_ev}% test_EV={wf_test_ev}% test_p={wf_test_p}")
@@ -845,9 +838,7 @@ def main():
     vc = Counter(verdicts.values())
     print(f"  verdicts: {dict(vc)}")
     print(f"  best combo: {best_combo['name']} (net_excess_EV={best_combo['net_ev']}%, t={best_combo['net_t']})")
-    print(
-        f"  best combo walk-forward: train={best_combo['wf_train_ev']}% test={best_combo['wf_test_ev']}% test_p={best_combo['wf_test_p']}"
-    )
+    print(f"  best combo walk-forward: train={best_combo['wf_train_ev']}% test={best_combo['wf_test_ev']}% test_p={best_combo['wf_test_p']}")
 
     # overall verdict
     n_confirmed = vc.get("edge-confirmed", 0)

@@ -230,9 +230,7 @@ def train_short_sector(
     )
     if not splits:
         raise ValueError(
-            "insufficient data to form a training fold "
-            f"(dates={len(dates)}, train_size={cfg.train_size}, "
-            f"gap={_gap(cfg.embargo_days, cfg.purge_days)})"
+            f"insufficient data to form a training fold (dates={len(dates)}, train_size={cfg.train_size}, gap={_gap(cfg.embargo_days, cfg.purge_days)})"
         )
 
     last = splits[-1]

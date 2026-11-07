@@ -168,9 +168,7 @@ def main() -> None:
     if r:
         print(f"【全历史】days={r['n_days']} picks={r['n_picks']}")
         print(f"  mean={r['mean'] * 100:+.3f}% median={r['median'] * 100:+.3f}% net={r['net'] * 100:+.3f}% t={r['t']:.2f}")
-        print(
-            f"  胜率: per-pick={r['per_pick_wr'] * 100:.1f}% / 日组合={r['combo_wr'] * 100:.1f}% / 日胜率(赚钱天)={r['day_wr'] * 100:.1f}%\n"
-        )
+        print(f"  胜率: per-pick={r['per_pick_wr'] * 100:.1f}% / 日组合={r['combo_wr'] * 100:.1f}% / 日胜率(赚钱天)={r['day_wr'] * 100:.1f}%\n")
 
     # 各年分层
     print(f"{'年份':<8}{'mean':>10}{'median':>10}{'per-pick':>10}{'日组合':>10}{'日胜率':>10}{'net':>10}{'t':>7}{'days':>7}")
@@ -207,12 +205,8 @@ def main() -> None:
     r1 = wr_stats(all_d, by_date, exclude_limit=False)
     r2 = wr_stats(all_d, by_date, exclude_limit=True)
     if r1 and r2:
-        print(
-            f"  含涨停: mean={r1['mean'] * 100:+.3f}% per-pick={r1['per_pick_wr'] * 100:.1f}% 日胜率={r1['day_wr'] * 100:.1f}% t={r1['t']:.2f}"
-        )
-        print(
-            f"  去涨停: mean={r2['mean'] * 100:+.3f}% per-pick={r2['per_pick_wr'] * 100:.1f}% 日胜率={r2['day_wr'] * 100:.1f}% t={r2['t']:.2f}"
-        )
+        print(f"  含涨停: mean={r1['mean'] * 100:+.3f}% per-pick={r1['per_pick_wr'] * 100:.1f}% 日胜率={r1['day_wr'] * 100:.1f}% t={r1['t']:.2f}")
+        print(f"  去涨停: mean={r2['mean'] * 100:+.3f}% per-pick={r2['per_pick_wr'] * 100:.1f}% 日胜率={r2['day_wr'] * 100:.1f}% t={r2['t']:.2f}")
         ratio = r2["mean"] / r1["mean"] if r1["mean"] else 0
         print(f"  去涨停/含涨停={ratio * 100:.0f}% → 涨停贡献约 {(1 - ratio) * 100:.0f}%")
     print()

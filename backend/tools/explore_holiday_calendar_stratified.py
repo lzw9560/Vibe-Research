@@ -173,10 +173,7 @@ for htype in ["春节", "国庆", "中秋", "端午", "劳动节", "清明", "�
     s = stats([p["ret"] for p in sub])
     lift = s["mean"] / base_s["mean"] if base_s["mean"] != 0 else float("inf")
     type_results[htype] = {"stats": s, "lift": lift, "picks": sub}
-    print(
-        f"{htype:<8} {s['n']:>4} {s['mean']:>10.3f} {s['mean'] - ETF_COST:>9.3f} "
-        f"{s['wr'] * 100:>6.1f} {s['t']:>6.2f} {s['p']:>10.6f} {lift:>5.2f}x"
-    )
+    print(f"{htype:<8} {s['n']:>4} {s['mean']:>10.3f} {s['mean'] - ETF_COST:>9.3f} {s['wr'] * 100:>6.1f} {s['t']:>6.2f} {s['p']:>10.6f} {lift:>5.2f}x")
 
 # ---------- index comparison note ----------
 print(f"\n{'=' * 70}")
@@ -274,9 +271,7 @@ for i in range(len(calendar) - 1):
         if o and c and o > 0:
             tom_rets.append((c - o) / o * 100)
 tom_s = stats(tom_rets)
-print(
-    f"  Turn-of-month (last3+first3): n={tom_s['n']} EV={tom_s['mean']:.4f}% WR={tom_s['wr'] * 100:.1f}% lift={tom_s['mean'] / base_s['mean']:.2f}x"
-)
+print(f"  Turn-of-month (last3+first3): n={tom_s['n']} EV={tom_s['mean']:.4f}% WR={tom_s['wr'] * 100:.1f}% lift={tom_s['mean'] / base_s['mean']:.2f}x")
 
 # Factor 2: January effect (all January windows)
 jan_rets = []

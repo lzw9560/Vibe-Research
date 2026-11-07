@@ -109,9 +109,7 @@ class SnapshotStore:
         conn = self._conn()
         try:
             cur = conn.execute(
-                "INSERT INTO snapshots "
-                "(as_of, data_date, source, query_spec, content_hash, raw_blob, "
-                "fetched_at, generator_commit) VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT INTO snapshots (as_of, data_date, source, query_spec, content_hash, raw_blob, fetched_at, generator_commit) VALUES (?,?,?,?,?,?,?,?)",
                 (
                     as_of,
                     data_date,
@@ -175,9 +173,7 @@ class SnapshotStore:
                 ).fetchone()
             else:
                 row = conn.execute(
-                    "SELECT raw_blob FROM snapshots "
-                    "WHERE source = ? AND data_date IS ? AND as_of <= ? "
-                    "ORDER BY as_of DESC, snapshot_id DESC LIMIT 1",
+                    "SELECT raw_blob FROM snapshots WHERE source = ? AND data_date IS ? AND as_of <= ? ORDER BY as_of DESC, snapshot_id DESC LIMIT 1",
                     (source, data_date, as_of),
                 ).fetchone()
             return bytes(row["raw_blob"]) if row else None

@@ -162,13 +162,9 @@ def main() -> int:
     lianban_sig = lianban_monotonic and (q5ci[0] > q1ci[1])
 
     if lianban_sig:
-        verdict = (
-            "连板概率 Q5>Q1 显著 → total_score 预测连板 → screener 是质量筛(b)，next-day-return r≈0 是错口径，照常用；不 pivot 选股基础。"
-        )
+        verdict = "连板概率 Q5>Q1 显著 → total_score 预测连板 → screener 是质量筛(b)，next-day-return r≈0 是错口径，照常用；不 pivot 选股基础。"
     elif not powered:
-        verdict = (
-            f"功效不足(c)：within-day 可检测 r 下界={r_ret['detectable_r_floor']}（>0.05），r≈0 可能是测不出小效应而非真无——需更多天数。"
-        )
+        verdict = f"功效不足(c)：within-day 可检测 r 下界={r_ret['detectable_r_floor']}（>0.05），r≈0 可能是测不出小效应而非真无——需更多天数。"
     elif ret_null and pct_null:
         verdict = (
             "total_score 既不预测次日收益(a) 也不预测次日涨跌幅/连板 —— 选股无验证 edge；"
@@ -197,12 +193,9 @@ def main() -> int:
         ci = f"[{qd['p_zt_ci'][0]},{qd['p_zt_ci'][1]}]" if qd["p_zt_ci"] else "—"
         print(f"{qd['quintile']:<5}{str(qd['score_range']):>12}{qd['n']:>6}{str(qd['p_zt']):>8}{ci:>20}")
     print(
-        f"\nwithin-day r(total_score, return_close2close) = {r_ret['within_day_r']} "
-        f"CI {r_ret['ci']} (n={r_ret['n']}, 可检测 r≥{r_ret['detectable_r_floor']})"
+        f"\nwithin-day r(total_score, return_close2close) = {r_ret['within_day_r']} CI {r_ret['ci']} (n={r_ret['n']}, 可检测 r≥{r_ret['detectable_r_floor']})"
     )
-    print(
-        f"within-day r(total_score, next_pctChg)        = {r_pct['within_day_r']} CI {r_pct['ci']} (可检测 r≥{r_pct['detectable_r_floor']})"
-    )
+    print(f"within-day r(total_score, next_pctChg)        = {r_pct['within_day_r']} CI {r_pct['ci']} (可检测 r≥{r_pct['detectable_r_floor']})")
     print(f"\n连板 Q5>Q1={lianban_monotonic} 显著={lianban_sig}")
     print(f"verdict: {verdict}")
     print(f"输出: {OUT_PATH}")

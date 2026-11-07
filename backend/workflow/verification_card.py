@@ -52,9 +52,9 @@ def run_migrations() -> None:
 
     Path(_DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     manager = MigrationManager(db_path=_DB_PATH)
-    migration_v1 = (
-        Path(__file__).resolve().parent.parent / "migrations" / "verification_card" / "20260812-001_create_verification_conditions.sql"
-    ).read_text(encoding="utf-8")
+    migration_v1 = (Path(__file__).resolve().parent.parent / "migrations" / "verification_card" / "20260812-001_create_verification_conditions.sql").read_text(
+        encoding="utf-8"
+    )
     manager.upgrade(
         [
             {"version": "20260812-001", "name": "create_verification_conditions", "sql": migration_v1},

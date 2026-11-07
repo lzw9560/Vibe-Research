@@ -212,11 +212,7 @@ def intraday_microstructure_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
     zt_codes: list[str] = []
     if intraday:
         try:
-            zt_codes = [
-                r["code"]
-                for r in _instrumented("hithink.limit_up_pool", "microstructure", hithink_src.limit_up_pool, date)
-                if r.get("code")
-            ]
+            zt_codes = [r["code"] for r in _instrumented("hithink.limit_up_pool", "microstructure", hithink_src.limit_up_pool, date) if r.get("code")]
         except Exception:  # noqa: BLE001 — hithink 涨停池失败不影响排名快照
             pass
         rank_codes = {it["code"] for items in ranking_items.values() for it in items if it.get("code")}

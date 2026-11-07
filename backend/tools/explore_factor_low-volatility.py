@@ -502,8 +502,7 @@ def main() -> int:
     meta = zoo["metadata"]
     print(f"    factors: {list(meta['factors'].keys())}")
     print(
-        f"    range: {meta['date_range']}  n_dates={meta['n_dates']}  "
-        f"n_rebal={len(rd)}  cross-sec avg={meta['cross_section_size']['avg_codes_per_rebalance']}",
+        f"    range: {meta['date_range']}  n_dates={meta['n_dates']}  n_rebal={len(rd)}  cross-sec avg={meta['cross_section_size']['avg_codes_per_rebalance']}",
         flush=True,
     )
     print(f"    [target] factor: {FACTOR_NAME} (idx={FACTOR_IDX}) — LONG low-vol (D1) + SHORT high-vol (D10)", flush=True)
@@ -539,10 +538,7 @@ def main() -> int:
             f"NW t = {best['factor_return_t']}  p = {best['factor_return_p']}"
         )
         print(f"  Bonferroni p (×{len(FREQS) * N_CROSS_FACTOR}) = {best['bonferroni_p']}")
-        print(
-            f"  CAPM alpha = {best['capm_alpha_pct']}%  (NW t = {best['capm_alpha_t']}, "
-            f"beta = {best['capm_beta']})  Sharpe = {best['sharpe']}"
-        )
+        print(f"  CAPM alpha = {best['capm_alpha_pct']}%  (NW t = {best['capm_alpha_t']}, beta = {best['capm_beta']})  Sharpe = {best['sharpe']}")
         print(
             f"  walk-forward: train {best['wf_train_mean_pct']}% (alpha "
             f"{best['wf_train_alpha_pct']}%) | test {best['wf_test_mean_pct']}% "
@@ -559,9 +555,7 @@ def main() -> int:
     print("\n--- 诚实标注 (禁止外推) ---")
     print("1. 本脚本测的是横截面 volatility_20d 因子 (long-short decile, long 低波动 + short 高波动), 非 long-only EV, 非其他因子.")
     print(
-        "2. long-short 需做空高波动股 — A股散户融券极度受限, "
-        "统计 alpha ≠ 可交易 (仅机构/融券标的可用). "
-        "low-vol long leg 单独可买但 short leg 多为融券受限标的."
+        "2. long-short 需做空高波动股 — A股散户融券极度受限, 统计 alpha ≠ 可交易 (仅机构/融券标的可用). low-vol long leg 单独可买但 short leg 多为融券受限标的."
     )
     print("3. survivorship: 早期 (2018-2020) 横截面 ~264-766 来自非随机 backfill 子集, 晚期 (2025-2026) 横截面大但天数少.")
     print("4. 交易成本: long-short 2 round-trip/rebalance, 周度年成本 ~30% (0.6%×50周) — 即使 gross edge 存在, net 多为负.")

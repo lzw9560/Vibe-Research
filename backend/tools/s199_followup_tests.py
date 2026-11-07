@@ -251,11 +251,7 @@ def test1_breakout_stratified(data: list[dict]) -> None:
         print(f"  confound delta (orig - bk-stratified) = {delta:+.4f}")
     # Simpson's paradox: pooled winrate lift vs day-paired lift
     pooled_lift_a = r_bk_a["surv_wr"] / r_bk_a["raw_wr"] if r_bk_a["raw_wr"] > 0 else None
-    print(
-        f"  Simpson check: pooled_wr_lift={pooled_lift_a:.4f} "
-        f"(surv_wr={r_bk_a['surv_wr']} vs raw_wr={r_bk_a['raw_wr']}) "
-        f"vs day_paired_lift={r_bk_a['lift']}"
-    )
+    print(f"  Simpson check: pooled_wr_lift={pooled_lift_a:.4f} (surv_wr={r_bk_a['surv_wr']} vs raw_wr={r_bk_a['raw_wr']}) vs day_paired_lift={r_bk_a['lift']}")
     if pooled_lift_a and r_bk_a["lift"]:
         if pooled_lift_a < 1.0 < r_bk_a["lift"]:
             print(
@@ -263,10 +259,7 @@ def test1_breakout_stratified(data: list[dict]) -> None:
                 "but day-paired lift>1 (gap wins per-day relative). 'Selection edge' "
                 "= day-clustering artifact, NOT per-trade winrate edge."
             )
-    print(
-        f"  floor arm realized=0 → stratification is no-op (all gap-present ARE "
-        f"breakout). Deconfound = within-breakout comparison (breakout held constant)."
-    )
+    print(f"  floor arm realized=0 → stratification is no-op (all gap-present ARE breakout). Deconfound = within-breakout comparison (breakout held constant).")
     print("  → lift persists within breakout arm (NOT breakout-driven), BUT pooled winrate<1 → not a robust per-trade selection edge")
 
 
@@ -280,11 +273,7 @@ def _gate_metrics(cases: list[dict], label: str) -> dict:
     mean = sum(rets) / len(rets) if rets else 0.0
     t = day_clustered_t_test(rets, dates)
     if t:
-        print(
-            f"  {label}: n={len(rets)} n_days={len(set(dates))} "
-            f"winrate={wr:.4f} mean_return={mean:+.4f}% "
-            f"day_t={t.t_stat:+.3f} p={t.p_one_sided:.4f}"
-        )
+        print(f"  {label}: n={len(rets)} n_days={len(set(dates))} winrate={wr:.4f} mean_return={mean:+.4f}% day_t={t.t_stat:+.3f} p={t.p_one_sided:.4f}")
     else:
         print(f"  {label}: n={len(rets)} n_days<2 (insufficient)")
     return {
@@ -314,10 +303,7 @@ def test2_binary_gate_ablation(data: list[dict]) -> None:
     d_wr = m_on["winrate"] - m_off["winrate"]
     d_mean = m_on["mean_return"] - m_off["mean_return"]
     print(f"  DELTA: winrate {d_wr * 100:+.4f}pp | mean_return {d_mean:+.4f}pp")
-    print(
-        f"  → gate improves winrate? {'YES' if d_wr > 0.01 else 'NO/marginal'} "
-        f"({'edge' if d_wr > 0.02 and (m_on['p'] or 1) < 0.05 else 'no clear edge'})"
-    )
+    print(f"  → gate improves winrate? {'YES' if d_wr > 0.01 else 'NO/marginal'} ({'edge' if d_wr > 0.02 and (m_on['p'] or 1) < 0.05 else 'no clear edge'})")
 
     # --- B. Within breakout arm (deconfounded) ---
     print("\n--- B. Within breakout arm (deconfounded), gap_a ---")
@@ -357,10 +343,7 @@ def main() -> None:
     n_gap_a = sum(1 for d in data if d["gap_a"] > 0)
     n_gap_b = sum(1 for d in data if d["gap_b"] > 0)
     n_days = len(set(d["entry_date"] for d in data if d.get("gross_return") is not None))
-    print(
-        f"# S199 follow-up: n_total={n_total} n_ret={n_ret} n_days={n_days} "
-        f"arm: breakout={n_bk} floor={n_floor} | gap_a>0={n_gap_a} gap_b>0={n_gap_b}"
-    )
+    print(f"# S199 follow-up: n_total={n_total} n_ret={n_ret} n_days={n_days} arm: breakout={n_bk} floor={n_floor} | gap_a>0={n_gap_a} gap_b>0={n_gap_b}")
     print(f"# §44v2: n_days={n_days} >=60 → robust tier, Bonferroni (not BH)")
 
     test1_breakout_stratified(data)

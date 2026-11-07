@@ -122,10 +122,7 @@ def is_yizi_dt(bar: dict, prev_close: float, limit: float) -> bool:
         return False
     tol = 0.005
     return (
-        abs(o - lim_down) / lim_down < tol
-        and abs(h - lim_down) / lim_down < tol
-        and abs(l - lim_down) / lim_down < tol
-        and abs(c - lim_down) / lim_down < tol
+        abs(o - lim_down) / lim_down < tol and abs(h - lim_down) / lim_down < tol and abs(l - lim_down) / lim_down < tol and abs(c - lim_down) / lim_down < tol
     )
 
 
@@ -386,9 +383,7 @@ def walk_forward_event(picks: list[dict], ret_fn) -> dict:
 # ---------- analysis (per subset: raw EV + BHAR + stop + walk-forward) ----------
 
 
-def analyze_subset(
-    name: str, picks: list[dict], ret_fn_raw, ret_fn_bhar, ret_fn_stop, window_label: str = "T+2", verbose: bool = True
-) -> dict:
+def analyze_subset(name: str, picks: list[dict], ret_fn_raw, ret_fn_bhar, ret_fn_stop, window_label: str = "T+2", verbose: bool = True) -> dict:
     """对一个子集跑全分析：raw EV + BHAR + stop + walk-forward."""
     if not picks:
         if verbose:
@@ -431,18 +426,11 @@ def analyze_subset(
 
     if verbose:
         print(f"\n  {name} [{window_label}]: n={len(picks)} n_days={bhar_dt['n_days']}")
+        print(f"    raw EV:  gross={raw_s['ev']:+.3f}% net={raw_s['ev'] - COST * 100:+.3f}% day_t={raw_dt['t']} p={raw_dt['p_one_sided']} WR={raw_s['wr']}%")
         print(
-            f"    raw EV:  gross={raw_s['ev']:+.3f}% net={raw_s['ev'] - COST * 100:+.3f}% "
-            f"day_t={raw_dt['t']} p={raw_dt['p_one_sided']} WR={raw_s['wr']}%"
+            f"    BHAR:    gross={bhar_s['ev']:+.3f}% net={bhar_s['ev'] - COST * 100:+.3f}% day_t={bhar_dt['t']} p={bhar_dt['p_one_sided']} WR={bhar_s['wr']}%"
         )
-        print(
-            f"    BHAR:    gross={bhar_s['ev']:+.3f}% net={bhar_s['ev'] - COST * 100:+.3f}% "
-            f"day_t={bhar_dt['t']} p={bhar_dt['p_one_sided']} WR={bhar_s['wr']}%"
-        )
-        print(
-            f"    beta 泄漏 = raw - BHAR = {raw_s['ev'] - bhar_s['ev']:+.3f}% "
-            f"({'raw 通胀(beta 泄漏)' if raw_s['ev'] > bhar_s['ev'] else 'raw 通缩'})"
-        )
+        print(f"    beta 泄漏 = raw - BHAR = {raw_s['ev'] - bhar_s['ev']:+.3f}% ({'raw 通胀(beta 泄漏)' if raw_s['ev'] > bhar_s['ev'] else 'raw 通缩'})")
         print(f"    stop:    gross={stop_s['ev']:+.3f}% net={stop_s['ev'] - COST * 100:+.3f}% WR={stop_s['wr']}% day_t={stop_dt['t']}")
         tot_r = sum(stop_reasons.values()) or 1
         stop_pct_str = ", ".join(f"{k}:{v}({v / tot_r * 100:.0f}%)" for k, v in sorted(stop_reasons.items(), key=lambda x: -x[1]))
@@ -787,11 +775,7 @@ def main() -> None:
             v = "survives-bonf"
         sc["sub_verdict"] = v
         flag = " <== survives" if v == "survives-bonf" else ""
-        print(
-            f"{sc['name']:<46} {sc['n']:>5} {sc['bhar']['ev']:>+8} "
-            f"{sc['bhar_net']:>+7} {sc['bhar_dt']['p_one_sided']:>9} "
-            f"{p_bonf:>9} {v:<14}{flag}"
-        )
+        print(f"{sc['name']:<46} {sc['n']:>5} {sc['bhar']['ev']:>+8} {sc['bhar_net']:>+7} {sc['bhar_dt']['p_one_sided']:>9} {p_bonf:>9} {v:<14}{flag}")
         if v == "survives-bonf":
             survivors.append(sc)
 
@@ -841,8 +825,7 @@ def main() -> None:
     print(f"  T+5 raw={sub_t5['raw']['ev']:+.3f}% vs BHAR={sub_t5['bhar']['ev']:+.3f}% → beta 泄漏={sub_t5['beta_leak']:+.3f}%")
 
     print(
-        f"\n[窗口] T+2 BHAR={sub_t2['bhar']['ev']:+.3f}% net={sub_t2['bhar_net']:+.3f}% | "
-        f"T+5 BHAR={sub_t5['bhar']['ev']:+.3f}% net={sub_t5['bhar_net']:+.3f}%"
+        f"\n[窗口] T+2 BHAR={sub_t2['bhar']['ev']:+.3f}% net={sub_t2['bhar_net']:+.3f}% | T+5 BHAR={sub_t5['bhar']['ev']:+.3f}% net={sub_t5['bhar_net']:+.3f}%"
     )
     print(f"  stop: T+2 net={sub_t2['stop_net']:+.3f}% | T+5 stop net={sub_t5['stop_net']:+.3f}%")
 

@@ -63,13 +63,10 @@ def compute() -> dict:
     # heat 定义：top-N + zt_count>=阈值
     heat_defs = [("top1", 1, 0), ("top3", 3, 0), ("top5", 5, 0), ("zt>=3", 99, 3), ("zt>=5", 99, 5)]
     try:
-        dates = [
-            r[0] for r in conn.execute("SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date").fetchall()
-        ]
+        dates = [r[0] for r in conn.execute("SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date").fetchall()]
         date_set = set(dates)
         code_ind: dict[str, str] = {
-            r[0]: r[1]
-            for r in conn.execute("SELECT code, industry FROM code_industry WHERE industry IS NOT NULL AND industry != ''").fetchall()
+            r[0]: r[1] for r in conn.execute("SELECT code, industry FROM code_industry WHERE industry IS NOT NULL AND industry != ''").fetchall()
         }
 
         # 预取每日 D 的 zt_by_ind + d_zt_codes + D+1 涨停池
@@ -80,18 +77,11 @@ def compute() -> dict:
                 continue
             zt_by_ind: dict[str, int] = defaultdict(int)
             d_zt_codes = set()
-            for code, ind in conn.execute(
-                "SELECT code, industry FROM gene_scores WHERE date=? AND data_source='eastmoney_live'", (d,)
-            ).fetchall():
+            for code, ind in conn.execute("SELECT code, industry FROM gene_scores WHERE date=? AND data_source='eastmoney_live'", (d,)).fetchall():
                 if ind:
                     zt_by_ind[ind] += 1
                     d_zt_codes.add(code)
-            d1_zt = {
-                r[0]
-                for r in conn.execute(
-                    "SELECT DISTINCT code FROM gene_scores WHERE date=? AND data_source='eastmoney_live'", (d1,)
-                ).fetchall()
-            }
+            d1_zt = {r[0] for r in conn.execute("SELECT DISTINCT code FROM gene_scores WHERE date=? AND data_source='eastmoney_live'", (d1,)).fetchall()}
             daily.append((d, zt_by_ind, d_zt_codes, d1_zt))
     finally:
         conn.close()

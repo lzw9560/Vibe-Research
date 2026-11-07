@@ -34,9 +34,7 @@ def resolve_data_dir() -> Path:
         if p.parent == Path.home() or p == Path.home() / ".vibe-research":
             import logging
 
-            logging.getLogger("vibe-research").warning(
-                "[vr_paths] VR_DATA_DIR=%s 在 home 根下，fallback 项目根 .vibe-research（防分裂）", env
-            )
+            logging.getLogger("vibe-research").warning("[vr_paths] VR_DATA_DIR=%s 在 home 根下，fallback 项目根 .vibe-research（防分裂）", env)
             return DEFAULT_DATA_DIR
         return p
     return DEFAULT_DATA_DIR

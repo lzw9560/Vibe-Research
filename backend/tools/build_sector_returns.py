@@ -361,10 +361,7 @@ def main() -> None:
     print(f"  dates: {m['n_dates']}  ({m['date_range'][0]} -> {m['date_range'][1]})")
     print(f"  sectors: {m['n_sectors']}")
     print(f"  universe codes used: {m['universe_codes_used']}")
-    print(
-        f"  benchmark: {data['benchmark']['code']} {data['benchmark']['label']} "
-        f"({sum(1 for r in data['benchmark']['returns'] if r is not None)} non-null)"
-    )
+    print(f"  benchmark: {data['benchmark']['code']} {data['benchmark']['label']} ({sum(1 for r in data['benchmark']['returns'] if r is not None)} non-null)")
     sv = m["survivorship"]["universe_membership_churn"]
     print(
         f"  survivorship: first-date codes={sv['n_codes_present_on_first_date']}, "

@@ -25,21 +25,17 @@ def run_migrations() -> None:
     from migrations import MigrationManager
 
     manager = MigrationManager(db_path=_DB_PATH)
-    migration_v1 = (
-        Path(__file__).resolve().parent.parent / "migrations" / "limitup_screener" / "20250613-001_create_gene_scores.sql"
-    ).read_text(encoding="utf-8")
-    migration_v2 = (
-        Path(__file__).resolve().parent.parent / "migrations" / "limitup_screener" / "20250613-002_add_gene_scores_indexes.sql"
-    ).read_text(encoding="utf-8")
-    migration_v3 = (
-        Path(__file__).resolve().parent.parent / "migrations" / "limitup_screener" / "20250724-001_create_fuse_pardon_records.sql"
-    ).read_text(encoding="utf-8")
-    migration_v4 = (
-        Path(__file__).resolve().parent.parent / "migrations" / "limitup_screener" / "20260809-001_add_data_source.sql"
-    ).read_text(encoding="utf-8")
-    migration_v5 = (Path(__file__).resolve().parent.parent / "migrations" / "limitup_screener" / "20260816-001_add_industry.sql").read_text(
+    migration_v1 = (Path(__file__).resolve().parent.parent / "migrations" / "limitup_screener" / "20250613-001_create_gene_scores.sql").read_text(
         encoding="utf-8"
     )
+    migration_v2 = (Path(__file__).resolve().parent.parent / "migrations" / "limitup_screener" / "20250613-002_add_gene_scores_indexes.sql").read_text(
+        encoding="utf-8"
+    )
+    migration_v3 = (Path(__file__).resolve().parent.parent / "migrations" / "limitup_screener" / "20250724-001_create_fuse_pardon_records.sql").read_text(
+        encoding="utf-8"
+    )
+    migration_v4 = (Path(__file__).resolve().parent.parent / "migrations" / "limitup_screener" / "20260809-001_add_data_source.sql").read_text(encoding="utf-8")
+    migration_v5 = (Path(__file__).resolve().parent.parent / "migrations" / "limitup_screener" / "20260816-001_add_industry.sql").read_text(encoding="utf-8")
     migrations = [
         {
             "version": "20250613-001",
@@ -88,9 +84,7 @@ def save_gene_scores(date: str, scores: list) -> None:
     with _DB_LOCK:
         try:
             # S066 Q16 step2：industry 主源 = GeneScore.industry（pool hybk），池缺时兜底 code_industry
-            code2ind: dict[str, str] = dict(
-                conn.execute("SELECT code, industry FROM code_industry WHERE industry IS NOT NULL AND industry != ''").fetchall()
-            )
+            code2ind: dict[str, str] = dict(conn.execute("SELECT code, industry FROM code_industry WHERE industry IS NOT NULL AND industry != ''").fetchall())
             rows = [
                 (
                     date,

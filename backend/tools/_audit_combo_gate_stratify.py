@@ -195,10 +195,7 @@ def group_stats(daily_means: list) -> dict:
 def fmt(r: dict) -> str:
     if r["n"] == 0:
         return f"{'(n=0)':<46}"
-    return (
-        f"{r['mean'] * 100:>+8.4f}%{r['median'] * 100:>+8.4f}%{r['wr'] * 100:>6.1f}%"
-        f"{r['net'] * 100:>+8.4f}%{r['t']:>6.2f}{r['t_nw']:>7.2f}{r['n']:>6}"
-    )
+    return f"{r['mean'] * 100:>+8.4f}%{r['median'] * 100:>+8.4f}%{r['wr'] * 100:>6.1f}%{r['net'] * 100:>+8.4f}%{r['t']:>6.2f}{r['t_nw']:>7.2f}{r['n']:>6}"
 
 
 def main() -> None:
@@ -286,9 +283,7 @@ def main() -> None:
     print("【4】判定（amount-decile 8年全量）")
     rs_off_full = group_stats(off)
     if rs_off_full["n"] > 0:
-        print(
-            f"  gate=OFF: mean={rs_off_full['mean'] * 100:+.4f}% t_nw={rs_off_full['t_nw']:.2f} WR={rs_off_full['wr'] * 100:.1f}% n={rs_off_full['n']}"
-        )
+        print(f"  gate=OFF: mean={rs_off_full['mean'] * 100:+.4f}% t_nw={rs_off_full['t_nw']:.2f} WR={rs_off_full['wr'] * 100:.1f}% n={rs_off_full['n']}")
         if rs_off_full["t_nw"] > 2 and rs_off_full["mean"] > 0:
             print("  → ✅ 门是梯度非 kill switch（OFF 仍显著正）→ combo 该梯度加权（OFF 用 0.3-0.5）")
         elif rs_off_full["mean"] > 0 and rs_off_full["t_nw"] <= 2:

@@ -422,9 +422,7 @@ def render_hit_report(hit_result: dict[str, Any]) -> str:
         lines.append("T 日无 watchlist（市场未满足信号条件）")
     elif total < 30:
         # 样本不足：13×4.34%=0.56 预期命中，Poisson P(0;0.56)=57% 合理，单日命中率波动大不可信
-        lines.append(
-            f"⚠️ 样本不足（{total} < 30）——单日命中率波动大不可信（13 只预期 0.56 涨停，0 命中 Poisson 概率 57% 合理），累积 60 天后验证"
-        )
+        lines.append(f"⚠️ 样本不足（{total} < 30）——单日命中率波动大不可信（13 只预期 0.56 涨停，0 命中 Poisson 概率 57% 合理），累积 60 天后验证")
     elif dev is not None and dev < -30:
         lines.append(f"⚠️ 命中率显著低于预期（{dev:+.1f}%）——当前 regime 信号可能失效")
     elif dev is not None and dev > 30:

@@ -231,9 +231,7 @@ def calculate_anomalous_deviation(
 
     if deviation >= min_deviation:
         is_anomalous = True
-        detail_parts.append(
-            f"错杀偏离度{deviation:.1f}%>={min_deviation}%（个股{individual_change_pct:.1f}% vs 板块{sector_change_pct:.1f}%）"
-        )
+        detail_parts.append(f"错杀偏离度{deviation:.1f}%>={min_deviation}%（个股{individual_change_pct:.1f}% vs 板块{sector_change_pct:.1f}%）")
 
         if vol_ratio < max_volume_ratio:
             # v10.2：偏离>=5%才high，3~5%只给medium（防边界噪声）
@@ -343,12 +341,7 @@ def check_tail_volatility(
         # 用单尾p值：实际波动率在模拟分布中的CDF位置
         p_value = 1.0 - float(np.mean(sim_vols_arr <= actual_vol)) if actual_vol < ci_lower else 0.5
 
-        detail = (
-            f"实际vol={actual_vol:.6f} "
-            f"CI下界={ci_lower:.6f} "
-            f"p={p_value:.4f} "
-            f"{'→ 波动率异常低，疑似恶庄压价' if is_manipulated else '→ 正常'}"
-        )
+        detail = f"实际vol={actual_vol:.6f} CI下界={ci_lower:.6f} p={p_value:.4f} {'→ 波动率异常低，疑似恶庄压价' if is_manipulated else '→ 正常'}"
     else:
         # scipy不可用时的降级：用简单的分位数比较
         p_value = 1.0
@@ -452,8 +445,7 @@ def execute_iron_stop_loss(
             current_price=current_price,
             entry_price=entry_price,
             pnl_pct=round(pnl_pct * 100, 2),
-            reason=f"止损触发：日内最低{intraday_low:.2f}≤止损线{stop_loss_line:.2f}"
-            f"（{base_stop:.0%}{' 周末收紧' if is_weekend_eve else ''}）",
+            reason=f"止损触发：日内最低{intraday_low:.2f}≤止损线{stop_loss_line:.2f}（{base_stop:.0%}{' 周末收紧' if is_weekend_eve else ''}）",
             urgency="urgent",
         )
 
@@ -1068,11 +1060,7 @@ def propose_peak_decay(
 
     # 衰减后是否解锁
     if new_drawdown_pct <= 15.0:
-        recommendation = (
-            f"衰减后peak={proposed_peak:.0f}（×{decay}），"
-            f"回撤{new_drawdown_pct:.1f}%<15% → 解锁，"
-            f"size_mult上限0.5（保留风控记忆，半仓运行）"
-        )
+        recommendation = f"衰减后peak={proposed_peak:.0f}（×{decay}），回撤{new_drawdown_pct:.1f}%<15% → 解锁，size_mult上限0.5（保留风控记忆，半仓运行）"
     else:
         recommendation = (
             f"衰减后peak={proposed_peak:.0f}（×{decay}），"

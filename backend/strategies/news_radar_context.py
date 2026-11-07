@@ -380,10 +380,7 @@ def build_news_radar_context(
         industries = radar_data.get("industries", [])
         target_ind = next((i for i in industries if i.get("key") == radar_key), None)
         if target_ind:
-            recent_3 = [
-                {"title": item.get("title", ""), "url": item.get("url", ""), "time": item.get("time", "")}
-                for item in target_ind.get("items", [])[:3]
-            ]
+            recent_3 = [{"title": item.get("title", ""), "url": item.get("url", ""), "time": item.get("time", "")} for item in target_ind.get("items", [])[:3]]
 
     return NewsRadarContext(
         sector_heat=[heat],

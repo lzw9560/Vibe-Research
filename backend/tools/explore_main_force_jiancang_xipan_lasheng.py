@@ -282,9 +282,7 @@ def main():
 
         # flaw 检查
         print(f"  [flaw 检查]")
-        print(
-            f"    R11 median/WR: median={med:+.4f}% WR={s['wr']}% ({'抛硬币=high-risk tail-driven' if abs(med) < 0.5 else '有 median 支撑'})"
-        )
+        print(f"    R11 median/WR: median={med:+.4f}% WR={s['wr']}% ({'抛硬币=high-risk tail-driven' if abs(med) < 0.5 else '有 median 支撑'})")
         print(f"    R13 survivorship: kline 仅近期 → 单 regime 偏差（已知）")
         print(f"    flaw1 entry涨停: 已跳过一字")
         print(f"    high-risk tail: p95={p95:+.2f}% ({'尾部可捕获' if p95 > 5 else '尾部不足'})")

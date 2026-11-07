@@ -215,9 +215,7 @@ def get_effective_dimension(
         effective = frozen
     else:
         # 构建新 frozen 实例（不改 baseline）——label/source 保留 provenance，note 标 override
-        note = (frozen.note + " | " if frozen.note else "") + (
-            f"override@{row['revalidated_at']} phase={row['phase']} ({row['source_script']})"
-        )
+        note = (frozen.note + " | " if frozen.note else "") + (f"override@{row['revalidated_at']} phase={row['phase']} ({row['source_script']})")
         effective = DimensionValidation(
             dimension_id=frozen.dimension_id,
             label=frozen.label,
@@ -284,14 +282,10 @@ def _compute_path_lift_from_forward_test(
     conn = sqlite3.connect(db, timeout=10)
     try:
         survivors_by_day: dict[str, list[float]] = {}
-        for date, rp in conn.execute(
-            "SELECT signal_date, return_path FROM forward_test_records WHERE return_path IS NOT NULL AND is_unbuyable = 0"
-        ).fetchall():
+        for date, rp in conn.execute("SELECT signal_date, return_path FROM forward_test_records WHERE return_path IS NOT NULL AND is_unbuyable = 0").fetchall():
             survivors_by_day.setdefault(date, []).append(float(rp))
         universe_by_day: dict[str, list[float]] = {}
-        for date, rp in conn.execute(
-            "SELECT signal_date, return_path FROM universe_returns WHERE return_path IS NOT NULL AND is_unbuyable = 0"
-        ).fetchall():
+        for date, rp in conn.execute("SELECT signal_date, return_path FROM universe_returns WHERE return_path IS NOT NULL AND is_unbuyable = 0").fetchall():
             universe_by_day.setdefault(date, []).append(float(rp))
     finally:
         conn.close()

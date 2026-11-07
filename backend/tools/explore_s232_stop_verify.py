@@ -208,9 +208,7 @@ def main():
     print(
         f"baseline (stop0/take0): EV={baseline['ev']}% std={baseline['std']}% t={baseline['t']} CI[{baseline['ci_lo']},{baseline['ci_hi']}] n={baseline['n']}"
     )
-    print(
-        f"best: stop={best['stop']} take={best['take']} EV={best['ev']}% std={best['std']}% t={best['t']} CI[{best['ci_lo']},{best['ci_hi']}]"
-    )
+    print(f"best: stop={best['stop']} take={best['take']} EV={best['ev']}% std={best['std']}% t={best['t']} CI[{best['ci_lo']},{best['ci_hi']}]")
     print("-3% stop +0 take:")
     m3 = next(g for g in grid if g["stop"] == -0.03 and g["take"] == 0.0)
     print(f"  EV={m3['ev']}% std={m3['std']}% t={m3['t']} CI[{m3['ci_lo']},{m3['ci_hi']}] n={m3['n']}")

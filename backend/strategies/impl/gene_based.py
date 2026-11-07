@@ -695,9 +695,7 @@ def _detect_leader_drop_reversal(bars):
         c2_desc = f"T-1 日内跌幅 {drop_pct * 100:.1f}%（阈值≤-7%，龙头大跌）"
         # C3 T 吞没: curr.close ≥ prev.open（吞没前日阴线）AND curr.open ≤ prev.close（低开反包）
         c3_hit = float(curr["close"]) >= float(prev["open"]) and float(curr["open"]) <= float(prev["close"])
-        c3_desc = (
-            f"T close {curr['close']} ≥ T-1 open {prev['open']}（吞没）且 T open {curr['open']} ≤ T-1 close {prev['close']}（低开反包）"
-        )
+        c3_desc = f"T close {curr['close']} ≥ T-1 open {prev['open']}（吞没）且 T open {curr['open']} ≤ T-1 close {prev['close']}（低开反包）"
         # C4 放量: curr.volume / prev.volume ≥ 1.2
         prev_vol = float(prev.get("volume", 0))
         curr_vol = float(curr.get("volume", 0))

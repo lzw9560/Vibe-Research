@@ -209,9 +209,7 @@ def window_return(bars: dict[str, dict], days: list[str], fomc_idx: int, entry_o
     return ret, e_date, x_date
 
 
-def base_rate_for_window(
-    bars: dict[str, dict], days: list[str], entry_off: int, exit_off: int, event_fomc_indices: set[int]
-) -> list[float]:
+def base_rate_for_window(bars: dict[str, dict], days: list[str], entry_off: int, exit_off: int, event_fomc_indices: set[int]) -> list[float]:
     """全市场同长度 rolling 窗口收益 (排除 FOMC 事件窗, 防污染).
     返回 base rate 收益列表 (用于算 base mean + std)."""
     span = exit_off - entry_off
@@ -251,10 +249,7 @@ def per_event_t(ar_list: list[float]) -> dict:
 def main() -> None:
     bars, days = load_regime()
     print(f"[data] regime trading days: {len(days)} ({days[0]}~{days[-1]})")
-    print(
-        f"[data] index close range: {min(b['close'] for b in bars.values()):.1f} ~ "
-        f"{max(b['close'] for b in bars.values()):.1f} (上证综指代理)"
-    )
+    print(f"[data] index close range: {min(b['close'] for b in bars.values()):.1f} ~ {max(b['close'] for b in bars.values()):.1f} (上证综指代理)")
 
     fomc_dates = load_fomc_dates(days[-1])
     print(f"[data] FOMC events: {len(fomc_dates)} ({fomc_dates[0]}~{fomc_dates[-1]})")
@@ -309,8 +304,7 @@ def main() -> None:
         print(f"    event: n={ev_s['n']} mean={ev_s['ev']}% std={ev_s['std']}% WR={ev_s['wr']}% t={ev_s['t']}")
         print(f"    base rate: n={len(base_rets)} mean={base_mean:.4f}% std={base_std:.4f}%")
         print(
-            f"    abnormal return (AR): mean={ar_t['mean']}% t={ar_t['t']} "
-            f"p_one_sided={ar_t['p_one_sided']} net_AR(after {COST * 100:.1f}% cost)={net_ar:.4f}%"
+            f"    abnormal return (AR): mean={ar_t['mean']}% t={ar_t['t']} p_one_sided={ar_t['p_one_sided']} net_AR(after {COST * 100:.1f}% cost)={net_ar:.4f}%"
         )
 
         all_event_rets_by_window[wname] = ev_rets
@@ -442,9 +436,7 @@ def main() -> None:
         (train_ar if fd < split_d else test_ar).append(r[0] - base_m)
     tr = per_event_t(train_ar)
     te = per_event_t(test_ar)
-    print(
-        f"    walk-forward: train_AR={tr['mean']}% (n={tr['n']}) | test_AR={te['mean']}% (n={te['n']}, t={te['t']}, p={te['p_one_sided']})"
-    )
+    print(f"    walk-forward: train_AR={tr['mean']}% (n={tr['n']}) | test_AR={te['mean']}% (n={te['n']}, t={te['t']}, p={te['p_one_sided']})")
 
     # verdict cascade (§44 v3 adapted for event study)
     print("\n  --- verdict cascade ---")

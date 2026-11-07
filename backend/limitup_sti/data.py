@@ -25,12 +25,8 @@ DB_PATH = STI_TIMELINE_DB_PATH
 def run_initial_migrations() -> None:
     """执行初始 schema 迁移（仅一次）。"""
     manager = MigrationManager(db_path=DB_PATH)
-    migration_v1 = (Path(__file__).resolve().parent.parent / "migrations" / "sti" / "20250613-001_create_sti_timeline.sql").read_text(
-        encoding="utf-8"
-    )
-    migration_v2 = (Path(__file__).resolve().parent.parent / "migrations" / "sti" / "20250613-002_add_sti_indexes.sql").read_text(
-        encoding="utf-8"
-    )
+    migration_v1 = (Path(__file__).resolve().parent.parent / "migrations" / "sti" / "20250613-001_create_sti_timeline.sql").read_text(encoding="utf-8")
+    migration_v2 = (Path(__file__).resolve().parent.parent / "migrations" / "sti" / "20250613-002_add_sti_indexes.sql").read_text(encoding="utf-8")
     migrations = [
         {
             "version": "20250613-001",

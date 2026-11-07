@@ -466,9 +466,7 @@ def compute_verdict(groups: dict[str, dict]) -> dict:
         else:
             # 方向一致但显著性不足 —— 按距离 A 更近，仍记 A 但标注显著性不足
             grade = "A"
-            rationale = (
-                f"所有核心因子方向不变，但仅 {sig_count} 个因子 CI 排除 0（<3，显著性不足；方向未反转，仍归 A 但提示需扩大样本或优化因子）"
-            )
+            rationale = f"所有核心因子方向不变，但仅 {sig_count} 个因子 CI 排除 0（<3，显著性不足；方向未反转，仍归 A 但提示需扩大样本或优化因子）"
 
     return {
         "grade": grade,

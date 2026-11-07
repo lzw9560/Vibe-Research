@@ -314,10 +314,7 @@ def verdict_highrisk(
     p_bonf_bhar = bonferroni_p(bhar_p, N_BONF)
 
     print(f"\n  [raw EV] gross={raw_gross:+.4f}% net={raw_net:+.4f}% day_t={raw_t} Bonf×{N_BONF}={p_bonf_raw:.6f} n_days={raw_n_days}")
-    print(
-        f"  [R12 size-matched BHAR] gross={bhar_gross:+.4f}% net={bhar_net:+.4f}% "
-        f"day_t={bhar_t} Bonf×{N_BONF}={p_bonf_bhar:.6f} n_days={bhar_n_days}"
-    )
+    print(f"  [R12 size-matched BHAR] gross={bhar_gross:+.4f}% net={bhar_net:+.4f}% day_t={bhar_t} Bonf×{N_BONF}={p_bonf_bhar:.6f} n_days={bhar_n_days}")
 
     # 1. raw gross < 0 → loser
     if raw_gross < 0:
@@ -327,9 +324,7 @@ def verdict_highrisk(
         return "underpowered", f"n_days={raw_n_days} < 60"
     # 3. R12 size-matched BHAR gross <= 0 → size premium 误标 (核心判据)
     if bhar_gross <= 0:
-        return "falsified", (
-            f"R12 size-matched BHAR {bhar_gross:+.4f}% <= 0 — raw {raw_gross:+.4f}% 是 size premium 误标, 非 shareholder alpha"
-        )
+        return "falsified", (f"R12 size-matched BHAR {bhar_gross:+.4f}% <= 0 — raw {raw_gross:+.4f}% 是 size premium 误标, 非 shareholder alpha")
     # 4. R12 BHAR 不显著 → residual 弱 (exploratory)
     if p_bonf_bhar >= ALPHA:
         return "exploratory", (f"R12 BHAR {bhar_gross:+.4f}% > 0 but Bonf p={p_bonf_bhar:.4f} >= 0.05 (residual 不显著, 可能噪声)")
@@ -339,16 +334,12 @@ def verdict_highrisk(
     # 6. walk-forward OOS (BHAR)
     if wf_bhar["status"] == "ok":
         if wf_bhar["train_ev"]["ev"] <= 0:
-            return "exploratory", (
-                f"R12 BHAR train EV {wf_bhar['train_ev']['ev']:+.4f}% <= 0 (edge 不在 train 半, test 可能 regime 过拟合)"
-            )
+            return "exploratory", (f"R12 BHAR train EV {wf_bhar['train_ev']['ev']:+.4f}% <= 0 (edge 不在 train 半, test 可能 regime 过拟合)")
         if wf_bhar["test_ev"]["ev"] <= 0:
             return "falsified", (f"R12 BHAR walk-forward test EV {wf_bhar['test_ev']['ev']:+.4f}% <= 0")
         wf_test_p_bonf = bonferroni_p(wf_bhar["test_day_t"]["p_one_sided"], N_BONF)
         if wf_test_p_bonf >= ALPHA:
-            return "exploratory", (
-                f"R12 BHAR OOS test EV {wf_bhar['test_ev']['ev']:+.4f}% > 0 but test p Bonf={wf_test_p_bonf:.4f} >= 0.05 (OOS 不显著)"
-            )
+            return "exploratory", (f"R12 BHAR OOS test EV {wf_bhar['test_ev']['ev']:+.4f}% > 0 but test p Bonf={wf_test_p_bonf:.4f} >= 0.05 (OOS 不显著)")
         return "edge-confirmed", (
             f"R12 size-matched BHAR {bhar_gross:+.4f}% > 0 显著 "
             f"(Bonf p={p_bonf_bhar:.4f}), net {bhar_net:+.4f}% > 0, "
@@ -474,18 +465,12 @@ def main():
 
     print(f"\n[R12 size-matched BHAR] (减全市场 decile-1 同窗口等权均值)")
     print(f"  benchmark 均值 (decile-1 全市场): mean={statistics.mean([b[0] for b in benchmarks.values()]):+.4f}%")
-    print(
-        f"  n={bhar_s['n']} gross={bhar_s['ev']:+.4f}% net={bhar_net:+.4f}% "
-        f"median={bhar_median:+.4f}% WR={bhar_s['wr']}% std={bhar_s['std']}%"
-    )
+    print(f"  n={bhar_s['n']} gross={bhar_s['ev']:+.4f}% net={bhar_net:+.4f}% median={bhar_median:+.4f}% WR={bhar_s['wr']}% std={bhar_s['std']}%")
     print(f"  day_t={bhar_dt['t']} p_one_sided={bhar_dt['p_one_sided']} n_days={bhar_dt['n_days']}")
 
     if hs300_s:
         print(f"\n[BHAR vs 沪深300 大盘] (对照, 非 R12 基准——展示大盘基准虚抬 lift)")
-        print(
-            f"  n={hs300_s['n']} gross={hs300_s['ev']:+.4f}% "
-            f"(vs R12 BHAR {bhar_s['ev']:+.4f}% → 大盘基准虚抬 {hs300_s['ev'] - bhar_s['ev']:+.4f}%)"
-        )
+        print(f"  n={hs300_s['n']} gross={hs300_s['ev']:+.4f}% (vs R12 BHAR {bhar_s['ev']:+.4f}% → 大盘基准虚抬 {hs300_s['ev'] - bhar_s['ev']:+.4f}%)")
 
     print(f"\n[10 flaw 检查]")
     print(f"  flaw1 entry涨停价: T+1 open 入场非涨停价 ✓ (一字跳过 {sum(1 for p in picks if False)})")

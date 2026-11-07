@@ -492,10 +492,7 @@ def main() -> None:
     for sname, _, r in scheme_results:
         e = r.get("basic_ev", {}).get("ev", 0.0)
         d = r.get("basic_day_t", {})
-        print(
-            f"  {sname:<14} {r.get('n_picks', 0):>5} {d.get('n_days', 0):>5} "
-            f"{e:>+8.3f} {d.get('t', 0):>7.2f} {d.get('p_one_sided', 1):>9.4f}"
-        )
+        print(f"  {sname:<14} {r.get('n_picks', 0):>5} {d.get('n_days', 0):>5} {e:>+8.3f} {d.get('t', 0):>7.2f} {d.get('p_one_sided', 1):>9.4f}")
     print(f"\n  best scheme: {b_name} (gross EV={b_ev:+.3f}%)")
     print(f"  → weight-search-corrected verdict (×{12 * N_WEIGHT_SCHEMES}):")
     v_ws = verdict_for(

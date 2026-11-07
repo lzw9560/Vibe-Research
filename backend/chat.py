@@ -156,9 +156,7 @@ def _exec_tool(name: str, args: dict):
 # —— 防 SSRF：用户可自带 OpenAI 兼容端点，但后端替其发请求前要挡住指向云元数据/内网的地址 ——
 # M10 修复：_PUBLIC_MODE 改为函数动态求值，避免模块导入时 .env 未加载导致 SSRF 降级
 _METADATA_NETS = [ipaddress.ip_network("169.254.0.0/16"), ipaddress.ip_network("fe80::/10")]
-_PRIVATE_NETS = [
-    ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "0.0.0.0/8", "::1/128", "fc00::/7")
-]
+_PRIVATE_NETS = [ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "0.0.0.0/8", "::1/128", "fc00::/7")]
 
 
 def _is_public_mode() -> bool:
@@ -292,9 +290,7 @@ def run_chat(cfg: dict, user_messages: list, context: str = "", fusion_output: d
 
         fusion_ctx = build_fusion_context(fusion_output)
         context = f"{context}\n\n{fusion_ctx}" if context else fusion_ctx
-    sys_prompt = (
-        SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
-    )
+    sys_prompt = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
     messages = [{"role": "system", "content": sys_prompt}]
     messages.extend(user_messages)
     trace: list[dict] = []
@@ -411,9 +407,7 @@ def _iter_sse_deltas(resp):
 def run_chat_stream(cfg: dict, user_messages: list, context: str = ""):
     """API 接入流式：function-calling 循环，边流答案边推工具调用事件。"""
     no_tools_cfg = str(cfg.get("provider", "")) == "agnes"
-    sys_prompt = (
-        SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
-    )
+    sys_prompt = SYSTEM_PROMPT_NO_TOOLS.format(context=context or "（无）") if no_tools_cfg else SYSTEM_PROMPT.format(context=context or "（无）")
     messages = [{"role": "system", "content": sys_prompt}]
     messages.extend(user_messages)
     trace: list[dict] = []

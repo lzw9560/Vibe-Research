@@ -354,10 +354,7 @@ def selection_verdict(fbs, cache, idx_maps, returns, dates, calendar, snap_id):
         n_joined += 1
 
     coverage = n_joined / len(gap_map) if gap_map else 0.0
-    print(
-        f"[selection] gap_map={len(gap_map)} score_rows_matched={n_score_rows} "
-        f"joined={n_joined} no_score={n_no_score} coverage={coverage:.2%}"
-    )
+    print(f"[selection] gap_map={len(gap_map)} score_rows_matched={n_score_rows} joined={n_joined} no_score={n_no_score} coverage={coverage:.2%}")
 
     if coverage < 0.40:
         print("[selection] coverage < 40% -> STUB (not run)")

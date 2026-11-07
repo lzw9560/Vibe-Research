@@ -312,16 +312,12 @@ def main():
     print(
         f"\nBHAR from NAV-negative picks: {bhar_from_nav_neg:+.2f}% (mean={bhar_from_nav_neg / max(1, len([p for p in picks if p['nav_ret_s2x'] <= 0])):+.3f}%)"
     )
-    print(
-        f"  Retail (raw) from same:     {raw_from_nav_neg:+.2f}% (mean={raw_from_nav_neg / max(1, len([p for p in picks if p['nav_ret_s2x'] <= 0])):+.3f}%)"
-    )
+    print(f"  Retail (raw) from same:     {raw_from_nav_neg:+.2f}% (mean={raw_from_nav_neg / max(1, len([p for p in picks if p['nav_ret_s2x'] <= 0])):+.3f}%)")
     print(f"  Gap (BHAR - Retail):        {bhar_from_nav_neg - raw_from_nav_neg:+.2f}% ← PHANTOM (not capturable)")
     print(
         f"\nBHAR from NAV-positive picks: {bhar_from_nav_pos:+.2f}% (mean={bhar_from_nav_pos / max(1, len([p for p in picks if p['nav_ret_s2x'] > 0])):+.3f}%)"
     )
-    print(
-        f"  Retail (raw) from same:      {raw_from_nav_pos:+.2f}% (mean={raw_from_nav_pos / max(1, len([p for p in picks if p['nav_ret_s2x'] > 0])):+.3f}%)"
-    )
+    print(f"  Retail (raw) from same:      {raw_from_nav_pos:+.2f}% (mean={raw_from_nav_pos / max(1, len([p for p in picks if p['nav_ret_s2x'] > 0])):+.3f}%)")
     print(f"  Gap (Retail - BHAR):         {raw_from_nav_pos - bhar_from_nav_pos:+.2f}% ← market beta bonus")
 
     # ---- THE CRITICAL TEST: Is raw_ev (retail return) positive & significant? ----

@@ -306,9 +306,7 @@ mom_vals = [p["mom5"] for p in mom_picks]
 mom_rets = [p["ret"] for p in mom_picks]
 print(f"  n with mom5: {len(mom_picks)}")
 if mom_vals:
-    print(
-        f"  mom5 (5-day return before day-3): mean={sum(mom_vals) / len(mom_vals):.3f}% min={min(mom_vals):.3f}% max={max(mom_vals):.3f}%"
-    )
+    print(f"  mom5 (5-day return before day-3): mean={sum(mom_vals) / len(mom_vals):.3f}% min={min(mom_vals):.3f}% max={max(mom_vals):.3f}%")
 
     r_mom = pearson_corr(mom_vals, mom_rets)
     p_mom = corr_p(r_mom, len(mom_vals)) if r_mom is not None else None

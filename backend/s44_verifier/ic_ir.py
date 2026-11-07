@@ -203,9 +203,7 @@ def layered_backtest(
         group_means.append(float(np.mean(fr[idx])))
 
     # Jonckheere-Terpstra 单调性（近似：检查是否单调递减，因子值高→收益高）
-    monotonic = all(group_means[i] <= group_means[i + 1] for i in range(n_groups - 1)) or all(
-        group_means[i] >= group_means[i + 1] for i in range(n_groups - 1)
-    )
+    monotonic = all(group_means[i] <= group_means[i + 1] for i in range(n_groups - 1)) or all(group_means[i] >= group_means[i + 1] for i in range(n_groups - 1))
 
     # 最高组 vs 最低组 t-test
     top_idx = order[-group_size:]

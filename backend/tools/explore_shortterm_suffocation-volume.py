@@ -440,9 +440,7 @@ def compute_dsr(rets: list[float], n_trials: int) -> dict:
         p_high = 1 - p_low
         if p < p_low:
             q = msqrt(-2 * log(p))
-            x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
-                (((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1
-            )
+            x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
         elif p <= p_high:
             q = p - 0.5
             rv = q * q
@@ -453,9 +451,7 @@ def compute_dsr(rets: list[float], n_trials: int) -> dict:
             )
         else:
             q = msqrt(-2 * log(1 - p))
-            x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
-                (((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1
-            )
+            x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
         return x
 
     sr_0_annual = sqrt(2 * log(max(n_trials, 2)))
@@ -523,10 +519,7 @@ def analyze_variant(
     basic_s = ev_stats(basic_rets)
     net_basic = basic_s["ev"] - COST * 100
     print(f"\n--- basic {'BHAR' if use_bhar else 'close_ev'} (no stop) ---")
-    print(
-        f"  n={basic_s['n']} gross_EV={basic_s['ev']}% std={basic_s['std']}% "
-        f"WR={basic_s['wr']}% t={basic_s['t']} CI[{basic_s['ci_lo']},{basic_s['ci_hi']}]"
-    )
+    print(f"  n={basic_s['n']} gross_EV={basic_s['ev']}% std={basic_s['std']}% WR={basic_s['wr']}% t={basic_s['t']} CI[{basic_s['ci_lo']},{basic_s['ci_hi']}]")
     print(f"  net EV (after {COST * 100:.1f}% cost): {net_basic:.3f}%")
 
     # day-paired t
@@ -554,10 +547,7 @@ def analyze_variant(
         stop_rets_clean = [r[0] for r in stop_rets if r is not None]
         stop_s = ev_stats(stop_rets_clean)
         net_stop = stop_s["ev"] - COST * 100
-        print(
-            f"  n={stop_s['n']} gross_EV={stop_s['ev']}% std={stop_s['std']}% "
-            f"WR={stop_s['wr']}% t={stop_s['t']} CI[{stop_s['ci_lo']},{stop_s['ci_hi']}]"
-        )
+        print(f"  n={stop_s['n']} gross_EV={stop_s['ev']}% std={stop_s['std']}% WR={stop_s['wr']}% t={stop_s['t']} CI[{stop_s['ci_lo']},{stop_s['ci_hi']}]")
         print(f"  net EV (after cost): {net_stop:.3f}%")
 
         for p in picks:

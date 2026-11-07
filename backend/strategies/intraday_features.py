@@ -411,9 +411,6 @@ if __name__ == "__main__":
     ts = compute_all_trajectories(d)
     print(f"=== {d} 封单 trajectory（{len(ts)} 股）===")
     for t in ts[:5]:
-        print(
-            f"  {t.code}: n={t.n_snapshots} first={t.first_seal} last={t.last_seal} "
-            f"delta={t.delta} max={t.max_seal} slope={t.slope} break={t.break_count}"
-        )
+        print(f"  {t.code}: n={t.n_snapshots} first={t.first_seal} last={t.last_seal} delta={t.delta} max={t.max_seal} slope={t.slope} break={t.break_count}")
     if len(ts) > 5:
         print(f"  ... ({len(ts) - 5} more)")

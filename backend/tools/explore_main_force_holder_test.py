@@ -249,9 +249,7 @@ def main():
     index_map = load_index()
     calendar = sorted(all_dates)
     date_idx = {d: i for i, d in enumerate(calendar)}
-    print(
-        f"\n[数据] holder codes={len(holder)}, kline codes={len(kline_map)}, calendar {calendar[0]}~{calendar[-1]} ({len(calendar)} dates)"
-    )
+    print(f"\n[数据] holder codes={len(holder)}, kline codes={len(kline_map)}, calendar {calendar[0]}~{calendar[-1]} ({len(calendar)} dates)")
 
     # BHAR 需要 index 同窗口
     def bhar_fn(p):
@@ -295,10 +293,7 @@ def main():
             f"n_days={raw_dt['n_days']}"
         )
         if bhar_s:
-            print(
-                f"  BHAR(vs沪深300): gross={bhar_s['ev']:+.4f}% net={bhar_s['ev'] - COST:+.4f}% "
-                f"day_t={bhar_dt['t']} p={bhar_dt['p_one_sided']}"
-            )
+            print(f"  BHAR(vs沪深300): gross={bhar_s['ev']:+.4f}% net={bhar_s['ev'] - COST:+.4f}% day_t={bhar_dt['t']} p={bhar_dt['p_one_sided']}")
         print(f"  beta 漂移 = raw - BHAR = {raw_s['ev'] - bhar_s['ev'] if bhar_s else 0:+.4f}%")
 
         # walk-forward

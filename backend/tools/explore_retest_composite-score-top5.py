@@ -154,9 +154,7 @@ def bh_fdr(p_list: list[float], alpha: float = 0.05) -> dict:
         "rejected": rejected,
         "n_rejected": k_max,
         "threshold_line": threshold_line,
-        "sorted_p_with_threshold": [
-            (round(sorted_p[k], 6), round((k + 1) / m * alpha, 6), sorted_p[k] <= (k + 1) / m * alpha) for k in range(m)
-        ],
+        "sorted_p_with_threshold": [(round(sorted_p[k], 6), round((k + 1) / m * alpha, 6), sorted_p[k] <= (k + 1) / m * alpha) for k in range(m)],
     }
 
 
@@ -435,9 +433,7 @@ def fake_edge_audit(picks: list[dict], ret_fn: Callable, rwf_result: dict | None
 
     return {
         "mode1_entry_gap_avg_pct": round(avg_gap, 3),
-        "mode1_verdict": (
-            f"PASS: entry=T+1 open (非 T close sealed), gap 是成本非假 edge; avg gap {avg_gap:.2f}% 是 entry 溢价 (close_ev 已含)"
-        ),
+        "mode1_verdict": (f"PASS: entry=T+1 open (非 T close sealed), gap 是成本非假 edge; avg gap {avg_gap:.2f}% 是 entry 溢价 (close_ev 已含)"),
         "mode1_pass": mode1_pass,
         "mode2_survivorship": "涨停股 universe (事件选择, 非存活偏差); 标注",
         "mode2_pass": True,
@@ -524,8 +520,7 @@ def main() -> None:
     orig_wf = walk_forward(top5, close_ev_basic)
     if orig_wf["status"] == "ok":
         print(
-            f"  walk-forward (50/50): train_EV={orig_wf['train_ev']['ev']}% "
-            f"test_EV={orig_wf['test_ev']['ev']}% test_p={orig_wf['test_day_t']['p_one_sided']}"
+            f"  walk-forward (50/50): train_EV={orig_wf['train_ev']['ev']}% test_EV={orig_wf['test_ev']['ev']}% test_p={orig_wf['test_day_t']['p_one_sided']}"
         )
 
     # ---- [B] 新方法学 1: per-trade HAC t ----
@@ -664,11 +659,7 @@ def main() -> None:
     print(f"  1. entry 涨停价溢价: avg gap={audit['mode1_entry_gap_avg_pct']}%")
     print(f"     → {audit['mode1_verdict']}")
     print(f"  2. survivorship: {audit['mode2_survivorship']}")
-    print(
-        f"  3. T+1 日内泄漏: open_ev_avg={audit['mode3_open_ev_avg']}% "
-        f"close_ev_avg={audit['mode3_close_ev_avg']}% "
-        f"leakage={audit['mode3_leakage']}%"
-    )
+    print(f"  3. T+1 日内泄漏: open_ev_avg={audit['mode3_open_ev_avg']}% close_ev_avg={audit['mode3_close_ev_avg']}% leakage={audit['mode3_leakage']}%")
     print(f"     → {audit['mode3_verdict']}")
     print(f"  4. 拥挤倒 U: {audit['mode4_detail']}")
     print(f"     → {audit['mode4_verdict']}")
@@ -748,11 +739,7 @@ def main() -> None:
     elif not bh_pass_any:
         new_verdict = "edge-falsified"
         flipped = False
-        key = (
-            f"BH FDR 5% FAIL in all families "
-            f"(HAC p={hac_p:.5f}, best BH adj_p="
-            f"{min(bh3['adjusted_p'][top5_idx], bh7['adjusted_p'][top5_idx_12]):.5f})"
-        )
+        key = f"BH FDR 5% FAIL in all families (HAC p={hac_p:.5f}, best BH adj_p={min(bh3['adjusted_p'][top5_idx], bh7['adjusted_p'][top5_idx_12]):.5f})"
     elif net_ev <= 0:
         new_verdict = "edge-falsified"
         flipped = False

@@ -212,20 +212,10 @@ def main() -> None:
                     "ev_gross": ev,
                     "t_day": dt.get("t", 0.0),
                     "p_raw": dt.get("p_one_sided", 1.0),
-                    "wf_train_ev": (
-                        r.get("wf_basic", {}).get("train_ev", {}).get("ev", 0.0) if r.get("wf_basic", {}).get("status") == "ok" else 0.0
-                    ),
-                    "wf_test_ev": (
-                        r.get("wf_basic", {}).get("test_ev", {}).get("ev", 0.0) if r.get("wf_basic", {}).get("status") == "ok" else 0.0
-                    ),
-                    "wf_test_t": (
-                        r.get("wf_basic", {}).get("test_day_t", {}).get("t", 0.0) if r.get("wf_basic", {}).get("status") == "ok" else 0.0
-                    ),
-                    "wf_test_p": (
-                        r.get("wf_basic", {}).get("test_day_t", {}).get("p_one_sided", 1.0)
-                        if r.get("wf_basic", {}).get("status") == "ok"
-                        else 1.0
-                    ),
+                    "wf_train_ev": (r.get("wf_basic", {}).get("train_ev", {}).get("ev", 0.0) if r.get("wf_basic", {}).get("status") == "ok" else 0.0),
+                    "wf_test_ev": (r.get("wf_basic", {}).get("test_ev", {}).get("ev", 0.0) if r.get("wf_basic", {}).get("status") == "ok" else 0.0),
+                    "wf_test_t": (r.get("wf_basic", {}).get("test_day_t", {}).get("t", 0.0) if r.get("wf_basic", {}).get("status") == "ok" else 0.0),
+                    "wf_test_p": (r.get("wf_basic", {}).get("test_day_t", {}).get("p_one_sided", 1.0) if r.get("wf_basic", {}).get("status") == "ok" else 1.0),
                     "verdict": "(baseline)",
                 }
             )

@@ -529,12 +529,7 @@ def main(days_back: int = 120):
     if "未知" in by_market_condition:
         s = by_market_condition["未知"]
         tag = "  （探索性，N<30）" if s.get("exploratory") else ""
-        print(
-            f"  {'未知':<16} "
-            f"N={s['N']:<4d} mean={s['mean_pct']:+.2f}%  "
-            f"正占比={s['pos_ratio'] * 100:.1f}%  "
-            f"成本后净={s['net_mean_pct']:+.2f}%{tag}"
-        )
+        print(f"  {'未知':<16} N={s['N']:<4d} mean={s['mean_pct']:+.2f}%  正占比={s['pos_ratio'] * 100:.1f}%  成本后净={s['net_mean_pct']:+.2f}%{tag}")
 
     # ---------- 存 JSON ----------
     out = {

@@ -580,8 +580,7 @@ class NotificationFormatterMixin:
                     "",
                     f"| {labels['current_price_label']} | {labels['volume_ratio_label']} | {labels['turnover_rate_label']} | {labels['source_label']} |",
                     "|-------|------|--------|----------|",
-                    f"| {snapshot.get('price', 'N/A')} | {snapshot.get('volume_ratio', 'N/A')} | "
-                    f"{snapshot.get('turnover_rate', 'N/A')} | {display_source} |",
+                    f"| {snapshot.get('price', 'N/A')} | {snapshot.get('volume_ratio', 'N/A')} | {snapshot.get('turnover_rate', 'N/A')} | {display_source} |",
                 ]
             )
 
@@ -832,8 +831,7 @@ class NotificationFormatterMixin:
         lines.append("")
         if has_sector_signal:
             lines.append(
-                f"| {labels['board_name_label']} | {labels['board_type_label']} | "
-                f"{labels['board_status_label']} | {labels['board_change_pct_label']} |"
+                f"| {labels['board_name_label']} | {labels['board_type_label']} | {labels['board_status_label']} | {labels['board_change_pct_label']} |"
             )
             lines.append("|:-----|:----:|:------:|------:|")
             for name, board_type, status_text, change_pct in prepared:

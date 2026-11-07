@@ -96,10 +96,7 @@ def cell(name, picks, ret_fn=gap_ev):
         if r is not None:
             bd[p["zt_date"]].append(r)
     dt = day_paired_t(bd)
-    print(
-        f"  {name:<30} n={s['n']:>4} days={dt['n_days']:>3} net_EV={s['ev']:>+7.3f}% "
-        f"WR={s['wr']:>5.1f}% day_t={dt['t']:>+6.2f} p={dt['p_one_sided']:.4f}"
-    )
+    print(f"  {name:<30} n={s['n']:>4} days={dt['n_days']:>3} net_EV={s['ev']:>+7.3f}% WR={s['wr']:>5.1f}% day_t={dt['t']:>+6.2f} p={dt['p_one_sided']:.4f}")
 
 
 def main():

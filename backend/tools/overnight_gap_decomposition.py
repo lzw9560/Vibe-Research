@@ -94,9 +94,7 @@ def stats(name, vals):
         print(f"  {name}: n=0")
         return
     pos = sum(1 for v in vals if v > 0)
-    print(
-        f"  {name}: n={len(vals)} mean={statistics.mean(vals):.2f}% median={statistics.median(vals):.2f}% winrate={pos * 100 / len(vals):.1f}%"
-    )
+    print(f"  {name}: n={len(vals)} mean={statistics.mean(vals):.2f}% median={statistics.median(vals):.2f}% winrate={pos * 100 / len(vals):.1f}%")
 
 
 print(f"涨停股 D+1 三窗口对比（%）：")

@@ -251,10 +251,7 @@ def main() -> None:
                 "realizability": "sealed_at_close(not_tradeable)",
             },
         )
-        print(
-            f"\n[§44] zt_pool_seal_time_gap:late_lock → status={v.status} "
-            f"selection_lift={v.selection_lift} n={v.n} days_robust={v.days_robust}"
-        )
+        print(f"\n[§44] zt_pool_seal_time_gap:late_lock → status={v.status} selection_lift={v.selection_lift} n={v.n} days_robust={v.days_robust}")
         print(f"       note: {v.note}")
     else:
         print(f"\n[§44] skips (n={len(rets)}<2 survivors)")

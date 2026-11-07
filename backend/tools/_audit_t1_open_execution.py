@@ -161,10 +161,7 @@ def main():
     # How many picks still have discount < -0.3% at T+1 open (stale NAV)?
     still_discount = sum(1 for d in discount_t1_stale if d < -0.3)
     print(f"\n  Picks where T+1 open discount (stale nav_T) still < -0.3%: {still_discount}/{n} ({still_discount / n * 100:.1f}%)")
-    print(
-        f"  Picks where T+1 open discount (stale nav_T) >= -0.3% (converged): "
-        f"{n - still_discount}/{n} ({(n - still_discount) / n * 100:.1f}%)"
-    )
+    print(f"  Picks where T+1 open discount (stale nav_T) >= -0.3% (converged): {n - still_discount}/{n} ({(n - still_discount) / n * 100:.1f}%)")
 
     # Overnight price gap
     print(f"\n  Overnight price gap (open_T1 - close_T)/close_T:")
@@ -210,16 +207,8 @@ def main():
         raw_ev_list.append(raw)
         bias_list.append(alpha_stale - alpha_fresh)
 
-    print(
-        f"  BHAR corrected (stale nav_T, Round 2):  "
-        f"mean={statistics.mean(bhar_stale_list):.4f}% "
-        f"std={statistics.pstdev(bhar_stale_list):.4f}%"
-    )
-    print(
-        f"  BHAR fresh (nav_T1, diagnostic):         "
-        f"mean={statistics.mean(bhar_fresh_list):.4f}% "
-        f"std={statistics.pstdev(bhar_fresh_list):.4f}%"
-    )
+    print(f"  BHAR corrected (stale nav_T, Round 2):  mean={statistics.mean(bhar_stale_list):.4f}% std={statistics.pstdev(bhar_stale_list):.4f}%")
+    print(f"  BHAR fresh (nav_T1, diagnostic):         mean={statistics.mean(bhar_fresh_list):.4f}% std={statistics.pstdev(bhar_fresh_list):.4f}%")
     print(f"  BHAR R1 (price_ret - nav_ret, Round 1):  mean={statistics.mean(bhar_r1_list):.4f}%")
     print(f"  raw EV (retail P&L):                     mean={statistics.mean(raw_ev_list):.4f}%")
     print()
@@ -241,10 +230,7 @@ def main():
     if up_picks:
         up_bias = [b for b, _ in up_picks]
         print(f"\n  Market UP overnight (nav_T1 > nav_T): n={len(up_picks)}")
-        print(
-            f"    stale-NAV bias mean={statistics.mean(up_bias):.4f}% "
-            f"(stale NAV {'inflates' if statistics.mean(up_bias) > 0 else 'deflates'} alpha)"
-        )
+        print(f"    stale-NAV bias mean={statistics.mean(up_bias):.4f}% (stale NAV {'inflates' if statistics.mean(up_bias) > 0 else 'deflates'} alpha)")
         # fresh vs stale for up-market
         up_stale = [bhar_stale_list[i] for i, ng in enumerate(nav_overnight_gap) if ng > 0]
         up_fresh = [bhar_fresh_list[i] for i, ng in enumerate(nav_overnight_gap) if ng > 0]
@@ -253,10 +239,7 @@ def main():
     if dn_picks:
         dn_bias = [b for b, _ in dn_picks]
         print(f"\n  Market DOWN overnight (nav_T1 <= nav_T): n={len(dn_picks)}")
-        print(
-            f"    stale-NAV bias mean={statistics.mean(dn_bias):.4f}% "
-            f"(stale NAV {'inflates' if statistics.mean(dn_bias) > 0 else 'deflates'} alpha)"
-        )
+        print(f"    stale-NAV bias mean={statistics.mean(dn_bias):.4f}% (stale NAV {'inflates' if statistics.mean(dn_bias) > 0 else 'deflates'} alpha)")
         dn_stale = [bhar_stale_list[i] for i, ng in enumerate(nav_overnight_gap) if ng <= 0]
         dn_fresh = [bhar_fresh_list[i] for i, ng in enumerate(nav_overnight_gap) if ng <= 0]
         print(f"    BHAR stale={statistics.mean(dn_stale):.4f}% vs fresh={statistics.mean(dn_fresh):.4f}%")

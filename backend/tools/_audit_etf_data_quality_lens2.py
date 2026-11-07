@@ -143,22 +143,15 @@ def main() -> None:
     }
     crisis_picks = [p for p in picks if p["d"] in crisis_days]
     crisis_bhar = sum(p["bhar"] for p in crisis_picks)
-    print(
-        f"  危机日 picks: {len(crisis_picks)} 个, BHAR 合计={crisis_bhar:+.2f}% "
-        f"mean={crisis_bhar / len(crisis_picks) if crisis_picks else 0:+.4f}%"
-    )
+    print(f"  危机日 picks: {len(crisis_picks)} 个, BHAR 合计={crisis_bhar:+.2f}% mean={crisis_bhar / len(crisis_picks) if crisis_picks else 0:+.4f}%")
     print(f"  / total={total_bhar:+.2f}% = {crisis_bhar / total_bhar * 100 if total_bhar else 0:.1f}%")
-    print(
-        f"  / n_picks={len(picks)} = {len(crisis_picks) / len(picks) * 100:.1f}% picks 贡献 "
-        f"{crisis_bhar / total_bhar * 100 if total_bhar else 0:.1f}% BHAR"
-    )
+    print(f"  / n_picks={len(picks)} = {len(crisis_picks) / len(picks) * 100:.1f}% picks 贡献 {crisis_bhar / total_bhar * 100 if total_bhar else 0:.1f}% BHAR")
 
     # 单看 2015-07-08
     d0708 = [p for p in picks if p["d"] == "2015-07-08"]
     b0708 = sum(p["bhar"] for p in d0708)
     print(
-        f"\n  仅 2015-07-08 一天: {len(d0708)} picks, BHAR 合计={b0708:+.2f}% "
-        f"/ total={total_bhar:+.2f}% = {b0708 / total_bhar * 100 if total_bhar else 0:.1f}%"
+        f"\n  仅 2015-07-08 一天: {len(d0708)} picks, BHAR 合计={b0708:+.2f}% / total={total_bhar:+.2f}% = {b0708 / total_bhar * 100 if total_bhar else 0:.1f}%"
     )
     print("  这 1 天的 day-mean 在 day-paired t 里算 1 个观测值")
 
@@ -261,9 +254,7 @@ def main() -> None:
     surge_days = {"2024-09-27", "2024-09-30", "2024-10-08", "2024-10-09"}
     surge_picks = [p for p in picks if p["d"] in surge_days]
     surge_bhar = sum(p["bhar"] for p in surge_picks)
-    print(
-        f"  暴涨簇 picks: {len(surge_picks)}, BHAR 合计={surge_bhar:+.2f}% mean={surge_bhar / len(surge_picks) if surge_picks else 0:+.4f}%"
-    )
+    print(f"  暴涨簇 picks: {len(surge_picks)}, BHAR 合计={surge_bhar:+.2f}% mean={surge_bhar / len(surge_picks) if surge_picks else 0:+.4f}%")
     print("  机制质疑：ETF 连续涨停时，NAV (T 日收盘后公告) vs price (T 日收盘实时)")
     print("  → price 涨停封板 close = 涨停价，NAV 当晚公告可能未反映涨停全部预期")
     print("  → 次日 NAV 追涨 → 假折价（price 已涨 NAV 没涨完）")

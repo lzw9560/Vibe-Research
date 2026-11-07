@@ -180,9 +180,7 @@ async def _fetch_zt_pool(date: str):
     try:
         zt, yzt, zb = await asyncio.gather(
             asyncio.to_thread(astock.em_zt_topic_pool, "getTopicZTPool", date, "fbt:asc"),
-            asyncio.to_thread(
-                astock.em_zt_topic_pool, "getYesterdayZTPool", date, "zs:desc"
-            ),  # S053 R1：fbt:asc→zs:desc（fbt 对该端点返空）
+            asyncio.to_thread(astock.em_zt_topic_pool, "getYesterdayZTPool", date, "zs:desc"),  # S053 R1：fbt:asc→zs:desc（fbt 对该端点返空）
             asyncio.to_thread(astock.em_zt_topic_pool, "getTopicZBPool", date, "fbt:asc"),
         )
         return (

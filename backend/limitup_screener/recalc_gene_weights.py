@@ -43,9 +43,7 @@ _COL_TO_NAME = {
 def recalc_live_rows(conn: sqlite3.Connection, dry_run: bool = False) -> dict:
     """复算 eastmoney_live 行。返回统计 dict。dry_run 只算不写。"""
     rows = conn.execute(
-        "SELECT rowid, total_score, qualify, high_gene, "
-        + ", ".join(FACTOR_COLS)
-        + " FROM gene_scores WHERE data_source = 'eastmoney_live'"
+        "SELECT rowid, total_score, qualify, high_gene, " + ", ".join(FACTOR_COLS) + " FROM gene_scores WHERE data_source = 'eastmoney_live'"
     ).fetchall()
     stats = {"n": len(rows), "changed": 0, "qualify_now": 0, "high_now": 0, "zero_factor_rows": 0}
     updates: list[tuple] = []

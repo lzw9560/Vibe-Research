@@ -174,10 +174,7 @@ def main() -> None:
         f"> spec §3 R5 验收 A4。cache {len(cache)} 只股票（{n_codes_with_bars} 只有 bars）"
         f"，缺口 case {n_gap}。趋势启动阈值 |后N日收益| > {TREND_THRESHOLD * 100}%。"
     )
-    R.append(
-        f"> v2 修正（对抗审 verdict partially-holds）：基线改普通-only exogenous + "
-        f"统一 continuation 口径 + 3 日前视上界标注 + sigma z + 混淆矩阵分方向。"
-    )
+    R.append(f"> v2 修正（对抗审 verdict partially-holds）：基线改普通-only exogenous + 统一 continuation 口径 + 3 日前视上界标注 + sigma z + 混淆矩阵分方向。")
     R.append(
         f"> v3 cluster-robust：day_clustered_t_test（per-date cluster, s44_verifier）+ Bonferroni-BH K≤8 "
         f"已集成（替代 v2 binomial z 的 case 不独立问题）；permutation_p_value 待后续（HIGH）。"
@@ -192,9 +189,7 @@ def main() -> None:
     R.append("## continuation rate vs 普通基线（统一口径 + cluster-robust v3）")
     R.append("")
     R.append("> continuation hit = 后 N 日延续缺口 direction。基线 = 普通缺口 continuation rate（exogenous ~43%）。")
-    R.append(
-        "> z(bino)=binomial（case 不独立夸大）；t/p(cluster)=day_clustered_t_test（per-date cluster, s44_verifier）；Bonf=Bonferroni-BH K≤8。"
-    )
+    R.append("> z(bino)=binomial（case 不独立夸大）；t/p(cluster)=day_clustered_t_test（per-date cluster, s44_verifier）；Bonf=Bonferroni-BH K≤8。")
     R.append("")
     R.append("| 类型 | 窗口 | cont 命中/总 | cont rate | 普通基线 | delta | z(bino) | t(cluster) | p(cluster) | n_days | Bonf | 定性 |")
     R.append("|---|---|---|---|---|---|---|---|---|---|---|---|")

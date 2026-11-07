@@ -171,9 +171,7 @@ def report(name, mask_fn):
     lo, hi = wilson(k, n)
     lift = rate / base_rate if base_rate else 0
     lo_l, hi_l = lo / base_rate if base_rate else 0, hi / base_rate if base_rate else 0
-    print(
-        f"{name:48s} | n={n:6d} hit={k:4d} rate={rate * 100:6.2f}% lift={lift:5.2f}x CI=[{lo * 100:.2f},{hi * 100:.2f}]% liftCI=[{lo_l:.2f},{hi_l:.2f}]x"
-    )
+    print(f"{name:48s} | n={n:6d} hit={k:4d} rate={rate * 100:6.2f}% lift={lift:5.2f}x CI=[{lo * 100:.2f},{hi * 100:.2f}]% liftCI=[{lo_l:.2f},{hi_l:.2f}]x")
 
 
 print("\n===== BASE =====")

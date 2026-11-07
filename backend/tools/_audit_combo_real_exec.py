@@ -163,9 +163,7 @@ def main() -> None:
         if r:
             print(f"【{label}】")
             print(f"  days={r['n_days']} picks={r['n_picks']}")
-            print(
-                f"  mean={r['mean'] * 100:+.3f}% median={r['median'] * 100:+.3f}% WR={r['wr'] * 100:.1f}% net={r['net'] * 100:+.3f}% t={r['t']:.2f}"
-            )
+            print(f"  mean={r['mean'] * 100:+.3f}% median={r['median'] * 100:+.3f}% WR={r['wr'] * 100:.1f}% net={r['net'] * 100:+.3f}% t={r['t']:.2f}")
     print()
 
     # entry gap 分布
@@ -186,9 +184,7 @@ def main() -> None:
     re = stats(all_d, by_date, "real_exec")
     if cc and re:
         eaten = cc["mean"] - re["mean"]
-        print(
-            f"\n【entry gap 吃 edge】close-close {cc['mean'] * 100:+.3f}% → real-exec {re['mean'] * 100:+.3f}% = 吃掉 {eaten * 100:+.3f}%"
-        )
+        print(f"\n【entry gap 吃 edge】close-close {cc['mean'] * 100:+.3f}% → real-exec {re['mean'] * 100:+.3f}% = 吃掉 {eaten * 100:+.3f}%")
         print(f"  median: {cc['median'] * 100:+.3f}% → {re['median'] * 100:+.3f}%（real-exec median 归零=变 lottery）")
         net_re = re["net"]
         if net_re > 0.003:

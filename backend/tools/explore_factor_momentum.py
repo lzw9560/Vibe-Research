@@ -447,8 +447,7 @@ def main() -> int:
     meta = zoo["metadata"]
     print(f"    factors: {list(meta['factors'].keys())}")
     print(
-        f"    range: {meta['date_range']}  n_dates={meta['n_dates']}  "
-        f"n_rebal={len(rd)}  cross-sec avg={meta['cross_section_size']['avg_codes_per_rebalance']}",
+        f"    range: {meta['date_range']}  n_dates={meta['n_dates']}  n_rebal={len(rd)}  cross-sec avg={meta['cross_section_size']['avg_codes_per_rebalance']}",
         flush=True,
     )
 
@@ -469,10 +468,7 @@ def main() -> int:
         best = min(valid, key=lambda r: r.get("factor_return_p", 1.0))
         print(f"\n{'#' * 72}")
         print(f"PRIMARY (best p across {len(FREQS)} freqs, search-corrected): freq={best['label']}")
-        print(
-            f"  factor_return_mean = {best['factor_return_mean_pct']}%/period  "
-            f"NW t = {best['factor_return_t']}  p = {best['factor_return_p']}"
-        )
+        print(f"  factor_return_mean = {best['factor_return_mean_pct']}%/period  NW t = {best['factor_return_t']}  p = {best['factor_return_p']}")
         print(f"  Bonferroni p (×{len(FREQS) * N_CROSS_FACTOR}) = {best['bonferroni_p']}")
         print(f"  CAPM alpha = {best['capm_alpha_pct']}%  (NW t = {best['capm_alpha_t']}, beta = {best['capm_beta']})")
         print(

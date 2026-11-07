@@ -196,8 +196,7 @@ def save_output(records, daily, window, prior) -> Path:
     out = {
         "meta": {
             "source": "baostock_kline_cache.json",
-            "method": "close==round(prev_close*(1+limit),2); prev_close from pctChg "
-            "(real daily return, forward-split robust); first_board=zt(D)-zt(D-1)",
+            "method": "close==round(prev_close*(1+limit),2); prev_close from pctChg (real daily return, forward-split robust); first_board=zt(D)-zt(D-1)",
             "window": [window[0], window[-1]],
             "window_days": len(window),
             "prior_date_for_window0": prior,
@@ -541,11 +540,7 @@ def main() -> None:
     log.info(f"输出: {out_path}")
     log.info(f"60 日首板总数: {total_fb}（涨停 {total_zt} / 连板 {total_lb}）")
     if em_hist:
-        log.info(
-            f"东财 zt_history: 涨停 recall {em_hist['recall_zt_pct']}% "
-            f"| 首板 recall {em_hist['recall_fb_pct']}% "
-            f"({em_hist['overlap_dates']} overlap)"
-        )
+        log.info(f"东财 zt_history: 涨停 recall {em_hist['recall_zt_pct']}% | 首板 recall {em_hist['recall_fb_pct']}% ({em_hist['overlap_dates']} overlap)")
         log.info(
             f"  clean（ex stale phantom {em_hist.get('stale_dates', [])}）: "
             f"涨停 {em_hist.get('clean_recall_zt_pct')}% "

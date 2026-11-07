@@ -239,9 +239,7 @@ async def update_one_day_risk_realtime(code: str) -> OneDayRisk:
     )
 
     # 10. 数据诚实性：聚合 data_status（base+cf+dt+seat+conc+trio+sti 9 态，S129 R2 + S131 R2 含 sti）
-    data_status = _merge_data_status(
-        base_status, cf_status, dt_status, seat_status, conc_status, vol_status, dd_status, liq_status, sti_status
-    )
+    data_status = _merge_data_status(base_status, cf_status, dt_status, seat_status, conc_status, vol_status, dd_status, liq_status, sti_status)
     # last_updated 仍以资金流（实时向量）为准：cf 非 ok 则不戳 now（对齐 S111 R4）；
     # risk-trio 缺失只抬 data_status，不回退 last_updated——risk_score 由 base+cf 决定，
     # trio 缺失只影响 factors/字段值，不影响核心评分时效。
@@ -794,8 +792,7 @@ def _get_realtime_capital_flow(code: str) -> dict:
     stale = carry_forward or is_nontrading
     if stale:
         logging.getLogger("risk_models").warning(
-            "_get_realtime_capital_flow(%s) stale：末条 date=%s, current_td=%s, "
-            "carry_forward=%s, is_nontrading=%s → degraded+data_time=bar date（不戳 now）",
+            "_get_realtime_capital_flow(%s) stale：末条 date=%s, current_td=%s, carry_forward=%s, is_nontrading=%s → degraded+data_time=bar date（不戳 now）",
             code,
             latest_date,
             current_td,

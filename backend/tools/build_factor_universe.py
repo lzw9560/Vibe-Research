@@ -303,8 +303,7 @@ def main() -> int:
     sz_mb = OUT.stat().st_size / 1048576
     print(f"    written {sz_mb:.1f} MB", flush=True)
     print(
-        f"==> total snapshots={total_snap} rebal_dates={len(rebal_dates)} "
-        f"avg_codes/rebal={avg_codes:.0f} (min={min_codes} max={max_codes})",
+        f"==> total snapshots={total_snap} rebal_dates={len(rebal_dates)} avg_codes/rebal={avg_codes:.0f} (min={min_codes} max={max_codes})",
         flush=True,
     )
     print(

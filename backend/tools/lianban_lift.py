@@ -64,9 +64,7 @@ def main():
     validate_or_reject("baostock_kline", [b for bars in cache.values() for b in bars], as_of=datetime.date.today().isoformat())
     conn = sqlite3.connect(str(DB), timeout=10)
     try:
-        em_dates = [
-            r[0] for r in conn.execute("SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date").fetchall()
-        ]
+        em_dates = [r[0] for r in conn.execute("SELECT DISTINCT date FROM gene_scores WHERE data_source='eastmoney_live' ORDER BY date").fetchall()]
     finally:
         conn.close()
     print(f"dates={len(em_dates)}", flush=True)

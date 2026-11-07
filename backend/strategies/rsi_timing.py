@@ -231,13 +231,7 @@ def check_rsi_macd_combo(index_name: str, closes: list[float]) -> RsiMacdSignal:
         exp_ret = 0
         wr = 0
 
-    detail = (
-        f"{index_name} RSI={rsi:.0f} "
-        f"DIF={dif[-1]:.1f} DEA={dea[-1]:.1f} "
-        f"MACD柱={hist[-1]:.1f} "
-        f"{'✅金叉' if is_cross else '❌死叉'} "
-        f"→ {combo}"
-    )
+    detail = f"{index_name} RSI={rsi:.0f} DIF={dif[-1]:.1f} DEA={dea[-1]:.1f} MACD柱={hist[-1]:.1f} {'✅金叉' if is_cross else '❌死叉'} → {combo}"
 
     return RsiMacdSignal(
         index_name=index_name,

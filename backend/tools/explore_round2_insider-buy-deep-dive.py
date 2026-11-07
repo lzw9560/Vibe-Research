@@ -250,9 +250,7 @@ def build_insider_picks(
             pick[f"{wname}_close"] = eclose
         picks.append(pick)
 
-    print(
-        f"[picks] built {len(picks)} picks from {len(events)} events (skipped {len(events) - len(picks)} — no kline / yizi / missing bars)"
-    )
+    print(f"[picks] built {len(picks)} picks from {len(events)} events (skipped {len(events) - len(picks)} — no kline / yizi / missing bars)")
     return picks
 
 
@@ -413,10 +411,7 @@ def analyze_subset(
     bhar_s = ev_stats(bhar_rets)
     bhar_net = bhar_s["ev"] - COST * 100
     print(f"\n--- BHAR vs 上证综指 (PRIMARY) ---")
-    print(
-        f"  n={bhar_s['n']} BHAR_gross={bhar_s['ev']}% std={bhar_s['std']}% "
-        f"WR={bhar_s['wr']}% t={bhar_s['t']} CI[{bhar_s['ci_lo']},{bhar_s['ci_hi']}]"
-    )
+    print(f"  n={bhar_s['n']} BHAR_gross={bhar_s['ev']}% std={bhar_s['std']}% WR={bhar_s['wr']}% t={bhar_s['t']} CI[{bhar_s['ci_lo']},{bhar_s['ci_hi']}]")
     print(f"  BHAR_net (after {COST * 100:.1f}% cost): {bhar_net:.3f}%")
 
     # ---- per-day-mean t ----
@@ -435,11 +430,7 @@ def analyze_subset(
     n_tests_report = N_CROSS_STRATEGY * N_WINDOWS  # ×9 for full report
     p_bonf_verdict = bonferroni_p(bhar_dt["p_one_sided"], n_tests_verdict)
     p_bonf_report = bonferroni_p(bhar_dt["p_one_sided"], n_tests_report)
-    print(
-        f"  Bonferroni: p_raw={bhar_dt['p_one_sided']} "
-        f"×{n_tests_verdict}(verdict)={p_bonf_verdict:.6f} "
-        f"×{n_tests_report}(full)={p_bonf_report:.6f}"
-    )
+    print(f"  Bonferroni: p_raw={bhar_dt['p_one_sided']} ×{n_tests_verdict}(verdict)={p_bonf_verdict:.6f} ×{n_tests_report}(full)={p_bonf_report:.6f}")
 
     # ---- walk-forward OOS (BHAR) ----
     print(f"\n--- walk-forward OOS (BHAR, 前半 train → 后半 test) ---")
@@ -530,10 +521,7 @@ def _verdict(
             return "edge-falsified"
         wf_test_p_bonf = bonferroni_p(wf_test_p, N_CROSS_STRATEGY)
         if wf_test_p_bonf >= ALPHA:
-            print(
-                f"    → EXPLORATORY: OOS test BHAR={wf_test_ev}% > 0 but "
-                f"test p={wf_test_p} Bonf×{N_CROSS_STRATEGY}={wf_test_p_bonf} >= {ALPHA}"
-            )
+            print(f"    → EXPLORATORY: OOS test BHAR={wf_test_ev}% > 0 but test p={wf_test_p} Bonf×{N_CROSS_STRATEGY}={wf_test_p_bonf} >= {ALPHA}")
             return "exploratory"
         print(f"    → EDGE-CONFIRMED: BHAR gross+net > 0, Bonf PASS, OOS test BHAR={wf_test_ev}% significant")
         return "edge-confirmed"

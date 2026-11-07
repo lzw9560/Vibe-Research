@@ -147,8 +147,7 @@ def get_snapshots_for(code: str, up_to_date: Optional[str] = None) -> list[Indic
     with sqlite3.connect(_DB_PATH) as conn:
         if up_to_date:
             rows = conn.execute(
-                "SELECT code, trade_date, indicators_json, snapshot_source "
-                "FROM indicator_snapshots WHERE code=? AND trade_date<=? ORDER BY trade_date",
+                "SELECT code, trade_date, indicators_json, snapshot_source FROM indicator_snapshots WHERE code=? AND trade_date<=? ORDER BY trade_date",
                 (code, up_to_date),
             ).fetchall()
         else:

@@ -486,9 +486,7 @@ def eastmoney_datacenter(
 
 def margin_trading(code: str, page_size: int = 30) -> list[dict]:
     """融资融券明细（日级）：融资余额 / 融资买入 / 融券余额 / 两融合计。"""
-    data = eastmoney_datacenter(
-        "RPTA_WEB_RZRQ_GGMX", filter_str=f'(SCODE="{code}")', page_size=page_size, sort_columns="DATE", sort_types="-1"
-    )
+    data = eastmoney_datacenter("RPTA_WEB_RZRQ_GGMX", filter_str=f'(SCODE="{code}")', page_size=page_size, sort_columns="DATE", sort_types="-1")
     return [
         {
             "date": str(r.get("DATE", ""))[:10],

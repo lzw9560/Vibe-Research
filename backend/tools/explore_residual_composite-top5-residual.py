@@ -516,17 +516,10 @@ def main() -> None:
     primary = hac_ols_named(y, fac, label="composite-top5 (mkt+smb+umd)")
     print(f"  n={primary['n']} NW_lag={primary['nw_lag']} R²={primary['r_squared']}")
     print(f"  residual alpha = {primary['alpha']} %/signal-day")
-    print(
-        f"    SE={primary['alpha_se']} t={primary['alpha_t']} "
-        f"p_one_sided={primary['alpha_p_one_sided']} p_two_sided={primary['alpha_p_two_sided']}"
-    )
+    print(f"    SE={primary['alpha_se']} t={primary['alpha_t']} p_one_sided={primary['alpha_p_one_sided']} p_two_sided={primary['alpha_p_two_sided']}")
     print(f"  factor loadings:")
     print(f"    {primary['factor_loadings_str']}")
-    print(
-        f"  vs raw EV (no control): {raw_ev['ev']}%/signal-day "
-        f"→ 控因子后残差 alpha {primary['alpha']}% "
-        f"(Δ={primary['alpha'] - raw_ev['ev']:+.4f}%)"
-    )
+    print(f"  vs raw EV (no control): {raw_ev['ev']}%/signal-day → 控因子后残差 alpha {primary['alpha']}% (Δ={primary['alpha'] - raw_ev['ev']:+.4f}%)")
 
     # Bonferroni ×4 + BH FDR sensitivity
     p_raw = primary["alpha_p_one_sided"]
@@ -559,8 +552,7 @@ def main() -> None:
     print(f"    SE={perpick['alpha_se']} t={perpick['alpha_t']} p_one_sided={perpick['alpha_p_one_sided']}")
     print(f"  factor loadings: {perpick['factor_loadings_str']}")
     print(
-        f"  vs dated primary alpha {primary['alpha']}% → "
-        f"{'consistent' if abs(perpick['alpha'] - primary['alpha']) < 0.15 else 'DIVERGENT (check aggregation)'}"
+        f"  vs dated primary alpha {primary['alpha']}% → {'consistent' if abs(perpick['alpha'] - primary['alpha']) < 0.15 else 'DIVERGENT (check aggregation)'}"
     )
 
     # ====================================================================
@@ -585,11 +577,7 @@ def main() -> None:
             f"p={roll['last_window']['p_one_sided']}"
         )
         # stability verdict
-        stable = (
-            roll["pct_positive"] >= 60
-            and roll["pct_significant_positive"] >= 30
-            and roll["std_alpha"] < abs(roll["mean_alpha"]) * 2 + 0.001
-        )
+        stable = roll["pct_positive"] >= 60 and roll["pct_significant_positive"] >= 30 and roll["std_alpha"] < abs(roll["mean_alpha"]) * 2 + 0.001
         print(f"  stability: {'STABLE' if stable else 'UNSTABLE'} (≥60% positive & ≥30% sig-pos & std<2×|mean|)")
     else:
         print(f"  {roll['status']} (n={roll.get('n', 0)})")
@@ -729,10 +717,7 @@ def main() -> None:
     print(f"  factor loadings (primary):    {primary['factor_loadings_str']}")
     print(f"  VIF: mkt={vif['mkt']} smb={vif['smb']} umd={vif['umd']}")
     if roll["status"] == "ok":
-        print(
-            f"  rolling 60d alpha:            mean={roll['mean_alpha']}% "
-            f"pos%={roll['pct_positive']}% sig%={roll['pct_significant_positive']}%"
-        )
+        print(f"  rolling 60d alpha:            mean={roll['mean_alpha']}% pos%={roll['pct_positive']}% sig%={roll['pct_significant_positive']}%")
     print(f"  regime:                       bull/bear alpha {[rb.get(k, {}).get('alpha', '?') for k in ['bull', 'bear']]}")
     print(f"  baseline sensitivity:         sign consistent={sign_consistent}")
     print(f"  VERDICT:                      {verdict}")

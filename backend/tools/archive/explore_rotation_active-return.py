@@ -438,10 +438,7 @@ def verdict_for(a: dict, n_bonf: int) -> str:
     )
     print(f"    beta_active={a['beta_active']} (vs 上证; ~0 => beta isolated)")
     if a["wf_status"] == "ok":
-        print(
-            f"    walk-forward: train={a['wf_train_ev']}% test={a['wf_test_ev']}% "
-            f"test_p={a['wf_test_p']} Bonf_test_p(×{n_bonf})={wf_test_p_bonf:.6f}"
-        )
+        print(f"    walk-forward: train={a['wf_train_ev']}% test={a['wf_test_ev']}% test_p={a['wf_test_p']} Bonf_test_p(×{n_bonf})={wf_test_p_bonf:.6f}")
 
     if a["active_gross_ev"] < 0:
         print(f"    -> FALSIFIED: active gross < 0 (worse than equal-weight benchmark)")

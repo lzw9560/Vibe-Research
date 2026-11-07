@@ -190,10 +190,7 @@ class SeatEdgeProvider:
             candidates,
             fetch_fn=lambda code, d: astock.dragon_tiger_board(code, trade_date=d),
             extract_fn=lambda board: {
-                s.get("name", "")
-                for side in ("buy", "sell")
-                for s in ((board or {}).get("seats", {}) or {}).get(side, []) or []
-                if s.get("name", "")
+                s.get("name", "") for side in ("buy", "sell") for s in ((board or {}).get("seats", {}) or {}).get(side, []) or [] if s.get("name", "")
             },
             edge_type="seat",
             date=date,

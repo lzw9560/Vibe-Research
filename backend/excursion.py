@@ -196,11 +196,7 @@ def _compute(trade: dict, rows: list[dict]) -> dict:
         "certain_note": (
             None
             if mae_certain is None
-            else (
-                f"中间完整交易日里从未浮亏（最差时仍 {mae_certain:+.2f}%）"
-                if mae_certain > 0
-                else f"中间完整交易日里确定浮亏过 {mae_certain:+.2f}%"
-            )
+            else (f"中间完整交易日里从未浮亏（最差时仍 {mae_certain:+.2f}%）" if mae_certain > 0 else f"中间完整交易日里确定浮亏过 {mae_certain:+.2f}%")
         ),
         "bars": len(rows),
         "bars_inner": len(inner),
@@ -268,8 +264,7 @@ def summary(limit: int = 300) -> dict:
         "same_day_count": same_day_n,
         "lost_with_move_count": lost_with_move,
         "capture_note": (
-            f"其中 {lost_with_move} 笔**捕获率为负** —— 那段确实涨过，但最后是亏损离场，"
-            "比「没吃到」更差的一档（所以中位数可能是负值，不是算错了）。"
+            f"其中 {lost_with_move} 笔**捕获率为负** —— 那段确实涨过，但最后是亏损离场，比「没吃到」更差的一档（所以中位数可能是负值，不是算错了）。"
             if lost_with_move
             else None
         ),

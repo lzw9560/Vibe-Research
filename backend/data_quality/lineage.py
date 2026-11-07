@@ -194,9 +194,7 @@ def record(
     existing = _read_all()
     for ex in existing:
         if ex.artifact_id == rec.artifact_id and ex.as_of == rec.as_of and ex.commit == rec.commit and ex.output_hash == rec.output_hash:
-            raise LineageError(
-                f"write-once 违反：记录已存在 artifact={artifact_id} as_of={as_of} commit={commit_hash} output_hash={rec.output_hash[:8]}…"
-            )
+            raise LineageError(f"write-once 违反：记录已存在 artifact={artifact_id} as_of={as_of} commit={commit_hash} output_hash={rec.output_hash[:8]}…")
     path = _store_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     # 'a' 模式 = append-only（不覆盖不删，spec R2）
