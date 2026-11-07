@@ -50,6 +50,16 @@ def isolated_seal_db(tmp_path, monkeypatch):
     monkeypatch.setattr(router, "seal_intraday_db_path", _fake_db_path)
     # collector 从 router 导入的 resolve_partition/ensure_partition 是同一函数对象，
     # 其内部调 seal_intraday_db_path 走 router 全局命名空间 → 自动生效，无需额外 patch。
+    # BUT: resolve_partition/ensure_partition imported at module level are bound references.
+    # Must also patch them in the collector module itself.
+    # 让 resolve_partition 返回主库 + 主表名（已通过 run_migrations 创建），不分表
+    import risk.seal_intraday_collector as sic
+    monkeypatch.setattr(sic, "resolve_partition", lambda date: (str(db_path), "seal_intraday_snapshots"))
+    monkeypatch.setattr(sic, "ensure_partition", lambda date: None)
+    # collect_once 的 tail_dip 采集调 subprocess.run 拉 hithink-finance → 真实 100 条数据泄漏
+    # mock subprocess.run 返回空，tail_dip 采集无数据
+    import subprocess as _sp
+    monkeypatch.setattr(_sp, "run", lambda *a, **k: _sp.CompletedProcess(args=[], returncode=0, stdout="{}", stderr=""))
 
     return str(db_path)
 
