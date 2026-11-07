@@ -149,5 +149,50 @@ def audit_r6() -> None:
         print(f"  → R6 FAIL: stop 压掉 edge（lottery 靠尾部，stop 切尾部 → mean 转负/不显著）")
 
 
+def compute_t10_nostop(code: str, trade_date: str, kline_cache: dict) -> float | None:
+    """T+2 open 买 → T+10 close 卖 nostop（S237 组合口径）。"""
+    if code not in kline_cache:
+        kline_cache[code] = load_kline(code)
+    bars = kline_cache[code]
+    after = [b for b in bars if b.get("date", "") > trade_date]
+    if len(after) < 10:
+        return None
+    t2_open = after[1].get("open")
+    t10_close = after[9].get("close")
+    if not t2_open or t2_open <= 0 or not t10_close:
+        return None
+    return (t10_close / t2_open - 1) * 100
+
+
+def audit_a_group_combo() -> dict:
+    """A组 T+10 组合口径 nostop 回测（S237，可重复跑复现 mean+0.989% WR53.6%）。
+
+    日等权组合（每日 A组候选等权 mean → 日收益 → stats）。
+    """
+    from collections import defaultdict  # noqa: PLC0415
+    picks = load_a_group_picks()
+    day_picks: dict = defaultdict(list)
+    for d, c in picks:
+        day_picks[d].append(c)
+    kc: dict = {}
+    day_means: list = []
+    for d, codes in day_picks.items():
+        rs = [compute_t10_nostop(c, d, kc) for c in codes]
+        rs = [r for r in rs if r is not None]
+        if rs:
+            day_means.append(sum(rs) / len(rs))
+    if not day_means:
+        return {"n_days": 0}
+    day_means.sort()
+    return {
+        "n_days": len(day_means),
+        "mean": round(sum(day_means) / len(day_means), 3),
+        "wr": round(sum(1 for m in day_means if m > 0) / len(day_means) * 100, 1),
+        "median": round(day_means[len(day_means) // 2], 3),
+    }
+
+
 if __name__ == "__main__":
     audit_r6()
+    print("\n=== S237 A组 T+10 组合口径 nostop ===")
+    print(f"  {audit_a_group_combo()}")

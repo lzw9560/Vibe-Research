@@ -348,6 +348,22 @@ TradeJournal 闭环/模拟盘自洽/OFI 收集器+看板/kline degraded/cockpit 
 
 ---
 
+## m5+ 战法演进归档（S229 / S236 / S237 / S238）✅ 已完成 2026-11-07
+
+§44 v3 anti-fake-edge / 机构跟庄 combo / A组 T+10 combo / combo-5d-edge / 打板手艺归档声明。本段为后续战法演进 spec 的批量归档收拢（不归属单一里程碑，统一归 `archive/m5+/`）。
+
+`specs/archive/m5+/` · 5 specs
+
+| 编号 | 一句话 | 状态 | 备注 |
+|---|---|---|---|
+| S229 | §44 v3 anti-fake-edge（entry close 涨停 filter + realizability 单向 + momentum survivorship 审） | ✅已实现 2026-11-07 | 2026-09-25 grill 4 视角 synthesis 定稿；R4 helper 未进 verify() 生产路径，冻结够用 |
+| S236 | 机构资金延续组合（inst_dominant combo）可交易落地 | ✅已实现 2026-11-07 | edge 降级（2026-10-18 cache 污染审计 + 干净终判）：原 +0.457%@T+2 不成立，降级为"弱 lottery 长持有 edge"，当前不交易 |
+| S237 | A组 T+10 组合（机构跟庄长持有）可交易落地 | ✅已实现 2026-11-07 | edge 证伪（2026-10-18 cache 污染审计）：wrong-period 假数，correct-period 负 edge，arm 已 is_active=0 |
+| S238 | combo-5d-edge 可交易落地（小盘+动量+gap rank top-20，5日持有） | ✅已实现 2026-11-07 | 2026-10-26 R4/R12 方法学闭合；edge 从 +2.06% 修正为去涨停 +1.07%（含 +0.62% alpha t6.85 真）；剩 60天前向 live |
+| S238 | 打板手艺参考·非 edge 归档声明 | ✅已实现 2026-11-07 | 声明性归档（2026-10-17）；打板=非 edge、不接生产，定位 docs/daban-workflow.md 纯手艺参考 |
+
+---
+
 ## 归档规则
 
 - spec 完成验收后自动归档到对应里程碑目录

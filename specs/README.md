@@ -138,6 +138,18 @@ specs/
 | [S151](S151-漏斗评价层/spec.md) | 漏斗评价层（预登记+降权梯度+回溯+诚实标注+即时处理） | 🟡草案 2026-09-04 | spec | DIMENSION_LIFT_REGISTRY+lift_to_multiplier+_apply_evaluation_layer（funnel.py:466）；复用 judge_lift_four_states/PASS_LIFT_FLOOR；§F breakout ×0.5 vs ×0.1 待用户拍板 |
 | [S153](S153-量化模型验证/spec.md) | 量化模型验证（platform_breakout+low_absorption 预注册交互假设） | 🟡草案 2026-09-04 | spec | H1-H4 预注册+R1-R10+harness（walk-forward+day-cluster置换+Bonferroni）；solo审6疑点待 T1.2 审查 workflow；日线可得不卡 intraday |
 
+### 已归档（m5+）2026-11-07
+
+下列 spec 已完成收拢，归档至 `archive/m5+/`：
+
+| 编号 | 标题 | 状态 | 路径 |
+|---|---|---|---|
+| S229 | §44 v3 anti-fake-edge | ✅已归档 2026-11-07 | `archive/m5+/S229-s44-v3-anti-fake-edge/` |
+| S236 | 机构资金延续组合 inst_dominant combo | ✅已归档 2026-11-07（edge 降级） | `archive/m5+/S236-inst-dominant-combo/` |
+| S237 | A组 T+10 组合（机构跟庄长持有） | ✅已归档 2026-11-07（edge 证伪） | `archive/m5+/S237-a-group-t10-combo/` |
+| S238 | combo-5d-edge（小盘+动量+gap rank top-20，5日持有） | ✅已归档 2026-11-07 | `archive/m5+/S238-combo-5d-edge/` |
+| S238 | 打板手艺参考·非 edge 归档声明 | ✅已归档 2026-11-07（声明性） | `archive/m5+/S238-daban-workflow-archive/` |
+
 > S002 与 S005 为**短线 / 中长线并列**的两条主线；S001/S003 为支撑性修复；S004 为 S002 候选池的性能优化；S006 为系统级重写纲领（含 §1 合规边界调整后的 UI 重设计）；S017/S018 为 ML 涨跌预测栈（模型栈+特征工程解耦），在 §1 新边界内承担研究性预测职责。
 
 > S021：无独立 spec（feat/fix/docs(S021) 三 commit 已落地 2026-08-02——误删恢复 + mootdx 空值崩溃修复 + workflow /api 前缀 + 体检报告 `reports/system-check-2026-08-02.md`；属修复/审计类，未走 SDD §0）。
