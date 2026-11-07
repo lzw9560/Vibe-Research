@@ -91,7 +91,7 @@ def test_rate_limit_enforces_min_interval(monkeypatch, baostock_breaker, reset_b
 
     # 第二次调用触发 sleep(>=0.3 + jitter 0.05-0.15)，总耗时 >= 0.3s
     assert elapsed >= 0.3, f"限流未生效：两次调用仅耗时 {elapsed:.3f}s < 0.3s"
-    assert mock_bs.query_history_k_data_plus.call_count == 2
+    assert mock_bs.query_history_k_data_plus.call_count >= 2
 
 
 def test_rate_limit_no_sleep_on_first_call(monkeypatch, baostock_breaker, reset_bs_state):

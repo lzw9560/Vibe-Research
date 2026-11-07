@@ -18,11 +18,13 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 TOOLS = REPO / "backend" / "tools"
-KLINE_DB = REPO / ".vibe-research" / "baostock_kline_cache.db"
+from vr_paths import resolve_data_dir
+KLINE_DB = resolve_data_dir() / "baostock_kline_cache.db"
 
 # commander_runner 在 backend/tools，加到 path 才能 import
 sys.path.insert(0, str(TOOLS))
 sys.path.insert(0, str(REPO / "backend"))
+sys.path.insert(0, str(REPO / "backend"))  # for vr_paths
 
 from commander_runner import load_combo_5d_today  # noqa: E402
 
