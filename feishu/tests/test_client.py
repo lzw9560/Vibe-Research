@@ -151,7 +151,7 @@ def test_no_webhook_returns_false(monkeypatch):
 
 # ─── ping_healthchecks ───
 
-def test_ping_healthchecks_no_url(monkeypatch):
+def test_ping_healthchecks_empty_url(monkeypatch):
     """HEALTHCHECKS_URL 为空 → 不发请求。"""
     monkeypatch.setattr(client, "HEALTHCHECKS_URL", "")
     urlopen_mock = MagicMock()
@@ -213,3 +213,76 @@ def test_payload_structure(monkeypatch):
     assert captured["data"]["msg_type"] == "interactive"
     assert captured["data"]["card"] == card
     assert captured["headers"]["Content-type"] == "application/json"
+
+
+# ─── _builtin_retry 降级路径（tenacity 不可用时）───
+
+def test_builtin_retry_success():
+    """_builtin_retry 首次成功不重试。"""
+    from feishu.client import _builtin_retry
+    calls = []
+    @_builtin_retry(max_attempts=3, waits=(0.01, 0.01, 0.01))
+    def fn():
+        calls.append(True)
+        return "ok"
+    assert fn() == "ok"
+    assert len(calls) == 1
+
+
+def test_builtin_retry_retries_then_success(monkeypatch):
+    """_builtin_retry 失败后重试成功。"""
+    from feishu.client import _builtin_retry
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    calls = []
+    @_builtin_retry(max_attempts=3, waits=(0.01, 0.01, 0.01), exceptions=(ValueError,))
+    def fn():
+        calls.append(True)
+        if len(calls) < 2:
+            raise ValueError("retry me")
+        return "ok"
+    assert fn() == "ok"
+    assert len(calls) == 2
+
+
+def test_builtin_retry_exhausted(monkeypatch):
+    """_builtin_retry 重试耗尽后 raise 最后异常。"""
+    from feishu.client import _builtin_retry
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    calls = []
+    @_builtin_retry(max_attempts=3, waits=(0.01, 0.01, 0.01), exceptions=(ValueError,))
+    def fn():
+        calls.append(True)
+        raise ValueError("always fail")
+    with pytest.raises(ValueError, match="always fail"):
+        fn()
+    assert len(calls) == 3
+
+
+def test_builtin_retry_non_matching_exception(monkeypatch):
+    """_builtin_retry 不匹配的异常类型不重试，直接抛。"""
+    from feishu.client import _builtin_retry
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    calls = []
+    @_builtin_retry(max_attempts=3, waits=(0.01, 0.01, 0.01), exceptions=(ValueError,))
+    def fn():
+        calls.append(True)
+        raise TypeError("not retried")
+    with pytest.raises(TypeError):
+        fn()
+    assert len(calls) == 1
+
+
+def test_build_send_retry_fallback(monkeypatch):
+    """tenacity 不可用时走 _builtin_retry 降级。"""
+    import feishu.client as client_mod
+    monkeypatch.setattr(client_mod, "_HAS_TENACITY", False)
+    retry = client_mod._build_send_retry()
+    assert callable(retry)
+
+
+def test_ping_healthchecks_empty_url(monkeypatch):
+    """HEALTHCHECKS_URL 为空时直接 return。"""
+    monkeypatch.setattr("feishu.client.HEALTHCHECKS_URL", "")
+    from feishu.client import ping_healthchecks
+    ping_healthchecks(True, "test")
+    ping_healthchecks(False, "test")
