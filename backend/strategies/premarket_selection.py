@@ -16,7 +16,6 @@ universe：cache 5226 股（全市场 broad set，T21 R20 扩展自历史涨停�
 """
 from __future__ import annotations
 
-import json
 import logging
 import sys
 from dataclasses import dataclass

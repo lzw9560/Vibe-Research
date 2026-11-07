@@ -2,7 +2,6 @@
 """质量标准检查——check_quality_standards / passes_hard_standards。"""
 from __future__ import annotations
 
-from typing import Any
 
 from strategies.funnel.registry import get_strategy_config
 

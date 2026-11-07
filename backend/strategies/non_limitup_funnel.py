@@ -27,12 +27,6 @@ from typing import Any
 
 from strategies.pattern_scan import (
     PatternScan,
-    compute_relative_strength,
-    check_ma_bullish,
-    compute_ma5_proximity,
-    compute_consolidation,
-    compute_volume_breakout,
-    compute_amount_yi,
 )
 from strategies.strategy_funnel_registry import (
     get_strategy_config,

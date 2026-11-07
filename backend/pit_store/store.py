@@ -19,7 +19,6 @@ import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from vr_paths import BEIJING_TZ, resolve_data_dir
 

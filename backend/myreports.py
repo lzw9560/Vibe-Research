@@ -17,7 +17,6 @@ import json
 import logging
 import os
 import shutil
-import sys
 import threading
 import time
 import uuid

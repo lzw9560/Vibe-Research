@@ -22,11 +22,9 @@ signal 生成器 → executor → accounting → 写 SQLite）。口径不同不
 """
 from __future__ import annotations
 
-import json
 import math
 import sqlite3
-import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any

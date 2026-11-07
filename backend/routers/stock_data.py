@@ -6,7 +6,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 import time as _time
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Dict, Tuple
 
 # deep 端点 TTL 缓存：12 源聚合 ~28s（kline 多源串行慢），日内数据 60s 缓存
 # quote 滞后 60s 可接受（cockpit 非实时交易），K 线/财务日内不变；第一次 28s 后续秒返

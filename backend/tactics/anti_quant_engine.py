@@ -11,7 +11,6 @@
 ⚠️ 探索性：所有阈值未经统计验证，≤3% 资金跟踪，n≥60 才出 verdict。
 """
 from __future__ import annotations
-from typing import Any
 
 from tactics.factor_calculator import (
     calc_amount_ratio,

@@ -10,7 +10,7 @@ match 条件/confidence 严格按 limitup_strategy.py:763-787 迁移，不改阈
 from __future__ import annotations
 
 from strategies.strategy_base import (
-    BaseStrategy, ConditionMatch, ConditionEval, StrategyMatchResult, make_data_unavailable_result,
+    BaseStrategy, ConditionEval, StrategyMatchResult, make_data_unavailable_result,
 )
 
 

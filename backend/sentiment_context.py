@@ -20,8 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from limitup_sti.data import get_db, load_last_score
-from limitup_sti.models import STIResult
+from limitup_sti.data import get_db
 
 
 @dataclass

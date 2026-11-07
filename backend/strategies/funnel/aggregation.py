@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-from typing import Any
 
 from strategies.funnel.registry import (
     STRATEGY_REGISTRY,

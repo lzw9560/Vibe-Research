@@ -231,7 +231,7 @@ async def backfill_dates(
         ):
             state = breaker_state()
             if state == "open":
-                print(f"熔断器 OPEN，等待 65s 恢复后继续……")
+                print("熔断器 OPEN，等待 65s 恢复后继续……")
                 await asyncio.sleep(65)
             answer = input(f"批次 {i + 1}/{len(dates)} 完成，继续下一批？[y/N] ").strip().lower()
             if answer not in ("y", "yes"):

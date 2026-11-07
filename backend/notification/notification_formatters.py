@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import logging
 
-from config import default_config
 
 from notification.notification_channel import NotificationChannel
 from report_language import (
@@ -24,7 +23,8 @@ from utils.data_processing import normalize_model_used
 from utils.sanitize import sanitize_diagnostic_text
 
 if TYPE_CHECKING:
-    pass  # AnalysisResult not needed for formatters
+    from notification.notification_types import AnalysisResult, ReportType
+    from config import get_config
 
 logger = logging.getLogger(__name__)
 

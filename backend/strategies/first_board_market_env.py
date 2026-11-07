@@ -28,7 +28,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -462,24 +462,24 @@ def _format_market_env_message(result: dict) -> str:
     light_emoji = {"green": "🟢", "yellow": "🟡", "red": "🔴"}.get(light, "⚪")
     lines = [
         f"### {light_emoji} 首板流·大盘环境判定",
-        f"",
+        "",
         f"**判定灯位**：{light_emoji} {light}",
-        f"",
+        "",
         f"**仓位建议**：{judge.get('position_advice', '')}",
-        f"",
-        f"---",
-        f"",
-        f"**4因素明细**：",
-        f"",
+        "",
+        "---",
+        "",
+        "**4因素明细**：",
+        "",
         f"- 沪深300涨跌幅：{_fmt_pct(judge.get('hs300_pct'))} （{judge.get('factors', {}).get('hs300', '-')}）",
         f"- 涨停家数：T-1={judge.get('zt_count_t1', 0)}家 / T日={_fmt_int(judge.get('zt_count_t'))}家 / 比值={_fmt_ratio(judge.get('zt_ratio'))} （{judge.get('factors', {}).get('zt_count', '-')}）",
         f"- 连板最高板：{_fmt_int(judge.get('max_boards'))}板 {'(T-1回溯)' if judge.get('max_boards_is_t1_fallback') else ''} （{judge.get('factors', {}).get('max_boards', '-')}）",
         f"- 国内流动性：DR007={_fmt_pct(judge.get('dr007'))} / QVIX={_fmt_pct(judge.get('qvix'))} （{judge.get('factors', {}).get('domestic_liquidity', '-')}，数据源待建）",
-        f"",
-        f"---",
-        f"",
+        "",
+        "---",
+        "",
         f"日期：{result.get('date', '')}",
-        f"阈值标注：待回测校准（当前为骨架占位）",
+        "阈值标注：待回测校准（当前为骨架占位）",
     ]
     return "\n".join(lines)
 

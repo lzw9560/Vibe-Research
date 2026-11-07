@@ -6,12 +6,9 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
 
 import astock
-import limitup_screener as ls
 from data.mappers import quote_from_tencent
-from limitup_sti import get_sti_engine
 
 
 @dataclass

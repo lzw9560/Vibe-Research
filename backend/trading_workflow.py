@@ -17,7 +17,6 @@ from factors import registry as factor_registry
 from factors.base import FactorResult
 from realtime_workflow import RealtimeWorkflow
 from post_market_workflow import PostMarketWorkflow, PostMarketReport
-from workflow_state_machine import WorkflowStatus
 from vr_paths import last_trading_date_str, is_trading_day
 
 logger = logging.getLogger(__name__)

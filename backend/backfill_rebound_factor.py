@@ -14,7 +14,6 @@ import argparse
 import asyncio
 import sqlite3
 import sys
-from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))

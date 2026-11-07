@@ -23,9 +23,8 @@ from __future__ import annotations
 import datetime as _dt
 import logging
 import os
-import sqlite3
 
-from config import PRIVATE_DATA_DIR, SEAL_INTRADAY_DIR, seal_intraday_db_path
+from config import seal_intraday_db_path
 from db_health import get_healthy_conn
 
 _logger = logging.getLogger(__name__)

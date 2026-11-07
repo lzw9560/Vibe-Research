@@ -257,7 +257,7 @@ def main():
     try:
         with open(FRED_KEY_PATH) as f:
             api_key = f.read().strip()
-        print(f"  FRED key present; fetching DGS10+DTWEXBGS...")
+        print("  FRED key present; fetching DGS10+DTWEXBGS...")
         macro = build_macro_map(bars, api_key)
         print(f"  macro dates covered: {len(macro)}")
     except Exception as e:

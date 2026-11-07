@@ -16,7 +16,6 @@ from pathlib import Path
 
 from config import SEAT_PROFILES_DB_PATH
 from migrations import MigrationManager
-from seat_engine.models import SeatProfile
 
 _DB_PATH = SEAT_PROFILES_DB_PATH
 _LOCK = threading.Lock()

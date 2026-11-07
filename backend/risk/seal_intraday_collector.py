@@ -24,7 +24,6 @@ from typing import Any
 from config import SEAL_INTRADAY_DB_PATH
 from db_health import get_healthy_conn
 from db_partition_router import ensure_partition, resolve_partition
-from vr_paths import is_trading_day
 
 _logger = logging.getLogger(__name__)
 

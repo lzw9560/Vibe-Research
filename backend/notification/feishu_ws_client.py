@@ -22,7 +22,6 @@ import logging
 import threading
 from typing import TYPE_CHECKING, Any, Optional
 
-from config import default_config
 
 if TYPE_CHECKING:
     from lark_oapi.api.im.v1 import P2ImMessageReceiveV1

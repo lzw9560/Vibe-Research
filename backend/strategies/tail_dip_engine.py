@@ -1113,7 +1113,6 @@ def check_tail_volatility_from_snapshots(
     """
     import sqlite3
     import json as _json
-    from collections import defaultdict
 
     try:
         db = sqlite3.connect(db_path)

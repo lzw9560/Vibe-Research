@@ -7,7 +7,6 @@
 """
 from __future__ import annotations
 
-from typing import Any
 
 from .dimension_registry import DIMENSION_REGISTRY, 战法ScoreConfig
 

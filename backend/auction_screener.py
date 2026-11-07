@@ -11,8 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-import threading as _threading
-from dataclasses import dataclass, field
+from dataclasses import field
 from datetime import datetime, timedelta
 from typing import Any
 

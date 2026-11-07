@@ -84,7 +84,6 @@ class _IntradaySampler:
         采样失败标 missing，分数=None，趋势维持上一个有效值（spec §7 风险降级）。
         """
         from candidate_funnel.sources.board_ladder import get_market_emotion_raw  # noqa: PLC0415
-        from sentiment_context import build_context  # noqa: PLC0415
 
         now = datetime.now()
         time_str = now.strftime("%H:%M")

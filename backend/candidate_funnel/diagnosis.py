@@ -17,7 +17,7 @@ from candidate_funnel.models import (
     Announcement,
     BaseThreshold,
     DiagnosisCard,
-    EightStandardResult,    IndicatorSet,
+    IndicatorSet,
     StabilizationSignals,
 )
 from candidate_funnel.eight_standards import check_eight_standards

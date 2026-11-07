@@ -11,9 +11,7 @@ spec §15 账户硬约束：max 5 只/max 10% 单股/max 20% 板块/min 30% 现�
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
-from config import default_config
 
 
 # ===========================================================================

@@ -5,11 +5,10 @@ from __future__ import annotations
 
 from typing import List, TYPE_CHECKING
 
-from notification.notification_channel import NotificationChannel, ChannelDetector
-from notification.notification_result import ChannelAttemptResult, NotificationDispatchResult
 
 if TYPE_CHECKING:
-    pass  # AnalysisResult not needed for builder
+    from notification.notification_types import AnalysisResult
+    from report_language import (normalize_report_language, get_report_labels, get_signal_level, get_localized_stock_name, localize_operation_advice)
 
 
 class NotificationBuilder:

@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import re
-from typing import List, Optional
+from typing import List
 
 # 常量
 MIN_MAX_BYTES = 4000

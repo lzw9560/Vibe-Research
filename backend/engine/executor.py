@@ -20,7 +20,7 @@ R5 gap bypasses engine：gap Trades（fill_type=intraday_conditional）→ Intra
 """
 from __future__ import annotations
 
-from engine.bar_utils import _bar_get, is_halted, is_unbuyable_next_bar
+from engine.bar_utils import is_halted, is_unbuyable_next_bar
 from engine.decision import FILL_ACCEPTED, FILL_UNTRADEABLE, Trades
 from engine.fill_policies import FillPolicy, FillResult
 

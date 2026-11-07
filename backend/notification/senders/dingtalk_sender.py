@@ -6,7 +6,6 @@ import base64
 import urllib.parse
 import requests
 import logging
-from typing import Optional
 
 from config import AssistantDefaultConfig as Config
 from formatters import chunk_content_by_max_bytes  # <-- 引入项目内置的切片器

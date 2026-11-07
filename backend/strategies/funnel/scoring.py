@@ -2,9 +2,7 @@
 """策略分计算——compute_strategy_score / _cand_to_gene / _build_market_scan_factors。"""
 from __future__ import annotations
 
-import dataclasses
 import logging
-from typing import Any
 
 from strategies.funnel.registry import _get_weight_set
 

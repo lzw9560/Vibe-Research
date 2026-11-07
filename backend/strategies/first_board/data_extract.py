@@ -7,13 +7,9 @@
 """
 from __future__ import annotations
 
-import json
 import logging
-from pathlib import Path
 
 from astock import concept_blocks  # noqa: E402
-from data.sources.baostock_src import fetch_bars  # noqa: E402  P2 DRY: baostock 统一接口
-from vr_paths import resolve_data_dir  # noqa: PLC0415
 
 from strategies.first_board.universe import _to_float  # noqa: E402
 

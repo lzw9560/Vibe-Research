@@ -217,7 +217,6 @@ def weekly_brainstorm_remind(payload: Dict[str, Any]) -> Dict[str, Any]:
     brainstorm+grill，基于数据+交易沉淀，落待办。
     """
     from datetime import datetime as _dt  # noqa: PLC0415
-    from pathlib import Path  # noqa: PLC0415
     from vr_paths import resolve_data_dir  # noqa: PLC0415
 
     today = _dt.now().strftime("%Y-%m-%d")
@@ -261,9 +260,8 @@ def daily_full_pull(payload: Dict[str, Any]) -> Dict[str, Any]:
     现有 kline_refresh/seal_intraday/ofi_collect 已 live 采，不重复（depends_on 保证顺序）。
     Turso 是云灾备（write-only），datalake 是本地回放层（供 replay.py 读回）。
     """
-    from datetime import datetime  # noqa: PLC0415
     from vr_paths import resolve_data_dir, last_trading_date_str  # noqa: PLC0415
-    from data.datalake.store import save_stoke_data, save_ticks  # noqa: PLC0415
+    from data.datalake.store import save_stoke_data  # noqa: PLC0415
 
     date_str = last_trading_date_str()
     result: Dict[str, Any] = {"date": date_str, "stoke": {}, "ticks": {}}

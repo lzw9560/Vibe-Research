@@ -12,7 +12,7 @@ low_absorption 在旧 STRATEGY_REGISTRY（dict）与 STRATEGY_FUNNEL_REGISTRY（
 from __future__ import annotations
 
 from strategies.strategy_base import (
-    BaseStrategy, ConditionMatch, ConditionEval, StrategyMatchResult, make_data_unavailable_result,
+    BaseStrategy, ConditionEval, StrategyMatchResult, make_data_unavailable_result,
 )
 
 

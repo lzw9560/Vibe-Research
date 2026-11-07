@@ -14,7 +14,6 @@ import astock
 from data.mappers import billboard_detail_from_dict
 from seat_engine.models import (
     SeatProfile,
-    ConsensusSignal,
     SEAT_DISCLAIMER,
     SEAT_LOOKBACK_DAYS,
     SEAT_QUANT_THRESHOLD,

@@ -3,17 +3,14 @@
 
 from __future__ import annotations
 
-import os
 import sqlite3
-import threading
-from datetime import datetime
 from pathlib import Path
 
 from config import STI_TIMELINE_DB_PATH
 
 from migrations import MigrationManager
 
-from limitup_sti.models import STIResult, DISCLAIMER
+from limitup_sti.models import STIResult
 
 import logging
 _logger = logging.getLogger(__name__)

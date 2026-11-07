@@ -77,8 +77,7 @@ def build_position_batches(
 
     返回 [{batch_idx, date, amount, status}]。
     """
-    from datetime import date as _date, datetime as _dt
-    import math
+    from datetime import date as _date
 
     if start_date:
         first = _date.fromisoformat(start_date)

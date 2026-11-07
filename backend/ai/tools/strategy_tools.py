@@ -45,7 +45,7 @@ def _build_backtest_section(code: str) -> str:
     import time
 
     try:
-        from strategies.strategy_backtest import _CACHE, _CACHE_TS, _CACHE_TTL, run_strategy_backtest
+        from strategies.strategy_backtest import _CACHE, _CACHE_TS, _CACHE_TTL
     except Exception:  # noqa: BLE001 — strategy_backtest import 失败不阻塞卡片
         return ""
 

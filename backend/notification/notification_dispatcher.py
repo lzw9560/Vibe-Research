@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from config import default_config
 
@@ -23,20 +23,6 @@ from notification.notification_routing import (
 from notification.notification_channel import NotificationChannel, ChannelDetector
 from notification.notification_result import ChannelAttemptResult, NotificationDispatchResult
 
-from notification.senders.feishu_sender import FeishuSender
-from notification.senders.wechat_sender import WechatSender
-from notification.senders.telegram_sender import TelegramSender
-from notification.senders.email_sender import EmailSender
-from notification.senders.custom_webhook_sender import CustomWebhookSender
-from notification.senders.dingtalk_sender import DingtalkSender
-from notification.senders.discord_sender import DiscordSender
-from notification.senders.gotify_sender import GotifySender
-from notification.senders.ntfy_sender import NtfySender
-from notification.senders.pushover_sender import PushoverSender
-from notification.senders.pushplus_sender import PushplusSender
-from notification.senders.serverchan3_sender import Serverchan3Sender
-from notification.senders.slack_sender import SlackSender
-from notification.senders.astrbot_sender import AstrbotSender
 
 if TYPE_CHECKING:
     pass  # AnalysisResult not needed for dispatcher

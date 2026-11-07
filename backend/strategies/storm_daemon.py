@@ -13,9 +13,7 @@ import json
 import logging
 import os
 import threading
-import time
 from datetime import datetime as _dt
-from pathlib import Path
 
 from vr_paths import resolve_data_dir
 

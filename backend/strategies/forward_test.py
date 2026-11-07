@@ -25,7 +25,6 @@ import logging
 from dataclasses import dataclass
 
 from config import GENE_SCORES_DB_PATH
-from vr_paths import resolve_data_dir
 
 _DB = GENE_SCORES_DB_PATH
 

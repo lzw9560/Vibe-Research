@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 import threading
 import time
 from datetime import datetime, timedelta
@@ -13,7 +12,7 @@ from datetime import datetime, timedelta
 import astock
 
 from data.mappers import zt_pool_item_from_dict
-from limitup_screener.data import run_migrations, save_gene_scores, load_gene_scores
+from limitup_screener.data import save_gene_scores, load_gene_scores
 from models.market_snapshot import ZTPoolItem
 from vr_paths import is_trading_day, last_trading_date_str
 from limitup_screener.models import (
@@ -23,8 +22,6 @@ from limitup_screener.models import (
     compute_gene_score,
     wilson_lower_bound,
     LOOKBACK_DAYS,
-    GENE_QUALIFY_THRESHOLD,
-    GENE_HIGH_THRESHOLD,
 )
 
 _BEIJING_TZ = datetime.now().astimezone().tzinfo

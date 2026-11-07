@@ -22,7 +22,6 @@ RSI（14 日默认）算超买/超卖 + 背离：
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 logger = logging.getLogger(__name__)
 

@@ -10,7 +10,7 @@ spec §2.1/§5.4/A9 将其定性为 bug（其真实条件是封板时间≤10:30
 from __future__ import annotations
 
 from strategies.strategy_base import (
-    BaseStrategy, ConditionMatch, ConditionEval, StrategyMatchResult, make_data_unavailable_result,
+    BaseStrategy, ConditionEval, StrategyMatchResult, make_data_unavailable_result,
 )
 
 

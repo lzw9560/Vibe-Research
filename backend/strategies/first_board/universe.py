@@ -21,10 +21,8 @@ backend/risk/seal_intraday_collector.py:206-207 注释）：
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
-from astock import em_zt_topic_pool, concept_blocks  # noqa: E402
-from market import _emotion  # noqa: E402  私有函数，任务要求；后续可升级公开接口
+from astock import em_zt_topic_pool  # noqa: E402
 
 _logger = logging.getLogger(__name__)
 

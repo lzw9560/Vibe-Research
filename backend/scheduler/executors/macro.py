@@ -22,7 +22,6 @@ def macro_fetch(payload: Dict[str, Any]) -> Dict[str, Any]:
     DCOILWTICO/PCOPPUSDM/VIXCLS）写 .vibe-research/macro_snapshot.json。
     前端 MacroPanel（/api/macro/snapshot）+ storm_predictor 读 cache。
     """
-    from pathlib import Path  # noqa: PLC0415
     from predict.features.macro import (  # noqa: PLC0415
         MACRO_SPECS, FRED_SERIES, get_fred_api_key,
         fetch_fred_series, parse_fred_observations,

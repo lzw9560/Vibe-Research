@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
-from datetime import datetime, timedelta
 from typing import Any
 
 import astock
@@ -26,9 +25,7 @@ from limitup_screener.models import (
     GENE_QUALIFY_THRESHOLD,
     GENE_HIGH_THRESHOLD,
     LOOKBACK_DAYS,
-    DISCLAIMER,
 )
-from limitup_screener.data import get_db
 
 logger = logging.getLogger(__name__)
 
