@@ -105,10 +105,18 @@ def test_scan_engine_import_fail_returns_empty(monkeypatch):
     """tail_dip_engine 导入失败 → 返回 []（不降级为 legacy）。"""
     # 提供 mock 数据但让引擎导入失败
     monkeypatch.setattr(scanners, "get_market_snapshot_all", lambda: [_stock("600001.SH")])
-    # 清除可能的已缓存模块，并确保 import 抛 ImportError
-    monkeypatch.delitem(sys.modules, "strategies.tail_dip_engine", raising=False)
-    # 让 backend path 下的真实模块也无法导入（vr_paths 缺失）——
-    # scanners 已有 try/except ImportError 兜底返回 []
+    # 清除所有可能的缓存模块，确保 import 真正失败
+    for mod in list(sys.modules.keys()):
+        if "tail_dip_engine" in mod or "backend.strategies.tail_dip_engine" in mod:
+            monkeypatch.delitem(sys.modules, mod, raising=False)
+    # mock __import__ 让 backend.strategies.tail_dip_engine 抛 ImportError
+    import builtins
+    real_import = builtins.__import__
+    def _fail_import(name, *args, **kwargs):
+        if "tail_dip_engine" in name:
+            raise ImportError("mocked: tail_dip_engine unavailable")
+        return real_import(name, *args, **kwargs)
+    monkeypatch.setattr(builtins, "__import__", _fail_import)
     result = scanners.scan_strategy4_tail_drop()
     assert result == []
 
