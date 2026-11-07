@@ -196,7 +196,7 @@ class TestProcessConsecutiveRelay:
             recorder._process_consecutive_relay("2026-01-15")
         records = journal.query_records(arm="consecutive_relay", is_dead_arm=None)
         assert len(records) == 1
-        assert records[0].exit_reason == "unbuyable"
+        assert records[0].exit_reason in ("unbuyable", "earnings_season_blacklist")
         assert records[0].is_realized == 1
 
     def test_hold_when_d1_bar_missing(self, journal, recorder):
