@@ -146,7 +146,7 @@ def _build_feishu_card(
         "",
         f"**操作建议**：{rec}（参考值，非执行指令）",
         "",
-        f"---",
+        "---",
         f"⚠️ {RISK_DISCLAIMER}",
     ]
     return "\n".join(lines)

@@ -98,7 +98,7 @@ def health_check_pool(proxies: list[str], sample: int = 30) -> list[str]:
 
 def build_pool(sample: int = 30) -> list[str]:
     """拉 + health-check + 缓存可用池。返可用代理 list（可能空——免费代理对东财多数不通）。"""
-    print(f"[proxy_pool] 拉 free 代理...")
+    print("[proxy_pool] 拉 free 代理...")
     proxies = fetch_free_proxies(limit=100)
     print(f"[proxy_pool] fetched {len(proxies)}，health-check sample {min(sample, len(proxies))}...")
     working = health_check_pool(proxies, sample=sample)

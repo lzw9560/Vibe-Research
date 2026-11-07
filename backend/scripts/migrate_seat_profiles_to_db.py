@@ -37,7 +37,7 @@ def main() -> None:
 
     # save_profiles_to_db 已处理建表 + UPSERT
     save_profiles_to_db(profiles)
-    print(f"写入 seat_profiles 表（A 字段，B 字段全 NULL）")
+    print("写入 seat_profiles 表（A 字段，B 字段全 NULL）")
 
     # 验证
     conn = sqlite3.connect(SEAT_PROFILES_DB_PATH)
@@ -50,7 +50,7 @@ def main() -> None:
     finally:
         conn.close()
 
-    print(f"\n验证：")
+    print("\n验证：")
     print(f"  SELECT COUNT(*) = {count}")
     print(f"  A 字段非空行数 = {a_nonempty}")
     print(f"  B 字段全 NULL 行数 = {b_null}")

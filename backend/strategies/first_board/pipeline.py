@@ -287,7 +287,7 @@ def run_first_board_filter(date: str, pool: list[dict] | None = None) -> dict:
     }
     try:
         _persistence.save_scores(scored_candidates, compact_date, full_result=result)
-        print(f"[fb_filter] 落盘完成", flush=True)
+        print("[fb_filter] 落盘完成", flush=True)
     except Exception as e:
         _logger.warning("save_scores 落盘失败 date=%s err=%s", compact_date, e)
 
