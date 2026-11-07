@@ -480,3 +480,211 @@ def test_all_card_elements_are_dicts(_empty_data):
         for e in card["elements"]:
             assert isinstance(e, dict), f"{b.__name__} element 非 dict"
             assert "tag" in e, f"{b.__name__} element 缺 tag"
+
+
+# ─── premarket RSI信号 + 回撤状态 mock ───
+
+def _mock_urlopen_rsi_drawdown(monkeypatch, rsi_data=None, dd_data=None):
+    """mock urllib 返回 RSI信号 + 回撤状态数据。"""
+    import urllib.request
+    import io
+
+    responses = {}
+    if rsi_data:
+        responses["rsi-timing"] = json.dumps(rsi_data).encode()
+    if dd_data:
+        responses["drawdown-status"] = json.dumps(dd_data).encode()
+
+    class _MockResp:
+        def __init__(self, data):
+            self._data = data
+        def read(self):
+            return self._data
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            pass
+
+    def _fake_urlopen(req, timeout=None):
+        url = req.full_url if hasattr(req, "full_url") else str(req)
+        for key, data in responses.items():
+            if key in url:
+                return _MockResp(data)
+        raise OSError("no matching mock")
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+
+def test_premarket_rsi_signal_triggered(monkeypatch):
+    """premarket RSI信号触发时卡片含RSI markdown。"""
+    monkeypatch.setattr(cards, "get_index_snapshot", lambda: [_index()])
+    monkeypatch.setattr(cards, "get_hot_stocks", lambda: [])
+    monkeypatch.setattr(cards, "get_dragon_tiger", lambda: [])
+    monkeypatch.setattr(cards, "get_limit_up_ladder", lambda: [_ladder_item()])
+    monkeypatch.setattr(cards, "get_skyrocket", lambda: [])
+    monkeypatch.setattr(cards, "scan_group_a_stocks", lambda: [])
+    monkeypatch.setattr(cards, "check_buy_signals", lambda: [])
+    monkeypatch.setattr(cards, "calculate_sentiment_score", lambda: _sentiment_data())
+
+    rsi_data = {
+        "any_triggered": True,
+        "signals": [
+            {"index_name": "上证", "is_triggered": True, "current_rsi": 15,
+             "threshold": 20, "sample_size": 100, "expected_return": 7.82,
+             "win_rate": 92, "p_value": 0.0002, "hold_days": 60,
+             "stop_loss_pct": 0.05},
+            {"index_name": "创业板", "is_triggered": False, "current_rsi": 35,
+             "threshold": 20, "sample_size": 100, "expected_return": 0,
+             "win_rate": 0, "p_value": 1, "hold_days": 0,
+             "stop_loss_pct": 0},
+        ],
+    }
+    dd_data = {
+        "portfolio": {"equity": 95000, "peak": 100000, "drawdown_pct": -5.0,
+                       "days_tracked": 30, "size_multiplier": 0.5}
+    }
+    _mock_urlopen_rsi_drawdown(monkeypatch, rsi_data=rsi_data, dd_data=dd_data)
+
+    card = cards.build_premarket_card()
+    # RSI markdown 应在 elements 中
+    rsi_elements = [e for e in card["elements"] if e.get("tag") == "markdown" and "RSI" in e.get("content", "")]
+    assert len(rsi_elements) > 0
+    assert "🚨" in rsi_elements[0]["content"]
+    # 回撤状态 markdown 应在 elements 中
+    dd_elements = [e for e in card["elements"] if e.get("tag") == "markdown" and "回撤" in e.get("content", "")]
+    assert len(dd_elements) > 0
+
+
+def test_premarket_rsi_not_triggered(monkeypatch):
+    """premarket RSI未触发时无RSI markdown。"""
+    monkeypatch.setattr(cards, "get_index_snapshot", lambda: [_index()])
+    monkeypatch.setattr(cards, "get_hot_stocks", lambda: [])
+    monkeypatch.setattr(cards, "get_dragon_tiger", lambda: [])
+    monkeypatch.setattr(cards, "get_limit_up_ladder", lambda: [_ladder_item()])
+    monkeypatch.setattr(cards, "get_skyrocket", lambda: [])
+    monkeypatch.setattr(cards, "scan_group_a_stocks", lambda: [])
+    monkeypatch.setattr(cards, "check_buy_signals", lambda: [])
+    monkeypatch.setattr(cards, "calculate_sentiment_score", lambda: _sentiment_data())
+
+    rsi_data = {"any_triggered": False, "signals": []}
+    _mock_urlopen_rsi_drawdown(monkeypatch, rsi_data=rsi_data, dd_data=None)
+
+    card = cards.build_premarket_card()
+    rsi_elements = [e for e in card["elements"] if e.get("tag") == "markdown" and "RSI择时信号触发" in e.get("content", "")]
+    assert len(rsi_elements) == 0
+
+
+def test_premarket_api_all_fail(monkeypatch):
+    """premarket 所有API失败时降级不崩。"""
+    monkeypatch.setattr(cards, "get_index_snapshot", lambda: [_index()])
+    monkeypatch.setattr(cards, "get_hot_stocks", lambda: [])
+    monkeypatch.setattr(cards, "get_dragon_tiger", lambda: [])
+    monkeypatch.setattr(cards, "get_limit_up_ladder", lambda: [_ladder_item()])
+    monkeypatch.setattr(cards, "get_skyrocket", lambda: [])
+    monkeypatch.setattr(cards, "scan_group_a_stocks", lambda: [])
+    monkeypatch.setattr(cards, "check_buy_signals", lambda: [])
+    monkeypatch.setattr(cards, "calculate_sentiment_score", lambda: _sentiment_data())
+
+    import urllib.request
+    monkeypatch.setattr(urllib.request, "urlopen", MagicMock(side_effect=OSError("no api")))
+
+    card = cards.build_premarket_card()
+    assert isinstance(card, dict)
+    assert "header" in card
+    # RSI/回撤降级后不应崩
+    assert "elements" in card
+
+
+# ─── intraday RSI+MACD 信号 mock ───
+
+def test_intraday_buy_signal(monkeypatch):
+    """intraday RSI+MACD买入信号。"""
+    rsi_macd_data = {
+        "buy_count": 1,
+        "wait_count": 0,
+        "signals": [{
+            "combo_signal": "买入", "index_name": "上证",
+            "rsi": 15, "expected_60d": 7.82, "win_rate_60d": 92,
+            "macd_dif": 0.5, "macd_dea": 0.3,
+        }],
+    }
+    import urllib.request
+    import io
+
+    class _MockResp:
+        def __init__(self, data):
+            self._data = data
+        def read(self):
+            return self._data
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            pass
+
+    def _fake_urlopen(req, timeout=None):
+        return _MockResp(json.dumps(rsi_macd_data).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+    card = cards.build_intraday_card()
+    buy_elements = [e for e in card["elements"] if e.get("tag") == "markdown" and "买入信号" in e.get("content", "")]
+    assert len(buy_elements) > 0
+
+
+def test_intraday_wait_signal(monkeypatch):
+    """intraday RSI触发但MACD未金叉——等待。"""
+    rsi_macd_data = {
+        "buy_count": 0,
+        "wait_count": 1,
+        "signals": [{
+            "combo_signal": "等待", "index_name": "上证",
+            "rsi": 15, "macd_dif": -0.2, "macd_dea": 0.1,
+        }],
+    }
+    import urllib.request
+
+    class _MockResp:
+        def __init__(self, data):
+            self._data = data
+        def read(self):
+            return self._data
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            pass
+
+    def _fake_urlopen(req, timeout=None):
+        return _MockResp(json.dumps(rsi_macd_data).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+    card = cards.build_intraday_card()
+    wait_elements = [e for e in card["elements"] if e.get("tag") == "markdown" and "等待" in e.get("content", "")]
+    assert len(wait_elements) > 0
+
+
+def test_intraday_no_signal(monkeypatch):
+    """intraday 无RSI信号。"""
+    rsi_macd_data = {
+        "buy_count": 0, "wait_count": 0, "signals": [],
+    }
+    import urllib.request
+
+    class _MockResp:
+        def __init__(self, data):
+            self._data = data
+        def read(self):
+            return self._data
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            pass
+
+    def _fake_urlopen(req, timeout=None):
+        return _MockResp(json.dumps(rsi_macd_data).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+    card = cards.build_intraday_card()
+    no_signal = [e for e in card["elements"] if e.get("tag") == "markdown" and "无RSI信号" in e.get("content", "")]
+    assert len(no_signal) > 0
