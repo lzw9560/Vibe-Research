@@ -5,28 +5,6 @@
 
 ---
 
-## 工具链基础设施（2026-11-08 工具链进化期）
-
-> ARCHITECTURE.md 声明"工具链进化期"——trading arms falsified 结论不变，但工具链基础设施活跃进化。
-
-### 关键变更（2026-11-06~08 会话产出）
-
-- **feishu 推送重构**：1202行 god script → 8模块+7测试+176passed+94%覆盖率+tenacity重试+日志轮转+健康告警
-- **数据层路径收口**：245文件走 vr_paths.resolve_data_dir()，0绝对路径，0僵尸DB
-- **DuckDB MCP 激活**：Python wrapper 直查 21 个 SQLite DB（baostock5255/dragon_tiger150万行）
-- **launchctl 自动化**：8任务0失败+KeepAlive+retention cron+calendar cron
-- **ruff 代码质量**：10179→0 真实bug + pre-commit hook 零容忍
-- **backend 测试**：4218passed+0failed+62.5%覆盖率
-
-### 技术栈
-
-- backend: FastAPI + SQLite + 245文件走vr_paths + ruff lint
-- feishu: 8模块包 + tenacity重试 + RotatingFileHandler日志 + ping_healthchecks
-- MCP: 8个（codex-security/firecrawl/codegraph/evolver/context7/playwright/duckdb/agentmemory停用）
-- skill: 79个（~/.config/opencode/skills/）+ AGENTS.md护栏
-- 测试: feishu 176p(94%) + backend 4218p(62.5%) + frontend 435p(ESLint 0errors)
-
-
 ## 会话开始协议（最高优先级）
 
 **每次会话开始，在做任何工作之前，先读知识图谱投研子区**：
@@ -110,6 +88,29 @@
 
 ---
 
+## 工具链基础设施（2026-11-08 工具链进化期）
+
+> ARCHITECTURE.md 声明"工具链进化期"——trading arms falsified 结论不变，但工具链基础设施活跃进化。
+
+### 关键变更（2026-11-06~08 会话产出）
+
+- **feishu 推送重构**：1202行 god script → 8模块+7测试+176passed+94%覆盖率+tenacity重试+日志轮转+健康告警
+- **数据层路径收口**：245文件走 vr_paths.resolve_data_dir()，0绝对路径，0僵尸DB
+- **DuckDB MCP 激活**：Python wrapper 直查 21 个 SQLite DB（baostock5255/dragon_tiger150万行）
+- **launchctl 自动化**：8任务0失败+KeepAlive+retention cron+calendar cron
+- **ruff 代码质量**：10179→0 真实bug + pre-commit hook 零容忍
+- **backend 测试**：4218passed+0failed+62.5%覆盖率
+
+### 技术栈
+
+- backend: FastAPI + SQLite + 245文件走vr_paths + ruff lint
+- feishu: 8模块包 + tenacity重试 + RotatingFileHandler日志 + ping_healthchecks
+- MCP: 8个（codex-security/firecrawl/codegraph/evolver/context7/playwright/duckdb/agentmemory停用）
+- skill: 79个（~/.config/opencode/skills/）+ AGENTS.md护栏
+- 测试: feishu 176p(94%) + backend 4218p(62.5%) + frontend 435p(ESLint 0errors)
+
+
+
 ## 2. 开发环境
 
 - **仓库**：macOS `/Users/lizhiwei/project/code/stock/Vibe-Research`（develop 分支）；Windows `E:\python\projects\Vibe-Research`
@@ -153,9 +154,20 @@
 
 ## 6. MCP 集成
 
-- `vibe-research` MCP server 已 `claude mcp add -s user` 挂入，暴露 5 工具：`query_quote / query_valuation / query_reports / query_news / query_global_stock`。
-- 启动：macOS `backend/.venv/bin/python backend/mcp_server.py`（stdio JSON-RPC，纯标准库；Windows 用 `Scripts/python.exe`）。
+### Vibe-Research MCP server（项目内置）
+- `vibe-research` MCP server 暴露 5 工具：`query_quote / query_valuation / query_reports / query_news / query_global_stock`。
+- 启动：macOS `backend/.venv/bin/python backend/mcp_server.py`（stdio JSON-RPC，纯标准库）。
 - 新增 MCP 工具 = 在 `chat.TOOLS` 加项（自动同步到 MCP，无需改 `mcp_server.py`）。
+
+### opencode MCP server（8 个，2026-11-08 工具链进化期）
+- `codex-security`：安全扫描（node 本地）
+- `firecrawl`：网页搜索/抓取/解析（npx，付费 API key 走 .env）
+- `codegraph`：代码知识图谱（本地二进制，`codegraph explore` 代替 grep）
+- `evolver`：自进化 memory graph（SessionStart 注入 + Stop 记录）
+- `context7`：官方文档实时查询，防 akshare/pandas/openpyxl API 幻觉（npx 免费无 key）
+- `playwright`：浏览器自动化/JS 渲染/截图，补 firecrawl 短板（--browser chrome 绕 mac12 限制）
+- `duckdb`：高性能分析型数据库，Python wrapper 直查 .vibe-research/ 下 25 个 SQLite DB + CSV
+- `agentmemory`：AI 记忆层（停用：2026-09-20 数据层清空事故 + opencode 侧无消费方 + 与文件 memory 重叠）
 
 ---
 
