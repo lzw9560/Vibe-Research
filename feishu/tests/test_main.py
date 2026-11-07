@@ -151,6 +151,20 @@ def test_main_trading_day_normal_push(monkeypatch, caplog):
     assert "premarket" in caplog.text
 
 
+# ─── main() 未知 mode ───
+
+def test_main_unknown_mode_exits_nonzero(monkeypatch, caplog):
+    """未知 mode → logger.error + sys.exit(1)。"""
+    monkeypatch.setattr(main_mod, "is_trading_day", lambda dt: True)
+    monkeypatch.setattr(main_mod, "BUILDERS", {"premarket": lambda: {}})
+    monkeypatch.setattr(sys, "argv", ["feishu.main", "--mode", "nonexistent"])
+    with caplog.at_level("ERROR"):
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 1
+    assert "未知 mode" in caplog.text
+
+
 # ─── main() send_feishu 失败 ───
 
 def test_main_send_fail_exits_nonzero(monkeypatch, caplog):
