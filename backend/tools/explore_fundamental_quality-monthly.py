@@ -44,16 +44,16 @@ ALPHA = 0.05
 UNIVERSE_SIZE = 250  # top-liquidity，exploratory first pass
 REBALANCE_DAY = "last"  # 月末最后交易日调仓
 
-# ── akshare 字段映射（中文列名 → 英文因子名）──────────────────────────────────
+# ── akshare 字段映射（中文列名 → 英文因子名，列名带 (%) 后缀）──────────────────
 FIELD_MAP = {
     "日期": "stat_date",
-    "销售毛利率": "gp_margin",      # gross margin (Hou-Xue-Zhang quality)
-    "销售净利率": "np_margin",      # net margin
-    "净资产收益率": "roe",          # ROE
-    "加权净资产收益率": "roe_w",    # weighted ROE
-    "资产负债率": "debt_ratio",    # leverage
-    "主营业务收入增长率": "rev_growth",  # revenue growth
-    "净利润增长率": "ni_growth",   # NI growth
+    "销售毛利率(%)": "gp_margin",      # gross margin (Hou-Xue-Zhang quality)
+    "销售净利率(%)": "np_margin",      # net margin
+    "净资产收益率(%)": "roe",          # ROE
+    "加权净资产收益率(%)": "roe_w",    # weighted ROE
+    "资产负债率(%)": "debt_ratio",    # leverage
+    "主营业务收入增长率(%)": "rev_growth",  # revenue growth
+    "净利润增长率(%)": "ni_growth",   # NI growth
 }
 
 
@@ -93,7 +93,10 @@ def backfill_one(code_bare: str) -> int:
         if not stat_date or stat_date == "nan" or len(stat_date) < 10:
             continue
         stat_date = stat_date[:10]
-        row = {"code": code_bare, "stat_date": stat_date}
+        # 初始化所有字段 None（防 akshare 某股缺列 → executemany binding 缺失）
+        row = {"code": code_bare, "stat_date": stat_date,
+               "gp_margin": None, "np_margin": None, "roe": None, "roe_w": None,
+               "debt_ratio": None, "rev_growth": None, "ni_growth": None}
         for cn, en in FIELD_MAP.items():
             if cn in r.index:
                 v = r[cn]
