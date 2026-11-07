@@ -310,3 +310,27 @@ def test_builtin_retry_unreachable(monkeypatch):
     # max_attempts=0 → for loop 不执行 → last_exc=None → raise RuntimeError
     with pytest.raises(RuntimeError, match="unreachable"):
         fn()
+
+
+# ─── tenacity import 降级路径 ───
+
+def test_tenacity_import_fail_falls_back(monkeypatch):
+    """tenacity 不可用时走 _builtin_retry 降级。"""
+    import builtins
+    import importlib
+    import feishu.client as client_mod
+    # 清除 tenacity 缓存让 import 失败
+    for mod in list(__import__("sys").modules.keys()):
+        if "tenacity" in mod:
+            monkeypatch.delitem(__import__("sys").modules, mod, raising=False)
+    real_import = builtins.__import__
+    def _fail_tenacity(name, *args, **kwargs):
+        if "tenacity" in name:
+            raise ImportError("mocked: tenacity unavailable")
+        return real_import(name, *args, **kwargs)
+    monkeypatch.setattr(builtins, "__import__", _fail_tenacity)
+    # 重新 import client 模块让 L50-59 重新执行
+    importlib.reload(client_mod)
+    assert client_mod._HAS_TENACITY is False
+    # 恢复
+    importlib.reload(client_mod)

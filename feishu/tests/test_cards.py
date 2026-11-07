@@ -760,3 +760,40 @@ def test_premarket_drawdown_permanently_locked(monkeypatch):
 
     # 清理 mock 模块
     del sys.modules["backend.strategies.tail_dip_engine"]
+
+
+# ─── cards.py ImportError 降级路径 ───
+
+def test_premarket_tail_dip_engine_import_fail(monkeypatch):
+    """premarket tail_dip_engine import 失败时降级不崩。"""
+    monkeypatch.setattr(cards, "get_index_snapshot", lambda: [_index()])
+    monkeypatch.setattr(cards, "get_hot_stocks", lambda: [])
+    monkeypatch.setattr(cards, "get_dragon_tiger", lambda: [])
+    monkeypatch.setattr(cards, "get_limit_up_ladder", lambda: [_ladder_item()])
+    monkeypatch.setattr(cards, "get_skyrocket", lambda: [])
+    monkeypatch.setattr(cards, "scan_group_a_stocks", lambda: [])
+    monkeypatch.setattr(cards, "check_buy_signals", lambda: [])
+    monkeypatch.setattr(cards, "calculate_sentiment_score", lambda: _sentiment_data())
+
+    # mock urllib 让 RSI/drawdown API 失败（不触发 L90-122）
+    import urllib.request
+    monkeypatch.setattr(urllib.request, "urlopen", MagicMock(side_effect=OSError("no api")))
+
+    # mock __import__ 让 backend.strategies.tail_dip_engine 抛 ImportError
+    import builtins
+    real_import = builtins.__import__
+    def _fail_tail_dip(name, *args, **kwargs):
+        if "tail_dip_engine" in name:
+            raise ImportError("mocked: tail_dip_engine unavailable")
+        return real_import(name, *args, **kwargs)
+    monkeypatch.setattr(builtins, "__import__", _fail_tail_dip)
+
+    # 清除缓存模块
+    import sys
+    for mod in list(sys.modules.keys()):
+        if "tail_dip_engine" in mod:
+            monkeypatch.delitem(sys.modules, mod, raising=False)
+
+    card = cards.build_premarket_card()
+    assert isinstance(card, dict)
+    assert "header" in card
