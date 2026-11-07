@@ -38,6 +38,26 @@ def isolated_seal_db(tmp_path, monkeypatch):
         return os.path.join(str(tmp_path), f"seal_intraday_{year}.db")
 
     monkeypatch.setattr(router, "seal_intraday_db_path", _fake_db_path)
+
+    # fix: resolve_partition/ensure_partition imported at module level are bound.
+    # Must patch in collector module itself. config is the DB path source after S037.
+    import config
+    import risk.seal_intraday_collector as sic
+    import subprocess as _sp
+    monkeypatch.setattr(config, "SEAL_INTRADAY_DB_PATH", str(db_path))
+    monkeypatch.setattr(config, "PRIVATE_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(sic, "resolve_partition", lambda date: (str(db_path), "seal_intraday_snapshots"))
+    monkeypatch.setattr(sic, "ensure_partition", lambda date: None)
+    monkeypatch.setattr(_sp, "run", lambda *a, **k: _sp.CompletedProcess(args=[], returncode=0, stdout="{}", stderr=""))
+    import os as _os
+    if _os.path.exists("/tmp/seal_intraday_tail.json"):
+        _os.remove("/tmp/seal_intraday_tail.json")
+    _real_open = open
+    def _mock_open(f, *a, **kw):
+        if "seal_intraday_tail" in str(f):
+            import io; return io.StringIO('{"data": {"item": []}}')
+        return _real_open(f, *a, **kw)
+    monkeypatch.setattr("builtins.open", _mock_open)
     return str(db_path)
 
 
