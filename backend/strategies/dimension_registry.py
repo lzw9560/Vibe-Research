@@ -14,6 +14,7 @@ DRY：与 strategies/funnel/scoring.py 14 维评分系统不同抽象层（scori
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass(frozen=True)

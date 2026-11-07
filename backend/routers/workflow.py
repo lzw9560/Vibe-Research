@@ -29,6 +29,7 @@ from vr_paths import last_trading_date_str, resolve_data_dir
 from candidate_funnel import funnel as funnel_mod
 from strategies.strategy_matcher import StrategyMatcher
 from strategies.position_advisor import PositionAdvisor
+from limitup_strategy import StrategySignal
 from risk.bomb_alert_system import BombAlertSystem
 from risk.position_manager import PositionManager, PositionLimit
 from settlement.settlement_engine import SettlementEngine
@@ -996,6 +997,8 @@ async def match_strategy(name: str, code: str = Query(..., description="股票�
 
         # 获取股票基因得分
         from limitup_screener.service import get_screener_result
+        from limitup_screener.models import compute_gene_score
+        import astock
 
         result = await get_screener_result()  # TODO: pass date
         gene = None

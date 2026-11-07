@@ -32,6 +32,8 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
+from datetime import datetime
 from typing import Any, Callable
 
 from engine.trade_journal import TradeJournal, JournalRecord
@@ -697,7 +699,7 @@ class JournalRecorder:
 
             position_notional = float(filled.entry_price) * size
             net_pnl = pr.return_pct / 100.0 * position_notional
-            pr.gross_return_pct / 100.0 * position_notional
+            gross_pnl = pr.gross_return_pct / 100.0 * position_notional
 
             record = JournalRecord.create(
                 arm="breakout",
@@ -948,7 +950,7 @@ class JournalRecorder:
 
             position_notional = float(filled.entry_price) * size
             net_pnl = pr.return_pct / 100.0 * position_notional
-            pr.gross_return_pct / 100.0 * position_notional
+            gross_pnl = pr.gross_return_pct / 100.0 * position_notional
 
             record = JournalRecord.create(
                 arm="trend",

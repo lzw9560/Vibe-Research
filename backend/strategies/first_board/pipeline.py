@@ -13,6 +13,7 @@ import sys
 
 from strategies.first_board import universe as _universe
 from strategies.first_board import exclusions as _exclusions
+from strategies.first_board import scoring as _scoring
 from strategies.first_board import persistence as _persistence
 from strategies.first_board.scoring import (
     score_dim_seal_time,
@@ -286,7 +287,7 @@ def run_first_board_filter(date: str, pool: list[dict] | None = None) -> dict:
     }
     try:
         _persistence.save_scores(scored_candidates, compact_date, full_result=result)
-        print("[fb_filter] 落盘完成", flush=True)
+        print(f"[fb_filter] 落盘完成", flush=True)
     except Exception as e:
         _logger.warning("save_scores 落盘失败 date=%s err=%s", compact_date, e)
 

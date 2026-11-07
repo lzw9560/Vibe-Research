@@ -461,4 +461,4 @@ if __name__ == "__main__":
 
     # 测试卖出记录
     exit_r = execute_exit(hold, ep * 1.06, "take_profit")
-    print("\n卖出记录:", exit_r)
+    print(f"\n卖出记录:", exit_r)

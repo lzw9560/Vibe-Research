@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 
 from strategies.funnel.registry import get_strategy_config
 

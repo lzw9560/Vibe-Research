@@ -644,7 +644,7 @@ def fetch_financial_substitute_factors(code: str) -> dict[str, Any]:
             if reduction_mask.any():
                 # 检查最近90天有无减持
                 if "公告日期" in change_df.columns:
-                    datetime.now() - timedelta(days=HARD_THRESHOLDS["reduction_announce_days"])
+                    cutoff = datetime.now() - timedelta(days=HARD_THRESHOLDS["reduction_announce_days"])
                     recent = change_df[reduction_mask].copy()
                     recent["公告日期"] = recent["公告日期"].astype(str)
                     # 简化：有减持记录就标记（精确日期过滤需要解析日期格式）
@@ -895,6 +895,7 @@ def compute_realtime_sector_deviation(
             stock_chg = stock_row[0]
             dev_median = abs(stock_chg - sector_median)
             dev_mean = abs(stock_chg - sector_mean)
+            sector_ref = sector_median if use_median else sector_mean
             dev_ref = dev_median if use_median else dev_mean
 
             results.append(
@@ -1141,6 +1142,7 @@ def check_tail_volatility_from_snapshots(
     """
     import sqlite3
     import json as _json
+    from collections import defaultdict
 
     try:
         db = sqlite3.connect(db_path)

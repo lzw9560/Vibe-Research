@@ -16,7 +16,10 @@ import math
 from astock import em_zt_topic_pool  # noqa: E402
 
 from strategies.first_board.universe import (
+    _market_phase,
     _fbt_to_hhmm,
+    MARKET_PHASE_WEIGHTS,
+    _emotion,
 )
 from strategies.first_board import data_extract as _data_extract
 

@@ -11,13 +11,23 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
+from pathlib import Path
+from typing import Optional
 
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 from vr_paths import resolve_data_dir
 
 from strategies.strategy_base import (
+    PositionParams,
     QualityCheck,
     StrategyConfig,
+    StrategyContext,
+    StrategyMatchResult,
+    _prepare_derived,
+    _prepare_pool_item,
+    dispatch_match,
 )
 from strategies.impl import (
     BreakResealStrategy,

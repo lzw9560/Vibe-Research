@@ -14,6 +14,7 @@ import logging
 
 from data.sources.baostock_src import fetch_bars  # noqa: E402  P2 DRY: baostock 统一接口
 from market import _emotion  # noqa: E402  私有函数，任务要求；后续可升级公开接口
+from astock import em_zt_topic_pool  # noqa: E402
 
 from strategies.first_board.universe import EXCLUDE_THRESHOLDS
 from strategies.first_board import data_extract as _data_extract
@@ -178,6 +179,7 @@ def exclude_layer3_market_env(
             - max_boards: int | None（最高连板）
             - ladder_broken: bool（无连板梯队，max_boards<2）
     """
+    fb_pool = first_boards if first_boards is not None else candidates
 
     # 取市场情绪（max_boards/ladder）
     emotion: dict = {}

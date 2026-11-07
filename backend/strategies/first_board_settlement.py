@@ -428,7 +428,7 @@ def run_first_board_settlement(
     elif status == "劣于随机":
         verdict = f"§44 硬底线触发（lift={summary.get('lift', 0)}x<1.0），移除/权重0"
     elif status == "探索性":
-        verdict = "探索性（n<30，非定论）——§44 未 validated 不阻断接入跑通"
+        verdict = f"探索性（n<30，非定论）——§44 未 validated 不阻断接入跑通"
     elif status == "validated":
         verdict = "§44 validated（lift>=2x + n>=30）"
     else:

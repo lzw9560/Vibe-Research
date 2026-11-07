@@ -10,7 +10,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException, Query
 
-from strategies.position_advisor import advisory_summary
+from strategies.position_advisor import advisory_summary, advise_recommendations, advise_watchlist
 
 router = APIRouter(tags=["advisory"])
 

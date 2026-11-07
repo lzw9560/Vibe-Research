@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from strategies.strategy_base import (
     BaseStrategy,
+    ConditionMatch,
     ConditionEval,
     StrategyMatchResult,
     make_data_unavailable_result,

@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from predict.features.alt import register_alt
-from predict.features.behavior import register_behavior
+from predict.features.alt import ALT_SPECS, register_alt
+from predict.features.behavior import BEHAVIOR_SPECS, register_behavior
 from predict.features.calendar import CALENDAR_SPECS, register_calendar
 from predict.features.external import EXTERNAL_SPECS, register_external
 from predict.features.fund_flow import FUND_FLOW_SPECS, register_fund_flow

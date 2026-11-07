@@ -1,9 +1,8 @@
-import sqlite3
-
 # -*- coding: utf-8 -*-
 """limitup_sti 服务层 —— STI 引擎核心逻辑。"""
 
 from __future__ import annotations
+import sqlite3
 
 import logging
 import threading
@@ -281,6 +280,7 @@ class STIEngine:
     ) -> str:
         """计算置信度等级。"""
         reasons_missing = 0
+        total_required = 3
 
         if not emotion_data.get("zt_count") or emotion_data.get("zt_count") == 0:
             reasons_missing += 1

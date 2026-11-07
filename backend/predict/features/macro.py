@@ -13,6 +13,7 @@ Pure parser is testable; live fetch is a stub (TODO S008/key-on-hand).
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from predict.features.registry import FeatureSpec, Registry
 from vr_paths import resolve_data_dir

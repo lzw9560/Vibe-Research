@@ -18,7 +18,7 @@ akshare 不可达 → 返空列表（不崩，标注"事件数据未取得"）�
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any

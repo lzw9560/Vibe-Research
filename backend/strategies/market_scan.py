@@ -18,7 +18,7 @@ name 反查为本地 DB，非东财）。
 
 from __future__ import annotations
 
-from strategies.pattern_scan import _compute_ma, compute_relative_strength, get_sector_stocks
+from strategies.pattern_scan import PatternScan, _compute_ma, compute_relative_strength, get_sector_stocks
 
 
 def compute_sector_stock_rank_map(

@@ -10,9 +10,10 @@ Provides market weather state, multi-factor scoring, strategy recommendations, a
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 import sqlite3
 import json
+import os
 import time
 from config import GENE_SCORES_DB_PATH, STI_TIMELINE_DB_PATH, default_config
 
@@ -1159,7 +1160,7 @@ def get_exit_signals(date: str = Query(..., description="交易日 YYYY-MM-DD"))
             # S109：修误键——tencent raw 键是 change_pct（tencent.py:68），非 pct。
             # 旧 q.get("pct") 恒 None 致 no_gap/竞价未高开 强制离场分支恒死（与缓存正交）。
             change_pct = q.get("change_pct") if isinstance(q, dict) else None
-            q.get("open") if isinstance(q, dict) else None
+            open_price = q.get("open") if isinstance(q, dict) else None
             price = q.get("price") if isinstance(q, dict) else None
 
             # 均线口径：前 N 日均价（用 K 线近似）
@@ -1248,6 +1249,7 @@ def macro_snapshot() -> Dict[str, Any]:
     后端已通但前端无展示，此 endpoint 暴露给前端 MacroPanel。
     宏观展示是参考层（非 sizing 杠杆，不碰 §44v2/lift_for_arm）。
     """
+    from pathlib import Path  # noqa: PLC0415
     from predict.features.macro import (  # noqa: PLC0415
         MACRO_SPECS,
         FRED_SERIES,

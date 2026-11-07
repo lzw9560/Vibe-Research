@@ -17,6 +17,7 @@ from candidate_funnel.models import (
     Announcement,
     BaseThreshold,
     DiagnosisCard,
+    EightStandardResult,
     IndicatorSet,
     StabilizationSignals,
 )

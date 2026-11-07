@@ -2,7 +2,7 @@
 Watchlist router.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 import sqlite3
 from typing import Any, Dict

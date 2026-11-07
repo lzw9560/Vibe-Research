@@ -22,10 +22,13 @@ journal_recorder 注入此 provider 替代默认 `lambda _code: []`（BREAK-2 �
 
 from __future__ import annotations
 
+import json
 import logging
+from typing import Any
 
 from engine.pctchg_injector import enrich_pctchg
 from engine.kline_cache_store import get_bars, invalidate, load_all
+from vr_paths import resolve_data_dir
 
 _logger = logging.getLogger(__name__)
 

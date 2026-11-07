@@ -27,6 +27,8 @@ def get_sti_latest(date: str = Query(None, description="日期，格式 YYYY-MM-
                 today = datetime.now(ls_sti.BEIJING_TZ).strftime("%Y-%m-%d")
                 result = engine.precompute_daily(today)
             else:
+                from datetime import datetime as _dt
+
                 db_score = float(row["score"]) if row["score"] is not None else None
                 default_dims = (
                     float(row["dimension_limit_up_count"]) if row["dimension_limit_up_count"] else 0,

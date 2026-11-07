@@ -157,7 +157,7 @@ def build_panel(stocks, index, dates_all):
     common = sorted(set(dates_all))
     # precompute per-stock history lists for O(n) feature build
     stock_hist = {c: [] for c in stocks}  # growing list of bars up to current date
-    {c: sorted(stocks[c].keys()) for c in stocks}
+    stock_dates = {c: sorted(stocks[c].keys()) for c in stocks}
 
     rows, ylist, date_list, sid_list = [], [], [], []
     for di, d in enumerate(common):
@@ -198,7 +198,7 @@ def build_panel(stocks, index, dates_all):
 def panel_walk_forward(dates, X, y, train_days=TRAIN_DAYS, test_days=TEST_DAYS, step_days=STEP_DAYS, gap=GAP):
     """Yield (train_idx, test_idx) over the panel, date-aligned."""
     uniq = sorted(set(dates))
-    {d: [i for i, dd in enumerate(dates) if dd == d] for d in uniq}
+    pos_by_date = {d: [i for i, dd in enumerate(dates) if dd == d] for d in uniq}
     folds = []
     t = train_days + gap
     while t + test_days <= len(uniq):
@@ -265,7 +265,7 @@ def main():
     last_tr, last_te, _, _ = folds[-1]
     e = SoftVoteEnsemble().fit(X[last_tr], y[last_tr])
     proba = e.predict_proba(X[last_te])[:, 1]
-    [dates[i] for i in last_te]
+    te_dates = [dates[i] for i in last_te]
     # rank test samples by proba, split into top/bottom quintile, measure actual outperformance rate
     order = np.argsort(proba)
     n = len(order)

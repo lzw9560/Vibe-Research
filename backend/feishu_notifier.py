@@ -9,10 +9,12 @@ webhook 收敛到 ``config.feishu_webhook_url``（环境变量 ``FEISHU_WEBHOOK_
 
 from __future__ import annotations
 
+import json
 import os
 import time
 from typing import Any
 
+import httpx
 
 from config import default_config
 from notification.notification_service import NotificationService

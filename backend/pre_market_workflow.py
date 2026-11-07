@@ -24,8 +24,11 @@ from datetime import datetime
 from typing import Any
 
 from limitup_screener.models import (
+    GENE_HIGH_THRESHOLD,
+    GENE_QUALIFY_THRESHOLD,
     GeneScore,
     ScreenerResult,
+    compute_gene_score,
 )
 from limitup_screener.service import get_screener_result
 from limitup_strategy import StrategySignal

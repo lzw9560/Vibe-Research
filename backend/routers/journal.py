@@ -16,6 +16,8 @@ from __future__ import annotations
 from typing import Any, Dict
 
 import asyncio
+import json
+from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
@@ -29,6 +31,7 @@ import inbox
 # S173: 闭环 ledger（trade_journal）+ drawdown 熔断——惰性 import 避循环依赖
 from engine.trade_journal import TradeJournal
 from engine.drawdown_breaker import DrawdownBreaker
+from vr_paths import resolve_data_dir
 
 router = APIRouter(tags=["journal"])
 

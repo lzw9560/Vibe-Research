@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -211,6 +213,8 @@ def deep_ai(code: str, llm: LLMConfig):
 
 def _fill_perspectives(skeleton: models.DeepAnalysisSkeleton, text: str) -> None:
     """按【大师】标记切分 text 填入各 perspective.ai_text。"""
+    import re
+
     names = ["巴菲特", "芒格", "段永平", "李录"]
     # 找每个标记位置
     positions = []

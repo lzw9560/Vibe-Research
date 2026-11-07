@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List
 
-from limitup_screener import GeneScore, get_screener_result
+from limitup_screener import GeneScore, get_screener_result, GENE_HIGH_THRESHOLD, GENE_QUALIFY_THRESHOLD
 from limitup_sti import get_sti_engine
 from config import default_config
 

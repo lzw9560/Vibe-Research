@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException
 
 from candidate_funnel.evaluation import (
     DIMENSION_LIFT_REGISTRY,
+    FROZEN_COMMIT,
     lift_to_multiplier,
 )
 from s44_verifier.recorder import Recorder, VerifierRecord

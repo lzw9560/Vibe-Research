@@ -11,7 +11,8 @@ from __future__ import annotations
 import logging
 import os
 import time
-from dataclasses import field
+import threading as _threading
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -166,7 +167,7 @@ class AuctionScreener:
         yzt_pool = [
             zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getYesterdayZTPool", date_fmt, "zs:desc")
         ]
-        [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicZBPool", date_fmt, "fbt:asc")]
+        zb_pool = [zt_pool_item_from_dict(it) for it in astock.em_zt_topic_pool("getTopicZBPool", date_fmt, "fbt:asc")]
 
         if not zt_pool:
             return AuctionScreenerResult(
@@ -198,6 +199,7 @@ class AuctionScreener:
             fbt = item.seal_time or 0  # 封板时间
             zbc = item.broken_count or 0  # 炸板次数
             zje = item.limit_price or 0  # 涨停价
+            open_price = item.open  # 开盘价（0 永不合法 per S121，None=未取得，不 or 0 反吞）
             seal_amount = item.seal_amount or 0.0  # 封单额（元）
             float_shares = item.float_shares or 0.0  # 流通盘（股）
             prev_close = item.prev_close or 0.0  # 昨收价

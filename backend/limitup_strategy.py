@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 from pydantic import BaseModel
+from typing import Any
 
 from limitup_screener import (
     DISCLAIMER,
@@ -15,9 +16,11 @@ from limitup_screener import (
     GENE_QUALIFY_THRESHOLD,
     LOOKBACK_DAYS,
     GeneScore,
+    compute_gene_score,
     get_screener_result,
 )
 from risk_models import OneDayRisk
+import astock
 
 # S086 涨停战法 pipeline 统一架构：
 # - ConditionMatch / match_strategies 来自 strategies.strategy_base（dispatch_match 调度器取代
@@ -449,6 +452,7 @@ async def _do_rebuild_gene_with_backtest(code: str, date: str | None) -> GeneSco
         calc_total_score,
         wilson_lower_bound,
         LOOKBACK_DAYS,
+        DISCLAIMER,
     )
 
     target_date = await public_resolve_date(date)

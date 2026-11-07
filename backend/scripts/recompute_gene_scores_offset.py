@@ -149,14 +149,14 @@ async def _run_apply() -> int:
     # 打印重算前状态
     conn = sqlite3.connect(GENE_SCORES_DB_PATH)
     conn.row_factory = sqlite3.Row
-    _print_before_state(conn)
+    before = _print_before_state(conn)
     conn.close()
 
     print("=== 开始重算 ===")
     for i, d in enumerate(TARGET_DATES):
         print(f"[{i + 1}/{len(TARGET_DATES)}] {d}")
         try:
-            await _recompute_one(d)
+            n = await _recompute_one(d)
         except Exception as e:
             print(f"  [ERROR] {d} 重算失败: {e}", file=sys.stderr)
             # 继续下一日，最后统一验证会暴露
@@ -177,7 +177,7 @@ def _verify() -> int:
     zh_conn = sqlite3.connect(ZT_HISTORY_DB_PATH)
 
     all_ok = True
-    date.today().isoformat()
+    today = date.today().isoformat()
 
     # a. 行数对照
     print("--- a. 行数对照（gene_scores vs 期望）---")

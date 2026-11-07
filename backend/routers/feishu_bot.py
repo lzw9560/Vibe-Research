@@ -20,7 +20,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Request
 
 import chat
-from config import load_config
+from config import AssistantDefaultConfig as Config, load_config
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["feishu_bot"])

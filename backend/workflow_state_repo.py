@@ -20,6 +20,7 @@ _ALLOWED_TRANSITIONS（经 WorkflowStateMachine.transition），不复制规则�
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 from datetime import datetime
 from typing import Any, Dict, List, Optional

@@ -15,6 +15,7 @@ import pathlib
 import sys
 
 import numpy as np
+import pandas as pd
 
 _SCRIPTS_DIR = pathlib.Path(__file__).resolve().parents[2] / "vendor" / "skill-backtest-overfit" / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:

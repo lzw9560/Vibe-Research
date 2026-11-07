@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
-from data.datalake.store import month_db
+from data.datalake.store import DATALAKE_ROOT, month_db
 
 
 def load_ticks(date_str: str, code: str) -> list[dict]:

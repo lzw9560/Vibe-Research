@@ -15,7 +15,7 @@ DSA SEAL_PLATE_ARCHITECTURE.md §6 规则原型：
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 

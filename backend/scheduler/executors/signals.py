@@ -143,7 +143,7 @@ def _render_d_close_entry(signals: dict[str, Any]) -> str:
     """D 收盘入场通知：今日收盘买这些。"""
     date = signals.get("date", "")
     sig_list = signals.get("signals", [])
-    signals.get("regime", {}).get("current", "unknown")
+    regime = signals.get("regime", {}).get("current", "unknown")
     cap = signals.get("cap", {}).get("effective", 1.0)
 
     tradable = [s for s in sig_list if s.get("bucket") == "tradable"]
@@ -201,7 +201,7 @@ def _render_d1_open_exit(signals: dict[str, Any]) -> str:
     """D+1 开盘出场通知：开盘卖这些。"""
     date = signals.get("date", "")
     sig_list = signals.get("signals", [])
-    signals.get("regime", {}).get("current", "unknown")
+    regime = signals.get("regime", {}).get("current", "unknown")
     cap = signals.get("cap", {}).get("effective", 1.0)
 
     # 出场只关注 tradable + exploratory（avoid 不交易）

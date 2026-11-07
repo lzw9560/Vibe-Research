@@ -23,9 +23,11 @@ signal 生成器 → executor → accounting → 写 SQLite）。口径不同不
 
 from __future__ import annotations
 
+import json
 import math
 import sqlite3
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -670,7 +672,7 @@ def _compute_arm_stats(records: list[JournalRecord]) -> dict:
     # net_pnl 序列
     net_pnls = [float(r.net_pnl) for r in buyable if r.net_pnl is not None]
     exit_dates = [r.exit_date or r.entry_date for r in buyable if r.net_pnl is not None]
-    [r.entry_date for r in buyable if r.net_pnl is not None]
+    entry_dates = [r.entry_date for r in buyable if r.net_pnl is not None]
     total_net_pnl = sum(net_pnls)
 
     # 盈亏比

@@ -11,7 +11,7 @@ import asyncio
 from datetime import date as _date
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Query, HTTPException
 
 # cache_response 定义在 app.py，但 candidates.py 模块级 import 会触发 circular import
 # （app.py 加载时 include_router(candidates.router) ← candidates 还没加载完）。

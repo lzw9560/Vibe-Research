@@ -75,6 +75,7 @@ def backfill_winrate_samples(days: int = 30) -> Dict[str, Any]:
     70% 假设买入（funnel_candidate），30% 留 missed。
     幂等：先删 signal_ref=_SYNTH_REF 旧行，再写新行。
     """
+    from vr_paths import resolve_data_dir
     from win_rate_tracker import WinRateTracker, WinRateRecord
 
     gene_dates = _list_gene_score_dates(days)

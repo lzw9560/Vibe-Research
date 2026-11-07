@@ -12,6 +12,7 @@
 """
 
 from __future__ import annotations
+from typing import Any
 
 from tactics.factor_calculator import (
     calc_amount_ratio,

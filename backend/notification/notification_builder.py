@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from typing import List, TYPE_CHECKING
 
+from notification.notification_channel import NotificationChannel, ChannelDetector
+from notification.notification_result import ChannelAttemptResult, NotificationDispatchResult
 
 if TYPE_CHECKING:
     from notification.notification_types import AnalysisResult

@@ -15,8 +15,8 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
-from dataclasses import dataclass
-from datetime import datetime, timedelta
+from dataclasses import dataclass, field
+from datetime import date as date_cls, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 

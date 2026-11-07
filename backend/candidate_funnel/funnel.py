@@ -22,6 +22,7 @@ from candidate_funnel.models import (
     FilterRecord,
     FunnelLayer,
     FunnelResult,
+    IndicatorSet,
     ThresholdConfig,
 )
 from candidate_funnel.sources._filters import classify_tradability

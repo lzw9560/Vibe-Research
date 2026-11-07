@@ -32,10 +32,14 @@ if _ROOT not in sys.path:
 from strategies.tail_dip_engine import (
     HARD_THRESHOLDS,
     calculate_anomalous_deviation,
+    check_tail_volatility,
     diagnose_drawdown_lock,
     execute_iron_stop_loss,
     fetch_financial_substitute_factors,
+    financial_red_line_shield,
+    premarket_liquidity_fuse,
     propose_peak_decay,
+    screen_tail_dip_candidate,
 )
 
 router = APIRouter(tags=["strategy-tail-dip"])
@@ -103,7 +107,7 @@ def scan_tail_dip(
         if cache and (_time.time() - cache[1]) < 60:
             all_stocks = cache[0]
         else:
-            subprocess.run(
+            result = subprocess.run(
                 [
                     "/Users/lizhiwei/.nvm/versions/node/v24.21.0/bin/hithink-finance",
                     "market",
@@ -584,7 +588,7 @@ def rsi_timing_signal() -> dict:
     """
     import subprocess
     import json as _json
-    from strategies.rsi_timing import check_rsi_signal, RSI_PARAMS
+    from strategies.rsi_timing import calculate_rsi, check_rsi_signal, RSI_PARAMS
 
     end_ms = int(__import__("time").time() * 1000)
     start_ms = end_ms - 60 * 86400000  # 近60天

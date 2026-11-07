@@ -5,7 +5,7 @@ Scheduled tasks router.
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import date, datetime
 
 from vr_paths import BEIJING_TZ
 

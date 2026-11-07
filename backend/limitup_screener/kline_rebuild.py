@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+from datetime import datetime, timedelta
 from typing import Any
 
 import astock
@@ -25,7 +26,9 @@ from limitup_screener.models import (
     GENE_QUALIFY_THRESHOLD,
     GENE_HIGH_THRESHOLD,
     LOOKBACK_DAYS,
+    DISCLAIMER,
 )
+from limitup_screener.data import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -203,7 +206,7 @@ async def rebuild_date(
     if codes is None:
         codes = await _get_db_codes()
 
-    date.replace("-", "")
+    target_date = date.replace("-", "")
     results: list[GeneScore] = []
 
     # 分批并发获取 K 线 + 判定涨停（mootdx 同步阻塞，用 to_thread 包装）

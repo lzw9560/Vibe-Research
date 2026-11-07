@@ -146,7 +146,7 @@ def candidate_funnel_precompute(payload: Dict[str, Any]) -> Dict[str, Any]:
 def daily_review_notify(payload: Dict[str, Any]) -> Dict[str, Any]:
     """每日复盘通知：生成报告并推送。"""
     import daily_review as dr
-    from notification.notification_service import get_notification_service
+    from notification.notification_service import get_notification_service, send_daily_report
 
     today = datetime.now().strftime("%Y-%m-%d")
     reviewer = dr.get_reviewer()

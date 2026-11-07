@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -341,6 +342,8 @@ async def get_sector_divergence_history(days: int = 30) -> list[dict]:
     降级：计算失败时返回已缓存的历史数据或空列表。
     """
     try:
+        import limitup_screener as ls
+
         history: list[dict] = []
         # 获取最近 N 个交易日（简化：按自然日回溯，实际应使用交易日历）
         # 这里用缓存避免重复计算

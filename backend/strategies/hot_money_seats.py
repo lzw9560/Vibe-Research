@@ -25,10 +25,13 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sqlite3
-from dataclasses import dataclass
+import urllib.request
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import astock
 from config import SEAT_PROFILES_DB_PATH

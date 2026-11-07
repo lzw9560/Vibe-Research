@@ -288,6 +288,7 @@ class TaskExecutor:
             service = get_notification_service()
 
             status_text = {"success": "成功", "degraded": "降级", "failed": "失败"}.get(status, "未知")
+            title = f"定时任务{status_text}: {task.name}"
             content = f"任务: {task.name}\n状态: {status_text}\n时间: {run.started_at}"
             if run.error:
                 content += f"\n错误: {run.error}"
