@@ -65,10 +65,20 @@ def load_data():
     code_map, all_dates = load_kline_db()
     calendar = sorted(all_dates)
     import json
-    idx = json.load(open(ROOT / ".vibe-research" / "index_ma20_regime.json"))
+    idx = json.load(open(resolve_data_dir() / "index_ma20_regime.json"))
     print(f"    codes={len(code_map)} dates={len(calendar)} "
           f"({calendar[0]}..{calendar[-1]}) index_days={len(idx)}")
     return code_map, calendar, idx
+
+
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+
+from vr_paths import resolve_data_dir
+
 
 
 ROOT = Path(__file__).resolve().parents[2]

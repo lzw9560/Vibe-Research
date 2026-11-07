@@ -55,8 +55,12 @@ from tools._factor_helpers import (  # noqa: E402  DRY: 禁复制 helper 代码
 
 # gene_scores.db 路径——镜像 helper 的 ROOT/.vibe-research 逻辑 (helper 用
 # parents[2]=repo root + ".vibe-research"; 同样路径, 不复制 helper 内部常量)
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir
+
 ROOT = Path(__file__).resolve().parents[2]
-GENE_DB = ROOT / ".vibe-research" / "gene_scores.db"
+GENE_DB = resolve_data_dir() / "gene_scores.db"
 
 
 def load_gene_scores() -> dict[str, dict[str, float]]:

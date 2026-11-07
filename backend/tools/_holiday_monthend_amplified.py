@@ -19,7 +19,16 @@ from datetime import datetime
 from pathlib import Path
 from math import erf, sqrt
 
-DATA = Path(__file__).resolve().parents[2] / ".vibe-research"
+import sys
+
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
+DATA = resolve_data_dir()
 HOLIDAY_GAP = 4
 
 

@@ -14,13 +14,22 @@ from pathlib import Path
 from collections import defaultdict
 import random
 
+import sys
+
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
 from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
-BLOCK = ROOT / ".vibe-research" / "block_trade_raw.json"
-KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
+BLOCK = resolve_data_dir() / "block_trade_raw.json"
+KLINE = resolve_data_dir() / "baostock_kline_cache.json"
 EXIT_WINDOWS = [1, 3, 5]
 N_PERM = 2000
 BONF_K = 9           # 3 strata × 3 windows

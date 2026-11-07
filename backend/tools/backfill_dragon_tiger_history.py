@@ -24,8 +24,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from strategies.hot_money_seats import fetch_billboard_for_date_meta
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / ".vibe-research"
+DATA = resolve_data_dir()
 INDEX_CACHE = DATA / "index_ohlc_cache.json"
 DB_PATH = DATA / "dragon_tiger_history.db"
 

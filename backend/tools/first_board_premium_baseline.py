@@ -30,12 +30,19 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
-KLINE_CACHE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
-DB = ROOT / ".vibe-research" / "gene_scores.db"
-OUT_JSON = ROOT / ".vibe-research" / "first_board_premium_baseline.json"
+KLINE_CACHE = resolve_data_dir() / "baostock_kline_cache.json"
+DB = resolve_data_dir() / "gene_scores.db"
+OUT_JSON = resolve_data_dir() / "first_board_premium_baseline.json"
 
 # 成本假设：佣金+滑点合计 0.4%（双侧，弱近似）
 COST_PCT = 0.4

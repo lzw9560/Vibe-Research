@@ -14,11 +14,16 @@
 """
 import json
 import statistics
+import sys
+from pathlib import Path
 from datetime import datetime, timedelta
 from collections import defaultdict
 from math import erf, sqrt
 
-DATA = '/Users/lizhiwei/project/code/stock/Vibe-Research/.vibe-research'
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir
+DATA = str(resolve_data_dir())
 ETF_COST = 0.10
 HOLIDAY_GAP = 4
 

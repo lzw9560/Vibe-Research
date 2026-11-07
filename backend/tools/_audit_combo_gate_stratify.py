@@ -34,7 +34,16 @@ import statistics
 from collections import defaultdict
 from pathlib import Path
 
-DB = Path(__file__).resolve().parents[2] / ".vibe-research" / "baostock_kline_cache.db"
+import sys
+
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
+DB = resolve_data_dir() / "baostock_kline_cache.db"
 COST = 0.004  # 双边 0.4%（和 R4 一致）
 
 

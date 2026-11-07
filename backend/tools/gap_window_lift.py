@@ -11,6 +11,11 @@ premium_baseline 899 samples（D 收盘→D+1 开盘 gap）+ gene_scores total_s
 import datetime, json, sqlite3, sys, statistics
 from pathlib import Path
 from collections import defaultdict
+import sys
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir
+
 ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
@@ -22,9 +27,9 @@ from engine.accounting import _cost_pct  # noqa: E402  # S184 wok7j1arm P0: gap 
 # 隔夜 gap(D收→D+1开) 是薄+不可选+部分不可交易的事件 edge（S199 证：市场级 forward-return edge），
 # 非"因子预测哪个涨停股 gap 大"的 selection edge。源码标注供 verifier_router 源码审查测。
 edge_type = "overnight_gap"
-KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
-DB = ROOT / ".vibe-research" / "gene_scores.db"
-PREMIUM = ROOT / ".vibe-research" / "first_board_premium_baseline.json"
+KLINE = resolve_data_dir() / "baostock_kline_cache.json"
+DB = resolve_data_dir() / "gene_scores.db"
+PREMIUM = resolve_data_dir() / "first_board_premium_baseline.json"
 TOL = 0.01  # 一字板价格容差
 
 def is_one_word_d(bar):

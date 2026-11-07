@@ -11,12 +11,13 @@ from pathlib import Path
 from math import sqrt
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir  # 数据路径统一走 vr_paths（S037 收口）
 from tools._factor_helpers import limit_for_code, is_yizi_t1
 from tools.explore_main_force_holder_test import (
     load_holder, load_kline, build_picks, raw_ev, HOLD_DAYS, COST, THRESHOLDS
 )
 
-KLINE_DB = Path("/Users/lizhiwei/project/code/stock/Vibe-Research/.vibe-research/baostock_kline_cache.db")
+KLINE_DB = resolve_data_dir() / "baostock_kline_cache.db"
 
 
 def median_amount_60bar(dmap, notice_date, window=60):

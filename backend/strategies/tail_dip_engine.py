@@ -26,6 +26,9 @@ from typing import Any
 
 import numpy as np
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+from vr_paths import resolve_data_dir
+
 try:
     import akshare as ak
 except ImportError:
@@ -804,7 +807,7 @@ class SectorDeviationResult:
 
 def compute_realtime_sector_deviation(
     code: str,
-    db_path: str = ".vibe-research/intraday_accumulation/intraday_microstructure.db",
+    db_path: str = str(resolve_data_dir() / "intraday_accumulation" / "intraday_microstructure.db"),
     *,
     date: str | None = None,
     min_deviation: float = 3.0,
@@ -1087,8 +1090,8 @@ class TailSnapVolatilityResult:
 
 def check_tail_volatility_from_snapshots(
     code: str,
-    db_path: str = ".vibe-research/intraday_accumulation/intraday_microstructure.db",
-    kline_db_path: str = ".vibe-research/baostock_kline_cache.db",
+    db_path: str = str(resolve_data_dir() / "intraday_accumulation" / "intraday_microstructure.db"),
+    kline_db_path: str = str(resolve_data_dir() / "baostock_kline_cache.db"),
     *,
     min_days: int = 15,
     manipulation_ratio: float = 0.3,   # 尾盘波动率<日K的30% → 疑似恶庄

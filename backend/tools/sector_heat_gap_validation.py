@@ -41,14 +41,21 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 from data_quality.schema_validator import validate_or_reject  # noqa: E402  R1 bad-data gate
 from engine.accounting import _cost_pct, gap_net_return  # noqa: E402  accounting.py:262
 
-KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
-ZHDB = ROOT / ".vibe-research" / "zt_history.db"
-GSDB = ROOT / ".vibe-research" / "gene_scores.db"
+KLINE = resolve_data_dir() / "baostock_kline_cache.json"
+ZHDB = resolve_data_dir() / "zt_history.db"
+GSDB = resolve_data_dir() / "gene_scores.db"
 TOL = 0.01  # 一字板价格容差
 
 

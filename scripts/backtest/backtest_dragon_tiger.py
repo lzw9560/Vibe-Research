@@ -5,9 +5,13 @@ Step 1: 新浪 API 拉日K → 计算 vol_ratio / amount / 次日收益
 Step 2: 东财 datacenter API 拉龙虎榜 → 计算游资净额
 Step 3: 分组对比
 """
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 import sqlite3, urllib.request, json, time, sys, os
+from pathlib import Path
 
-DB = "/Users/lizhiwei/project/code/stock/Vibe-Research/.vibe-research/gene_scores.db"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
+from vr_paths import resolve_data_dir
+DB = str(resolve_data_dir() / "gene_scores.db")
 CACHE_FILE = "/tmp/backtest_kline_cache.json"
 
 def fetch_klines_sina(code, datalen=250):

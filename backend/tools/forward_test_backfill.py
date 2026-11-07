@@ -21,6 +21,13 @@ import sqlite3
 import sys
 from pathlib import Path
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
@@ -32,8 +39,8 @@ from strategies.forward_test import (  # noqa: E402
     get_forward_test_summary,
 )
 
-DB = ROOT / ".vibe-research" / "gene_scores.db"
-SAMPLES = ROOT / ".vibe-research" / "backtest_samples.json"
+DB = resolve_data_dir() / "gene_scores.db"
+SAMPLES = resolve_data_dir() / "backtest_samples.json"
 
 
 def load_returns_map() -> dict[tuple[str, str], dict]:
@@ -62,8 +69,8 @@ def load_returns_by_date() -> dict[str, dict[str, dict]]:
     return by_date
 
 
-ZT_DB = ROOT / ".vibe-research" / "zt_history.db"
-KLINE_CACHE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
+ZT_DB = resolve_data_dir() / "zt_history.db"
+KLINE_CACHE = resolve_data_dir() / "baostock_kline_cache.json"
 
 
 def _collect_signal_dates_multi_source() -> list[tuple[str, str]]:

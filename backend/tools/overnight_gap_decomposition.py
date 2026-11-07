@@ -9,13 +9,18 @@
 import bisect
 import datetime, json, sqlite3, sys, statistics
 from pathlib import Path
+import sys
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir
+
 ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from strategies.kline_returns import simulate_holding
 from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-data gate
 from engine.pctchg_injector import enrich_pctchg  # S204 T1b: 第 7 个 bypass（7e75465 接 6 harness 漏此）
-KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
-DB = ROOT / ".vibe-research" / "gene_scores.db"
+KLINE = resolve_data_dir() / "baostock_kline_cache.json"
+DB = resolve_data_dir() / "gene_scores.db"
 raw_cache = json.loads(KLINE.read_bytes())
 # S204 T1b: enrich pctChg（一字板 0.0 复算覆盖）——补第 7 个 bypass。
 # 隔夜 gap 数（line 61 用 close/open 直算）不依赖 pctChg 本来干净；

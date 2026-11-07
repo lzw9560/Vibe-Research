@@ -19,12 +19,19 @@ import random
 from pathlib import Path
 from collections import defaultdict
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 sys.path.insert(0, str(ROOT / "backend/tools"))
 
-KLINE_CACHE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
-DB = ROOT / ".vibe-research" / "gene_scores.db"
+KLINE_CACHE = resolve_data_dir() / "baostock_kline_cache.json"
+DB = resolve_data_dir() / "gene_scores.db"
 
 
 def _wilson(wins: int, n: int, z: float = 1.96) -> tuple[float, float]:

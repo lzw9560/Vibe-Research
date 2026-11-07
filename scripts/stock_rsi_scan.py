@@ -12,7 +12,9 @@ from scipy import stats as sp_stats
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
-KDB = os.path.join(os.path.dirname(__file__), "..", ".vibe-research", "baostock_kline_cache.db")
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+from vr_paths import resolve_data_dir
+KDB = str(resolve_data_dir() / "baostock_kline_cache.db")
 
 def calc_rsi(closes):
     if len(closes) < 15:

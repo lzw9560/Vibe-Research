@@ -17,13 +17,19 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 from pathlib import Path
 
 import numpy as np
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
+from vr_paths import resolve_data_dir
+
 REPO = Path(__file__).resolve().parent.parent.parent
-SAMPLES_PATH = REPO / ".vibe-research" / "backtest_samples.json"
-OUT = REPO / ".vibe-research" / "factor_significance.json"
+_DATA = resolve_data_dir()
+SAMPLES_PATH = _DATA / "backtest_samples.json"
+OUT = _DATA / "factor_significance.json"
 
 FACTORS = [
     "factor_premium_rate",

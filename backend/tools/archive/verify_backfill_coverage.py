@@ -10,9 +10,18 @@ import json
 import sqlite3
 from pathlib import Path
 
+import sys
+
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
-CACHE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
-DB = ROOT / ".vibe-research" / "zt_history.db"
+CACHE = resolve_data_dir() / "baostock_kline_cache.json"
+DB = resolve_data_dir() / "zt_history.db"
 
 
 def _coverage(picks: list[tuple[str, str]], cache: dict) -> tuple[int, int, int]:

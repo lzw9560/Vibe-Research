@@ -15,6 +15,13 @@ import sys
 import time
 from pathlib import Path
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
@@ -107,7 +114,7 @@ if __name__ == "__main__":
     sox = probe_sox_datacenter()
     print(json.dumps(sox, ensure_ascii=False))
 
-    out_dir = ROOT / ".vibe-research" / "s088-secid-probe"
+    out_dir = resolve_data_dir() / "s088-secid-probe"
     out_dir.mkdir(parents=True, exist_ok=True)
     matrix_path = out_dir / "matrix.json"
     matrix_path.write_text(

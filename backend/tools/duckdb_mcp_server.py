@@ -13,9 +13,13 @@ import sys
 import os
 from pathlib import Path
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir
+
 # 数据根目录
 DATA_DIR = Path(os.environ.get("VR_DATA_DIR", 
-    str(Path(__file__).resolve().parents[2] / ".vibe-research")))
+    str(resolve_data_dir())))
 
 try:
     import duckdb
@@ -61,16 +65,17 @@ def list_tables(db_path: str) -> list[str]:
 
 def query_sql(sql: str, db_path: str = None, limit: int = 100) -> str:
     """执行 SQL 查询。如果指定 db_path，先 ATTACH。"""
+    if not db_path:
+        return json.dumps({"error": "db_path required. Use list_databases to see available DBs.", "hint": "query <sql> --db_path <relative_path.db>"})
     con = duckdb.connect()
     try:
-        if db_path:
-            full_path = DATA_DIR / db_path
-            if not full_path.exists():
-                return json.dumps({"error": f"{db_path} not found"})
-            con.execute(f"ATTACH '{full_path}' AS db (TYPE SQLITE)")
-            # 如果 SQL 没带 schema 前缀，加 db.
-            if "db." not in sql and "FROM " in sql.upper():
-                sql = sql.replace("FROM ", "FROM db.", 1)  # 简单替换第一个 FROM
+        full_path = DATA_DIR / db_path
+        if not full_path.exists():
+            return json.dumps({"error": f"{db_path} not found"})
+        con.execute(f"ATTACH '{full_path}' AS db (TYPE SQLITE)")
+        # 如果 SQL 没带 schema 前缀，加 db.
+        if "db." not in sql and "FROM " in sql.upper():
+            sql = sql.replace("FROM ", "FROM db.", 1)  # 简单替换第一个 FROM
         
         # 加 LIMIT
         if "LIMIT" not in sql.upper():
@@ -123,80 +128,53 @@ def query_csv(csv_path: str, sql: str = None, limit: int = 100) -> str:
         con.close()
 
 
-if Server is not None:
-    # Full MCP SDK available
-    server = Server("duckdb-mcp")
-    
-    @server.list_tools()
-    async def list_tools():
-        return [
-            Tool(
-                name="list_databases",
-                description="List all SQLite databases in .vibe-research/",
-                inputSchema={"type": "object", "properties": {}},
-            ),
-            Tool(
-                name="list_tables",
-                description="List tables in a specific SQLite database",
-                inputSchema={
-                    "type": "object",
-                    "properties": {"db_path": {"type": "string", "description": "Relative path to .db file in .vibe-research/"}},
-                    "required": ["db_path"],
-                },
-            ),
-            Tool(
-                name="query_sql",
-                description="Execute SQL query on a SQLite database (via DuckDB ATTACH) or CSV",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "sql": {"type": "string", "description": "SQL query"},
-                        "db_path": {"type": "string", "description": "Optional: relative path to .db file"},
-                        "limit": {"type": "integer", "description": "Max rows to return", "default": 100},
-                    },
-                    "required": ["sql"],
-                },
-            ),
-            Tool(
-                name="query_csv",
-                description="Query a CSV file directly with DuckDB (no import needed)",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "csv_path": {"type": "string", "description": "Path to CSV file"},
-                        "sql": {"type": "string", "description": "Optional SQL (use {table} as placeholder)"},
-                        "limit": {"type": "integer", "description": "Max rows", "default": 100},
-                    },
-                    "required": ["csv_path"],
-                },
-            ),
-        ]
-    
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict):
+
+
+def _run_mcp_server():
+    """启动 MCP stdio server（仅 __main__ 时调用）。"""
+    from mcp.server import Server
+    from mcp.server.stdio import stdio_server
+    from mcp.types import Tool as ToolType, TextContent as TextContentType, ListToolsResult, CallToolResult
+    import mcp.types as mt
+    import asyncio
+
+    async def _on_list_tools(ctx, params=None):
+        return ListToolsResult(tools=[
+            ToolType(name="list_databases", description="List all SQLite databases in .vibe-research/", inputSchema={"type": "object", "properties": {}}),
+            ToolType(name="list_tables", description="List tables in a SQLite database", inputSchema={"type": "object", "properties": {"db_path": {"type": "string"}}, "required": ["db_path"]}),
+            ToolType(name="query_sql", description="Execute SQL on a SQLite DB via DuckDB ATTACH", inputSchema={"type": "object", "properties": {"sql": {"type": "string"}, "db_path": {"type": "string"}, "limit": {"type": "integer", "default": 100}}, "required": ["sql", "db_path"]}),
+            ToolType(name="query_csv", description="Query CSV directly with DuckDB", inputSchema={"type": "object", "properties": {"csv_path": {"type": "string"}, "sql": {"type": "string"}, "limit": {"type": "integer", "default": 100}}, "required": ["csv_path"]}),
+        ])
+
+    async def _on_call_tool(ctx, params):
+        name = params.name
+        args = params.arguments or {}
         if name == "list_databases":
-            result = list_databases()
-            return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
+            r = list_databases()
+            return CallToolResult(content=[mt.TextContent(type="text", text=json.dumps(r, ensure_ascii=False, indent=2))])
         elif name == "list_tables":
-            result = list_tables(arguments["db_path"])
-            return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+            r = list_tables(args.get("db_path", ""))
+            return CallToolResult(content=[mt.TextContent(type="text", text=json.dumps(r, ensure_ascii=False))])
         elif name == "query_sql":
-            result = query_sql(arguments["sql"], arguments.get("db_path"), arguments.get("limit", 100))
-            return [TextContent(type="text", text=result)]
+            r = query_sql(args.get("sql", ""), args.get("db_path"), args.get("limit", 100))
+            return CallToolResult(content=[mt.TextContent(type="text", text=r)])
         elif name == "query_csv":
-            result = query_csv(arguments["csv_path"], arguments.get("sql"), arguments.get("limit", 100))
-            return [TextContent(type="text", text=result)]
-    
+            r = query_csv(args.get("csv_path", ""), args.get("sql"), args.get("limit", 100))
+            return CallToolResult(content=[mt.TextContent(type="text", text=r)])
+        return CallToolResult(content=[mt.TextContent(type="text", text=f"Unknown: {name}")])
+
+    server = Server("duckdb-mcp", on_list_tools=_on_list_tools, on_call_tool=_on_call_tool)
+
     async def main():
         async with stdio_server() as (read, write):
             await server.run(read, write, server.create_initialization_options())
-    
-    import asyncio
+
     asyncio.run(main())
-else:
-    # Fallback: line-based stdio (for testing without MCP SDK)
-    print("MCP SDK not available. Running in test mode.", file=sys.stderr)
-    print("Available commands: list_databases, list_tables <db_path>, query <sql>, csv <path>", file=sys.stderr)
+
+
+def _run_test_mode():
+    """Fallback: line-based stdio for testing without MCP SDK。"""
+    print("Test mode. Commands: list_databases, list_tables <db>, query <sql> db=<path>, csv <path>", file=sys.stderr)
     for line in sys.stdin:
         line = line.strip()
         if line == "list_databases":
@@ -204,8 +182,27 @@ else:
         elif line.startswith("list_tables "):
             print(json.dumps(list_tables(line[12:]), ensure_ascii=False))
         elif line.startswith("query "):
-            print(query_sql(line[6:]))
+            rest = line[6:]
+            db_path = None
+            if " db=" in rest:
+                parts = rest.split(" db=", 1)
+                rest = parts[0]
+                db_path = parts[1]
+            print(query_sql(rest, db_path))
         elif line.startswith("csv "):
-            print(query_csv(line[4:]))
+            rest = line[4:]
+            db_path = None
+            if " db=" in rest:
+                parts = rest.split(" db=", 1)
+                rest = parts[0]
+                db_path = parts[1]
+            print(query_csv(rest, db_path))
         elif line == "quit":
             break
+
+
+if __name__ == "__main__":
+    if '--test' in sys.argv:
+        _run_test_mode()
+    else:
+        _run_mcp_server()

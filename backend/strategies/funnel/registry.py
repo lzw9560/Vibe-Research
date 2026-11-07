@@ -15,6 +15,9 @@ import os
 from pathlib import Path
 from typing import Optional
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+from vr_paths import resolve_data_dir
+
 from strategies.strategy_base import (
     PositionParams,
     QualityCheck,
@@ -45,7 +48,7 @@ from strategies.impl import (
 
 # spec §3: weights 由 Phase 0d 全样本回归定稿（.vibe-research/strategy_weights.json）
 # 测试时 VR_DATA_DIR 指向临时目录（conftest），weights 不存在 → 等权兜底
-_DATA_DIR = Path(os.environ.get("VR_DATA_DIR", "")) if os.environ.get("VR_DATA_DIR") else Path(__file__).resolve().parent.parent.parent / ".vibe-research"
+_DATA_DIR = resolve_data_dir()
 _WEIGHTS_PATH = _DATA_DIR / "strategy_weights.json"
 _WEIGHTS_CACHE: dict | None = None
 

@@ -132,7 +132,8 @@ def evaluate_discipline_gate(target_date: str) -> dict[str, Any]:
         from config import STI_TIMELINE_DB_PATH  # noqa: PLC0415
         db_path = Path(STI_TIMELINE_DB_PATH)
     except Exception:  # noqa: BLE001
-        db_path = Path(".vibe-research/sti_timeline.db")
+        from vr_paths import resolve_data_dir  # noqa: PLC0415
+        db_path = resolve_data_dir() / "sti_timeline.db"
 
     sti_row = _load_sti_row(db_path, target_date)
 

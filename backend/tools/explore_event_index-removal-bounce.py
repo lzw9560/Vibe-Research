@@ -48,8 +48,15 @@ from tools._factor_helpers import (  # noqa: E402
     ev_stats, day_paired_t, bonferroni_p, norm_sf_positive, ALPHA, COST,
 )
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / ".vibe-research"
+DATA = resolve_data_dir()
 KLINE_DB = DATA / "baostock_kline_cache.db"
 DIFF_CACHE = DATA / "_idx_constituent_diff_cache.json"   # constituent diff (eff dates + add/remove)
 FETCH_CACHE = DATA / "_idx_add_fetch_cache.json"         # reuse addition fetch cache (shared kline fetches)

@@ -27,8 +27,15 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tools._factor_helpers import limit_for_code, is_yizi_t1, ev_stats, day_paired_t, bonferroni_p, ALPHA
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / ".vibe-research"
+DATA = resolve_data_dir()
 KLINE_DB = DATA / "baostock_kline_cache.db"
 INDEX_CACHE = DATA / "index_ohlc_cache.json"
 

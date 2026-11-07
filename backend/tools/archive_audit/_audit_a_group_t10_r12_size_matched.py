@@ -14,7 +14,16 @@ from collections import defaultdict
 from math import erf
 import bisect
 
-DATA = Path(__file__).resolve().parents[2] / ".vibe-research"
+import sys
+
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from vr_paths import resolve_data_dir
+
+
+DATA = resolve_data_dir()
 DT_DB = DATA / "dragon_tiger_history.db"
 KLINE_DB = DATA / "baostock_kline_cache.db"
 STOP_PCT = -3.0

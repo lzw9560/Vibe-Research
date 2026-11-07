@@ -12,7 +12,16 @@ import sqlite3
 from pathlib import Path
 from collections import defaultdict
 
-DATA = Path(__file__).resolve().parents[2] / ".vibe-research"
+import sys
+
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
+DATA = resolve_data_dir()
 DT_DB = DATA / "dragon_tiger_history.db"
 
 # R34 机构+外资席位关键词

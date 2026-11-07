@@ -5,11 +5,15 @@
 3. 宽基 vs 行业 ETF 节前差异
 4. 动量参考 (节前信号是否=前期涨幅的延续)
 """
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 import json, sys
+from pathlib import Path
 from datetime import datetime, timedelta
 from statistics import mean, median, stdev
 
-CACHE = "/Users/lizhiwei/project/code/stock/Vibe-Research/.vibe-research"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir
+CACHE = str(resolve_data_dir())
 
 with open(f"{CACHE}/index_ohlc_cache.json") as f:
     idx = json.load(f)

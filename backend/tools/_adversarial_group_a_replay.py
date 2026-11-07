@@ -22,9 +22,12 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-ROOT = Path("/Users/lizhiwei/project/code/stock/Vibe-Research")
-DT_DB = ROOT / ".vibe-research" / "dragon_tiger_history.db"
-KL_DB = ROOT / ".vibe-research" / "baostock_kline_cache.db"
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir
+ROOT = Path(__file__).resolve().parents[2]
+DT_DB = resolve_data_dir() / "dragon_tiger_history.db"
+KL_DB = resolve_data_dir() / "baostock_kline_cache.db"
 sys.path.insert(0, str(ROOT / "backend"))
 from engine.accounting import _cost_pct  # noqa: E402
 

@@ -54,8 +54,15 @@ from tools._factor_helpers import (
     ALPHA,
 )
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / ".vibe-research"
+DATA = resolve_data_dir()
 REGIME_PATH = DATA / "index_ma20_regime.json"
 OHLC_CACHE = DATA / "index_ohlc_cache.json"
 

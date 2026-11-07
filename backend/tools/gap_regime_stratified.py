@@ -34,12 +34,19 @@ from pathlib import Path
 
 import numpy as np
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from engine.accounting import gap_net_return  # noqa: E402
 
-VR = ROOT / ".vibe-research"
+VR = resolve_data_dir()
 UNIVERSE = VR / "first_board_universe_baostock_120d.json"
 KLINE = VR / "baostock_kline_cache.json"
 REGIME_CACHE = VR / "index_ma20_regime.json"

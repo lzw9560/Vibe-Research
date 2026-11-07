@@ -10,10 +10,15 @@ T 日全样本（未涨停）→ T+1 涨停 预判信号宽口径回溯。
 诚实：报 sample n / hit count / hit rate / base rate / lift / 95% CI(Wilson)，不臆造。
 """
 import sqlite3, json, statistics, math, sys
+from pathlib import Path
 from collections import defaultdict
 
-KLINE_DB = "/Users/lizhiwei/project/code/stock/Vibe-Research/.vibe-research/baostock_kline_cache.db"
-ZT_DB = "/Users/lizhiwei/project/code/stock/Vibe-Research/.vibe-research/zt_history.db"
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir
+_DATA = resolve_data_dir()
+KLINE_DB = str(_DATA / "baostock_kline_cache.db")
+ZT_DB = str(_DATA / "zt_history.db")
 
 # ---- load zt_history: date -> set(codes) ----
 zdb = sqlite3.connect(ZT_DB); zcur = zdb.cursor()

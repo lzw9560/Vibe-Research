@@ -36,7 +36,16 @@ from pathlib import Path
 from collections import defaultdict
 from math import erf
 
-DATA = Path(__file__).resolve().parents[2] / ".vibe-research"
+import sys
+
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from vr_paths import resolve_data_dir
+
+
+DATA = resolve_data_dir()
 KLINE_DB = DATA / "baostock_kline_cache.db"
 
 # 信号参数（strategy4 报告 §4.3 推荐口径）

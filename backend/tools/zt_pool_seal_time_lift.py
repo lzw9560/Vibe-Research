@@ -11,6 +11,11 @@ signal_date=D（涨停日，feature D close 已知），entry=D+1 open（续涨/
 import datetime, json, sqlite3, sys, time
 from pathlib import Path
 from collections import defaultdict
+import sys
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir
+
 ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar
@@ -19,9 +24,9 @@ from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-dat
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2 verifier
 from tools.first_board_premium_baseline import _load_kline_cache  # noqa: E402  # S204 T1: enriched baostock cache（pctChg 0.0/None 一字板修复）
 
-KLINE_CACHE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
-DB = ROOT / ".vibe-research" / "gene_scores.db"
-ZT_CACHE = ROOT / ".vibe-research" / "zt_pool_hist_cache.json"
+KLINE_CACHE = resolve_data_dir() / "baostock_kline_cache.json"
+DB = resolve_data_dir() / "gene_scores.db"
+ZT_CACHE = resolve_data_dir() / "zt_pool_hist_cache.json"
 PARAMS = (-3.0, 8.0, 3)
 
 def fetch_zt_pool(date_compact):  # YYYYMMDD

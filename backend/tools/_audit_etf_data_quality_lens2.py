@@ -10,7 +10,14 @@ from statistics import mean, median
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-ETF_CACHE = Path(__file__).resolve().parents[2] / ".vibe-research" / "etf_premium_cache.json"
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
+ETF_CACHE = resolve_data_dir() / "etf_premium_cache.json"
 ETF_NAMES = {
     "510300": "沪深300ETF", "510050": "上证50ETF", "159915": "创业板ETF",
     "510500": "中证500ETF", "510880": "红利ETF", "512890": "红利低波ETF",

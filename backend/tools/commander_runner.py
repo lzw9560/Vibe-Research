@@ -18,8 +18,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fetch_market_sentiment_metrics import diagnose
 from calculate_position_allocation import allocate
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / ".vibe-research"
+DATA = resolve_data_dir()
 DT_DB = DATA / "dragon_tiger_history.db"
 KLINE_DB = DATA / "baostock_kline_cache.db"  # combo-5d-edge 全市场日 K（S238，不走 em_get 无防封需求）
 

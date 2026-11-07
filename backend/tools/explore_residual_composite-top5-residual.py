@@ -81,8 +81,15 @@ load_gene_scores = _mod.load_gene_scores
 WEIGHT_SCHEMES = _mod.WEIGHT_SCHEMES
 FACTORS = _mod.FACTORS
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / ".vibe-research"
+DATA = resolve_data_dir()
 FACTOR_JSON = DATA / "factor_baselines.json"
 REGIME_JSON = DATA / "index_ma20_regime.json"
 

@@ -6,6 +6,10 @@
 增量 merge（已有 date 不重拉）。断点 .vibe-research/backfill_progress.json。
 用法：python tools/backfill_kline_to_2018.py [limit]  (limit=0 全量)
 """
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir
+
 import json
 import os
 import sys
@@ -15,7 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from engine.bars_provider import _load_cache
 
-_DATA_DIR = Path(os.environ.get("VR_DATA_DIR", str(Path(__file__).resolve().parents[2] / ".vibe-research")))
+_DATA_DIR = Path(os.environ.get("VR_DATA_DIR", str(resolve_data_dir())))
 CACHE_PATH = _DATA_DIR / "baostock_kline_cache.json"
 PROGRESS_PATH = _DATA_DIR / "backfill_progress.json"
 START = "2018-01-01"

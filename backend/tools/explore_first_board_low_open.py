@@ -23,10 +23,15 @@ import math
 import sqlite3
 import statistics
 import sys
+from pathlib import Path
 from collections import Counter, defaultdict
 
-KLINE_DB = "/Users/lizhiwei/project/code/stock/Vibe-Research/.vibe-research/baostock_kline_cache.db"
-ZT_DB = "/Users/lizhiwei/project/code/stock/Vibe-Research/.vibe-research/zt_history.db"
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir
+_DATA = resolve_data_dir()
+KLINE_DB = str(_DATA / "baostock_kline_cache.db")
+ZT_DB = str(_DATA / "zt_history.db")
 
 # ---- load zt_history: first-board (lbc=1) only ----
 zdb = sqlite3.connect(ZT_DB)

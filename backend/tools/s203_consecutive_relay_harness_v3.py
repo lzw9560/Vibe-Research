@@ -13,6 +13,13 @@ import sqlite3
 import sys
 from pathlib import Path
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
@@ -21,7 +28,7 @@ from strategies.kline_returns import _is_unbuyable_next_bar  # noqa: E402
 from tools.s203_consecutive_relay_harness import _zt_history_picks_lbc2  # noqa: E402
 from tools.first_board_premium_baseline import _load_kline_cache  # noqa: E402
 
-KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
+KLINE = resolve_data_dir() / "baostock_kline_cache.json"
 
 
 def _close_is_limit_up(bar: dict, prev_close: float, code: str) -> bool:

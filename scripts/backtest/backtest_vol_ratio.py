@@ -5,9 +5,13 @@
 样本：gene_scores.db 中 qualify=1 的 93 个 (date,code) 对。
 方法：拉日K → 计算 vol_ratio / amount_yi(=vol*close近似) / 次日收益 → 分组对比。
 """
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 import sqlite3, urllib.request, json, time, sys
+from pathlib import Path
 
-DB = "/Users/lizhiwei/project/code/stock/Vibe-Research/.vibe-research/gene_scores.db"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
+from vr_paths import resolve_data_dir
+DB = str(resolve_data_dir() / "gene_scores.db")
 
 def fetch_klines_sina(code: str, datalen=250) -> list[dict]:
     """新浪日K，返回 [{day, open, high, low, close, volume}]"""

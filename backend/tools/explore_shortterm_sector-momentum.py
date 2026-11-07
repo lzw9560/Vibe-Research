@@ -43,8 +43,12 @@ from _factor_helpers import (  # type: ignore[import-not-found]
 )
 
 # ---------- paths ----------
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir
+
 ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / ".vibe-research"
+DATA = resolve_data_dir()
 KLINE_DB = DATA / "baostock_kline_cache.db"
 GENE_DB = DATA / "gene_scores.db"
 REGIME_JSON = DATA / "index_ma20_regime.json"

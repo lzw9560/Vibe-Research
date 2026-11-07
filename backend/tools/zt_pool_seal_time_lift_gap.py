@@ -42,6 +42,13 @@ import statistics
 import sys
 from pathlib import Path
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 from data_quality.schema_validator import validate_or_reject
@@ -49,10 +56,10 @@ from engine.accounting import _cost_pct, gap_net_return  # noqa: E402
 from tools._s44_wire import wire_verdict  # noqa: E402
 from tools.first_board_premium_baseline import _load_kline_cache  # noqa: E402
 
-KLINE_CACHE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
-ZT_CACHE = ROOT / ".vibe-research" / "zt_pool_hist_cache.json"
-ZT_HISTORY_DB = ROOT / ".vibe-research" / "zt_history.db"
-DB = ROOT / ".vibe-research" / "gene_scores.db"
+KLINE_CACHE = resolve_data_dir() / "baostock_kline_cache.json"
+ZT_CACHE = resolve_data_dir() / "zt_pool_hist_cache.json"
+ZT_HISTORY_DB = resolve_data_dir() / "zt_history.db"
+DB = resolve_data_dir() / "gene_scores.db"
 FROZEN = "lategap1"  # gap-window variant (methodology pre-register, not path harness)
 TOL = 0.01  # 一字板价格容差
 

@@ -23,14 +23,21 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from tools.first_board_layer_lift import day_paired_lift, four_state, _winrate  # noqa: E402
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2 verifier
 
-KLINE_CACHE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
-LOCKUP_CACHE = ROOT / ".vibe-research" / "lockup_events_cache.json"
+KLINE_CACHE = resolve_data_dir() / "baostock_kline_cache.json"
+LOCKUP_CACHE = resolve_data_dir() / "lockup_events_cache.json"
 
 STOP_PCT = -3.0
 TAKE_PCT = 8.0

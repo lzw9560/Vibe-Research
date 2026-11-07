@@ -29,8 +29,15 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 REPO = Path(__file__).resolve().parents[2]
-DATA = REPO / ".vibe-research"
+DATA = resolve_data_dir()
 BACKEND = REPO / "backend"
 CACHE = DATA / "baostock_kline_cache.json"
 EM_POOL_HIST = DATA / "zt_pool_hist_cache.json"

@@ -17,14 +17,18 @@
 import json
 import sys
 import statistics
+from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
 from math import erf, sqrt
 
-sys.path.insert(0, '/Users/lizhiwei/project/code/stock/Vibe-Research/backend/tools')
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _factor_helpers import norm_sf_positive, bonferroni_p, ALPHA
 
-DATA = '/Users/lizhiwei/project/code/stock/Vibe-Research/.vibe-research'
+DATA = str(resolve_data_dir())
 ETF_COST = 0.10
 HOLIDAY_GAP = 4
 N_TESTS = 5  # 5 capital-flow factors tested

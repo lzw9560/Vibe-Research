@@ -21,6 +21,13 @@ import statistics
 import sys
 from pathlib import Path
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
@@ -31,8 +38,8 @@ from tools.gap_regime_stratified import compute_market_o2c_gap_by_date, compute_
 from strategies.kline_returns import _is_unbuyable_next_bar  # noqa: E402
 from engine.accounting import _cost_pct  # noqa: E402
 
-KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
-ZT_DB = ROOT / ".vibe-research" / "zt_history.db"
+KLINE = resolve_data_dir() / "baostock_kline_cache.json"
+ZT_DB = resolve_data_dir() / "zt_history.db"
 FROZEN = "f6a964e"  # fork C fetch_zt_pool fallback commit（consecutive_relay picks 解锁基线）
 
 

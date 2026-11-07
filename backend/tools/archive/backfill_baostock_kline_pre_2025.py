@@ -22,14 +22,21 @@ import sys
 import time
 from pathlib import Path
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from data.sources.baostock_src import fetch_daily_bars, ensure_login  # noqa: E402
 from engine.pctchg_injector import enrich_pctchg  # noqa: E402
 
-CACHE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
-DB = ROOT / ".vibe-research" / "zt_history.db"
+CACHE = resolve_data_dir() / "baostock_kline_cache.json"
+DB = resolve_data_dir() / "zt_history.db"
 START = "2024-06-01"
 # 覆盖 train third（team-lead 测 bear train third = 2024-06..2025-12）。
 # 有 existing earliest 的股 fetch 到 earliest（gap-fill 最小 overlap）；

@@ -1,10 +1,15 @@
 """ETF domain: full holiday signal + premium + momentum analysis."""
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 import json
+import sys
+from pathlib import Path
 from datetime import datetime
 from statistics import mean, median, stdev
 from collections import Counter
 
-CACHE = "/Users/lizhiwei/project/code/stock/Vibe-Research/.vibe-research"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir
+CACHE = str(resolve_data_dir())
 with open(f"{CACHE}/index_ohlc_cache.json") as f:
     idx = json.load(f)
 with open(f"{CACHE}/etf_premium_cache.json") as f:

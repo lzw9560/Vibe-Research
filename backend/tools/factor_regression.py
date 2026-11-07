@@ -39,10 +39,14 @@ import numpy as np
 from scipy import stats
 
 # --- 路径 ---
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir
+
 ROOT = Path(__file__).resolve().parents[2]
-SAMPLES_PATH = ROOT / ".vibe-research" / "backtest_samples.json"
-DB_PATH = ROOT / ".vibe-research" / "gene_scores.db"
-OUT_PATH = ROOT / ".vibe-research" / "factor_significance.json"
+SAMPLES_PATH = resolve_data_dir() / "backtest_samples.json"
+DB_PATH = resolve_data_dir() / "gene_scores.db"
+OUT_PATH = resolve_data_dir() / "factor_significance.json"
 
 # spec §1.1 的 74 样本结论：
 SPEC_BASELINE_R = {

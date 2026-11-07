@@ -16,11 +16,17 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
+from vr_paths import resolve_data_dir
+
 REPO = Path(__file__).resolve().parent.parent.parent
-SIG_PATH = REPO / ".vibe-research" / "factor_significance.json"
-OUT = REPO / ".vibe-research" / "strategy_weights.json"
+_DATA = resolve_data_dir()
+SIG_PATH = _DATA / "factor_significance.json"
+OUT = _DATA / "strategy_weights.json"
 
 # 因子名 → 反向标记（spec §4.4：premium/freq 用 100-value 反转）
 REVERSE_FACTORS = {"factor_premium_rate", "factor_freq_score"}

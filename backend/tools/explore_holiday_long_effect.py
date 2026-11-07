@@ -25,14 +25,18 @@
 import json
 import sys
 import statistics
+from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
 from math import erf, sqrt
 
-sys.path.insert(0, '/Users/lizhiwei/project/code/stock/Vibe-Research/backend/tools')
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _factor_helpers import ev_stats, norm_sf_positive, day_paired_t, bonferroni_p, ALPHA
 
-DATA = '/Users/lizhiwei/project/code/stock/Vibe-Research/.vibe-research'
+DATA = str(resolve_data_dir())
 ETF_COST = 0.10       # round-trip cost % for index ETF
 HOLIDAY_GAP = 4       # gap >= 4 calendar days = long holiday break
 N_TESTS = 6           # 3 strategies (panel top-3) x 2 subsets (pre/post)

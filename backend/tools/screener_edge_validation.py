@@ -24,10 +24,17 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
-SAMPLES_PATH = ROOT / ".vibe-research" / "backtest_samples.json"
-DB_PATH = ROOT / ".vibe-research" / "gene_scores.db"
-OUT_PATH = ROOT / ".vibe-research" / "screener_edge_validation.json"
+SAMPLES_PATH = resolve_data_dir() / "backtest_samples.json"
+DB_PATH = resolve_data_dir() / "gene_scores.db"
+OUT_PATH = resolve_data_dir() / "screener_edge_validation.json"
 ZT_NEXT_THRESHOLD = 9.8  # 主板涨停 10% 限近似（创业/科创 20% 亦命中，ST 5% 漏）
 
 

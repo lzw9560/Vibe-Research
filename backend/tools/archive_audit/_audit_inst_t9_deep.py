@@ -26,7 +26,14 @@ from _audit_inst_tn_matrix import (  # noqa: E402
     load_picks, load_kline, INST_KEYWORDS, COST,
 )
 
-DATA = Path(__file__).resolve().parents[2] / ".vibe-research"
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from vr_paths import resolve_data_dir
+
+
+DATA = resolve_data_dir()
 DT_DB = DATA / "dragon_tiger_history.db"
 KLINE_DB = DATA / "baostock_kline_cache.db"
 T9 = 9

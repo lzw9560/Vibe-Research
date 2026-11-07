@@ -23,6 +23,13 @@ from collections import defaultdict
 from pathlib import Path
 from math import erf, sqrt
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
@@ -31,7 +38,7 @@ from tools._factor_helpers import (  # noqa: E402
     close_ev_stop, ev_stats, day_paired_t, limit_for_code, is_yizi_t1,
 )
 
-ZT_DB = ROOT / ".vibe-research" / "zt_history.db"
+ZT_DB = resolve_data_dir() / "zt_history.db"
 
 
 def load_zt_with_meta() -> list[dict]:

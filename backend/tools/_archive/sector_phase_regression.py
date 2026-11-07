@@ -22,14 +22,21 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend 入 sys.path
 
 from strategies.sector_cycle import analyze_sector_phase  # noqa: E402
 
-SAMPLES_PATH = ROOT / ".vibe-research" / "backtest_samples.json"
-DB_PATH = ROOT / ".vibe-research" / "gene_scores.db"
-OUT_PATH = ROOT / ".vibe-research" / "sector_phase_significance.json"
+SAMPLES_PATH = resolve_data_dir() / "backtest_samples.json"
+DB_PATH = resolve_data_dir() / "gene_scores.db"
+OUT_PATH = resolve_data_dir() / "sector_phase_significance.json"
 
 PHASES = ["启动", "发酵", "高潮", "退潮", "冷门", "无历史"]
 MODIFIER = {"启动": 1.1, "发酵": 1.0, "高潮": 0.9, "退潮": 0.7, "冷门": 0.8, "无历史": 1.0}

@@ -20,6 +20,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+from vr_paths import resolve_data_dir
+
 # 确保能 import strategies.tail_dip_engine
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
@@ -304,10 +307,7 @@ def get_deviation(
     """个股vs全市场实时偏离度时间序列。"""
     from strategies.tail_dip_engine import compute_realtime_sector_deviation
 
-    db_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-        ".vibe-research", "intraday_accumulation", "intraday_microstructure.db",
-    )
+    db_path = str(resolve_data_dir() / "intraday_accumulation" / "intraday_microstructure.db")
     results = compute_realtime_sector_deviation(code, db_path=db_path, date=date)
     if not results:
         raise HTTPException(404, f"无 {code} 的偏离度数据")
@@ -438,10 +438,9 @@ def tail_volatility_check(code: str = Query(..., description="股票代码")) ->
     """尾盘波动率检查（轻量版——用14:50→15:00快照替代5分钟bar）。"""
     from strategies.tail_dip_engine import check_tail_volatility_from_snapshots
 
-    import os
-    _root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    db = os.path.join(_root, ".vibe-research", "intraday_accumulation", "intraday_microstructure.db")
-    kdb = os.path.join(_root, ".vibe-research", "baostock_kline_cache.db")
+    _data = resolve_data_dir()
+    db = str(_data / "intraday_accumulation" / "intraday_microstructure.db")
+    kdb = str(_data / "baostock_kline_cache.db")
 
     r = check_tail_volatility_from_snapshots(code, db_path=db, kline_db_path=kdb)
     return {

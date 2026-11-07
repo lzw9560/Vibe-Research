@@ -17,12 +17,19 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from data.sources.baostock_src import fetch_daily_bars, ensure_login, logout, DependencyMissing
 
-CACHE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
+CACHE = resolve_data_dir() / "baostock_kline_cache.json"
 FIELDS = "date,open,high,low,close,volume,amount,turn,pctChg,isST"
 
 # 每 RELOGIN_BATCH 股 re-login 一次（BaoStock 长会话超时返空）

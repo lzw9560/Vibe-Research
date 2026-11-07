@@ -32,10 +32,19 @@ from math import erf, sqrt
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _factor_helpers import limit_for_code, is_yizi_t1, COST, ALPHA
 
+import sys
+
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
-BLOCK = ROOT / ".vibe-research" / "block_trade_raw.json"
-KLINE_DB = ROOT / ".vibe-research" / "baostock_kline_cache.db"
-IDX = ROOT / ".vibe-research" / "index_ohlc_cache.json"
+BLOCK = resolve_data_dir() / "block_trade_raw.json"
+KLINE_DB = resolve_data_dir() / "baostock_kline_cache.db"
+IDX = resolve_data_dir() / "index_ohlc_cache.json"
 N_BONF = 3  # Bonferroni ×3 (T+5/T+10/T+20)
 WINDOWS = [5, 10, 20]
 DISCOUNT_THRESH = -0.10

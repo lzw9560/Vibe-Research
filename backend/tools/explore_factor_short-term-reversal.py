@@ -62,8 +62,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools._factor_helpers import bonferroni_p, norm_sf_positive  # noqa: E402  DRY
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / ".vibe-research"
+DATA = resolve_data_dir()
 FACTOR_ZOO = DATA / "factor_zoo_data.json"
 KLINE_DB = DATA / "baostock_kline_cache.db"
 

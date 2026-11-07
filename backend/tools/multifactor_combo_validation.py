@@ -41,6 +41,13 @@ from scipy.stats import spearmanr
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
@@ -48,7 +55,7 @@ from tools.kline_ta_validation import _compute_ta  # noqa: E402
 from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar  # noqa: E402
 from tools.first_board_premium_baseline import _load_kline_cache  # noqa: E402  # S204 T1: enriched baostock cache（pctChg 0.0/None 一字板修复）
 
-VR = ROOT / ".vibe-research"
+VR = resolve_data_dir()
 BASELINE = VR / "first_board_premium_baseline.json"
 KLINE = VR / "baostock_kline_cache.json"
 GENE_DB = VR / "gene_scores.db"

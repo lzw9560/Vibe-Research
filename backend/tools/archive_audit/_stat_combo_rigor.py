@@ -19,9 +19,11 @@ import json, math, sqlite3, statistics, sys
 from collections import defaultdict
 from pathlib import Path
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
-DB = ROOT.parent / ".vibe-research" / "baostock_kline_cache.db"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from vr_paths import resolve_data_dir
+DB = resolve_data_dir() / "baostock_kline_cache.db"
 COST = 0.004
 TOP_N = 20
 

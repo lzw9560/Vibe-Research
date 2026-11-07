@@ -22,14 +22,16 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
+from vr_paths import resolve_data_dir
 
 from tools.first_board_premium_baseline import _load_kline_cache, _bs_code  # noqa: E402
 
 # ── 常量 ──────────────────────────────────────────────────────────────────
 from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
-CACHE_PATH = Path("/Users/lizhiwei/project/code/stock/Vibe-Research/.vibe-research/baostock_kline_cache.json")
+CACHE_PATH = resolve_data_dir() / "baostock_kline_cache.json"
 FORECAST_CACHE = ROOT / "backend" / ".scratch" / "pead-event-study" / "forecast_reports.json"
 OUT_DIR = ROOT / "backend" / ".scratch" / "pead-event-study"
 N_PERM = 500             # permutation 次数 (p-value 分辨率 0.002, alpha_adj=0.01 足够)

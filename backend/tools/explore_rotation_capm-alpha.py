@@ -56,8 +56,15 @@ from tools._factor_helpers import bonferroni_p, ev_stats  # noqa: E402
 
 # ---------- config ----------
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
-DATA_JSON = ROOT / ".vibe-research" / "sector_rotation_data.json"
+DATA_JSON = resolve_data_dir() / "sector_rotation_data.json"
 
 # 25 dense-core industries (>=10 codes with >=5yr / 1218-bar history).
 # NOTE: 银行Ⅱ (banks, 42 codes) and 保险Ⅱ (insurance) have ZERO long-history

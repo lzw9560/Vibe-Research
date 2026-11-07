@@ -29,7 +29,16 @@ import statistics
 from collections import Counter
 from pathlib import Path
 
-DB = Path(__file__).resolve().parents[2] / ".vibe-research" / "baostock_kline_cache.db"
+import sys
+
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
+DB = resolve_data_dir() / "baostock_kline_cache.db"
 LOG_DB = DB  # regime_gate_combo_log 表与 kline cache 同库
 
 # ⚠️ FROZEN 2026-10-27——前瞻验证 30-60 天前不可改（§44 v3 R42-R44 防 post-hoc）

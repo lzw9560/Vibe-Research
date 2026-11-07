@@ -47,8 +47,15 @@ from tools._factor_helpers import (
     norm_sf_positive, ALPHA,
 )
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / ".vibe-research"
+DATA = resolve_data_dir()
 CACHE = DATA / "etf_premium_cache.json"
 
 ETF_COST = 0.15  # ETF round-trip cost % (免印花税, 佣金~0.06% + 滑点~0.09%)

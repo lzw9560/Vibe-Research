@@ -23,6 +23,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
@@ -33,8 +40,8 @@ from strategies.kline_returns import simulate_holding, _is_unbuyable_next_bar  #
 from engine.accounting import _cost_pct  # noqa: E402  # S201b: per-trade cost 非 flat 0.70
 from pre_limitup_scanner import scan_pre_limitup  # noqa: E402  # S208: lbc==1 首板源
 
-KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
-ZT_DB = ROOT / ".vibe-research" / "zt_history.db"
+KLINE = resolve_data_dir() / "baostock_kline_cache.json"
+ZT_DB = resolve_data_dir() / "zt_history.db"
 PARAMS = (-4.0, 8.0, 3)  # 继承 breakout DEFAULT_PATH_PARAMS（74295b9 冻结，不 sweep——小样本 sweep=overfit）
 FROZEN = "45bafca"  # frozen at pre-harness commit（S209 T6 引入前 HEAD；reproduce 用此 codebase + harness 本 commit）
 

@@ -46,8 +46,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _factor_helpers as H  # noqa: E402  (ev_stats / day_paired_t / bonferroni_p / ALPHA)
 
 # ---------- config ----------
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir
+
 ROOT = Path(__file__).resolve().parents[2]
-DATA_JSON = ROOT / ".vibe-research" / "sector_rotation_data.json"
+DATA_JSON = resolve_data_dir() / "sector_rotation_data.json"
 
 WINDOW_END = "2025-12-31"          # 截到 2025 末（避 2026 degenerate tail + recent wave）
 MIN_STOCKS = 5                     # 行业当日 >=5 只才纳入

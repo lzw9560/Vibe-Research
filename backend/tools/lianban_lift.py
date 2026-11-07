@@ -8,6 +8,11 @@
 复用 day_paired per-T top-vs-all + net-profit-verify（S155/S156 教训）。"""
 import datetime, json, re, sqlite3, sys, time
 from pathlib import Path
+import sys
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from vr_paths import resolve_data_dir
+
 ROOT = Path(__file__).resolve().parents[2]  # S163 R3: repo root，不硬编码绝对路径
 sys.path.insert(0, str(ROOT / "backend"))
 from data.sources.eastmoney import ths_limit_up_pool
@@ -17,9 +22,9 @@ from data_quality.schema_validator import validate_or_reject  # S163 R1: bad-dat
 from tools.first_board_premium_baseline import _load_kline_cache  # noqa: E402  # S204 T1: enriched baostock cache（pctChg 0.0 一字板修复）
 from tools._s44_wire import wire_verdict  # noqa: E402  # S168 接线 §44v2
 
-KLINE = ROOT / ".vibe-research" / "baostock_kline_cache.json"
-DB = ROOT / ".vibe-research" / "gene_scores.db"
-LB_CACHE = ROOT / ".vibe-research" / "ths_lb_cache.json"
+KLINE = resolve_data_dir() / "baostock_kline_cache.json"
+DB = resolve_data_dir() / "gene_scores.db"
+LB_CACHE = resolve_data_dir() / "ths_lb_cache.json"
 PARAMS = (-3.0, 8.0, 3)
 
 def parse_boards(high_days: str) -> int:

@@ -20,10 +20,15 @@ from pathlib import Path
 
 import baostock as bs
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
+from vr_paths import resolve_data_dir
+
 REPO = Path(__file__).resolve().parent.parent.parent
-DB = REPO / ".vibe-research" / "gene_scores.db"
-OUT = REPO / ".vibe-research" / "backtest_samples.json"
-KLINE_CACHE = REPO / ".vibe-research" / "baostock_kline_cache.json"
+_DATA = resolve_data_dir()
+DB = _DATA / "gene_scores.db"
+OUT = _DATA / "backtest_samples.json"
+KLINE_CACHE = _DATA / "baostock_kline_cache.json"
 
 FIELDS = "date,open,high,low,close,volume,amount,turn,pctChg,isST"
 # 拉取窗口：gene_scores 最早 2026-01-05，多取前 5 日防匹配漂移，后多取 10 日保 next_bar

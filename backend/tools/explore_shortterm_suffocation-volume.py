@@ -54,9 +54,16 @@ from tools._factor_helpers import (
     SLIPPAGE,
 )
 
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
-REGIME_PATH = ROOT / ".vibe-research" / "index_ma20_regime.json"
-DIVIDEND_PATH = ROOT / ".vibe-research" / "dividend_events_cache.json"
+REGIME_PATH = resolve_data_dir() / "index_ma20_regime.json"
+DIVIDEND_PATH = resolve_data_dir() / "dividend_events_cache.json"
 
 # Bonferroni: 3 N-variants × 5 cross-strategy = 15 (×2 subsets = 30 tests)
 # Hold periods + vol thresholds are sensitivity, not independent hypotheses

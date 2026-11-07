@@ -14,6 +14,15 @@ import json, sqlite3, sys, statistics, bisect
 from pathlib import Path
 import numpy as np
 
+import sys
+
+# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from vr_paths import resolve_data_dir
+
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
@@ -22,7 +31,7 @@ import astock
 from s44_verifier.ic_ir import _newey_west_std
 from s44_verifier.stats import bonferroni_bh
 
-KLINE_DB = ROOT / ".vibe-research" / "baostock_kline_cache.db"
+KLINE_DB = resolve_data_dir() / "baostock_kline_cache.db"
 NW_LAG = 5
 PUSH2HIS_UT = "fa5fd1943c7b386f172d6893dbbd10d0"  # 东财公开 token
 
