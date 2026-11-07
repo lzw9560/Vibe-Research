@@ -286,3 +286,27 @@ def test_ping_healthchecks_empty_url(monkeypatch):
     from feishu.client import ping_healthchecks
     ping_healthchecks(True, "test")
     ping_healthchecks(False, "test")
+
+
+# ─── _load_env 边界 ───
+
+def test_load_env_no_env_file(monkeypatch, tmp_path):
+    """.env 不存在时 _load_env 直接 return。"""
+    from pathlib import Path as _Path
+    monkeypatch.setattr("feishu.client.Path", lambda *a: tmp_path / "nonexistent.env")
+    from feishu.client import _load_env
+    _load_env()  # 不应抛异常
+
+
+# ─── _builtin_retry unreachable 路径 ───
+
+def test_builtin_retry_unreachable(monkeypatch):
+    """_builtin_retry max_attempts=0 时走 unreachable 路径。"""
+    from feishu.client import _builtin_retry
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    @_builtin_retry(max_attempts=0, waits=(0.01,), exceptions=(ValueError,))
+    def fn():
+        return "ok"
+    # max_attempts=0 → for loop 不执行 → last_exc=None → raise RuntimeError
+    with pytest.raises(RuntimeError, match="unreachable"):
+        fn()
