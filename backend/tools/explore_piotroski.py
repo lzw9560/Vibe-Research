@@ -209,8 +209,8 @@ def main() -> None:
         cand.sort(key=lambda x: -x[1])
         n_top = max(5, len(cand) // 10)
         top = [c for c, _ in cand[:n_top]]
-        s_r = statistics.mean(code_ret[c][rd] for c, _ in top)
-        b_r = statistics.mean(code_ret[c][rd] for c, _ in cand)  # filtered benchmark（有 score 的股）
+        s_r = statistics.mean(code_ret[c][rd] for c in top)  # top 是 code strings，不 unpack
+        b_r = statistics.mean(code_ret[c][rd] for c, _ in cand)  # cand 是 (code,score) tuples，unpack
         strat_net = s_r - COST
         excess = strat_net - b_r
         excess_rets.append(excess * 100)
