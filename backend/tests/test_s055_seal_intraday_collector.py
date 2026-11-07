@@ -25,11 +25,16 @@ def isolated_seal_db(tmp_path, monkeypatch):
     主库 seal_intraday.db 存 intraday_features / seal_derived_features（非分区），
     seal_intraday_snapshots 时序数据走 S089 路由层到 seal_intraday_YYYY.db 月分表。
     故需 patch collector._DB_PATH（主库）+ db_partition_router 路由常量/函数（分库）。
+    + config.SEALE_INTRADAY_DB_PATH（fix-9 路径收口后 config 是 DB 路径的源头）。
     """
     # 主库：存 intraday_features / seal_derived_features（非分区）
     db_path = tmp_path / "seal_intraday.db"
     monkeypatch.setattr("risk.seal_intraday_collector._DB_PATH", str(db_path))
     monkeypatch.setattr("risk.seal_intraday_collector.SEAL_INTRADAY_DB_PATH", str(db_path))
+    # fix-9 路径收口后 config 是源头——collect_once 内部可能从 config 读路径
+    import config
+    monkeypatch.setattr(config, "SEAL_INTRADAY_DB_PATH", str(db_path))
+    monkeypatch.setattr(config, "PRIVATE_DATA_DIR", str(tmp_path))
     from risk.seal_intraday_collector import run_migrations
     run_migrations()
 
