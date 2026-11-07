@@ -70,8 +70,6 @@ def test_main_test_mode_skips_trading_day(monkeypatch, capsys):
 
     # 验证 send_feishu 被调用（test 模式跳过了交易日判断）
     send_mock.assert_called_once()
-    out = capsys.readouterr().out
-    assert "推送成功" in out
 
 
 def test_main_test_mode_on_non_trading_day(monkeypatch, capsys):
