@@ -78,7 +78,7 @@ from data.sources.akshare_src import (  # noqa: F401,E402
 )
 
 # ── mootdx 源（惰性）───────────────────────────────────────────────────────
-from data.sources.mootdx_src import _mootdx_client, kline, finance  # noqa: F401,E402
+from data.sources.mootdx_src import _mootdx_client, finance  # noqa: F401  # noqa: F401,E402
 
 # ── cninfo 源（直 requests 互动易）─────────────────────────────────────────
 from data.sources.cninfo import investor_qa  # noqa: F401,E402

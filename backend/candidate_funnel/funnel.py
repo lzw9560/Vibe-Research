@@ -32,6 +32,7 @@ from candidate_funnel.thresholds import resolve_thresholds
 
 if TYPE_CHECKING:
     from sentiment_context import SentimentContext
+    from candidate_funnel.diagnosis import DiagnosisCard
 
 
 # S044 R6：漏斗阶段 → 特征 stage 映射。look-ahead 防护——sources 在当前 stage 取数，

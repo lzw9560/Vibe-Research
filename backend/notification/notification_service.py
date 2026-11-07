@@ -23,7 +23,7 @@ from notification.notification_routing import (
 from notification.notification_channel import NotificationChannel, ChannelDetector
 from notification.notification_result import ChannelAttemptResult, NotificationDispatchResult
 
-from .notification_formatters import NotificationFormatterMixin, _safe_float
+from .notification_formatters import NotificationFormatterMixin, _safe_float  # noqa: F811
 from .notification_report_generator import NotificationReportMixin
 from .notification_dispatcher import NotificationDispatcherMixin
 
