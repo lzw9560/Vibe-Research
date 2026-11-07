@@ -145,7 +145,7 @@ class TaskExecutor:
 
         try:
             seeded_tasks = _manager.list_tasks()
-        except Exception as e:  # noqa: BLE001——DB 未就绪/锁住，startup 不崩
+        except Exception as e:  # noqa: BLE001  # DB未就绪/锁住，startup不崩
             logger.warning("[selfcheck] scheduled_tasks 表读取失败，跳过 drift 检查: %s", e)
             return
 

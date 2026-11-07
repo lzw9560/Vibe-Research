@@ -36,3 +36,7 @@ ignore = ["E402", "E702", "E741", "F821", "F841"]  # 暂忽略大量历史遗留
 "tests/*" = ["E", "F", "W"]
 "tools/*" = ["E", "F", "W"]
 "archive_audit/*" = ["E", "F", "W"]
+
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = []
+quote-annotations = true

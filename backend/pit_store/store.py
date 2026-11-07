@@ -246,7 +246,7 @@ def run_migrations(db_path: str | Path | None = None) -> None:
     供 app startup 或显式调用。版本：``20260906-001``。``db_path`` 缺省走默认路径。
     与 ``limitup_sti/data.py.run_initial_migrations`` 同构。
     """
-    from migrations import MigrationManager  # noqa: PLC0415（避免顶层循环 import）
+    from migrations import MigrationManager  # noqa: PLC0415  # 避免顶层循环 import
 
     sql_path = (
         Path(__file__).resolve().parent.parent
