@@ -1,0 +1,13 @@
+# feishu 推送脚本轻量依赖（不需要 backend 的 ML 重型依赖）
+# 安装：pip install -r requirements-feishu.txt
+# Python 3.10+
+
+# 推送重试
+tenacity>=8.0
+
+# 标准库即可的部分（无需 pip install）：
+# - json, sys, os, subprocess, urllib.request, logging, pathlib, datetime
+# - sqlite3（Python 内置）
+
+# hithink-finance CLI 是外部二进制，不在 requirements 里
+# markitdown 是 xlsx skill 的依赖，不是 feishu 的
