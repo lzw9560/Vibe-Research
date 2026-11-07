@@ -13,13 +13,9 @@ import sys
 import os
 from pathlib import Path
 
-# 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from vr_paths import resolve_data_dir
-
-# 数据根目录
-DATA_DIR = Path(os.environ.get("VR_DATA_DIR", 
-    str(resolve_data_dir())))
+# 数据根目录：优先 VR_DATA_DIR env，否则项目根/.vibe-research（不导入 vr_paths 避免 backend 初始化链）
+_proj_root = Path(__file__).resolve().parents[2]
+DATA_DIR = Path(os.environ.get("VR_DATA_DIR", str(_proj_root / ".vibe-research")))
 
 try:
     import duckdb
@@ -50,46 +46,53 @@ def list_databases() -> list[dict]:
 
 
 def list_tables(db_path: str) -> list[str]:
-    """列出 SQLite DB 的表。"""
+    """列出 SQLite DB 的表（用 sqlite3 直接查，比 DuckDB ATTACH 更可靠）。"""
     full_path = DATA_DIR / db_path
     if not full_path.exists():
         return [f"Error: {db_path} not found"]
-    con = duckdb.connect()
     try:
-        con.execute(f"ATTACH '{full_path}' AS db (TYPE SQLITE)")
-        result = con.execute("SELECT name FROM db.sqlite_master WHERE type='table' ORDER BY name").fetchall()
-        return [r[0] for r in result]
-    finally:
+        import sqlite3
+        con = sqlite3.connect(str(full_path))
+        result = con.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
         con.close()
+        return [r[0] for r in result]
+    except Exception as e:
+        return [f"Error: {e}"]
 
 
 def query_sql(sql: str, db_path: str = None, limit: int = 100) -> str:
-    """执行 SQL 查询。如果指定 db_path，先 ATTACH。"""
+    """执行 SQL 查询。SQLite DB 用 sqlite3 直查（可靠），CSV/parquet 用 DuckDB。"""
     if not db_path:
-        return json.dumps({"error": "db_path required. Use list_databases to see available DBs.", "hint": "query <sql> --db_path <relative_path.db>"})
+        return json.dumps({"error": "db_path required. Use list_databases to see available DBs."})
+    full_path = DATA_DIR / db_path
+    if not full_path.exists():
+        return json.dumps({"error": f"{db_path} not found"})
+    
+    # SQLite DB → 用 sqlite3 直查（避免 DuckDB ATTACH 的 schema 前缀/ROWID 问题）
+    if db_path.endswith('.db'):
+        try:
+            import sqlite3
+            con = sqlite3.connect(str(full_path))
+            con.row_factory = sqlite3.Row
+            if "LIMIT" not in sql.upper():
+                sql = f"{sql.rstrip(';')} LIMIT {limit}"
+            cursor = con.execute(sql)
+            columns = [d[0] for d in cursor.description]
+            rows = [dict(row) for row in cursor.fetchall()]
+            con.close()
+            return json.dumps({"columns": columns, "row_count": len(rows), "rows": rows[:limit]}, ensure_ascii=False, default=str)
+        except Exception as e:
+            return json.dumps({"error": str(e), "sql": sql})
+    
+    # CSV/parquet → 用 DuckDB
     con = duckdb.connect()
     try:
-        full_path = DATA_DIR / db_path
-        if not full_path.exists():
-            return json.dumps({"error": f"{db_path} not found"})
-        con.execute(f"ATTACH '{full_path}' AS db (TYPE SQLITE)")
-        # 如果 SQL 没带 schema 前缀，加 db.
-        if "db." not in sql and "FROM " in sql.upper():
-            sql = sql.replace("FROM ", "FROM db.", 1)  # 简单替换第一个 FROM
-        
-        # 加 LIMIT
         if "LIMIT" not in sql.upper():
             sql = f"{sql.rstrip(';')} LIMIT {limit}"
-        
         result = con.execute(sql)
         columns = [d[0] for d in result.description]
         rows = result.fetchall()
-        
-        return json.dumps({
-            "columns": columns,
-            "row_count": len(rows),
-            "rows": [dict(zip(columns, row)) for row in rows[:limit]],
-        }, ensure_ascii=False, default=str)
+        return json.dumps({"columns": columns, "row_count": len(rows), "rows": [dict(zip(columns, row)) for row in rows[:limit]]}, ensure_ascii=False, default=str)
     except Exception as e:
         return json.dumps({"error": str(e), "sql": sql})
     finally:
