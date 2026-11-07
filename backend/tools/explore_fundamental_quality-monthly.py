@@ -98,6 +98,8 @@ def backfill_one(code_bare: str) -> int:
                "gp_margin": None, "np_margin": None, "roe": None, "roe_w": None,
                "debt_ratio": None, "rev_growth": None, "ni_growth": None}
         for cn, en in FIELD_MAP.items():
+            if en == "stat_date":
+                continue  # 日期已单独处理，不 float 转换（否则 ValueError 覆盖为 None）
             if cn in r.index:
                 v = r[cn]
                 try:
@@ -448,6 +450,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--backfill", action="store_true", help="先跑 backfill")
     ap.add_argument("--size", type=int, default=UNIVERSE_SIZE)
+    ap.add_argument("--min-funds", type=int, default=50, help="backtest 最少股数")
     args = ap.parse_args()
 
     universe = select_universe(args.size)
@@ -459,8 +462,8 @@ def main() -> None:
     print("\n=== load data ===")
     funds = load_fundamentals_pit()
     print(f"fundamentals: {len(funds)} stocks cached")
-    if len(funds) < 50:
-        print("⚠️ fundamentals 不足 50，请先 --backfill")
+    if len(funds) < args.min_funds:
+        print(f"⚠️ fundamentals {len(funds)} < {args.min_funds}，请先 --backfill 或降 --min-funds")
         return
     prices, month_dates = load_monthly_prices()
     print(f"prices: {len(prices)} stocks, {len(month_dates)} month-ends")
