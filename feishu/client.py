@@ -114,13 +114,13 @@ def _build_send_retry() -> Callable[[Callable[..., T]], Callable[..., T]]:
     """构建 send_feishu 的重试装饰器：优先 tenacity，否则内置。"""
     if _HAS_TENACITY:
         # 类型检查器无法推断 try/except ImportError 绑定，运行时 _HAS_TENACITY
-        # 为 True 时这些名称一定已绑定，此处 noqa 抑制误报。
-        return _tenacity_retry(  # type: ignore[return-value]
-            stop=stop_after_attempt(3),  # noqa: F821
-            wait=wait_exponential(multiplier=1, base=2, max=4),  # noqa: F821
-            retry=retry_if_exception_type(_NETWORK_EXC),  # noqa: F821
+        # 为 True 时这些名称一定已绑定（已在文件顶部预声明为 Any）。
+        return _tenacity_retry(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1, exp_base=2, max=4),
+            retry=retry_if_exception_type(_NETWORK_EXC),
             reraise=True,
-            before_sleep=before_sleep_log(logger, logging.WARNING),  # noqa: F821
+            before_sleep=before_sleep_log(logger, logging.WARNING),
         )
     return _builtin_retry(
         max_attempts=3, waits=(1.0, 2.0, 4.0), exceptions=_NETWORK_EXC,
@@ -145,8 +145,14 @@ def ping_healthchecks(success: bool, mode: str) -> None:
         logger.debug("healthchecks ping 失败（忽略）: %s", e)
 
 
+@_send_retry
 def _do_send(card: dict, mode: str) -> bool:
-    """单次发送（不含重试）。网络异常向上抛给重试装饰器；飞书返回非零返回 False。"""
+    """单次发送（被 @_send_retry 装饰，网络异常自动重试 3 次）。
+
+    网络异常（OSError/TimeoutError/ConnectionError）向上抛 → 重试装饰器捕获重试，
+    重试耗尽后 reraise（tenacity reraise=True / 内置 raise）。
+    飞书返回非零返回 False（业务层失败，不重试）。
+    """
     import urllib.request
 
     payload = json.dumps({"msg_type": "interactive", "card": card}).encode("utf-8")
@@ -161,12 +167,18 @@ def _do_send(card: dict, mode: str) -> bool:
     return ok
 
 
-@_send_retry
 def send_feishu(card: dict, mode: str = "") -> bool:
     """发送飞书卡片消息。
 
     失败时重试 3 次（指数退避 1s/2s/4s，仅网络异常重试），
     重试耗尽或飞书返回非零记日志 + ping healthchecks。
+
+    重试作用于 _do_send（单次网络发送），send_feishu 负责编排：
+    - WEBHOOK 校验
+    - 调 _do_send（含重试）
+    - 捕获重试耗尽后的网络异常 → False + ping
+    - 业务层非零 → False + ping（不重试）
+    - 成功 → True + ping
 
     Args:
         card: 飞书卡片 dict
