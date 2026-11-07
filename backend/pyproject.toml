@@ -10,7 +10,7 @@
 # 注：backend 模块为扁平布局（无 backend 包），故 --cov=. 覆盖 cwd 下所有 .py；
 # .venv / data 等通过同目录 .coveragerc exclude 排除。
 # 纯函数门槛（--cov-fail-under）：本地 venv 已装 lightgbm/mapie/catboost，
-# 纯计算测试可跑全。当前整体覆盖率 54%（基线），设 50 作为防回归门槛
+# 纯计算测试可跑全。当前整体覆盖率 62.5%（2026-11-08 全量跑验证）（基线），设 50 作为防回归门槛
 # （目标 80，先锁基线防回退，逐模块提升——见 S016 tasks T13 / spec R3）。
 addopts = [
     "-m", "not live",
