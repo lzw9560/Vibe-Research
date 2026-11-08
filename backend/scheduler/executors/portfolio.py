@@ -49,20 +49,76 @@ def get_divlowvol_drawdown() -> dict[str, Any]:
     }
 
 
+def get_trailing_relative_return(window: int = LOOKBACK_DAYS) -> dict[str, Any]:
+    """S244 监控 enrichment:512890 vs 沪深300 trailing 相对收益。
+
+    6专家panel共识:S44 drawdown_monitor 只算绝对回撤,挡不住 regime-drift 慢渗
+    (2025 超额 -13% 但绝对 +4.6% 未触发减仓)。加 trailing 相对收益监控,
+    跑输 >10% 时提醒 "alpha regime shift—review thesis"。
+
+    返回 {etf_ret, bench_ret, relative_ret, flag}。flag="regime_shift" 若 relative < -10%。
+    """
+    import akshare as ak  # noqa: PLC0415
+    etf_df = ak.fund_etf_hist_em(symbol=ETF_CODE, period="daily", adjust="qfq")
+    bench_df = ak.stock_zh_index_daily_em(symbol="sh000300")  # 沪深300
+    etf_df["日期"] = etf_df["日期"].astype(str)
+    bench_df["date"] = bench_df["date"].astype(str)
+    # 对齐日期(沪深300 日期范围更广,取交集)
+    merged = etf_df[["日期", "收盘"]].merge(
+        bench_df[["date", "close"]], left_on="日期", right_on="date"
+    ).tail(window)
+    etf_ret = (float(merged["收盘"].iloc[-1]) / float(merged["收盘"].iloc[0]) - 1) if len(merged) > 1 else 0.0
+    bench_ret = (float(merged["close"].iloc[-1]) / float(merged["close"].iloc[0]) - 1) if len(merged) > 1 else 0.0
+    rel = etf_ret - bench_ret
+    flag = "regime_shift" if rel < -0.10 else "normal"
+    return {
+        "etf_ret": etf_ret,
+        "bench_ret": bench_ret,
+        "relative_ret": rel,
+        "flag": flag,
+        "window_days": len(merged),
+    }
+
+
 def portfolio_rebalance_remind(payload: dict[str, Any]) -> dict[str, Any]:
-    """季初(1/4/7/10 月)提醒调回 25% 仓位。非季初 skip 不打扰。"""
+    """季初(1/4/7/10 月)提醒调回 25% 仓位。非季初 skip 不打扰。
+
+    S244 监控 enrichment(6专家panel):加 trailing 相对收益(512890 vs 沪深300),
+    跑输 >10% 时提醒加 "⚠ alpha regime shift—review thesis" flag(仅 review 不自动减仓)。
+    """
     now = datetime.now()
     month = now.month
     if month not in (1, 4, 7, 10):
         return {"status": "skip", "reason": f"非季初月({month}月),不打扰"}
+    # trailing 相对收益监控(6专家panel consensus:regime-drift 缺口)
+    rel_info = None
+    regime_flag = ""
+    try:
+        rel_info = get_trailing_relative_return()
+        if rel_info["flag"] == "regime_shift":
+            regime_flag = (
+                f"\n⚠ alpha regime shift—review thesis\n"
+                f"  512890 trailing {rel_info['window_days']}日 {rel_info['etf_ret']*100:+.1f}% vs 沪深300 {rel_info['bench_ret']*100:+.1f}%"
+                f" → 跑输 {rel_info['relative_ret']*100:+.1f}% (<-10% 阈值)\n"
+                f"  flag 仅 review 不自动减仓(S44 drawdown -20% 仍管绝对回撤)"
+            )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[portfolio_rebalance] trailing rel err: %s", repr(e)[:100])
     text = (
         f"【季再平衡提醒】512890 红利低波底仓调回目标仓位 {int(TARGET_WEIGHT*100)}%\n"
-        f"规则(回测验证 S244):20-30% Sharpe 最优区间(20% S1.223 / 30% S1.035)\n"
+        f"规则(回测验证 S244):20-30% Sharpe 最优区间(20% S1.223 / 30% S1.035)"
+        f"{regime_flag}\n"
         f"操作:调仓到 {int(TARGET_WEIGHT*100)}% + 闲置资金 GC001 逆回购 sweep(S243)\n"
         f"非自动交易,用户手动执行——S244 practitioner reframe(散户 edge 在 sizing)"
     )
     _send_text_notification(text)
-    return {"status": "sent", "target_weight": TARGET_WEIGHT, "month": month}
+    return {
+        "status": "sent",
+        "target_weight": TARGET_WEIGHT,
+        "month": month,
+        "regime_flag": rel_info["flag"] if rel_info else "unknown",
+        "relative_ret": rel_info["relative_ret"] if rel_info else None,
+    }
 
 
 def portfolio_drawdown_monitor(payload: dict[str, Any]) -> dict[str, Any]:

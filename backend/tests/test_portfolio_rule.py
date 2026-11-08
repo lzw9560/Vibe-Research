@@ -14,24 +14,33 @@ from datetime import datetime
 def test_rebalance_remind_quarter_start_jan():
     """AC2: 1 月(季初)触发提醒。"""
     with patch("scheduler.executors.portfolio.datetime") as mock_dt, \
-         patch("scheduler.executors.portfolio._send_text_notification") as mock_notify:
+         patch("scheduler.executors.portfolio._send_text_notification") as mock_notify, \
+         patch("scheduler.executors.portfolio.get_trailing_relative_return") as mock_rel:
         mock_dt.now.return_value = datetime(2026, 1, 5)
+        mock_rel.return_value = {"etf_ret": 0.05, "bench_ret": 0.03, "relative_ret": 0.02, "flag": "normal", "window_days": 250}
         from scheduler.executors.portfolio import portfolio_rebalance_remind
         result = portfolio_rebalance_remind({"notify": True})
     assert result["status"] == "sent"
     assert result["month"] == 1
+    assert result["regime_flag"] == "normal"
     mock_notify.assert_called_once()
 
 
 def test_rebalance_remind_quarter_start_apr():
     """AC2: 4 月(季初)触发。"""
     with patch("scheduler.executors.portfolio.datetime") as mock_dt, \
-         patch("scheduler.executors.portfolio._send_text_notification") as mock_notify:
+         patch("scheduler.executors.portfolio._send_text_notification") as mock_notify, \
+         patch("scheduler.executors.portfolio.get_trailing_relative_return") as mock_rel:
         mock_dt.now.return_value = datetime(2026, 4, 1)
+        mock_rel.return_value = {"etf_ret": -0.08, "bench_ret": 0.05, "relative_ret": -0.13, "flag": "regime_shift", "window_days": 250}
         from scheduler.executors.portfolio import portfolio_rebalance_remind
         result = portfolio_rebalance_remind({"notify": True})
     assert result["status"] == "sent"
     assert result["month"] == 4
+    assert result["regime_flag"] == "regime_shift"
+    # 飞书文本含 regime shift flag
+    sent_text = mock_notify.call_args[0][0]
+    assert "regime shift" in sent_text
 
 
 def test_rebalance_remind_non_quarter_skip():
