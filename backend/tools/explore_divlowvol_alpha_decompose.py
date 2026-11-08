@@ -209,6 +209,21 @@ def reconstruct_ttm_eps(funds: list[dict], rebalance_date: str) -> float | None:
     return cur_eps + prior_annual["eps"] - prior_same_q["eps"]
 
 
+def trailing_bvps(funds: list[dict], rebalance_date: str) -> float | None:
+    """PIT 每股净资产(bvps):取 rebalance_date 前最近一期(存量非 TTM,不需重建)。
+
+    B/P 第三因子(6专家panel第二步):补全 value 三族控制(E/P+D/P+B/P)。
+    排除负净资产(bvps<=0)= 破产风险股,同 archive backtest_bp 口径。
+    """
+    avail = [f for f in funds if f["pit"] <= rebalance_date and f.get("bvps") is not None]
+    if not avail:
+        return None
+    bvps = avail[-1]["bvps"]
+    if bvps is None or bvps <= 0:  # 排除负净资产
+        return None
+    return float(bvps)
+
+
 def load_raw_close() -> tuple[dict[str, dict[str, float]], dict[str, str]]:
     """code -> {month(YYYY-MM): close}, 停牌(vol=0)过滤. 复用 value 脚本.
     返回 (by_month, canonical_date) — canonical_date[month]=该月最大交易日(PIT 用)."""
@@ -366,8 +381,8 @@ def build_value_hml(
         next_m = rebal_months[i + 1]  # 持有期月份
         # PIT 再平衡日 (该月最大交易日)
         rd = canonical_raw.get(m) or canonical_kline.get(m) or f"{m}-28"
-        # 算 value score
-        scores: list[tuple[str, float, float]] = []
+        # 算 value score (E/P + D/P + B/P 三因子,6专家panel第二步补全 value 三族)
+        scores: list[tuple[str, float, float, float]] = []
         for code in raw_close:
             if next_m not in month_rets.get(code, {}):
                 continue
@@ -378,27 +393,33 @@ def build_value_hml(
             ttm = reconstruct_ttm_eps(fl, rd) if fl else None
             divs = dividends.get(code)
             dp_num = trailing_dp(divs, rd) if divs else None
+            bvps = trailing_bvps(fl, rd) if fl else None
             if ttm is None or ttm <= 0:  # E/P 需正盈利
                 continue
             if dp_num is None or dp_num <= 0:  # D/P 需有分红 (高质量 value)
                 continue
+            if bvps is None or bvps <= 0:  # B/P 需正净资产 (排除破产风险)
+                continue
             ep = ttm / close
             dp = dp_num / close
-            scores.append((code, ep, dp))
+            bp = bvps / close
+            scores.append((code, ep, dp, bp))
         if len(scores) < 20:
             continue
-        # cross-sectional percentile rank (复合 value = 平均 rank)
+        # cross-sectional percentile rank (复合 value = 三因子平均 rank)
         eps_vals = [s[1] for s in scores]
         dp_vals = [s[2] for s in scores]
+        bp_vals = [s[3] for s in scores]
 
         def pct_rank(vals: list[float], v: float) -> float:
             return sum(1 for x in vals if x <= v) / len(vals)
 
         composite = []
-        for code, ep, dp in scores:
+        for code, ep, dp, bp in scores:
             r_ep = pct_rank(eps_vals, ep)
             r_dp = pct_rank(dp_vals, dp)
-            composite.append((code, (r_ep + r_dp) / 2.0))
+            r_bp = pct_rank(bp_vals, bp)
+            composite.append((code, (r_ep + r_dp + r_bp) / 3.0))
         composite.sort(key=lambda x: -x[1])  # 高 value 在前
         n_total = len(composite)
         n_top = max(5, int(n_total * VALUE_LEG_PCT))
