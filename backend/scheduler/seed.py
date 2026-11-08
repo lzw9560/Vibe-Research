@@ -693,12 +693,12 @@ def _ensure_seed_tasks() -> None:
                 name="portfolio_rebalance_remind",
                 description="S244 512890 季再平衡提醒（季初 1/4/7/10 月调回 25%）",
                 task_type="portfolio_rebalance_remind",
-                cron_expr="15 9 1-7 1,4,7,10 *",  # 季初月 1-7 日 09:15(避开周末取 1-7 日首个工作日)
+                cron_expr="15 9 1 1,4,7,10 0-4",  # 季初月 1 日 09:15 周一到周五(1 日周末则该季错过,drawdown monitor 每日保护)
                 payload={"notify": True},
                 enabled=True,
             )
         )
-        logger.info("[scheduler] seed 默认任务 portfolio_rebalance_remind 已创建（cron 15 9 1-7 1,4,7,10，S244）")
+        logger.info("[scheduler] seed 默认任务 portfolio_rebalance_remind 已创建（cron 15 9 1 1,4,7,10 0-4，S244）")
     if "portfolio_drawdown_monitor" not in existing:
         _manager.create_task(
             ScheduledTask(
