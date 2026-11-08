@@ -128,6 +128,8 @@ class TaskExecutor:
             "sentiment_commander_close": self._execute_sentiment_commander_close,  # S234 — 情绪指挥官 14:50 尾盘（排雷+飞书，沸点期才 filter）
             "regime_gate_combo_log": self._execute_regime_gate_combo_log,  # 命题A对抗后——combo regime gate 前瞻跟踪（只读诊断，不接仓位）
             "combo_daily_notify": self._execute_combo_daily_notify,  # 2026-10-29 用户"每日提醒我 combo"——15:10 收盘后干净推送 combo top-20 + gate（不混投毒）
+            "yield_repo_remind": self._execute_yield_repo_remind,  # S243 — 逆回购 GC001 sweep 提醒 14:30（>3%或季末/月末）
+            "yield_cb_remind": self._execute_yield_cb_remind,  # S243 — CB 信用申购提醒 09:15（当日有申购）
         }
         # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
         # 调度器线程全挂也不影响路由器的 asyncio.to_thread（71 调用方共享默认池）。
@@ -701,6 +703,18 @@ class TaskExecutor:
         from scheduler.executors.signals import combo_daily_notify
 
         return combo_daily_notify(payload)
+
+    def _execute_yield_repo_remind(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S243 — 14:30 逆回购 GC001 sweep 提醒（>3%或季末/月末才触发，避免轰炸）。"""
+        from scheduler.executors.yield_ops import yield_repo_remind
+
+        return yield_repo_remind(payload)
+
+    def _execute_yield_cb_remind(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S243 — 09:15 CB 信用申购提醒（当日有申购才触发）。"""
+        from scheduler.executors.yield_ops import yield_cb_remind
+
+        return yield_cb_remind(payload)
 
     def _execute_cron_audit(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S218 #10 — cron-fire audit：扫 cron_fire.log receipt + last_run_at 数 missed delivery cron。"""

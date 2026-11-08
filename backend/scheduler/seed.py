@@ -645,6 +645,33 @@ def _ensure_seed_tasks() -> None:
         )
         logger.info("[scheduler] seed 默认任务 sentiment_commander_close 已创建（cron 50 14 * * 0-4，S234）")
 
+    # S243: 运维 yield——逆回购 sweep 14:30 + CB 信用申购 09:15
+    # 散户结构性 yield（非选股 alpha）：GC001 零风险 2-3%/年+季末 5-15% / CB 零成本信用申购
+    if "yield_repo_remind" not in existing:
+        _manager.create_task(
+            ScheduledTask(
+                name="yield_repo_remind",
+                description="S243 逆回购 GC001 sweep 提醒 14:30（>3%或季末/月末才触发）",
+                task_type="yield_repo_remind",
+                cron_expr="30 14 * * 0-4",  # 14:30 盘前（14:50 操作前提醒）
+                payload={"notify": True},
+                enabled=True,
+            )
+        )
+        logger.info("[scheduler] seed 默认任务 yield_repo_remind 已创建（cron 30 14 * * 0-4，S243）")
+    if "yield_cb_remind" not in existing:
+        _manager.create_task(
+            ScheduledTask(
+                name="yield_cb_remind",
+                description="S243 CB 信用申购提醒 09:15（当日有申购才触发）",
+                task_type="yield_cb_remind",
+                cron_expr="15 9 * * 0-4",  # 09:15 盘前（9:30 申购前）
+                payload={"notify": True},
+                enabled=True,
+            )
+        )
+        logger.info("[scheduler] seed 默认任务 yield_cb_remind 已创建（cron 15 9 * * 0-4，S243）")
+
     # S232: T+1 涨停预测 watchlist——15:10 收盘后（T 日全量数据确认）
     # 观察池非买入信号：turn>20%+vr5>2 信号 lift 5.28x 真但 EV -0.87% 负，二次确认累积 60 天验证
     if "t1_watchlist_generate" not in existing:

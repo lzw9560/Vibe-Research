@@ -76,6 +76,7 @@ from routers import (
 from routers import discipline_gate as discipline_gate_router  # S231: 打板纪律门禁看板
 from routers import t1_forecast as t1_forecast_router  # S232: T+1 涨停预测 watchlist（观察池非买入信号）
 from routers import limitup_workflow as limitup_workflow_router  # S233: 打板工作流闭环（-3% stop OOS）
+from routers import yield_ops as yield_ops_router  # S243: 运维 yield 看板（GC001 逆回购+CB 信用申购）
 from routers import (
     recommendation,
     win_rate,
@@ -347,6 +348,7 @@ app.include_router(premarket_router.router)  # S071：盘前选股
 app.include_router(sector_divergence.router)
 app.include_router(risk_router.router)
 app.include_router(sentiment_weather.router)
+app.include_router(yield_ops_router.router)  # S243: 运维 yield 看板（GC001+CB）
 app.include_router(workflow.router)
 app.include_router(scheduled_tasks.router)
 app.include_router(prediction.router)

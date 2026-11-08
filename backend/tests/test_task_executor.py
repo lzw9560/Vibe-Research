@@ -111,6 +111,8 @@ _EXPECTED_TASK_TYPES = {
     "sentiment_commander_close",  # S234 情绪指挥官 14:50 尾盘（排雷+飞书，沸点期才 filter）
     "regime_gate_combo_log",  # 命题A对抗后——combo regime gate 前瞻跟踪（只读诊断，不接仓位）
     "combo_daily_notify",  # 2026-10-29 用户"每日提醒我 combo"——15:10 收盘后干净推送
+    "yield_repo_remind",  # S243 逆回购 GC001 sweep 提醒 14:30
+    "yield_cb_remind",  # S243 CB 信用申购提醒 09:15
 }
 
 
