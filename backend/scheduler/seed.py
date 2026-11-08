@@ -684,6 +684,34 @@ def _ensure_seed_tasks() -> None:
         )
         logger.info("[scheduler] seed 默认任务 yield_ipo_remind 已创建（cron 17 9 * * 0-4，S243）")
 
+    # S244: 红利低波 512890 仓位规则——季再平衡 + drawdown 监控
+    # practitioner reframe 落地:选股 alpha 穷尽后散户 edge 在 sizing/风控/行为
+    # 回测验证(explore_portfolio_allocation.py):20% Sharpe 1.223 / 30% S1.035,25% 中值 regime 稳健
+    if "portfolio_rebalance_remind" not in existing:
+        _manager.create_task(
+            ScheduledTask(
+                name="portfolio_rebalance_remind",
+                description="S244 512890 季再平衡提醒（季初 1/4/7/10 月调回 25%）",
+                task_type="portfolio_rebalance_remind",
+                cron_expr="15 9 1-7 1,4,7,10 *",  # 季初月 1-7 日 09:15(避开周末取 1-7 日首个工作日)
+                payload={"notify": True},
+                enabled=True,
+            )
+        )
+        logger.info("[scheduler] seed 默认任务 portfolio_rebalance_remind 已创建（cron 15 9 1-7 1,4,7,10，S244）")
+    if "portfolio_drawdown_monitor" not in existing:
+        _manager.create_task(
+            ScheduledTask(
+                name="portfolio_drawdown_monitor",
+                description="S244 512890 drawdown 监控（-20% 减仓提醒，日 17:00 收盘后）",
+                task_type="portfolio_drawdown_monitor",
+                cron_expr="0 17 * * 0-4",  # 17:00 收盘后(512890 日线更新)
+                payload={"notify": True},
+                enabled=True,
+            )
+        )
+        logger.info("[scheduler] seed 默认任务 portfolio_drawdown_monitor 已创建（cron 0 17 * * 0-4，S244）")
+
     # S232: T+1 涨停预测 watchlist——15:10 收盘后（T 日全量数据确认）
     # 观察池非买入信号：turn>20%+vr5>2 信号 lift 5.28x 真但 EV -0.87% 负，二次确认累积 60 天验证
     if "t1_watchlist_generate" not in existing:

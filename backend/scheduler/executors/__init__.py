@@ -131,6 +131,8 @@ class TaskExecutor:
             "yield_repo_remind": self._execute_yield_repo_remind,  # S243 — 逆回购 GC001 sweep 提醒 14:30（>3%或季末/月末）
             "yield_cb_remind": self._execute_yield_cb_remind,  # S243 — CB 信用申购提醒 09:15（当日有申购）
             "yield_ipo_remind": self._execute_yield_ipo_remind,  # S243 Phase3 — 打新提醒+筛选红线 09:15
+            "portfolio_rebalance_remind": self._execute_portfolio_rebalance_remind,  # S244 — 512890 季再平衡提醒（季初 1/4/7/10 月）
+            "portfolio_drawdown_monitor": self._execute_portfolio_drawdown_monitor,  # S244 — 512890 drawdown 监控（-20% 减仓提醒）
         }
         # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
         # 调度器线程全挂也不影响路由器的 asyncio.to_thread（71 调用方共享默认池）。
@@ -722,6 +724,18 @@ class TaskExecutor:
         from scheduler.executors.yield_ops import yield_ipo_remind
 
         return yield_ipo_remind(payload)
+
+    def _execute_portfolio_rebalance_remind(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S244 — 季初（1/4/7/10 月）512890 红利低波底仓调回 25% 提醒。"""
+        from scheduler.executors.portfolio import portfolio_rebalance_remind
+
+        return portfolio_rebalance_remind(payload)
+
+    def _execute_portfolio_drawdown_monitor(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S244 — 512890 drawdown 监控（-20% 减仓提醒，>=-10% 正常 skip）。"""
+        from scheduler.executors.portfolio import portfolio_drawdown_monitor
+
+        return portfolio_drawdown_monitor(payload)
 
     def _execute_cron_audit(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S218 #10 — cron-fire audit：扫 cron_fire.log receipt + last_run_at 数 missed delivery cron。"""
