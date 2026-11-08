@@ -25,10 +25,23 @@ interface CBItem {
   list_date?: string;
 }
 
+interface IPOItem {
+  code: string;
+  name: string;
+  subscribe_code?: string;
+  price?: number;
+  pe?: number;
+  industry_pe?: number;
+  pe_ratio?: number | null;
+  win_rate?: number;
+  board?: string;
+  risk_flag?: string;
+}
+
 interface YieldSnapshot {
   repo: RepoInfo;
   cb_today: { count: number; items: CBItem[] };
-  ipo_today: { count: number; items: unknown[]; note?: string };
+  ipo_today: { count: number; items: IPOItem[] };
 }
 
 export function YieldPanel() {
@@ -122,13 +135,26 @@ export function YieldPanel() {
         <div className="text-xs text-muted-foreground">9:30-15:00 信用申购（零成本无市值要求）</div>
       </div>
 
-      {/* 打新（Phase 3 deferred） */}
+      {/* 打新（Phase 3 已接线） */}
       <div className="space-y-1 border-t pt-2">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">打新筛选</span>
-          <Badge variant="default" className="text-xs text-muted-foreground">Phase 3 待接线</Badge>
+          <span className="text-xs text-muted-foreground">打新申购（今日）</span>
+          <Badge variant="default" className="text-xs">{ipo_today.count} 只</Badge>
         </div>
-        <div className="text-xs text-muted-foreground">{ipo_today.note ?? "IPO 日历数据源待调研"}</div>
+        {ipo_today.count > 0 ? (
+          <div className="space-y-0.5">
+            {ipo_today.items.slice(0, 3).map((ipo) => (
+              <div key={ipo.code} className="text-xs">
+                {ipo.subscribe_code ?? ipo.code} {ipo.name} 价{ipo.price ?? "-"} PE{ipo.pe ?? "-"}/{ipo.industry_pe ?? "-"}
+                {ipo.risk_flag && <span className="ml-1 text-muted-foreground">{ipo.risk_flag}</span>}
+              </div>
+            ))}
+            {ipo_today.count > 3 && <div className="text-xs text-muted-foreground">...等 {ipo_today.count - 3} 只</div>}
+          </div>
+        ) : (
+          <div className="text-xs text-muted-foreground">今日无新股申购</div>
+        )}
+        <div className="text-xs text-muted-foreground">🔴高溢价跳过 / 🟢折价较安全 / ⚠北交所流动性差</div>
       </div>
     </GlassCard>
   );

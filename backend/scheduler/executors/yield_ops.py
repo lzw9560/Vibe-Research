@@ -10,7 +10,7 @@ import logging
 from typing import Any
 
 from scheduler.executors.signals import _send_text_notification
-from data.sources.akshare_yield import get_gc001_rate, get_today_cb_subscriptions
+from data.sources.akshare_yield import get_gc001_rate, get_today_cb_subscriptions, get_today_ipos
 
 logger = logging.getLogger("vibe-research")
 
@@ -69,3 +69,25 @@ def yield_cb_remind(payload: dict[str, Any]) -> dict[str, Any]:
     )
     _send_text_notification(text)
     return {"status": "sent", "n_cbs": len(today_cbs)}
+
+
+def yield_ipo_remind(payload: dict[str, Any]) -> dict[str, Any]:
+    """09:15 打新提醒 + 筛选红线。当日有新股申购才提醒。
+    筛选标注（避雷降破发损失，非选 alpha）：发行PE/行业PE>1.5 高溢价风险 / <1 折价安全 / 北交所流动性差。"""
+    ipos = get_today_ipos()
+    if not ipos:
+        return {"status": "skip", "reason": "今日无新股申购"}
+
+    lines = []
+    for ip in ipos[:5]:
+        flag = ip.get("risk_flag", "")
+        lines.append(f"  {ip['subscribe_code']} {ip['name']} 价{ip['price']} PE{ip['pe']}/{ip['industry_pe']} {flag}")
+    text = (
+        f"【打新申购】今日 {len(ipos)} 只新股\n"
+        + "\n".join(lines)
+        + (f"\n  ...等 {len(ipos)-5} 只" if len(ipos) > 5 else "")
+        + f"\n筛选红线：🔴高溢价(PE/行业>1.5)建议跳过 / 🟢折价(<1)较安全 / ⚠北交所流动性差\n"
+        f"底仓红利低波已满足市值，筛选后手动申购——S243"
+    )
+    _send_text_notification(text)
+    return {"status": "sent", "n_ipos": len(ipos)}

@@ -113,6 +113,7 @@ _EXPECTED_TASK_TYPES = {
     "combo_daily_notify",  # 2026-10-29 用户"每日提醒我 combo"——15:10 收盘后干净推送
     "yield_repo_remind",  # S243 逆回购 GC001 sweep 提醒 14:30
     "yield_cb_remind",  # S243 CB 信用申购提醒 09:15
+    "yield_ipo_remind",  # S243 Phase3 打新提醒+筛选红线 09:15
 }
 
 

@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
-from data.sources.akshare_yield import get_gc001_rate, get_cb_list, get_today_cb_subscriptions
+from data.sources.akshare_yield import get_gc001_rate, get_cb_list, get_today_cb_subscriptions, get_today_ipos
 
 router = APIRouter(tags=["yield-ops"])
 
@@ -33,13 +33,21 @@ def cb_today() -> dict[str, Any]:
     return {"count": len(items), "items": items, "date": __import__("datetime").date.today().isoformat()}
 
 
+@router.get("/api/yield/ipo")
+def ipo_today() -> dict[str, Any]:
+    """今日申购新股 + 打新筛选红线（发行PE/行业PE 避雷）。"""
+    items = get_today_ipos()
+    return {"count": len(items), "items": items, "date": __import__("datetime").date.today().isoformat()}
+
+
 @router.get("/api/yield/snapshot")
 def yield_snapshot() -> dict[str, Any]:
-    """运维 yield 总览：GC001 + 今日 CB（看板 panel 用）。"""
+    """运维 yield 总览：GC001 + 今日 CB + 今日打新（看板 panel 用）。"""
     repo = get_gc001_rate()
     today_cbs = get_today_cb_subscriptions()
+    today_ipos = get_today_ipos()
     return {
         "repo": repo,
         "cb_today": {"count": len(today_cbs), "items": today_cbs},
-        "ipo_today": {"count": 0, "items": [], "note": "Phase 3 deferred——IPO 日历数据源待调研"},
+        "ipo_today": {"count": len(today_ipos), "items": today_ipos},
     }

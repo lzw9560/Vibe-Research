@@ -671,6 +671,18 @@ def _ensure_seed_tasks() -> None:
             )
         )
         logger.info("[scheduler] seed 默认任务 yield_cb_remind 已创建（cron 15 9 * * 0-4，S243）")
+    if "yield_ipo_remind" not in existing:
+        _manager.create_task(
+            ScheduledTask(
+                name="yield_ipo_remind",
+                description="S243 Phase3 打新提醒+筛选红线 09:15（当日有新股才触发）",
+                task_type="yield_ipo_remind",
+                cron_expr="17 9 * * 0-4",  # 09:17（CB 提醒后 2 分钟，避免并发）
+                payload={"notify": True},
+                enabled=True,
+            )
+        )
+        logger.info("[scheduler] seed 默认任务 yield_ipo_remind 已创建（cron 17 9 * * 0-4，S243）")
 
     # S232: T+1 涨停预测 watchlist——15:10 收盘后（T 日全量数据确认）
     # 观察池非买入信号：turn>20%+vr5>2 信号 lift 5.28x 真但 EV -0.87% 负，二次确认累积 60 天验证

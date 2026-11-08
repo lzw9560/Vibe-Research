@@ -130,6 +130,7 @@ class TaskExecutor:
             "combo_daily_notify": self._execute_combo_daily_notify,  # 2026-10-29 用户"每日提醒我 combo"——15:10 收盘后干净推送 combo top-20 + gate（不混投毒）
             "yield_repo_remind": self._execute_yield_repo_remind,  # S243 — 逆回购 GC001 sweep 提醒 14:30（>3%或季末/月末）
             "yield_cb_remind": self._execute_yield_cb_remind,  # S243 — CB 信用申购提醒 09:15（当日有申购）
+            "yield_ipo_remind": self._execute_yield_ipo_remind,  # S243 Phase3 — 打新提醒+筛选红线 09:15
         }
         # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
         # 调度器线程全挂也不影响路由器的 asyncio.to_thread（71 调用方共享默认池）。
@@ -715,6 +716,12 @@ class TaskExecutor:
         from scheduler.executors.yield_ops import yield_cb_remind
 
         return yield_cb_remind(payload)
+
+    def _execute_yield_ipo_remind(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S243 Phase3 — 09:15 打新提醒+筛选红线（当日有新股才触发）。"""
+        from scheduler.executors.yield_ops import yield_ipo_remind
+
+        return yield_ipo_remind(payload)
 
     def _execute_cron_audit(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S218 #10 — cron-fire audit：扫 cron_fire.log receipt + last_run_at 数 missed delivery cron。"""

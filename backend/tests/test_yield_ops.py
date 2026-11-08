@@ -85,3 +85,35 @@ def test_cb_remind_trigger():
     assert result["status"] == "sent"
     assert result["n_cbs"] == 1
     mock_notify.assert_called_once()
+
+
+def test_ipo_remind_skip_no_ipo():
+    """今日无新股申购 → skip。"""
+    with patch("scheduler.executors.yield_ops.get_today_ipos") as mock:
+        mock.return_value = []
+        from scheduler.executors.yield_ops import yield_ipo_remind
+        result = yield_ipo_remind({"notify": True})
+    assert result["status"] == "skip"
+
+
+def test_ipo_remind_trigger():
+    """当日有新股申购 → 发飞书+筛选红线。"""
+    with patch("scheduler.executors.yield_ops.get_today_ipos") as mock_ipos, \
+         patch("scheduler.executors.yield_ops._send_text_notification") as mock_notify:
+        mock_ipos.return_value = [{"code": "688827", "name": "测试股", "subscribe_code": "788827",
+                                    "price": 45.37, "pe": 41.86, "industry_pe": 30, "pe_ratio": 1.40,
+                                    "risk_flag": "🔴高溢价(PE/行业=1.40 破发风险)"}]
+        from scheduler.executors.yield_ops import yield_ipo_remind
+        result = yield_ipo_remind({"notify": True})
+    assert result["status"] == "sent"
+    assert result["n_ipos"] == 1
+    mock_notify.assert_called_once()
+
+
+def test_ipo_endpoint():
+    """/api/yield/ipo 返回今日新股+筛选。"""
+    with patch("routers.yield_ops.get_today_ipos") as mock:
+        mock.return_value = [{"code": "688827", "name": "测试股", "risk_flag": "🟢折价"}]
+        r = client.get("/api/yield/ipo")
+    assert r.status_code == 200
+    assert r.json()["count"] == 1
