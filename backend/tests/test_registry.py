@@ -181,4 +181,6 @@ def test_registry_only_objective_and_research_tools():
         "query_gap_regime", "query_macd_divergence", "query_rsi",
         # S215 通用技术指标综合评分（100 分+信号映射，与 regime 信号互补）
         "query_tech_score",
+        # S243 运维 yield（GC001 逆回购/CB 信用申购/打新筛选，客观取数非选股 alpha）
+        "query_yield",
     }

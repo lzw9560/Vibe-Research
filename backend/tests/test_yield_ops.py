@@ -117,3 +117,28 @@ def test_ipo_endpoint():
         r = client.get("/api/yield/ipo")
     assert r.status_code == 200
     assert r.json()["count"] == 1
+
+
+def test_query_yield_registered():
+    """AC6: query_yield 注册进 chat.TOOLS（API /api/chat + MCP 自动获得，§3 架构约定）。"""
+    import ai.tools  # noqa: F401 — 触发 @register_tool
+    from ai.tools.registry import get_openai_tools
+    names = [t["function"]["name"] for t in get_openai_tools()]
+    assert "query_yield" in names
+
+
+def test_query_yield_dispatch():
+    """AC6: registry.execute('query_yield') 聚合 repo+cb+ipo + summary。"""
+    import ai.tools  # noqa: F401
+    from ai.tools import registry
+    with patch("data.sources.akshare_yield.get_gc001_rate") as m_repo, \
+         patch("data.sources.akshare_yield.get_today_cb_subscriptions") as m_cb, \
+         patch("data.sources.akshare_yield.get_today_ipos") as m_ipo:
+        m_repo.return_value = {"rate": 5.5, "quarter_end": True}
+        m_cb.return_value = [{"code": "123456", "name": "测试CB"}]
+        m_ipo.return_value = [{"code": "688827", "name": "测试股", "risk_flag": "🟢折价"}]
+        result = registry.execute("query_yield", {})
+    assert result["repo"]["rate"] == 5.5
+    assert result["cb_today"]["count"] == 1
+    assert result["ipo_today"]["count"] == 1
+    assert "5.5%" in result["summary"]
