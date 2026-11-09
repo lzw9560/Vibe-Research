@@ -712,6 +712,21 @@ def _ensure_seed_tasks() -> None:
         )
         logger.info("[scheduler] seed 默认任务 portfolio_drawdown_monitor 已创建（cron 0 17 * * 0-4，S244）")
 
+    # S245: 打新 regime 监控——weekly 算 rolling 90 天破发率+首日median+IPO数/周,2/3 触发转弱 alert
+    # 6专家panel第三步:打新是最大 surviving edge(14.72%)BUT S243 没盯 regime(最大引擎没仪表盘)
+    if "ipo_regime_monitor" not in existing:
+        _manager.create_task(
+            ScheduledTask(
+                name="ipo_regime_monitor",
+                description="S245 打新 regime 监控（破发率>10%/首日median<50%/IPO>5周 2/3 触发转弱 alert）",
+                task_type="ipo_regime_monitor",
+                cron_expr="0 18 * * 0",  # 每周日 18:00(weekend 盘后,review 过去一周 IPO regime)
+                payload={"notify": True},
+                enabled=True,
+            )
+        )
+        logger.info("[scheduler] seed 默认任务 ipo_regime_monitor 已创建（cron 0 18 * * 0，S245 weekly）")
+
     # S232: T+1 涨停预测 watchlist——15:10 收盘后（T 日全量数据确认）
     # 观察池非买入信号：turn>20%+vr5>2 信号 lift 5.28x 真但 EV -0.87% 负，二次确认累积 60 天验证
     if "t1_watchlist_generate" not in existing:

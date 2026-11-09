@@ -121,6 +121,7 @@ class TestScheduledTasksImports(unittest.TestCase):
             "yield_ipo_remind",  # S243 Phase3 打新提醒+筛选红线 09:15
             "portfolio_rebalance_remind",  # S244 512890 季再平衡提醒（季初）
             "portfolio_drawdown_monitor",  # S244 512890 drawdown 监控（-20% 减仓）
+            "ipo_regime_monitor",  # S245 打新 regime 监控（weekly 破发率/首日median/IPO 2/3 触发）
         }
         actual = set(executor._executors.keys())
         self.assertEqual(actual, expected, f"缺失: {expected - actual}")

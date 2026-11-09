@@ -133,6 +133,7 @@ class TaskExecutor:
             "yield_ipo_remind": self._execute_yield_ipo_remind,  # S243 Phase3 — 打新提醒+筛选红线 09:15
             "portfolio_rebalance_remind": self._execute_portfolio_rebalance_remind,  # S244 — 512890 季再平衡提醒（季初 1/4/7/10 月）
             "portfolio_drawdown_monitor": self._execute_portfolio_drawdown_monitor,  # S244 — 512890 drawdown 监控（-20% 减仓提醒）
+            "ipo_regime_monitor": self._execute_ipo_regime_monitor,  # S245 — 打新 regime 监控（破发率/首日median/IPO节奏 2/3 触发）
         }
         # S150 审查 HIGH1 根治：调度器独占 ThreadPoolExecutor，隔离 to_thread 泄漏——
         # 调度器线程全挂也不影响路由器的 asyncio.to_thread（71 调用方共享默认池）。
@@ -736,6 +737,12 @@ class TaskExecutor:
         from scheduler.executors.portfolio import portfolio_drawdown_monitor
 
         return portfolio_drawdown_monitor(payload)
+
+    def _execute_ipo_regime_monitor(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """S245 — weekly 打新 regime 监控（破发率/首日median/IPO节奏 2/3 触发转弱 alert）。"""
+        from scheduler.executors.ipo_regime import ipo_regime_monitor
+
+        return ipo_regime_monitor(payload)
 
     def _execute_cron_audit(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """S218 #10 — cron-fire audit：扫 cron_fire.log receipt + last_run_at 数 missed delivery cron。"""
