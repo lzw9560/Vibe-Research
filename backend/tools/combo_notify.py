@@ -1,18 +1,13 @@
 # -*- coding: utf-8 -*-
-"""combo 每日飞书提醒（2026-10-29，用户"每日提醒我 combo"）。
+"""combo 每日飞书提醒（2026-10-29 建，2026-11-08 FALSIFIED 后 daily 推送已 disable）。
 
-17:22 跑（kline_refresh 17:15 刷当日 EOD 收盘后 +7min，早 regime_gate 17:25）：
-load_combo_5d_today top-20（去涨停 mode=filtered）+ gate 状态 + push_feishu。
-干净专属推送——不混 inst/A组（已证伪投毒），只推 combo + gate，教用户怎么执行。
-⚠️ 原 15:10 错——baostock EOD 17:15 才刷当日收盘，15:10 cache 还是昨天的（Agent 2026-10-29 戳破）。
+⚠️ combo_5d edge 已 FALSIFIED 2026-11-08（9 专家 panel 10 角度证伪：real-exec t_nw=1.487 FAIL
+/ permutation p=0.47 / live 101 settled mean -3.649%）。weight 0.3→0.0 止血，paper tracking
+保留 60 天 settle 收尾（~2026-12-19）。combo_daily_notify cron enabled=0，此模块不再 daily 推送。
 
-gate（FROZEN 阈值 2026-10-27，amount 口径，防 post-hoc §44v3 R42-R44）：
-  breadth（>60MA 占比）>40% AND 小盘decile 5d ret >0 → ON（可交易）
-  否则 OFF（纸面跟踪 weight 0.3，不交易）
-
-combo edge（5脚本全套 §44v3 确认 2026-10-29）：去涨停 +1.07% net t=10.15，
-walk-forward test t=3.20（衰减13%），R12 alpha +0.62% t=6.85（真选股非 size premium）。
-caveat：当前 regime 错（2026 弱市 gate=OFF）非 edge 假，等 regime 转向 + 60 天前向验证。
+历史逻辑保留供复现（cron 50 18，load_combo_5d_today top-20 mode=filtered + gate + push_feishu）。
+gate（FROZEN 阈值 2026-10-27，amount 口径）：breadth>40% AND 小盘decile 5d>0 → ON。
+combo 真 alpha = universe 小盘 premium 非选股 edge（见 memory combo-edge-falsified-expert-panel-2026-11-08）。
 """
 
 from __future__ import annotations

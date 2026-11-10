@@ -372,7 +372,7 @@ def run() -> dict:
             r["a_group_t10_signals"] = a_signals[:10]
     except Exception as e:
         r["a_group_error"] = f"A组 T+10 信号失败: {e}"
-    # combo-5d-edge signal（S238，项目迄今最强 edge：top20 5日持有 R12 alpha t=11.94；weight 0.5 试探因 test-set-selection 须60天前向复验）
+    # combo-5d-edge signal（S238，已 FALSIFIED 2026-11-08：real-exec t_nw=1.487 FAIL / permutation p=0.47 / live 101 settled mean -3.649%；weight 0.0 止血，paper settle 收尾中）
     try:
         c_signals = load_combo_5d_today()
         if c_signals:

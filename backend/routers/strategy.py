@@ -5,11 +5,36 @@ Strategy router.
 import asyncio
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 import limitup_strategy as lstrat
 
 router = APIRouter(tags=["strategy"])
+
+
+# ⚠️ 2026-11-08 归档：板块轮动 5 方法全 FALSIFIED（factor-return/long-short/active-return/
+# capm-alpha/shortterm，isoβ=-0.09 alpha 真隔离→edge 真死，见 memory sector-rotation-falsified-2026-11-08）。
+# 4 个轮动 endpoint 返 410 证伪通告。sector_cycle.py 模块保留（aggregate_sectors/classify_phase/
+# zt_count_today 被 trend_swing_arm + dimension_registry + non-limitup-funnel live 依赖）。
+_SECTOR_ROTATION_FALSIFIED_NOTE: dict[str, Any] = {
+    "falsified": True,
+    "date": "2026-11-08",
+    "reason": (
+        "板块轮动 5 方法全 FALSIFIED：factor-return/long-short/active-return/capm-alpha/shortterm；"
+        "isoβ=-0.09 alpha 真隔离→edge 真死。散户行业轮动选股结构性无 edge。"
+    ),
+    "evidence": "memory sector-rotation-falsified-2026-11-08 / specs/S247-僵尸代码归档/spec.md",
+    "action": "本 endpoint 已下线，不再返回轮动数据。sector_cycle.py 模块保留供 live 依赖。",
+}
+
+
+def _sector_rotation_falsified() -> None:
+    """板块轮动已证伪归档，4 个轮动 endpoint 返 410 证伪通告。
+
+    raise HTTPException 短路（router dependencies 返 JSONResponse 不短路——FastAPI 忽略 dep 返回值，
+    只用于副作用；tail_dip 旧 _falsified_gone 返 JSONResponse 同样不短路，一并修）。
+    """
+    raise HTTPException(status_code=410, detail=_SECTOR_ROTATION_FALSIFIED_NOTE)
 
 
 @router.get("/api/strategy/signals/{code}")
@@ -177,7 +202,7 @@ async def get_calendar_factor(
     }
 
 
-@router.get("/api/strategy/funnel/sector-cycle")
+@router.get("/api/strategy/funnel/sector-cycle", dependencies=[Depends(_sector_rotation_falsified)])
 async def get_sector_cycle(
     date: str = Query(..., description="交易日 YYYY-MM-DD"),
     industry: str = Query(..., description="板块/行业名"),
@@ -204,7 +229,7 @@ async def get_sector_cycle(
     }
 
 
-@router.get("/api/strategy/funnel/sector-rotation")
+@router.get("/api/strategy/funnel/sector-rotation", dependencies=[Depends(_sector_rotation_falsified)])
 async def get_sector_rotation(
     date: str | None = Query(None, description="交易日 YYYY-MM-DD（默认最近交易日 last_trading_date_str）"),
 ) -> Dict[str, Any]:
@@ -220,7 +245,7 @@ async def get_sector_rotation(
     return {"data": sector_rotation(date)}
 
 
-@router.get("/api/strategy/funnel/concept-rotation")
+@router.get("/api/strategy/funnel/concept-rotation", dependencies=[Depends(_sector_rotation_falsified)])
 async def get_concept_rotation(date: str = Query(..., description="交易日 YYYY-MM-DD")) -> Dict[str, Any]:
     """S066 §5.4 概念题材板块强度（纯 label，§44 未验证概念 edge）。
     概念聚合跨 f100 行业（国产芯片=半导体+元件+其他电子+...），concept_blocks per 涨停股。
@@ -230,7 +255,7 @@ async def get_concept_rotation(date: str = Query(..., description="交易日 YYY
     return {"data": concept_rotation(date)}
 
 
-@router.get("/api/strategy/funnel/multi-rotation")
+@router.get("/api/strategy/funnel/multi-rotation", dependencies=[Depends(_sector_rotation_falsified)])
 async def get_multi_rotation(date: str = Query(..., description="交易日 YYYY-MM-DD")) -> Dict[str, Any]:
     """S066 §5.4 多维度融合板块强度（纯 label，§44 未验证）。
     不定义单一板块——行业 f100 + ths reason 题材融合，标签平等聚合（106 全市场）。

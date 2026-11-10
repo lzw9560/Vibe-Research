@@ -113,72 +113,8 @@ export function useCalendarFactor(date: string, options?: Opts<CalendarFactorRes
   });
 }
 
-/** S066 §5.4 板块周期分析。 */
-export function useSectorCycle(date: string, industry: string, options?: Opts<SectorCycleResult | null>) {
-  return useQuery({
-    queryKey: ["strategy", "funnel", "sector-cycle", date, industry] as const,
-    queryFn: () => request<SectorCycleResult | null>(`/strategy/funnel/sector-cycle?date=${date}&industry=${encodeURIComponent(industry)}`),
-    staleTime: 300_000,
-    ...options,
-  });
-}
-
-/** S066 §5.4.1 板块强度排名 TOP10 + §5.4.3 跨板块轮动检测（纯 label）。 */
-export interface SectorRotationResult {
-  date: string;
-  strength_rank: { industry: string; zt_count_today: number; zt_momentum: number; fund_flow: number; rank: number; strength: number; modifier: number }[];
-  rotation: { industry: string; prev_rank: number | null; curr_rank: number | null; change: number; signal: string }[];
-  fund_flow_blocked: boolean;
-  note: string;
-}
-
-export function useSectorRotation(date: string | undefined, options?: Opts<SectorRotationResult>) {
-  return useQuery({
-    queryKey: ["strategy", "funnel", "sector-rotation", date ?? ""] as const,
-    queryFn: () => request<SectorRotationResult>(`/strategy/funnel/sector-rotation?date=${date}`),
-    enabled: !!date,
-    staleTime: 300_000,
-    ...options,
-  });
-}
-
-/** S066 §5.4 概念题材板块强度（纯 label，聚合跨 f100 行业）。 */
-export interface ConceptRotationResult {
-  date: string;
-  concept_rank: { concept: string; zt_count_today: number }[];
-  count: number;
-  note: string;
-}
-
-export function useConceptRotation(date: string | undefined, options?: Opts<ConceptRotationResult>) {
-  return useQuery({
-    queryKey: ["strategy", "funnel", "concept-rotation", date ?? ""] as const,
-    queryFn: () => request<ConceptRotationResult>(`/strategy/funnel/concept-rotation?date=${date}`),
-    enabled: !!date,
-    staleTime: 300_000,
-    ...options,
-  });
-}
-
-/** S066 §5.4 多维度融合板块强度（行业+题材+概念，纯 label）。 */
-export interface MultiRotationResult {
-  date: string;
-  multi_rank: { label: string; zt_count_today: number; dims: string[]; codes: { code: string; name: string }[] }[];
-  multi_dim_rank: { label: string; zt_count_today: number; dims: string[]; codes: { code: string; name: string }[] }[];
-  pool_size: number;
-  count: number;
-  note: string;
-}
-
-export function useMultiRotation(date: string | undefined, options?: Opts<MultiRotationResult>) {
-  return useQuery({
-    queryKey: ["strategy", "funnel", "multi-rotation", date ?? ""] as const,
-    queryFn: () => request<MultiRotationResult>(`/strategy/funnel/multi-rotation?date=${date}`),
-    enabled: !!date,
-    staleTime: 300_000,
-    ...options,
-  });
-}
+// 板块轮动 hooks 已移除（sector_cycle/sector_rotation/concept_rotation/multi_rotation
+// endpoint 410 FALSIFIED 2026-11-08，S247 归档）。sector_cycle.py 模块保留供 backend live 依赖。
 
 export function useNonLimitupFunnel(date: string | undefined, options?: Opts<NonLimitupFunnelResult>) {
   return useQuery({

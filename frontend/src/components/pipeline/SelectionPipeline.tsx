@@ -4,7 +4,6 @@
 // §44 诚实：scored 不接 R3 → 虚线漂移；非涨停 Phase 2 → placeholder；STI/天气去噪不展示
 import { useState } from "react";
 import { HonestyBanner } from "@/components/ui/HonestyBanner";
-import { useMultiRotation } from "@/lib/query/strategy";
 import { FunnelLayerCard } from "@/components/ui/FunnelLayerCard";
 import { DimensionValidationBadge } from "@/components/ui/DimensionValidationBadge";
 import { DimensionValidationGrid } from "@/components/DimensionValidationGrid";
@@ -37,9 +36,6 @@ interface Props {
   onPick?: (code: string) => void;
   rerunHandlers?: RerunHandlers;
   showHonestyBanner?: boolean;
-  /** S094 附录 A2：板块轮动由前置共享区统一渲染时传 true（默认），本组件不再渲染 SectorRotationNode。
-   *  避免双叉切换时前置共享区 + SelectionPipeline 内部两处重复渲染同一数据。 */
-  sharedSectorRotation?: boolean;
 }
 
 type ActiveLane = "limitup" | "non-limitup";
@@ -50,7 +46,6 @@ export function SelectionPipeline({
   funnelResult, funnelLayers, finalCandidates,
   screenerPoolSize, nonLimitupCandidates, date, lane, fork, onPick, rerunHandlers,
   showHonestyBanner = true,
-  sharedSectorRotation = true,
 }: Props) {
   // S094 §11 附录 A1：lane prop 优先；fork 兼容旧调用作 fallback；默认涨停。
   // 内部不再有 LaneSwitcher + activeLane state——切换由父组件（ForwardTabSection）控制。
@@ -79,12 +74,7 @@ export function SelectionPipeline({
       {/* 共享节点：涨停股池（两模式都显，不在切换范围） */}
       <PipelineNode label="涨停股池" sub={rootSub} count={rootSize} />
       <ArrowDown />
-      {/* S094 附录 A2：板块轮动由前置共享区统一渲染（sharedSectorRotation=true），
-           本组件不再渲染 SectorRotationNode，避免双叉切换时两处重复 */}
-      {!sharedSectorRotation && date && <SectorRotationNode date={date} />}
-      {!sharedSectorRotation && date && <ArrowDown />}
-      {!sharedSectorRotation && !date && <ArrowDown />}
-      {sharedSectorRotation && <ArrowDown />}
+      <ArrowDown />
 
       {/* S094 §11 附录 A1：根据 lane prop 显对应叉——一次只显一叉，切换由父组件控制 */}
       {activeLane === "limitup" ? (
@@ -222,59 +212,7 @@ function LaneHeader({ title, sub, tone }: { title: string; sub?: string; tone?: 
   );
 }
 
-function SectorRotationNode({ date }: { date: string }) {
-  const { data: rot, isLoading } = useMultiRotation(date);
-  const [expanded, setExpanded] = useState(false);
-  if (isLoading) return <div className={`${NODE} text-xs text-muted-foreground`}>板块轮动加载中…</div>;
-  if (!rot) return null;
-  const dim = rot.multi_dim_rank.slice(0, 5);
-  const top = rot.multi_rank.slice(0, 10);
-  return (
-    <div className={NODE}>
-      <button onClick={() => setExpanded((v) => !v)} className="w-full text-left">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium">板块轮动（多维度融合）</span>
-          <span className="text-xs text-muted-foreground">{expanded ? "▼ 收起" : "▶ 展开"}</span>
-        </div>
-        {dim.length > 0 && (
-          <div className="mt-0.5 text-xs text-muted-foreground">
-            共振 TOP5：{dim.map((s) => `${s.label}(${s.zt_count_today},${s.dims.length}维)`).join(" · ")}
-          </div>
-        )}
-        {!expanded && (
-          <div className="mt-0.5 text-xs text-muted-foreground">
-            全标签 TOP10：{top.map((s) => `${s.label}(${s.zt_count_today})`).join(" · ")}
-          </div>
-        )}
-      </button>
-      {expanded && (
-        <div className="mt-2 space-y-1.5 border-t border-border/30 pt-2">
-          {top.map((s) => (
-            <div key={s.label} className="rounded border border-border/30 bg-card/20 p-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium">{s.label}</span>
-                <span className="text-xs text-muted-foreground">
-                  {s.zt_count_today} 涨停 · {s.dims.join("+")}
-                </span>
-              </div>
-              <div className="mt-1 flex flex-wrap gap-1 text-xs">
-                {(s.codes || []).slice(0, 10).map((c) => (
-                  <span key={c.code} className="rounded bg-muted/30 px-1 py-0.5 text-muted-foreground">
-                    {c.name} <span className="text-muted-foreground">{c.code}</span>
-                  </span>
-                ))}
-                {(s.codes || []).length > 10 && <span className="text-muted-foreground">…共 {s.codes.length} 只</span>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="mt-1 text-xs text-muted-foreground">
-        多维度共振（dims≥2）更可信；ths 106 全市场 + concept_map 缓存
-      </div>
-    </div>
-  );
-}
+// SectorRotationNode 已移除（板块轮动 FALSIFIED 2026-11-08，S247 归档）
 
 // S094 §11 附录 A2：ScoredBranch/ScoredDegraded/RiskNode 已删除——
 // ②战法匹配由 StrategySubPipelineView 渲染，风控移至后置共享区 PostSharedRegion

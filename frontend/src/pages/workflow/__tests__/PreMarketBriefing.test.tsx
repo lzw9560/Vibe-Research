@@ -37,11 +37,8 @@ vi.mock("@/lib/query/strategy", () => ({
   useFunnelStrategies: () => ({ data: [] }),
   useCalendarFactor: () => ({ data: undefined }),
   useMarketKillSwitch: () => ({ data: undefined }),
-  useSectorCycle: () => ({ data: undefined }),
   // S075：HonestyBanner 调 useForwardTestSummary，补 mock 避免预存测试报错
   useForwardTestSummary: () => ({ data: undefined, isLoading: false }),
-  // S075：SelectionPipeline 的 SectorRotationNode 调 useMultiRotation，补 mock
-  useMultiRotation: () => ({ data: undefined, isLoading: false }),
   // S075：SelectionPipeline 的 NonLimitupLane 调 useNonLimitupFunnel，补 mock
   useNonLimitupFunnel: () => ({ data: undefined, isLoading: false }),
 }));

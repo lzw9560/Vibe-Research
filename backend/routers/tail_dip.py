@@ -18,7 +18,6 @@ import sys
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 # 数据路径统一走 vr_paths.resolve_data_dir()（S037 收口）
@@ -60,9 +59,9 @@ TAIL_DIP_FALSIFIED_NOTE: dict[str, Any] = {
 }
 
 
-def _falsified_gone() -> JSONResponse:
-    """tail-dip已证伪归档，所有endpoint返410证伪通告（不再返买入候选）。"""
-    return JSONResponse(status_code=410, content=TAIL_DIP_FALSIFIED_NOTE)
+def _falsified_gone() -> None:
+    """tail-dip已证伪归档，所有endpoint返410证伪通告（raise HTTPException 短路；原返 JSONResponse 不短路已修）。"""
+    raise HTTPException(status_code=410, detail=TAIL_DIP_FALSIFIED_NOTE)
 
 
 router = APIRouter(tags=["strategy-tail-dip"], dependencies=[Depends(_falsified_gone)])

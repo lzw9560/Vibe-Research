@@ -237,8 +237,6 @@ export const api = {
   // 板块分化度
   sectorDivergence: (date?: string) =>
     get<any>(`/sector/divergence${date ? `?date=${date}` : ""}`),
-  sectorRotation: (date?: string) =>
-    get<any>(`/strategy/funnel/sector-rotation${date ? `?date=${date}` : ""}`),
   // 定时任务
   scheduledTasks: () => get<any[]>("/scheduled-tasks"),
   scheduledTask: (id: number) => get<any>(`/scheduled-tasks/${id}`),
