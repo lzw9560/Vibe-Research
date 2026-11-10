@@ -1039,13 +1039,13 @@ def _ensure_seed_tasks() -> None:
                 name="daily_full_pull",
                 description="S191 RB-3 每日全量拉取沉淀 datalake（stoke 研报/新闻/涨停归因 + mootdx 分笔→datalake/，供 replay.py 回放）",
                 task_type="daily_full_pull",
-                cron_expr="35 17 * * 0-4",  # 17:35 晚 journal 17:30
+                cron_expr="30 19 * * 0-4",  # 19:30 trade_journal_daily 19:00 跑完后（原 17:35 depends_on 时序倒挂致 6 周 skip，S246 2026-11-10 修）
                 payload={},
                 enabled=True,
                 depends_on="trade_journal_daily",  # S190 R5 硬门控
             )
         )
-        logger.info("[scheduler] seed 默认任务 daily_full_pull 已创建（cron 35 17 * * 0-4，depends_on=trade_journal_daily）")
+        logger.info("[scheduler] seed 默认任务 daily_full_pull 已创建（cron 30 19 * * 0-4，depends_on=trade_journal_daily）")
 
     # S218 C5: 周度汇总复盘——每周日 18:00 盘后（weekly_review）
     if "weekly_review" not in existing:
