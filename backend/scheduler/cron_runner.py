@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timedelta
+from typing import Dict, Optional, Tuple
 
 from scheduler import cron as _cron
 from scheduler.db import _manager, _REAPER_STALE_SECONDS
@@ -36,6 +36,9 @@ class CronScheduler:
         # S032 R6：已 spawn 的 _run_task 集合（done 即弃）——生产 stop 不等待，
         # 测试可据此等 fire-and-forget 任务落终态 run。
         self._spawned: set = set()
+        # S248：depends_on 宽限重试——cron 命中但 dep 未满足时加入，后续 tick dep 满足补 fire。
+        # task_id → (retry_deadline, depends_on_str)。窗口 = max_dep_timeout + 300。
+        self._pending_retry: Dict[int, Tuple[datetime, str]] = {}
 
     async def start(self) -> None:
         """在当前（FastAPI 主）事件循环启动 ticker task。
@@ -102,35 +105,74 @@ class CronScheduler:
                 spawned.add_done_callback(self._spawned.discard)
 
     async def _run_task(self, task: ScheduledTask) -> TaskRun:
-        """执行单个任务（fire-and-forget），完成后清理去重标志。"""
+        """执行单个任务（fire-and-forget），完成后清理去重标志 + 待重试。"""
         try:
             return await self._executor.execute_async(task)
         finally:
             self._running_task_ids.discard(task.id)
+            # S248：已 fire 任务清待重试（防残留）
+            if task.id is not None:
+                self._pending_retry.pop(task.id, None)
 
     def _should_run(self, task: ScheduledTask, now: datetime) -> bool:
-        """cron 匹配 + S190 R5 depends_on 门控。
+        """cron 匹配 + S190 R5 depends_on 门控（S248 宽限重试）。
 
         depends_on（逗号分隔 task_type）：今日上游 task_type 须有 status IN
         (success/degraded) 的 run，否则跳过（防下游先于上游跑吃陈旧数据）。
-        """
-        if not _cron.cron_match(task.cron_expr, now):
-            return False
-        # S190 R5：depends_on 门控
-        if task.depends_on:
-            from vr_paths import last_trading_date_str  # noqa: PLC0415
 
-            today = last_trading_date_str()
-            deps = [d.strip() for d in task.depends_on.split(",") if d.strip()]
-            for dep_type in deps:
-                if not _manager.dependency_satisfied(dep_type, today):
-                    logger.info(
-                        "[scheduler] %s 跳过：依赖 %s 今日未 success/degraded",
-                        task.name,
-                        dep_type,
-                    )
-                    return False
-        return True
+        S248：cron 命中但 dep 未满足时加入 _pending_retry（窗口=max_dep_timeout+300），
+        后续 tick（即使 cron 不再匹配）dep 满足时补 fire，覆盖上游 overrun 致当日静默断链
+        （2026-11-11 kline_refresh 70 分钟 vs 平日 3 分钟直接验证）。
+        """
+        cron_hit = _cron.cron_match(task.cron_expr, now)
+        # S248: cron 不命中时检查 _pending_retry（dep 满足则补 fire）
+        if not cron_hit:
+            return self._check_pending_retry(task, now)
+        # cron 命中
+        if not task.depends_on:
+            return True
+        if self._deps_satisfied(task.depends_on):
+            return True
+        # S248: dep 未满足，加入待重试窗口
+        self._add_pending_retry(task, now)
+        logger.info(
+            "[scheduler] %s cron 命中但依赖未满足，加入待重试窗口（覆盖上游 overrun）",
+            task.name,
+        )
+        return False
+
+    def _deps_satisfied(self, depends_on: str) -> bool:
+        """S190 R5：所有上游今日有 status IN (success/degraded) 的 run。"""
+        from vr_paths import last_trading_date_str  # noqa: PLC0415
+
+        today = last_trading_date_str()
+        deps = [d.strip() for d in depends_on.split(",") if d.strip()]
+        return all(_manager.dependency_satisfied(d, today) for d in deps)
+
+    def _add_pending_retry(self, task: ScheduledTask, now: datetime) -> None:
+        """S248：加入待重试——窗口 = max_dep_timeout + 300s（自适应上游最坏 overrun）。"""
+        from scheduler.db import _DEFAULT_TASK_TIMEOUT, _TASK_TIMEOUTS  # noqa: PLC0415
+
+        deps = [d.strip() for d in (task.depends_on or "").split(",") if d.strip()]
+        max_dep_timeout = max((_TASK_TIMEOUTS.get(d, _DEFAULT_TASK_TIMEOUT) for d in deps), default=300)
+        retry_deadline = now + timedelta(seconds=max_dep_timeout + 300)
+        self._pending_retry[task.id] = (retry_deadline, task.depends_on or "")
+
+    def _check_pending_retry(self, task: ScheduledTask, now: datetime) -> bool:
+        """S248：待重试窗口内 dep 满足则补 fire + 清，过期则清。"""
+        entry = self._pending_retry.get(task.id)
+        if entry is None:
+            return False
+        retry_deadline, deps_str = entry
+        if now > retry_deadline:
+            self._pending_retry.pop(task.id, None)
+            logger.info("[scheduler] %s 重试窗口过期，放弃当日", task.name)
+            return False
+        if self._deps_satisfied(deps_str):
+            self._pending_retry.pop(task.id, None)
+            logger.info("[scheduler] %s 重试命中（依赖已满足），补 fire", task.name)
+            return True
+        return False
 
     def _reap_stale_runs(self) -> None:
         """S150 R2：reap stale running run → discard _running_task_ids（去堵 dedup）。
