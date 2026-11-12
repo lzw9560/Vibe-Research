@@ -165,26 +165,34 @@ def fetch_etf_hist(code: str = "512890", start: str = "", end: str = "", retries
     S183 重启验证发现东财 fund_etf_hist_em 端点瞬时不稳（Connection aborted, RemoteDisconnected），
     加 retries=3 次重试（0.5s 间隔）修瞬时失败。全失败返 []，bars_provider 走 baostock fallback。
     """
+    import socket  # noqa: PLC0415
     import time  # noqa: PLC0415
 
+    # S249 socket timeout（2026-11-13）：akshare fund_etf_hist_em 无 timeout，退化日 hang 致
+    # update_floor_mtm N+1 放大（163×30-90s 超 1200s）。设 10s 全局 socket timeout 防单调用 hang。
+    old_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(10)
     ak = _ak()
     last_err: Exception | None = None
-    for attempt in range(retries):
-        try:
-            df = ak.fund_etf_hist_em(
-                symbol=code,
-                period="daily",
-                start_date=start or "20200101",
-                end_date=end or datetime.now().strftime("%Y%m%d"),
-                adjust="qfq",
-            )
-            return _parse_daily_returns(df)
-        except Exception as e:
-            last_err = e
-            if attempt < retries - 1:
-                time.sleep(0.5)
-    _LOGGER.warning("fetch_etf_hist(%s) %d 次重试全失败: %s", code, retries, last_err)
-    return []
+    try:
+        for attempt in range(retries):
+            try:
+                df = ak.fund_etf_hist_em(
+                    symbol=code,
+                    period="daily",
+                    start_date=start or "20200101",
+                    end_date=end or datetime.now().strftime("%Y%m%d"),
+                    adjust="qfq",
+                )
+                return _parse_daily_returns(df)
+            except Exception as e:
+                last_err = e
+                if attempt < retries - 1:
+                    time.sleep(0.5)
+        _LOGGER.warning("fetch_etf_hist(%s) %d 次重试全失败: %s", code, retries, last_err)
+        return []
+    finally:
+        socket.setdefaulttimeout(old_timeout)
 
 
 def fetch_index_hist(symbol: str = "930955", start: str = "", end: str = "") -> list[dict]:

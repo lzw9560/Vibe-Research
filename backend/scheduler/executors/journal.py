@@ -54,23 +54,10 @@ def trade_journal_daily(payload: Dict[str, Any]) -> Dict[str, Any]:
     pp = PaperPortfolio()
     equity = pp.equity()
     drawdown_status = pp.drawdown_status()
-    # S238 P0（2026-10-28 对手盘 workflow 发现）：combo_5d record 当日 picks 记 pending
-    # 之前没接线 cron，60天前向验证没在积累（只有手动零星 22 条）。17:30 一起跑 record 新 + settle 旧
-    combo_recorded = None
-    try:
-        import sys  # noqa: PLC0415
-        from pathlib import Path  # noqa: PLC0415
-
-        tp = str(Path(__file__).resolve().parents[2] / "tools")  # backend/tools
-        if tp not in sys.path:
-            sys.path.insert(0, tp)
-        from combo_5d_daily_record import record_combo_5d  # noqa: E402
-
-        combo_recorded = record_combo_5d()
-        logger.info("[combo_5d_record] recorded=%s picks (pending, T+1 open + T+5 exit 待 settle)", combo_recorded)
-    except Exception as e:  # noqa: BLE001
-        logger.warning("[combo_5d_record] failed: %s", repr(e)[:200])
-        combo_recorded = f"error: {repr(e)[:200]}"
+    # S249 砍 record_combo_5d（2026-11-13）：combo 11-08 FALSIFIED weight=0.0，给死策略每天攒新 paper picks
+    # 零下游价值 + load_combo_5d_today 全表 1.28GB load+parse ~30s 压低 timeout 余量。保留 settle_combo_5d
+    # 收尾现存 61 pending 到 ~12-19。record 独立逻辑移除（如需复现见 git history S238）。
+    combo_recorded = "skipped (combo FALSIFIED 2026-11-08, S249)"
     # S238：combo_5d settle（T+5 到了的填 entry/exit/net_pnl）——独立逻辑，不复用 recorder arms
     # 17:30 跑（晚 17:15 kline_refresh，settle 需刷新后 cache 找 T+5 bars）
     combo_settled = None

@@ -1094,10 +1094,15 @@ class JournalRecorder:
             is_dead_arm=None,
         )
         updated = 0
+        # S249 N+1 去重（2026-11-13）：163 floor pending 全 512890（distinct=1），循环内每 position
+        # 调 bars_provider 致 163× 网络调用（ETF 路径无 cache 无 dedup），akshare 退化日 163×(30-90s)
+        # 远超 1200s timeout。循环外按 unique stock_code 预取 bars 到 cache，循环内复用（N+1→unique_count）。
+        unique_codes = {pos.stock_code for pos in open_positions if pos.entry_price is not None}
+        bars_cache: dict[str, list[dict]] = {code: self._bars_provider(code) for code in unique_codes}
         for pos in open_positions:
             if pos.entry_price is None:
                 continue
-            bars = self._bars_provider(pos.stock_code)
+            bars = bars_cache[pos.stock_code]
             current_close = self._latest_close(bars, target_date=target_date)
             if current_close is None:
                 continue
