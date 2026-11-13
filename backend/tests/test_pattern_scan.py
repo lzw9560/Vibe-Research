@@ -330,3 +330,23 @@ class TestIndustryMap:
         """加载行业分类返回 dict（可能为空，BaoStock 不可达时不崩）。"""
         mapping = load_industry_map()
         assert isinstance(mapping, dict)
+
+    def test_load_industry_map_fallback_to_kline_cache(self, monkeypatch):
+        """S250: fetch_stock_industry 返空时回退 kline_cache get_all_codes（避免 universe 空）。"""
+        import strategies.pattern_scan as ps
+
+        # 重置内存缓存
+        monkeypatch.setattr(ps, "_INDUSTRY_CACHE", None)
+        # baostock 行业源 flaky → 返空
+        monkeypatch.setattr(ps, "fetch_stock_industry", lambda: {})
+        # kline_cache SQLite 全量 code
+        monkeypatch.setattr("engine.kline_cache_store.get_all_codes", lambda: ["000001", "000002", "600000"])
+
+        mapping = ps.load_industry_map(force_refresh=True)
+
+        # 回退：全量 code 在，行业名空串（不臆造）
+        assert "000001" in mapping
+        assert "000002" in mapping
+        assert "600000" in mapping
+        assert all(v == "" for v in mapping.values())
+        assert len(mapping) == 3

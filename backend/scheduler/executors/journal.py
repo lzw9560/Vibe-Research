@@ -7,9 +7,13 @@ journal/executor/bars_provider），但未接 scheduler 31 dispatch / seed cron�
 call-point wiring 点火（S175 P0 最关键）。
 
 执行序（盘后 16:45，晚 kline_refresh 16:30）：
-  1. settle_pending_breakout()——重算昨日未平 'hold'（path_return T+1 guard 需 T+2+ bars）
-  2. run_daily(target_date=prev, arms=['floor','breakout'])——floor MTM + breakout path_return
-  3. update_floor_mtm()——floor 每日 MTM 更新
+  1. run_daily(target_date=prev, arms=['floor','breakout','trend'])——内部先 settle_pending
+     （breakout/trend/consecutive_relay），再 process 各 arm。S250 dedup：settle 不再显式调。
+  2. update_floor_mtm()——floor 每日 MTM 更新
+  3. PaperPortfolio.equity() + drawdown_status()——R10/R11 接线
+  4. settle_combo_5d()——combo T+5 收尾（FALSIFIED，仅 settle 现存 pending）
+S250：每步 START/END + elapsed 计时日志（timeout 能定位卡哪步）。
+S250：arms 去 consecutive_relay（2026-11-08 FALSIFIED weight=0.0）。
 
 依赖：kline_refresh 16:30 已刷 baostock_kline_cache.json（A股 bars）；
 ETF bars 走 fetch_etf_hist（akshare push2delay，非 cache）。
@@ -18,6 +22,7 @@ ETF bars 走 fetch_etf_hist（akshare push2delay，非 cache）。
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Dict
 
 logger = logging.getLogger("vibe-research")
@@ -39,21 +44,28 @@ def trade_journal_daily(payload: Dict[str, Any]) -> Dict[str, Any]:
     recorder = JournalRecorder(bars_provider=bars_provider)
 
     target_date = payload.get("target_date")  # None → run_daily default prev_trading_date_str
-    settled = recorder.settle_pending_breakout()
-    # S211（2026-09-17）：arms 加 consecutive_relay——唯一已证 edge（bull +1.055%
-    # drift-adjusted）arm 从 dormant 转活。scan_consecutive_relay 直读 zt_history.db
-    # （17:15 zt_history_snapshot 已写当日涨停池，早于 17:30 trade_journal_daily）。
-    # regime cap bite：bull ×0.5 provisional（综合 refuted 保守，待 60 天 forward OOS 升 ×1.0）。
-    results = recorder.run_daily(target_date=target_date, arms=["floor", "breakout", "trend", "consecutive_relay"])
+    # S250 dedup：settle_pending_breakout 移入 run_daily（run_daily:141 已调，双调用无意义）。
+    # S250：arms 去 consecutive_relay（2026-11-08 FALSIFIED weight=0.0，省 0.2s 清理非性能）。
+    _t0 = time.perf_counter()
+    logger.info("[trade_journal_daily] step run_daily START")
+    results = recorder.run_daily(target_date=target_date, arms=["floor", "breakout", "trend"])
+    logger.info("[trade_journal_daily] step run_daily END elapsed=%.3fs", time.perf_counter() - _t0)
+
+    _t0 = time.perf_counter()
+    logger.info("[trade_journal_daily] step update_floor_mtm START")
     mtm = recorder.update_floor_mtm(target_date=target_date)
+    logger.info("[trade_journal_daily] step update_floor_mtm END elapsed=%.3fs", time.perf_counter() - _t0)
     # S175 R10/R11：PaperPortfolio.equity() 落盘供 R9 推荐 sizing（R9↔R10 接线 SH1 fix）+
     # drawdown_breaker 接生产路径（从 API 层移 executor，overlay stub deferred）。
     # PaperPortfolio() 默认 DB = recorder 同一 trade_journal.db（resolve_data_dir）。
     from engine.paper_portfolio import PaperPortfolio  # noqa: PLC0415
 
+    _t0 = time.perf_counter()
+    logger.info("[trade_journal_daily] step equity+drawdown START")
     pp = PaperPortfolio()
     equity = pp.equity()
     drawdown_status = pp.drawdown_status()
+    logger.info("[trade_journal_daily] step equity+drawdown END elapsed=%.3fs", time.perf_counter() - _t0)
     # S249 砍 record_combo_5d（2026-11-13）：combo 11-08 FALSIFIED weight=0.0，给死策略每天攒新 paper picks
     # 零下游价值 + load_combo_5d_today 全表 1.28GB load+parse ~30s 压低 timeout 余量。保留 settle_combo_5d
     # 收尾现存 61 pending 到 ~12-19。record 独立逻辑移除（如需复现见 git history S238）。
@@ -61,6 +73,8 @@ def trade_journal_daily(payload: Dict[str, Any]) -> Dict[str, Any]:
     # S238：combo_5d settle（T+5 到了的填 entry/exit/net_pnl）——独立逻辑，不复用 recorder arms
     # 17:30 跑（晚 17:15 kline_refresh，settle 需刷新后 cache 找 T+5 bars）
     combo_settled = None
+    _t0 = time.perf_counter()
+    logger.info("[trade_journal_daily] step combo_5d_settle START")
     try:
         import sys  # noqa: PLC0415
         from pathlib import Path  # noqa: PLC0415
@@ -74,16 +88,16 @@ def trade_journal_daily(payload: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:  # noqa: BLE001
         logger.warning("[combo_5d_settle] failed: %s", repr(e)[:200])
         combo_settled = f"error: {repr(e)[:200]}"
+    logger.info("[trade_journal_daily] step combo_5d_settle END elapsed=%.3fs", time.perf_counter() - _t0)
     logger.info(
-        "trade_journal_daily done: settled=%s arms=%s floor_mtm=%s equity=%s combo_5d_settled=%s",
-        settled,
+        "trade_journal_daily done: arms=%s floor_mtm=%s equity=%s combo_5d_settled=%s",
         results,
         mtm,
         equity,
         combo_settled,
     )
     return {
-        "settled_pending": settled,
+        "settled_pending": "settled inside run_daily (S250 dedup)",
         "arms": results,
         "floor_mtm": mtm,
         "equity": equity,

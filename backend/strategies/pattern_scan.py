@@ -17,6 +17,7 @@ spec §5.5/P2-2 形态计算：
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 import time
 from dataclasses import dataclass
@@ -26,6 +27,8 @@ from typing import Any
 
 from vr_paths import resolve_data_dir
 from data.sources.baostock_src import fetch_stock_industry
+
+_logger = logging.getLogger(__name__)
 
 # BaoStock 行业分类缓存（5540 条，日级不变，缓存到 .vibe-research）
 _INDUSTRY_CACHE_PATH = Path(resolve_data_dir()) / "baostock_industry.json"  # Path() 防 str 返回
@@ -96,7 +99,23 @@ def load_industry_map(force_refresh: bool = False) -> dict[str, str]:
         _INDUSTRY_CACHE = mapping
         _INDUSTRY_CACHE_TS = now
         _save_industry_cache(mapping, now)
-    return mapping or {}
+        return mapping
+    # S250 fallback：行业源 flaky（baostock 不可达/返空）→ 回退 kline_cache SQLite
+    # 全量 code（~5256），行业名空串（不臆造）。避免 load_industry_map().keys() 为空
+    # 致整轮 universe 空（trend_swing_arm / refresh_kline_cache 等下游全断）。
+    try:
+        from engine.kline_cache_store import get_all_codes  # noqa: PLC0415
+
+        codes = get_all_codes()
+        if codes:
+            _logger.warning(
+                "load_industry_map: baostock 行业源返空，回退 kline_cache %d codes（行业名空）",
+                len(codes),
+            )
+            return {code: "" for code in codes}
+    except Exception as e:  # noqa: BLE001
+        _logger.warning("load_industry_map: kline_cache 回退失败: %s", e)
+    return {}
 
 
 def _save_industry_cache(mapping: dict[str, str], ts: float) -> None:

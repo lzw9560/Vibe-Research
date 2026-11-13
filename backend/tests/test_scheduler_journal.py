@@ -2,9 +2,8 @@
 """S175 T4 — scheduler trade_journal_daily executor 接线测试（BREAK-0 fix）。
 
 验证：① TaskExecutor._executors 含 trade_journal_daily dispatch；
-② trade_journal_daily(payload) 调 JournalRecorder.settle_pending_breakout +
-run_daily(arms=['floor','breakout']) + update_floor_mtm 三步 + 返 {settled_pending,
-arms, floor_mtm}。
+② trade_journal_daily(payload) 调 run_daily + update_floor_mtm 两步 + 返 {settled_pending,
+arms, floor_mtm}。settle_pending_breakout 不再显式调（S250 dedup：run_daily 内部已调）。
 mock orchestrator，不读真 cache/不联网。
 """
 import sys
@@ -26,8 +25,8 @@ def test_trade_journal_daily_in_dispatch_dict():
     assert callable(executor._executors["trade_journal_daily"])
 
 
-def test_trade_journal_daily_calls_orchestrator_three_steps(tmp_path, monkeypatch):
-    """trade_journal_daily 调 settle_pending_breakout + run_daily + update_floor_mtm。"""
+def test_trade_journal_daily_calls_orchestrator_two_steps(tmp_path, monkeypatch):
+    """trade_journal_daily 调 run_daily + update_floor_mtm（settle 在 run_daily 内部，不显式调）。"""
     monkeypatch.setenv("VR_DATA_DIR", str(tmp_path))
 
     mock_recorder = MagicMock()
@@ -42,14 +41,14 @@ def test_trade_journal_daily_calls_orchestrator_three_steps(tmp_path, monkeypatc
         from scheduler.executors.journal import trade_journal_daily
         result = trade_journal_daily({})
 
-    # 三步全调
-    mock_recorder.settle_pending_breakout.assert_called_once()
+    # 两步全调
+    # S250 dedup：settle_pending_breakout 不再显式调（run_daily:141 已调，双调用无意义）
+    mock_recorder.settle_pending_breakout.assert_not_called()
     mock_recorder.run_daily.assert_called_once()
     mock_recorder.update_floor_mtm.assert_called_once()
-    # run_daily 用 arms=['floor','breakout','trend','consecutive_relay']
-    # （S181 trend 臂进 cron paper_track 2026-09-11；S211 consecutive_relay 通电 2026-09-17 commit 1b9a4c2）
+    # S250: arms 去 consecutive_relay（2026-11-08 FALSIFIED weight=0.0）
     _, kwargs = mock_recorder.run_daily.call_args
-    assert kwargs.get("arms") == ["floor", "breakout", "trend", "consecutive_relay"]
+    assert kwargs.get("arms") == ["floor", "breakout", "trend"]
     # 返结构
     assert "settled_pending" in result
     assert "arms" in result
