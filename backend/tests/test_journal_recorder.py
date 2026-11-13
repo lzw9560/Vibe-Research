@@ -227,6 +227,28 @@ class TestFloorArm:
         # entry was ~10.2, current close 11.0, size=100
         assert records[0].unrealized_pnl > 0
 
+    def test_floor_idempotent_no_reaccumulate(self, journal, recorder):
+        """S250（2026-11-13）：_process_floor 幂等守卫——跨日重跑不累积幽灵持仓。
+
+        bug 根因：build_position_batches(one_shot=True, start_date=target_date) 每日生成 1 batch，
+        signal_id=f'floor_{entry_date}_ETF' 每日新 PRIMARY KEY → INSERT OR REPLACE 不去重跨日 →
+        无限累积（实测 163 条 hold 虚高 equity 945.6 CNY 灌入 R9 sizing）。守卫：有 open floor 则 no-op。
+        """
+        bars = _make_bars("2026-01-15")
+        with patch("strategies.index_replication_floor.build_position_batches",
+                   return_value=[{"batch_idx": 0, "date": "2026-01-15", "amount": 100000, "status": "planned"}]):
+            recorder._bars_provider = lambda code: bars if code == "512890" else []
+            # 首次：插入 1 条
+            r1 = recorder._process_floor("2026-01-15")
+            assert r1["n_candidates"] == 1
+            # 次日重跑：守卫挡，no-op
+            r2 = recorder._process_floor("2026-01-16")
+            assert r2.get("status") == "existing_floor_position"
+            assert r2["n_buyable"] == 0
+
+        records = journal.query_records(arm="floor", is_dead_arm=None)
+        assert len(records) == 1  # 守卫防累积
+
 
 class TestGapArm:
     """C2 gap 走 gap_net_return（不走 path_return）。"""

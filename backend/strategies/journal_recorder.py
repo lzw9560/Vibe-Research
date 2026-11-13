@@ -1006,6 +1006,21 @@ class JournalRecorder:
             ETF_CODE,
         )
 
+        # S250 幂等守卫（2026-11-13）：floor 是底仓（永不平），首次插入后每日重跑应 no-op。
+        # 无守卫时 build_position_batches(one_shot=True, start_date=target_date) 每日生成 1 batch，
+        # signal_id=f'floor_{entry_date}_ETF' 每日新 PRIMARY KEY → INSERT OR REPLACE 不去重跨日 →
+        # 无限累积幽灵持仓（实测 163 条 hold 虚高 equity 945.6 CNY 灌入 R9 sizing，已清理 + 本守卫防复发）。
+        # 有 open floor 持仓则跳过插入（update_floor_mtm 负责单条 MTM 更新）。
+        existing = self._journal.query_records(arm="floor", is_realized=0, is_dead_arm=0)
+        if any(r.stock_code == ETF_CODE for r in existing):
+            return {
+                "n_candidates": 1,
+                "n_buyable": 0,
+                "n_unbuyable": 0,
+                "n_realized": 0,
+                "status": "existing_floor_position",
+            }
+
         batches = build_position_batches(one_shot=True, start_date=target_date)
         if not batches:
             return {"n_candidates": 0, "n_buyable": 0, "n_unbuyable": 0, "n_realized": 0}
